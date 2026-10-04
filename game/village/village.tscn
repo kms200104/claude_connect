@@ -1,4 +1,4 @@
-[gd_scene load_steps=62 format=3]
+[gd_scene load_steps=64 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -55,6 +55,8 @@
 [ext_resource type="Script" path="res://ui/emotes/emote_window.gd" id="59_emote_window"]
 [ext_resource type="Script" path="res://ui/museum/museum_window.gd" id="60_museum_window"]
 [ext_resource type="Script" path="res://ui/hud/catch_card.gd" id="61_catch_card"]
+[ext_resource type="Script" path="res://game/places/mirror_site.gd" id="62_mirror_site"]
+[ext_resource type="Script" path="res://ui/mirror/mirror_window.gd" id="63_mirror_window"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -213,6 +215,10 @@ actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
 
+[node name="Mirrors" type="Node3D" parent="."]
+script = ExtResource("62_mirror_site")
+clay_material = ExtResource("23_foliage")
+
 [node name="Flowers" type="Node3D" parent="."]
 script = ExtResource("56_flowers")
 clay_material = ExtResource("23_foliage")
@@ -324,8 +330,10 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "dialogue", "fishing", "action_hud", "toast_hud")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud")]
 script = ExtResource("34_interaction")
+mirrors = NodePath("../Mirrors")
+mirror_window = NodePath("../HUD/MirrorWindow")
 museum = NodePath("../Museum")
 airport = NodePath("../Airport")
 flowers = NodePath("../Flowers")
@@ -474,5 +482,16 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("60_museum_window")
 player = NodePath("../../Player")
+
+[node name="MirrorWindow" type="Control" parent="HUD" node_paths=PackedStringArray("player", "camera_rig")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("63_mirror_window")
+player = NodePath("../../Player")
+camera_rig = NodePath("../../CameraRig")
 
 [connection signal="bag_pressed" from="HUD/Hotbar" to="HUD/InventoryWindow" method="toggle"]

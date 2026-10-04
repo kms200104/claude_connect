@@ -1,8 +1,8 @@
 class_name InteractionController
 extends Node
 ## 상황 버튼으로 하는 일: 주민·상점 주인·떠돌이 상인·박물관 관장·공항 조종사에게 말 걸기, 상점 드나들기, 선물·별 조각 줍기,
-## 핀 꽃 따기, 도끼로 나무 베기, 손에 든 씨앗 심기, 내 가구 줍기. (낚시는 FishingController 가 맡는다.)
-## 우선순위: 주민 > 떠돌이 상인 > 관장·조종사 > 상점 주인 > 상점 문 > 선물·별 조각 > 꽃 > 나무 > 씨앗 심기 > 가구 > (물가면 낚시).
+## 핀 꽃 따기, 거울 보기(얼굴 꾸미기), 도끼로 나무 베기, 손에 든 씨앗 심기, 내 가구 줍기. (낚시는 FishingController 가 맡는다.)
+## 우선순위: 주민 > 떠돌이 상인 > 관장·조종사 > 상점 주인 > 상점 문 > 선물·별 조각 > 꽃 > 거울 > 나무 > 씨앗 심기 > 가구 > (물가면 낚시).
 ## 판정은 서버가 하고 여기서는 가까운 대상을 고르고 연출만 한다.
 
 @export_group("References")
@@ -16,6 +16,8 @@ extends Node
 @export var museum: MuseumSite
 @export var airport: AirportSite
 @export var flowers: FlowerField
+@export var mirrors: MirrorSite
+@export var mirror_window: MirrorWindow
 @export var dialogue: DialogueController
 @export var fishing: FishingController
 @export var action_hud: ActionHud
@@ -33,7 +35,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR }
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -84,6 +86,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action("꽃 따기")
 		Target.PLANT:
 			action_hud.show_action("심기")
+		Target.MIRROR:
+			action_hud.show_action("거울 보기")
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
@@ -92,7 +96,7 @@ func _process(_delta: float) -> void:
 func _pick_target() -> void:
 	target = Target.NONE
 	target_id = ""
-	if Net.state != Net.State.ONLINE or player.is_input_locked() or dialogue.is_active():
+	if Net.state != Net.State.ONLINE or player.is_input_locked() or dialogue.is_active() or (mirror_window != null and mirror_window.is_open()):
 		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
@@ -133,6 +137,16 @@ func _pick_target() -> void:
 		if not flower_id.is_empty():
 			target = Target.PICK
 			target_id = flower_id
+			return
+	var mirror_range: float = (GameData.face.mirror_range if GameData.face != null else 2.2) - safety_margin
+	if mirrors != null and mirrors.nearest(pos, mirror_range) >= 0:
+		target = Target.MIRROR
+		return
+	if furniture != null:
+		var mirror_id: String = furniture.nearest_mirror(pos, mirror_range)
+		if not mirror_id.is_empty():
+			target = Target.MIRROR
+			target_id = mirror_id
 			return
 	if player.held_item == "axe":
 		var tree_id: String = trees.nearest_grown(pos, GameData.chop_range - safety_margin)
@@ -175,6 +189,10 @@ func _on_action_pressed() -> void:
 			Net.pick_flower(target_id)
 		Target.PLANT:
 			_plant(plant_spot)
+		Target.MIRROR:
+			if mirror_window != null:
+				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))
+				mirror_window.open(target_id, at)
 
 
 ## 캐릭터 앞 땅, 0.5m 격자 (서버가 맞추는 자리와 같다).
@@ -203,6 +221,10 @@ func can_plant_at(at: Vector3, is_tree: bool) -> bool:
 	for npc: NpcInfo in GameData.npcs.values():
 		if Vector2(npc.house_position.x, npc.house_position.z).distance_to(p) < 4.2:
 			return false
+	if layout != null:
+		for mirror: Vector3 in layout.mirrors:
+			if Vector2(mirror.x, mirror.y).distance_to(p) < 1.3:
+				return false
 	if trees != null and not trees.clear_for_tree(at, GameData.tree_clearance if is_tree else 1.0):
 		return false
 	if flowers != null and not flowers.clear_for(at, 1.0 if is_tree else GameData.flower_clearance):

@@ -6,6 +6,7 @@ import { SAVE_SCHEMA_VERSION } from './persistence.js';
 import { addItem, emptySlots, hasItem, sanitize } from './inventory.js';
 import { sanitizePlanted, sanitizeTrees } from './trees.js';
 import { sanitizeFlowers } from './plants.js';
+import { defaultFace, sanitizeFace } from './face.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
@@ -31,7 +32,7 @@ function ensureStarterTools(slots, cfg) {
 }
 
 /** 한 사람(uid)의 저장되는 상태. 접속이 끊겨도 방 파일에 남는다. */
-function newProfile(uid, slot, cfg) {
+function newProfile(uid, slot, cfg, data) {
   const spawn = spawnPoints[(slot - 1) % spawnPoints.length];
   return {
     uid,
@@ -50,6 +51,7 @@ function newProfile(uid, slot, cfg) {
     lastQuestDay: null,
     outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
     emotes: { known: ['hello'], quick: ['hello'] }, // 배운 감정표현과 감정표현 퀵슬롯
+    face: data ? defaultFace(data.face, slot) : {}, // 거울에서 고른 얼굴 (눈·코·입·피부·머리)
   };
 }
 
@@ -135,6 +137,7 @@ export class Player {
       held: this.heldItem,
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
+      face: { ...this.profile.face },
       x: this.x,
       y: this.y,
       z: this.z,
@@ -213,7 +216,7 @@ export class Room {
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
-      const base = newProfile(uid, slot, cfg);
+      const base = newProfile(uid, slot, cfg, data);
       // schema 1 은 물고기 목록(items), schema 2 부터는 칸 배열(slots).
       const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf), cfg);
       const held = intOr(p.held, base.held);
@@ -233,6 +236,7 @@ export class Room {
         lastQuestDay: intOr(p.lastQuestDay, null),
         outfit: sanitizeOutfit(p.outfit, data),
         emotes: sanitizeEmotes(p.emotes, data, cfg),
+        face: sanitizeFace(p.face, data.face, base.slot),
       });
     }
     return room;
@@ -340,7 +344,7 @@ export class RoomManager {
     } else {
       const slot = room.freeSlot();
       if (slot === null) return null;
-      profile = newProfile(uid, slot, this.cfg);
+      profile = newProfile(uid, slot, this.cfg, this.data);
       this.applyStarter(profile);
       room.profiles.set(uid, profile);
     }

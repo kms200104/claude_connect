@@ -32,12 +32,16 @@ npm test                  # 서버 단위·통합 테스트
 - `tests/run_shop_e2e.sh` — 달리기 · 상점 들어가기 · 주인과 대화 → 팔기 → 상점 성장 → 사기 · 나가기 · 옷 입기 · 가구 설치·줍기
 - `tests/run_events_e2e.sh` — 떠돌이 상인(이벤트 칩·알림판·노점·찾는 물건 2배로 팔기·보따리 사기) · 선물 풍선 줍기 · 나무 넘어지는 연출 · 상점 문으로 걸어 드나들기
 - `tests/run_island_e2e.sh` — 섬·박물관·공항 · 달리다 반대로 꺾으면 브레이크 · 감정표현과 주민 반응 · 대화(기분 이름표·감정표현 배우기·주제 수다) · 도토리 심기 → 나무로 자람 · 튤립 심기 → 피면 따기 · 박물관 기증(수조) · 공항 기념품
+- `tests/run_mirror_e2e.sh` — 광장 거울 앞 "거울 보기" · 얼굴 클로즈업 · 눈·코·입·피부·머리 고르기(미리 보기) · 닫으면 되돌림 · 완료하면 저장 · 거울에서 멀면 거절 · 거울 가구를 놓고 그 앞에서도 · 가방에 넣기
+- 렌더러 없이 도는 검사: `godot --headless --path . res://tests/face_check.tscn` (얼굴 부품이 머리 겉면 밖인지 · 캐릭터 삼각형 4,000 이하, 절약·고화질 둘 다), `res://tests/quality_check.tscn` (화질 두 단계 · S24/폴드7 3D 해상도 · 리소스팩)
 - `tests/run_title_e2e.sh` — 첫 화면: 새 마을 만들기 → 다시 켜면 서버 주소·마지막 방이 채워져 있고 "시작하기"로 같은 방에 들어감
 - `godot --headless --path . res://tests/anim_check.tscn` — AnimationTree 블렌딩 (걷기·달리기 팔다리·낚시·도끼질·브레이크·감정표현·자랑)
 
 화면 확인(테스트 아님, 실제 렌더러 필요): 서버를 `WEATHER_FORCE=clear QUEST_CHANCE=1 MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0` 으로 띄우고
 `godot --path . res://tools/capture_screens.tscn -- --server=ws://127.0.0.1:8080 --out=/tmp/shots` — 아침·도끼질·비·뇌우·노을·밤·대화·부탁 목록·가방 창을 PNG로 찍는다.
-섬 생활 화면은 `tools/capture_island.sh /tmp/island_shots` (섬 하늘·박물관·수조·공항·이륙·바닷가, 브레이크·감정표현·대화·감정표현 창·정원·도감, 낚시 자랑).
+섬 생활 화면은 `tools/capture_island.sh /tmp/island_shots` (섬 하늘·박물관·수조·공항·이륙·바닷가, 브레이크·감정표현·대화·감정표현 창·정원·도감, 낚시 자랑, 거울·얼굴 꾸미기·화질 창).
+`MODES="mirror"` 처럼 일부만, `RES=984x1092`(갤럭시 Z 폴드7 펼친 화면 비율) · `RES=540x1170`(갤럭시 S24 비율)로 화면 비율을 바꿔 찍을 수 있다.
+얼굴·머리 모양 모음은 `godot --path . res://tools/art_preview.tscn -- --what=faces|faces_side|hairs --out=…` (가로 화면 `--resolution 2200x1300` 권장).
 이벤트 화면은 `tools/capture_events.sh /tmp/event_shots` (서버를 이벤트별로 띄워 떠돌이 상인·특가 매입·선물 풍선·넘어지는 나무·찌 던지기·유성우를 찍는다).
 상점·옷·가구는 서버를 `WEATHER_FORCE=clear START_SOL=40000 MOVE_SLACK_M=200 DOOR_GRACE_MS=0` 으로 띄우고 `res://tools/capture_shop.tscn` (구멍가게 → 잡화점 → 백화점, 옷·가구).
 

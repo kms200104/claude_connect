@@ -64,7 +64,7 @@ func set_outfit(hat: String, top: String) -> void:
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
 	if rig != null:
-		rig.set_look(CharacterLook.for_player(state.id))
+		rig.set_look(Net.look_of(state.id))
 	global_position = state.position
 	if body != null:
 		body.rotation.y = state.yaw

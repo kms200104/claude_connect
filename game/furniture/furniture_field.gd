@@ -42,6 +42,21 @@ func nearest_any(position: Vector3, max_distance: float) -> String:
 	return best
 
 
+## 가장 가까운 거울 가구 (누가 놓았든).
+func nearest_mirror(position: Vector3, max_distance: float) -> String:
+	var best: String = ""
+	var best_d: float = max_distance
+	for info: PlacedInfo in Net.placed.values():
+		var item: ItemInfo = GameData.item(info.item)
+		if item == null or not item.is_mirror:
+			continue
+		var d: float = Vector2(position.x - info.position.x, position.z - info.position.z).length()
+		if d <= best_d:
+			best_d = d
+			best = info.id
+	return best
+
+
 func has_furniture(id: String) -> bool:
 	return _bodies.has(id)
 

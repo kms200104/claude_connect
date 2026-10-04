@@ -53,12 +53,15 @@ var _show_value: float = 0.0
 var _hold: Node3D = null
 var _held_before_show: String = ""
 var _eyes: MeshInstance3D = null
+var _eye_offset: Vector2 = Vector2.ZERO
 var _limbs: Array[MeshInstance3D] = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
 var _outfit_ids: Dictionary[String, String] = {"hat": "", "top": ""}
 
 
 func _ready() -> void:
+	# 화질을 바꾸면 Quality 가 이 무리의 리그를 새 촘촘함으로 다시 빚는다.
+	add_to_group(&"character_rigs")
 	if tree != null:
 		tree.active = true
 	_build_static_parts()
@@ -195,18 +198,18 @@ func is_chopping() -> bool:
 
 
 ## 눈동자 위치 (-1~1). x 양수 = 캐릭터 기준 오른쪽(+X), y 양수 = 위.
+## 눈은 머리 겉면에 붙어 있어서, 옮기지 않고 머리 중심을 축으로 굴린다 (얼굴 앞면 기준 eye_travel 만큼 움직인다).
 func set_eye_offset(offset: Vector2) -> void:
 	if _eyes == null:
 		return
-	var o: Vector2 = offset.clamp(Vector2(-1.0, -1.0), Vector2(1.0, 1.0))
-	_eyes.position = CharacterModel.EYE_CENTER + Vector3(o.x * eye_travel.x, o.y * eye_travel.y, 0.0)
+	_eye_offset = offset.clamp(Vector2(-1.0, -1.0), Vector2(1.0, 1.0))
+	var yaw: float = -_eye_offset.x * eye_travel.x / CharacterModel.HEAD_RADII.z
+	var pitch: float = _eye_offset.y * eye_travel.y / CharacterModel.HEAD_RADII.z
+	_eyes.rotation = Vector3(pitch, yaw, 0.0)
 
 
 func get_eye_offset() -> Vector2:
-	if _eyes == null:
-		return Vector2.ZERO
-	var d: Vector3 = _eyes.position - CharacterModel.EYE_CENTER
-	return Vector2(d.x / eye_travel.x, d.y / eye_travel.y)
+	return _eye_offset
 
 
 func _process(delta: float) -> void:
@@ -228,11 +231,11 @@ func _build_static_parts() -> void:
 		return
 	_eyes = MeshInstance3D.new()
 	_eyes.name = "Eyes"
-	_eyes.mesh = CharacterModel.eyes()
+	_eyes.mesh = CharacterModel.eyes(look)
 	_eyes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_eyes.material_override = clay_material
 	visual.add_child(_eyes)
-	_eyes.position = CharacterModel.EYE_CENTER
+	_eyes.position = CharacterModel.HEAD_CENTER
 	_add_tool_mesh(rod, CharacterModel.rod())
 	_add_tool_mesh(axe, CharacterModel.axe())
 	for limb: Node3D in [arm_left, arm_right, leg_left, leg_right]:
@@ -262,6 +265,8 @@ func _apply_look() -> void:
 	if top != null and top.tint.a > 0.0:
 		worn = look.duplicate_look()
 		worn.top = top.tint
+	if _eyes != null:
+		_eyes.mesh = CharacterModel.eyes(worn)
 	if body_mesh != null:
 		body_mesh.mesh = CharacterModel.body(worn)
 		body_mesh.material_override = clay_material

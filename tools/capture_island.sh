@@ -15,14 +15,14 @@ offset_for() {
 }
 
 # MODES="places life" 처럼 일부만 찍을 수 있다.
-want() { [[ " ${MODES:-places life fish} " == *" $1 "* ]]; }
+want() { [[ " ${MODES:-places life fish mirror} " == *" $1 "* ]]; }
 
 run_mode() { # mode port hour env...
   local mode=$1 port=$2 hour=$3; shift 3
   (cd "$ROOT/server" && exec env PORT="$port" SAVE_DIR="$DIR/$mode" CLOCK_OFFSET_MIN="$(offset_for "$hour")" MOVE_SLACK_M=300 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 QUEST_CHANCE=0 "$@" node src/index.js >"$DIR/$mode.log" 2>&1) &
   local pid=$!
   sleep 1
-  xvfb-run -a -s "-screen 0 1080x1920x24" "$GODOT" --path "$ROOT" --rendering-driver vulkan --rendering-method mobile \
+  xvfb-run -a -s "-screen 0 2200x2200x24" "$GODOT" --path "$ROOT" --rendering-driver vulkan --rendering-method mobile ${RES:+--resolution $RES} \
     res://tools/capture_island.tscn -- --server="ws://127.0.0.1:$port" --mode="$mode" --out="$OUT" 2>&1 | grep -E '^\[capture\]|SCRIPT ERROR'
   kill "$pid" 2>/dev/null
 }
@@ -31,3 +31,4 @@ want places && run_mode places 18201 15 WEATHER_FORCE=clear EVENT_FORCE=lumber_d
 want life && run_mode life 18202 15 WEATHER_FORCE=clear EVENT_FORCE=lumber_day GROWTH_SCALE=0.02 START_FRIENDSHIP=30 \
   START_ITEMS=acorn:3,pinecone:2,seed_tulip:3,seed_cosmos:3,seed_sunflower:2,seed_hydrangea:2,crucian:1,loach:1,goldfish:1
 want fish && run_mode fish 18203 15 WEATHER_FORCE=clear EVENT_FORCE=lumber_day FISH_TIME_SCALE=0.3
+want mirror && run_mode mirror 18204 15 WEATHER_FORCE=clear

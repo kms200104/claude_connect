@@ -64,6 +64,10 @@ func _ready() -> void:
 		if _code_edit.text.strip_edges().length() == NetProtocol.ROOM_CODE_LENGTH:
 			_enter(func() -> void: Net.join_room(_server_url(), _code_edit.text)))
 	_refresh_start_label()
+	# 화질 고르기 (절약 · 고화질).
+	var quality: QualityWindow = QualityWindow.attach(_overlay)
+	var quality_button: Button = QualityWindow.make_button(quality, 32)
+	_start_button.get_parent().add_child(quality_button)
 	_place_camera()
 	Audio.play_music(Audio.MUSIC_TITLE)
 

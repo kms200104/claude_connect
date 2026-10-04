@@ -21,6 +21,8 @@ var island_power: float = 4.0
 var island_beach: float = 8.0
 ## 큰 광장 말고 작은 광장들 (박물관 앞, 공항 앞).
 var plazas: Array[Vector3] = []
+## 마을에 놓인 거울: (x, z, yaw) — yaw 는 거울 앞면이 보는 방향 (+Z 를 yaw 만큼 돌린 쪽).
+var mirrors: Array[Vector3] = []
 var path_width: float = 2.6
 var plaza_center: Vector2 = Vector2.ZERO
 var plaza_radius: float = 6.0
@@ -54,6 +56,9 @@ static func from_dict(data: Dictionary) -> VillageLayout:
 	for entry: Variant in data.get("plazas", []):
 		if entry is Dictionary:
 			layout.plazas.append(Vector3(float(entry.get("x", 0.0)), float(entry.get("z", 0.0)), float(entry.get("r", 4.0))))
+	for entry: Variant in data.get("mirrors", []):
+		if entry is Dictionary:
+			layout.mirrors.append(Vector3(float(entry.get("x", 0.0)), float(entry.get("z", 0.0)), float(entry.get("yaw", 0.0))))
 	for line: Variant in data.get("paths", []):
 		layout.paths.append(_points(line))
 	layout.lake_shore = float(data.get("lake_shore", layout.lake_shore))

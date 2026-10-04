@@ -13,7 +13,10 @@
         "style": "bun",
         "top": "#E8A6B8",
         "bottom": "#8C6A8E",
-        "shoes": "#7A5A4A"
+        "shoes": "#7A5A4A",
+        "eyes": "droopy",
+        "nose": "button",
+        "mouth": "smile"
       },
       "about": "찻집을 하는 다정한 할머니. 따뜻한 차와 수다를 좋아한다.",
       "house": {
@@ -115,10 +118,13 @@
       "color": "#F2C14E",
       "look": {
         "hair": "#D9733A",
-        "style": "short",
+        "style": "spiky",
         "top": "#F2C14E",
         "bottom": "#4F81BD",
-        "shoes": "#D9574A"
+        "shoes": "#D9574A",
+        "eyes": "sparkle",
+        "nose": "small",
+        "mouth": "open"
       },
       "about": "하루 종일 뛰어다니는 기운찬 친구. 운동과 내기를 좋아한다.",
       "house": {
@@ -224,7 +230,10 @@
         "style": "bob",
         "top": "#8EC5E8",
         "bottom": "#EFE6D2",
-        "shoes": "#8A6A4A"
+        "shoes": "#8A6A4A",
+        "eyes": "sleepy",
+        "nose": "small",
+        "mouth": "wavy"
       },
       "about": "호숫가에서 그림을 그리는 느긋한 화가. 낮잠이 취미다.",
       "house": {
@@ -326,11 +335,14 @@
       "color": "#9C8BD1",
       "look": {
         "hair": "#3A2A22",
-        "style": "short",
+        "style": "buzz",
         "top": "#9C8BD1",
         "bottom": "#6A5A48",
         "shoes": "#4A3A30",
-        "skin": "#EDC3A2"
+        "skin": "#EDC3A2",
+        "eyes": "sharp",
+        "nose": "big",
+        "mouth": "flat"
       },
       "about": "말수 적은 목수. 무뚝뚝하지만 부탁을 들어주면 몰래 기뻐한다.",
       "house": {
@@ -431,10 +443,14 @@
       "color": "#E9A8D0",
       "look": {
         "hair": "#B88AD4",
-        "style": "bob",
+        "style": "side",
         "top": "#F2C6DE",
         "bottom": "#5A4A7A",
-        "shoes": "#3A2A4A"
+        "shoes": "#3A2A4A",
+        "eyes": "almond",
+        "nose": "long",
+        "mouth": "smirk",
+        "eye_color": "#8A5CC4"
       },
       "about": "서쪽 숲 끝에 사는 새침한 옷 디자이너. 우아한 것을 좋아하고 칭찬에 약하다.",
       "house": {
@@ -532,10 +548,14 @@
       "color": "#A8C8F0",
       "look": {
         "hair": "#F2D27A",
-        "style": "short",
+        "style": "curly",
         "top": "#A8C8F0",
         "bottom": "#F4F1EA",
-        "shoes": "#8A6A9A"
+        "shoes": "#8A6A9A",
+        "eyes": "star",
+        "nose": "freckle",
+        "mouth": "tiny",
+        "eye_color": "#4F8FD6"
       },
       "about": "남쪽 꽃동산에 사는 몽상가 시인. 별과 구름에 이름 붙이기를 좋아한다.",
       "house": {

@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 6
+const VERSION: int = 7
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -102,6 +102,8 @@ const ERR_PLANT_LIMIT: String = "plant_limit"
 const ERR_NO_FLOWER: String = "no_flower"
 const ERR_UNKNOWN_EMOTE: String = "unknown_emote"
 const ERR_NOT_NEAR_KEEPER: String = "not_near_keeper"
+const ERR_NOT_NEAR_MIRROR: String = "not_near_mirror"
+const ERR_BAD_FACE: String = "bad_face"
 const ERR_ALREADY_DONATED: String = "already_donated"
 const ERR_NOT_FISH: String = "not_fish"
 const ERR_BAD_TOPIC: String = "bad_topic"

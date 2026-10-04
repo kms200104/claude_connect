@@ -77,6 +77,9 @@ extends Node
 
 
 func _ready() -> void:
+	# 그림자 거리는 화질 설정을 따른다 (절약 22m · 고화질 32m).
+	shadow_distance = float(Quality.value("shadow_distance", shadow_distance))
+	Quality.changed.connect(func() -> void: shadow_distance = float(Quality.value("shadow_distance", shadow_distance)))
 	_apply_all()
 
 

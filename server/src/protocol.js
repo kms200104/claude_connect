@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -53,6 +53,8 @@ export const ErrorCode = Object.freeze({
   unknownEmote: 'unknown_emote', // 아직 배우지 않은 감정표현
   // 박물관 · 공항
   notNearKeeper: 'not_near_keeper', // 관장·조종사 곁이 아님
+  notNearMirror: 'not_near_mirror', // 거울 앞이 아님
+  badFace: 'bad_face', // 모르는 얼굴 항목·모양
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
   // 대화 주제

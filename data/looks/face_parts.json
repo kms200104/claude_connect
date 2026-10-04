@@ -1,0 +1,95 @@
+{
+ "version": 1,
+ "_comment": "얼굴 부품: 눈·코·입 도형(머리 겉면 기준 미터 좌표), 피부·머리 색, 머리 모양. 눈 좌표 x는 바깥쪽이 +, 입·코는 캐릭터 오른쪽(+X)이 +.",
+ "anchors": {"eye": [0.125, 0.39], "nose": [0.0, 0.315], "mouth": [0.0, 0.255], "cheek": [0.2, 0.3]},
+ "colors": {"ink": "#2B211E", "white": "#FFFFFF", "sclera": "#FFFDF7", "mouth": "#5A3326", "mouth_dark": "#6B3528", "tongue": "#E8707A", "teeth": "#FFFFFF", "star": "#FFD866", "heart": "#EC5A78"},
+ "eyes": [
+  {"id": "round", "name": "동글눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.056, 0.07], "color": "ink"}, {"shape": "ellipse", "c": [0, -0.016], "r": [0.04, 0.046], "color": "iris"}, {"shape": "ellipse", "c": [0.016, 0.026], "r": [0.019, 0.021], "color": "white"}, {"shape": "ellipse", "c": [-0.016, -0.032], "r": [0.009, 0.009], "color": "white"}, {"shape": "stroke", "pts": [[0.038, 0.056], [0.058, 0.068], [0.074, 0.07]], "w": 0.013, "color": "ink"}]},
+  {"id": "dot", "name": "콩눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.027, 0.033], "color": "ink"}, {"shape": "ellipse", "c": [0.009, 0.012], "r": [0.008, 0.008], "color": "white"}]},
+  {"id": "sparkle", "name": "반짝눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.064, 0.078], "color": "ink"}, {"shape": "ellipse", "c": [0, -0.016], "r": [0.048, 0.054], "color": "iris"}, {"shape": "star", "c": [0.014, 0.022], "r": 0.03, "inner": 0.32, "n": 4, "rot": 45, "color": "white"}, {"shape": "ellipse", "c": [-0.02, -0.036], "r": [0.011, 0.011], "color": "white"}, {"shape": "ellipse", "c": [0.026, -0.024], "r": [0.006, 0.006], "color": "white"}, {"shape": "stroke", "pts": [[0.044, 0.062], [0.066, 0.076], [0.082, 0.078]], "w": 0.013, "color": "ink"}]},
+  {"id": "sleepy", "name": "졸린눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.052, 0.062], "color": "ink"}, {"shape": "ellipse", "c": [0, -0.02], "r": [0.038, 0.036], "color": "iris"}, {"shape": "chord", "c": [0, 0], "r": [0.062, 0.072], "a0": 8, "a1": 172, "color": "skin"}, {"shape": "stroke", "pts": [[-0.056, 0.012], [0, 0.016], [0.058, 0.012], [0.07, 0.02]], "w": 0.012, "color": "ink"}, {"shape": "ellipse", "c": [0.014, -0.008], "r": [0.008, 0.008], "color": "white"}]},
+  {"id": "happy", "name": "웃는눈", "layers": [{"shape": "arc", "c": [0, -0.022], "r": [0.046, 0.044], "a0": 15, "a1": 165, "w": 0.017, "color": "ink"}]},
+  {"id": "line", "name": "실눈", "layers": [{"shape": "stroke", "pts": [[-0.042, 0.0], [0, 0.008], [0.044, 0.0]], "w": 0.015, "color": "ink"}, {"shape": "stroke", "pts": [[0.044, 0.0], [0.062, 0.012]], "w": 0.011, "color": "ink"}]},
+  {"id": "almond", "name": "또렷눈", "layers": [{"shape": "poly", "pts": [[-0.05, -0.004], [-0.03, 0.03], [0.0, 0.046], [0.034, 0.044], [0.062, 0.022], [0.05, -0.018], [0.02, -0.04], [-0.02, -0.038]], "color": "ink"}, {"shape": "ellipse", "c": [0.004, -0.002], "r": [0.03, 0.036], "color": "iris"}, {"shape": "ellipse", "c": [0.016, 0.016], "r": [0.013, 0.014], "color": "white"}, {"shape": "stroke", "pts": [[-0.054, 0.0], [-0.03, 0.036], [0.0, 0.052], [0.036, 0.05], [0.07, 0.03], [0.084, 0.036]], "w": 0.014, "color": "ink"}]},
+  {"id": "bright", "name": "초롱눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.058, 0.068], "color": "sclera"}, {"shape": "ellipse", "c": [-0.004, -0.006], "r": [0.042, 0.05], "color": "iris"}, {"shape": "ellipse", "c": [-0.004, -0.006], "r": [0.022, 0.028], "color": "ink"}, {"shape": "ellipse", "c": [0.012, 0.018], "r": [0.013, 0.015], "color": "white"}, {"shape": "ellipse", "c": [-0.018, -0.028], "r": [0.007, 0.007], "color": "white"}, {"shape": "arc", "c": [0, 0], "r": [0.06, 0.07], "a0": 20, "a1": 165, "w": 0.014, "color": "ink"}, {"shape": "stroke", "pts": [[0.052, 0.05], [0.074, 0.064]], "w": 0.012, "color": "ink"}]},
+  {"id": "droopy", "name": "순한눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.05, 0.062], "color": "ink"}, {"shape": "ellipse", "c": [0, -0.014], "r": [0.036, 0.04], "color": "iris"}, {"shape": "ellipse", "c": [0.012, 0.022], "r": [0.016, 0.017], "color": "white"}, {"shape": "stroke", "pts": [[-0.05, 0.084], [0.0, 0.09], [0.06, 0.066]], "w": 0.013, "color": "ink"}]},
+  {"id": "sharp", "name": "새침눈", "layers": [{"shape": "poly", "pts": [[-0.05, -0.02], [-0.046, 0.02], [-0.02, 0.044], [0.02, 0.054], [0.06, 0.058], [0.05, 0.0], [0.02, -0.04], [-0.02, -0.042]], "color": "ink"}, {"shape": "ellipse", "c": [0.0, -0.006], "r": [0.03, 0.034], "color": "iris"}, {"shape": "ellipse", "c": [0.014, 0.016], "r": [0.012, 0.013], "color": "white"}, {"shape": "stroke", "pts": [[-0.052, 0.02], [-0.02, 0.05], [0.024, 0.062], [0.072, 0.07]], "w": 0.014, "color": "ink"}]},
+  {"id": "star", "name": "별눈", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.058, 0.07], "color": "ink"}, {"shape": "star", "c": [0, -0.004], "r": 0.04, "inner": 0.45, "n": 5, "rot": 90, "color": "star"}, {"shape": "ellipse", "c": [0.022, 0.032], "r": [0.009, 0.009], "color": "white"}]},
+  {"id": "heart", "name": "하트눈", "layers": [{"shape": "heart", "c": [0, -0.004], "s": 0.075, "color": "heart"}, {"shape": "ellipse", "c": [0.016, 0.012], "r": [0.01, 0.011], "color": "white"}]}
+ ],
+ "eye_colors": [
+  {"id": "cocoa", "name": "코코아", "color": "#4A2E22"},
+  {"id": "black", "name": "까망", "color": "#1E1A1A"},
+  {"id": "sky", "name": "하늘", "color": "#4F8FD6"},
+  {"id": "leaf", "name": "풀잎", "color": "#4E9B5A"},
+  {"id": "amber", "name": "호박", "color": "#C8862E"},
+  {"id": "violet", "name": "보라", "color": "#8A5CC4"},
+  {"id": "rose", "name": "분홍", "color": "#E06A9A"},
+  {"id": "gray", "name": "회색", "color": "#7D8790"}
+ ],
+ "noses": [
+  {"id": "button", "name": "단추코", "layers": [{"shape": "dome", "c": [0, 0], "r": [0.03, 0.024], "h": 0.016, "color": "nose"}]},
+  {"id": "dot", "name": "점코", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.011, 0.008], "color": "nose_dark"}]},
+  {"id": "small", "name": "콩코", "layers": [{"shape": "dome", "c": [0, 0], "r": [0.019, 0.015], "h": 0.01, "color": "nose"}]},
+  {"id": "line", "name": "ㄴ자코", "layers": [{"shape": "stroke", "pts": [[-0.004, 0.016], [-0.008, -0.006], [0.01, -0.008]], "w": 0.01, "color": "nose_dark"}]},
+  {"id": "long", "name": "오똑코", "layers": [{"shape": "dome", "c": [0, 0.006], "r": [0.02, 0.036], "h": 0.022, "color": "nose"}]},
+  {"id": "pig", "name": "돼지코", "layers": [{"shape": "ellipse", "c": [0, 0], "r": [0.032, 0.024], "color": "nose"}, {"shape": "ellipse", "c": [-0.011, 0], "r": [0.006, 0.009], "color": "nose_dark"}, {"shape": "ellipse", "c": [0.011, 0], "r": [0.006, 0.009], "color": "nose_dark"}]},
+  {"id": "big", "name": "주먹코", "layers": [{"shape": "dome", "c": [0, 0], "r": [0.042, 0.032], "h": 0.022, "color": "nose"}]},
+  {"id": "freckle", "name": "주근깨", "layers": [{"shape": "dome", "c": [0, 0], "r": [0.022, 0.017], "h": 0.012, "color": "nose"}, {"shape": "ellipse", "c": [0.13, -0.03], "r": [0.006, 0.006], "color": "nose_dark", "mirror": true}, {"shape": "ellipse", "c": [0.155, -0.012], "r": [0.006, 0.006], "color": "nose_dark", "mirror": true}, {"shape": "ellipse", "c": [0.15, -0.048], "r": [0.006, 0.006], "color": "nose_dark", "mirror": true}]}
+ ],
+ "mouths": [
+  {"id": "smile", "name": "미소", "layers": [{"shape": "arc", "c": [0, 0.012], "r": [0.056, 0.034], "a0": 200, "a1": 340, "w": 0.016, "color": "mouth"}]},
+  {"id": "tiny", "name": "쏙 미소", "layers": [{"shape": "arc", "c": [0, 0.008], "r": [0.03, 0.022], "a0": 205, "a1": 335, "w": 0.014, "color": "mouth"}]},
+  {"id": "open", "name": "활짝", "layers": [{"shape": "chord", "c": [0, 0.008], "r": [0.05, 0.042], "a0": 180, "a1": 360, "color": "mouth_dark"}, {"shape": "ellipse", "c": [0, -0.022], "r": [0.024, 0.01], "color": "tongue"}]},
+  {"id": "cat", "name": "고양이입", "layers": [{"shape": "stroke", "pts": [[-0.05, 0.006], [-0.04, -0.008], [-0.026, -0.013], [-0.012, -0.008], [0, 0.002], [0.012, -0.008], [0.026, -0.013], [0.04, -0.008], [0.05, 0.006]], "w": 0.014, "color": "mouth"}]},
+  {"id": "flat", "name": "무표정", "layers": [{"shape": "stroke", "pts": [[-0.03, -0.004], [0.03, -0.004]], "w": 0.014, "color": "mouth"}]},
+  {"id": "o", "name": "동그란입", "layers": [{"shape": "ellipse", "c": [0, -0.006], "r": [0.019, 0.023], "color": "mouth_dark"}, {"shape": "ellipse", "c": [0, -0.016], "r": [0.011, 0.007], "color": "tongue"}]},
+  {"id": "grin", "name": "이빨 웃음", "layers": [{"shape": "chord", "c": [0, 0.006], "r": [0.055, 0.042], "a0": 180, "a1": 360, "color": "mouth_dark"}, {"shape": "poly", "pts": [[-0.044, 0.004], [0.044, 0.004], [0.04, -0.01], [-0.04, -0.01]], "color": "teeth"}]},
+  {"id": "pout", "name": "뾰로통", "layers": [{"shape": "stroke", "pts": [[0.004, 0.014], [-0.01, 0.008], [0.002, 0.0], [-0.01, -0.008], [0.004, -0.014]], "w": 0.012, "color": "mouth"}]},
+  {"id": "tongue", "name": "메롱", "layers": [{"shape": "ellipse", "c": [0.014, -0.026], "r": [0.016, 0.014], "color": "tongue"}, {"shape": "arc", "c": [0, 0.012], "r": [0.056, 0.034], "a0": 200, "a1": 340, "w": 0.016, "color": "mouth"}]},
+  {"id": "smirk", "name": "씩", "layers": [{"shape": "stroke", "pts": [[-0.04, -0.01], [-0.01, -0.016], [0.022, -0.01], [0.044, 0.006]], "w": 0.015, "color": "mouth"}]},
+  {"id": "wavy", "name": "물결입", "layers": [{"shape": "stroke", "pts": [[-0.045, -0.004], [-0.034, 0.002], [-0.022, -0.004], [-0.011, -0.01], [0, -0.004], [0.011, 0.002], [0.022, -0.004], [0.034, -0.01], [0.045, -0.004]], "w": 0.012, "color": "mouth"}]},
+  {"id": "laugh", "name": "깔깔", "layers": [{"shape": "chord", "c": [0, 0.01], "r": [0.062, 0.054], "a0": 180, "a1": 360, "color": "mouth_dark"}, {"shape": "ellipse", "c": [0, -0.03], "r": [0.032, 0.013], "color": "tongue"}, {"shape": "poly", "pts": [[-0.05, 0.008], [0.05, 0.008], [0.046, -0.002], [-0.046, -0.002]], "color": "teeth"}]}
+ ],
+ "skins": [
+  {"id": "porcelain", "name": "뽀얀 피부", "skin": "#FBE3D6", "cheeks": "#F7A9A8"},
+  {"id": "light", "name": "밝은 피부", "skin": "#F9DAC5", "cheeks": "#F4A6A0"},
+  {"id": "peach", "name": "복숭아 피부", "skin": "#F7D5BC", "cheeks": "#F4A6A0"},
+  {"id": "rosy", "name": "발그레 피부", "skin": "#F6CDB8", "cheeks": "#EE8F8F"},
+  {"id": "beige", "name": "베이지 피부", "skin": "#EBC39C", "cheeks": "#E9947E"},
+  {"id": "honey", "name": "꿀빛 피부", "skin": "#DDAA7A", "cheeks": "#DB8A6C"},
+  {"id": "tan", "name": "그을린 피부", "skin": "#C98E5F", "cheeks": "#C9725A"},
+  {"id": "caramel", "name": "캐러멜 피부", "skin": "#B0754A", "cheeks": "#B85E4A"},
+  {"id": "cocoa", "name": "코코아 피부", "skin": "#8C5638", "cheeks": "#9E4E3C"},
+  {"id": "deep", "name": "짙은 피부", "skin": "#643B27", "cheeks": "#84402F"}
+ ],
+ "hair_styles": [
+  {"id": "bob", "name": "단발"},
+  {"id": "short", "name": "짧은 머리"},
+  {"id": "bun", "name": "올림머리"},
+  {"id": "long", "name": "긴 생머리"},
+  {"id": "pigtails", "name": "양갈래"},
+  {"id": "ponytail", "name": "포니테일"},
+  {"id": "curly", "name": "뽀글 파마"},
+  {"id": "spiky", "name": "삐죽 머리"},
+  {"id": "side", "name": "옆가르마"},
+  {"id": "buzz", "name": "짧게 민 머리"}
+ ],
+ "hair_colors": [
+  {"id": "brown", "name": "밤색", "color": "#8A5638"},
+  {"id": "dark", "name": "먹색", "color": "#3B3445"},
+  {"id": "black", "name": "검정", "color": "#26211F"},
+  {"id": "blonde", "name": "금발", "color": "#E2B860"},
+  {"id": "ginger", "name": "당근색", "color": "#C8622E"},
+  {"id": "pink", "name": "분홍", "color": "#E99AB4"},
+  {"id": "mint", "name": "민트", "color": "#7CC9B2"},
+  {"id": "blue", "name": "하늘", "color": "#6A9BDB"},
+  {"id": "purple", "name": "보라", "color": "#8D6CC2"},
+  {"id": "silver", "name": "은회색", "color": "#B9B7BD"}
+ ],
+ "defaults": [
+  {"eyes": "round", "eye_color": "cocoa", "nose": "button", "mouth": "smile", "skin": "peach", "hair": "bob", "hair_color": "brown"},
+  {"eyes": "round", "eye_color": "cocoa", "nose": "button", "mouth": "smile", "skin": "peach", "hair": "short", "hair_color": "dark"}
+ ],
+ "mirror": {"range": 2.2}
+}

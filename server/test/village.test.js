@@ -69,7 +69,7 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.ok(w.trees.every((t) => t.s === 'grown'));
     assert.deepEqual(w.npcs.map((n) => n.id).sort(), ['danchu', 'haerang', 'morak', 'mujin', 'rara', 'tongtong']);
     assert.ok(w.npcs.every((n) => typeof n.m === 'string'), '주민 기분이 함께 온다');
-    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] } });
+    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' } });
     assert.deepEqual(w.flowers, []);
     assert.deepEqual(w.museum, { fish: {} });
     assert.deepEqual(w.shop, { level: 1, points: 0, next: 1500 });

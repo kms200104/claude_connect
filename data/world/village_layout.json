@@ -21,6 +21,7 @@
     { "x": 48, "z": -9, "r": 5.5 },
     { "x": 0, "z": -68, "r": 6.0 }
   ],
+  "mirrors": [{"id": "plaza_mirror", "x": -2.5, "z": 5.2, "yaw": 2.69}],
   "lake_shore": 1.6,
   "lake_shape_power": 4.0,
   "rocks": [

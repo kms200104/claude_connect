@@ -26,8 +26,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel = PanelContainer.new()
-	_panel.position = Vector2(70, 250)
 	_panel.custom_minimum_size = Vector2(940, 0)
+	HudLayout.center_top(_panel, 940.0, 250.0)
 	_panel.minimum_size_changed.connect(func() -> void: _panel.reset_size())
 	_panel.add_to_group(&"blocks_joystick")
 	_panel.gui_input.connect(func(event: InputEvent) -> void:

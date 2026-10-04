@@ -208,7 +208,7 @@ func _refresh_outfit() -> void:
 			_outfit_slots[part] = slot
 	_outfit_slots["hat"].set_item(InventoryItem.new(Net.outfit_hat, 1) if not Net.outfit_hat.is_empty() else null)
 	_outfit_slots["top"].set_item(InventoryItem.new(Net.outfit_top, 1) if not Net.outfit_top.is_empty() else null)
-	_preview.rig.set_look(CharacterLook.for_player(Net.my_id))
+	_preview.rig.set_look(Net.look_of(Net.my_id))
 	_preview.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 

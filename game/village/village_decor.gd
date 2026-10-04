@@ -28,6 +28,19 @@ func _ready() -> void:
 	_layout = GameData.layout
 	if _layout == null:
 		return
+	Quality.changed.connect(rebuild)
+	_build_all()
+
+
+## 화질(풀·꽃·야자수 수)이 바뀌었을 때 처음부터 다시 꾸민다 (시드가 같아서 남는 것은 같은 자리).
+func rebuild() -> void:
+	for child: Node in get_children():
+		remove_child(child)
+		child.queue_free()
+	_build_all()
+
+
+func _build_all() -> void:
 	_rng.seed = seed_value
 	_build_rocks()
 	_build_fences()
@@ -121,7 +134,8 @@ func _build_flowers() -> void:
 			by_color[_rng.randi() % PETALS.size()].append(_flower_xform(p))
 	var placed: int = 0
 	var tries: int = 0
-	while placed < _layout.wild_flower_count and tries < _layout.wild_flower_count * 20:
+	var wild_count: int = int(float(_layout.wild_flower_count) * Quality.density("wild_flowers"))
+	while placed < wild_count and tries < wild_count * 20:
 		tries += 1
 		var p: Vector2 = _random_point()
 		if _blocked(p, 0.4):
@@ -164,7 +178,8 @@ func _build_grass() -> void:
 		anchors.append(rock.position)
 	var xforms: Array[Transform3D] = []
 	var tries: int = 0
-	while xforms.size() < _layout.grass_count and tries < _layout.grass_count * 20:
+	var grass_count: int = int(float(_layout.grass_count) * Quality.density("grass"))
+	while xforms.size() < grass_count and tries < grass_count * 20:
 		tries += 1
 		var p: Vector2 = _random_point()
 		if _rng.randf() < 0.45 and not anchors.is_empty():
@@ -206,6 +221,9 @@ func _blocked(p: Vector2, margin: float) -> bool:
 	for npc: NpcInfo in GameData.npcs.values():
 		if p.distance_to(Vector2(npc.house_position.x, npc.house_position.z)) < 3.2:
 			return true
+	for mirror: Vector3 in _layout.mirrors:
+		if p.distance_to(Vector2(mirror.x, mirror.y)) < 1.2 + margin:
+			return true
 	var door: Vector2 = Vector2(GameData.shop.door.x, GameData.shop.door.z)
 	if p.x > door.x - 5.5 and p.x < door.x + 5.5 and p.y < door.y + 1.5 and p.y > door.y - 8.0:
 		return true
@@ -237,7 +255,8 @@ func _build_beach() -> void:
 	var stars: Array[Transform3D] = []
 	var half: float = _layout.island_half
 	var tries: int = 0
-	while palms.size() < palm_count and tries < palm_count * 40:
+	var palm_total: int = int(float(palm_count) * Quality.density("palms"))
+	while palms.size() < palm_total and tries < palm_total * 40:
 		tries += 1
 		var a: float = _rng.randf() * TAU
 		var dir: Vector2 = Vector2(cos(a), sin(a))

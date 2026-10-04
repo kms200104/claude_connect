@@ -2,6 +2,7 @@ extends Node3D
 ## 모델 확인용 사진관 (테스트 아님, 실제 렌더러 필요). 나무·캐릭터·소품을 줄지어 세우고 PNG로 찍는다.
 ## 사용: godot --path . res://tools/art_preview.tscn -- --what=trees --out=/tmp/preview.png
 ##   --what: trees / characters / outfits / furniture / clothes / shop / village (--cam=x,y,z --at=x,y,z, 서버 없이 마을 전체)
+##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
@@ -50,6 +51,30 @@ func _ready() -> void:
 				if i % 3 == 2:
 					rig.rotation.y = 0.6
 			_camera(Vector3(0.0, 1.6, -6.5), Vector3(0.0, 0.85, 0.0), 40.0)
+		"faces", "faces_side", "hairs":
+			var f: FaceCatalog = GameData.face
+			var count: int = f.hair_styles.size() if _what == "hairs" else 12
+			var columns: int = 5 if _what == "hairs" else 6
+			for i: int in count:
+				var ids: Dictionary = {
+					"eyes": f.eyes[i % f.eyes.size()].id, "nose": f.noses[i % f.noses.size()].id,
+					"mouth": f.mouths[i % f.mouths.size()].id, "skin": f.skins[(i * 3) % f.skins.size()].id,
+					"hair": f.hair_styles[i % f.hair_styles.size()].id, "hair_color": f.hair_colors[i % f.hair_colors.size()].id,
+					"eye_color": f.eye_colors[i % f.eye_colors.size()].id}
+				if _what == "hairs":
+					ids = {"hair": f.hair_styles[i].id, "hair_color": f.hair_colors[i % f.hair_colors.size()].id}
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				var row: int = i / columns
+				rig.position = Vector3((float(i % columns) - float(columns - 1) * 0.5) * 0.95, 0.8 + 1.45 * float(1 - row), 0.0)
+				rig.set_look(GameData.player_look(1, ids))
+				rig.set_held("")
+				rig.tree.active = false
+				if _what == "faces_side":
+					rig.rotation.y = -0.75
+				elif _what == "hairs":
+					rig.rotation.y = 0.5 if row == 0 else PI - 0.5
+			_camera(Vector3(0.0, 1.95, -4.6), Vector3(0.0, 1.95, 0.0), 42.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():

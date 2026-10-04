@@ -29,6 +29,12 @@ func _ready() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	_resume_button.pressed.connect(_on_resume_pressed)
 	_leave_button.pressed.connect(Net.leave)
+	# 방 정보 줄에 화질 단추 (창은 HUD 맨 위에 붙인다).
+	var quality: QualityWindow = QualityWindow.attach(get_parent() if get_parent() != null else self)
+	var quality_button: Button = QualityWindow.make_button(quality, 26)
+	quality_button.name = "QualityButton"
+	_leave_button.get_parent().add_child(quality_button)
+	_leave_button.get_parent().move_child(quality_button, _leave_button.get_index())
 	Net.state_changed.connect(_on_state_changed)
 	Net.error_received.connect(_on_error)
 	Net.session_lost.connect(_on_session_lost)

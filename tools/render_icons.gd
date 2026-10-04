@@ -1,6 +1,7 @@
 extends Node
 ## 아이템 아이콘 사진관 (실제 렌더러 필요): 아이템 모형(data 의 model, 물고기 look)을 점토 조명으로 찍어
 ## assets/icons/items/<id>.png (128×128, 투명 배경)로 저장한다. 참고 그림에서 오려 낸 아이콘(HAND_MADE)은 건드리지 않는다.
+## 머리 모양 그림(거울 창)도 찍는다: assets/ui/face/hair_<id>.png (--only=hair 로 머리만).
 ## 사용: godot --path . res://tools/render_icons.tscn [-- --only=wood,acorn]
 
 ## tools/art/extract_reference.py 가 참고 그림에서 오려 낸 아이콘.
@@ -38,6 +39,13 @@ func _ready() -> void:
 	if only.is_empty() or "gift" in only:
 		await _shoot("gift", DropField.gift_mesh(0), Vector3(0.5, 0.35, 1.0), "res://assets/ui/icons")
 		count += 1
+	# 거울 창의 머리 모양 그림: 기본 얼굴에 머리 모양만 바꿔 3/4 앞모습.
+	if only.is_empty() or "hair" in only:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/ui/face"))
+		for hair: FaceCatalog.Part in GameData.face.hair_styles:
+			var look: CharacterLook = GameData.player_look(1, {"hair": hair.id, "hair_color": "brown"})
+			await _shoot_head("hair_%s" % hair.id, look)
+			count += 1
 	print("[icons] %d개 저장" % count)
 	get_tree().quit()
 
@@ -105,6 +113,27 @@ func _build_studio() -> void:
 	_holder = MeshInstance3D.new()
 	_holder.material_override = _material
 	_viewport.add_child(_holder)
+
+
+## 캐릭터 머리 (몸 메시 + 눈 메시)를 같은 각도로.
+func _shoot_head(id: String, look: CharacterLook) -> void:
+	_holder.mesh = CharacterModel.body(look)
+	var eyes: MeshInstance3D = MeshInstance3D.new()
+	eyes.mesh = CharacterModel.eyes(look)
+	eyes.material_override = _material
+	eyes.position = CharacterModel.HEAD_CENTER
+	_viewport.add_child(eyes)
+	var center: Vector3 = CharacterModel.HEAD_CENTER + Vector3(0.0, 0.02, 0.0)
+	# 캐릭터 앞 = -Z. 살짝 옆에서.
+	_camera.look_at_from_position(center + Vector3(0.45, 0.25, -1.0).normalized() * 2.15, center)
+	for i: int in 3:
+		await RenderingServer.frame_post_draw
+	var image: Image = _viewport.get_texture().get_image()
+	image.resize(ICON_SIZE, ICON_SIZE, Image.INTERPOLATE_LANCZOS)
+	var path: String = ProjectSettings.globalize_path("res://assets/ui/face/%s.png" % id)
+	image.save_png(path)
+	print("[icons] %s" % path)
+	eyes.queue_free()
 
 
 func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:

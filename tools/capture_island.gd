@@ -3,6 +3,7 @@ extends Node
 ##   --mode=places : 섬 하늘에서 · 박물관과 수조 · 공항과 이륙하는 비행기 · 바닷가 야자수
 ##   --mode=life   : 브레이크 미끄러짐 · 감정표현과 주민 반응 · 감정표현 창 · 대화(기분·주제) · 심고 자라는 나무와 꽃 · 박물관 도감
 ##   --mode=fish   : 물고기를 낚아 두 손으로 내밀고 자랑 (클로즈업 · 외침 카드)
+##   --mode=mirror : 광장 거울 · 거울 창(눈 탭, 머리 탭) · 바꾼 얼굴 옆모습
 ## 인자: -- --server=ws://… --mode=… --out=/tmp/shots
 
 var _server: String = "ws://127.0.0.1:8080"
@@ -32,6 +33,8 @@ func _ready() -> void:
 			await _life()
 		"fish":
 			await _fish()
+		"mirror":
+			await _mirror()
 	get_tree().quit()
 
 
@@ -270,3 +273,57 @@ func _fish() -> void:
 			await _shot("v16_fish_show_off")
 			return
 		await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.IDLE, 6.0)
+
+
+func _mirror() -> void:
+	var interaction: InteractionController = _village.get_node("InteractionController")
+	var window: MirrorWindow = _village.get_node("HUD/MirrorWindow")
+	var mirrors: MirrorSite = _village.get_node("Mirrors")
+	var player: Player = _village.get_node("Player")
+	var spot: Vector3 = mirrors.spot_position(0)
+	await _put(spot + Vector3(1.6, 0.1, 3.0), PI * 0.75)
+	await _wait(0.6)
+	await _shot("m01_plaza_mirror")
+	await _put(mirrors.stand_position(0, 1.1) + Vector3(0.0, 0.1, 0.0))
+	await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.MIRROR, 2.0)
+	interaction.action_hud.action_pressed.emit()
+	await _wait(1.0)
+	window.pick("eyes", "sparkle")
+	window.pick("eye_color", "sky")
+	await _wait(0.4)
+	await _shot("m02_mirror_eyes")
+	window.select_tab_key("mouth")
+	window.pick("mouth", "cat")
+	await _wait(0.4)
+	await _shot("m03_mirror_mouth")
+	window.select_tab_key("hair")
+	window.pick("hair", "pigtails")
+	window.pick("hair_color", "pink")
+	await _wait(0.4)
+	await _shot("m04_mirror_hair")
+	window.select_tab_key("skin")
+	window.pick("skin", "honey")
+	await _wait(0.4)
+	await _shot("m05_mirror_skin")
+	window.save()
+	await _wait_until(func() -> bool: return not window.is_open(), 3.0)
+	await _wait(1.0)
+	await _put(spot + Vector3(4.0, 0.1, 4.0))
+	player.set_input_lock(&"capture", true)
+	player.rig.set_held("")
+	player.look_toward(Vector3.BACK.rotated(Vector3.UP, 0.7))
+	var camera: FollowCamera = _camera()
+	camera.focus_distance = 2.4
+	camera.focus_height = 1.0
+	camera.focus_pitch_degrees = 8.0
+	camera.set_focus(1.0, 0.1)
+	await _wait(0.8)
+	await _shot("m06_new_face_side")
+	# 화질 창 (방 정보 줄의 "화질" 단추)
+	camera.set_focus(0.0, 0.1)
+	player.set_input_lock(&"capture", false)
+	var quality: QualityWindow = _village.get_node("HUD/QualityWindow")
+	quality.open()
+	await _wait(0.5)
+	await _shot("m07_quality_window")
+	quality.close()

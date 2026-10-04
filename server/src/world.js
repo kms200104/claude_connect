@@ -40,6 +40,7 @@ export function blockedAreas(data) {
     circles.push({ x: data.airport.pilot.x, z: data.airport.pilot.z, r: 1.6 });
   }
   for (const n of data.npcs.values()) if (n.house) circles.push({ x: n.house.x, z: n.house.z, r: 4.2 });
+  for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
   return { rects, circles };
 }
 

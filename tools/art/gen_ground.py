@@ -2,9 +2,10 @@
 """마을 바닥 텍스처를 만든다: 잔디 바탕 + 흙길 + 광장 + 호숫가 모래톱 + 섬 바닷가 모래사장·얕은 바다 밑 + 공항 활주로
 (data/world/village_layout.json, data/fish/spots.json, data/places/airport.json).
 
-  assets/textures/ground_map.png    1024×1024, 마을 가운데 ±map_extent 미터를 덮는 색 지도 (알파 = 잔디 정도)
-  assets/textures/ground_detail.png 256×256, 바둑판처럼 이어지는 잔결 (3m마다 반복, 회색조)
-사용: python3 tools/art/gen_ground.py   (numpy, pillow 필요)
+화질 설정마다 리소스팩(assets/packs/<pack>/)에 해상도를 달리해 만든다:
+  ground_map.png    마을 가운데 ±map_extent 미터를 덮는 색 지도 (알파 = 잔디 정도)   low 512² · high 2048²
+  ground_detail.png 바둑판처럼 이어지는 잔결 (3m마다 반복, 회색조)                    low 128² · high 512²
+사용: python3 tools/art/gen_ground.py [low|high ...]   (기본 = 모두, numpy, pillow 필요)
 """
 import json
 from pathlib import Path
@@ -15,6 +16,9 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 SIZE = 1024
 DETAIL = 256
+## 리소스팩 → (색 지도 크기, 잔결 크기)
+PACKS = {"low": (512, 128), "high": (2048, 512)}
+OUT_DIR = ROOT / "assets/packs/low"
 
 GRASS = np.array([0.56, 0.78, 0.43])
 GRASS_DARK = np.array([0.45, 0.68, 0.36])
@@ -70,7 +74,10 @@ def segment_distance(px: np.ndarray, pz: np.ndarray, a: tuple, b: tuple) -> np.n
     return np.hypot(px - cx, pz - cz)
 
 
-def main() -> None:
+def main(pack: str) -> None:
+    global SIZE, DETAIL, OUT_DIR
+    SIZE, DETAIL = PACKS[pack]
+    OUT_DIR = ROOT / "assets/packs" / pack
     layout = json.loads((ROOT / "data/world/village_layout.json").read_text(encoding="utf-8"))
     spots = json.loads((ROOT / "data/fish/spots.json").read_text(encoding="utf-8"))
     extent = float(layout["map_extent"])
@@ -148,7 +155,7 @@ def main() -> None:
         grassiness = grassiness * (1 - sand)
 
     rgba = np.dstack([np.clip(color, 0, 1), grassiness])
-    out = ROOT / "assets/textures/ground_map.png"
+    out = OUT_DIR / "ground_map.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray((rgba * 255).astype(np.uint8), "RGBA").save(out, optimize=True)
     print(out)
@@ -156,16 +163,19 @@ def main() -> None:
     # 잔결: 큰 얼룩 + 잔 점 + 짧은 풀잎 줄.
     detail = fbm(DETAIL, 5, [(8, 0.6), (32, 0.6), (64, 0.5), (128, 0.4)])
     rng = np.random.default_rng(9)
-    for _ in range(900):
+    k_scale = DETAIL / 256
+    for _ in range(int(900 * k_scale * k_scale)):
         x, y = rng.integers(0, DETAIL, 2)
-        length = rng.integers(3, 7)
+        length = int(rng.integers(3, 7) * k_scale + 0.5)
         for k in range(length):
             detail[(y - k) % DETAIL, (x + k // 3) % DETAIL] += 0.18 * (1 - k / length)
     detail = (detail - detail.min()) / (detail.max() - detail.min())
-    out = ROOT / "assets/textures/ground_detail.png"
+    out = OUT_DIR / "ground_detail.png"
     Image.fromarray((detail * 255).astype(np.uint8), "L").save(out, optimize=True)
     print(out)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    for name in sys.argv[1:] or list(PACKS):
+        main(name)

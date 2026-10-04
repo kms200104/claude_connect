@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { inHours } from './clock.js';
 import { blockedAreas } from './world.js';
+import { loadFace } from './face.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -82,6 +83,10 @@ export function loadGameData(dataDir, cfg) {
   const airport = read('places/airport.json');
   for (const id of airport.stock) if (!items.get(id)?.buy) throw new Error(`airport: ${id} 에 buy 가격이 없음`);
 
+  // 얼굴 꾸미기 · 거울
+  const face = loadFace(read('looks/face_parts.json'));
+  const mirrors = (layout?.mirrors ?? []).filter((m) => Number.isFinite(m.x) && Number.isFinite(m.z));
+
   const isFish = (id) => fish.has(id);
   const isKnown = (id) => fish.has(id) || items.has(id);
   const limitOf = (id) => (fish.has(id) ? cfg.inventoryStackSize : (items.get(id)?.stack ?? 1));
@@ -117,6 +122,8 @@ export function loadGameData(dataDir, cfg) {
     emoteIds,
     museum,
     airport,
+    face,
+    mirrors,
     kindOf,
     priceOf,
     isFish,

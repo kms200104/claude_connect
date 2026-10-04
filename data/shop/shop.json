@@ -39,14 +39,14 @@
       "name": "솔바람 구멍가게",
       "points": 0,
       "sell_bonus": 0,
-      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos"]
+      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "standing_mirror", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos"]
     },
     {
       "level": 2,
       "name": "솔바람 잡화점",
       "points": 1500,
       "sell_bonus": 0.05,
-      "stock": ["yarn", "bouquet", "round_table", "bench", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls"]
+      "stock": ["yarn", "bouquet", "round_table", "bench", "vanity_mirror", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls"]
     },
     {
       "level": 3,

@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v6
+# 네트워크 프로토콜 v7
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -7,6 +7,7 @@ v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베
 v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가구 설치·줍기, 옷 입기·벗기, 소지품 부탁, 달리기 속도(최대 7.2m/s 허용).
 v4 → v5: 마을 이벤트(`ev`), 바닥의 선물·별 조각(`drop` `drop_gone` `collect`), 떠돌이 상인과 거래(`shop_sell`/`shop_buy` 의 `at: "merchant"`), 낚시 대회 상금(`fish_result.bonus`), 나무꾼의 날(`chop_result.n`).
 v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x z`)·꽃(`flower`, `pick`), 나무가 게임 시간으로 자람(`sprout`·`young` 단계), 감정표현(`emote` `emote_quick`, `act` 의 `kind: emote`)과 주민 반응(`npc_emote`), 주민 기분(`npcs` 의 `m`, `talk_open.m`), 대화 주제(`talk_topic`), 감정표현 배우기·주민 선물(`talk_open.teach` `gift`), 박물관 기증(`donate`, `museum`), 공항 기념품(`shop_buy` 의 `at: "airport"`). 저장 파일 schema 4.
+v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` → `face`), 프로필·플레이어 정보의 `face`, 에러 `not_near_mirror` `bad_face`. 저장 파일은 schema 4 그대로 (프로필에 `face` 가 없으면 자리 기본 얼굴).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -45,6 +46,7 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 | `emote_quick` | `quick[]` | 감정표현 퀵슬롯 순서 저장 (v6, 배운 것만, 4칸까지) → `profile` |
 | `talk_topic` | `topic` | 대화 중인 주민과 주제 수다 (v6): `mood hobby gossip fish past dream food you`. 하루 3번까지 친밀도 +1 → `talk_topic` |
 | `donate` | `rid slot` | 박물관 관장 곁(`donate_range`)에서 칸의 물고기 기증 (v6). 한 종에 한 마리(`already_donated`), 물고기만(`not_fish`) |
+| `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -57,7 +59,7 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 | `correct` | `x y z` | 요청한 이동이 거부됨 → 이 위치로 되돌리기 |
 | `pong` | `c s` | `s` = 서버 시각(ms) |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
-| `profile` | `sol quests[] friends{} outfit emotes` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6). 바뀔 때마다 나에게만 |
+| `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
 | `fish_started` | `rid spot` | 던지기 수락 |
 | `fish_nibble` | `rid` | 가짜 입질 (0~3번). 아직 당기면 안 된다 |
 | `fish_bite` | `rid windowMs` | 진짜 입질. 물고기 종류는 알리지 않는다 |
@@ -72,6 +74,7 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 | `flower` | `f by?` | 꽃이 생기거나 자라거나 따였다 (방 전체, v6). `f` = `{id, sp, c, x, z, s}` (`sp` 종류, `c` 색 번호, `s` = `sprout`/`bud`/`bloom`), `by` = 그렇게 한 사람(저절로 자라면 없음) |
 | `plant_result` | `rid id kind x z` | 내가 심었다 (`kind` = `tree`/`flower`) |
 | `pick_result` | `rid id item` | 내가 꽃을 땄다 |
+| `face` | `rid? id face{}` | 누군가 얼굴을 바꿨다 (v7, 방 전체 — 바꾼 사람에게는 `rid` 와 함께). `face` = 일곱 항목 전부 |
 | `museum` | `fish{} id by` | 박물관 기증 목록이 바뀌었다 (방 전체, v6). `fish` = 물고기 id → 기증한 사람 자리 번호 |
 | `donate_result` | `rid fish reward sol count gifts[]` | 내가 기증했다: 감사 `reward`솔, 지금까지 `count`종, 문턱을 넘어 받은 기념품 `gifts` |
 | `talk_closed` | `npc` | 서버가 대화를 끝냄 (멀어짐·시간 초과) |
@@ -90,12 +93,12 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용).
+`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지).
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face`
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
@@ -171,6 +174,11 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 - 꽃: 새싹 → 봉오리 → 활짝(`plants.json` 의 `minutes`, 수국은 비 오면 `rain_bonus` 배 빨리). 따면 꽃 아이템 1개, 봉오리로 돌아가 `rebloom_minutes` 뒤 다시 핀다.
 - 박물관: 관장 곁에서 한 종에 한 마리 기증, 마을 공용(`museum.fish`). 기증마다 `reward_sol`(50솔). 기증 수가 `milestones`(5·15·31)를 넘으면 그 기증을 한 사람에게 기념품 (가방이 차 있으면 다음 기증 때).
 - 공항: 조종사 곁에서 `stock` 의 기념품만 산다. 비행기 이착륙은 서버 메시지 없이 마을 시계(`flight.cycle_minutes`)로 클라이언트가 계산한다.
+
+## 얼굴 · 거울 (서버 판정, v7)
+- 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).
+- 거울: 마을 거울 자리(`mirrors`)와 `mirror: true` 가구(전신 거울·거울 화장대)를 누가 놓았든 그 앞(`mirror.range` 2.2m + 0.5m)에서만 바꾼다. 거울 자리 1.3m 안에는 심거나 가구를 놓을 수 없다.
+- 비용 없음. 바꾸면 저장하고 방 전체에 `face` 로 알린다.
 
 ## 인벤토리
 퀵슬롯 5칸 + 가방 20칸. 새 아이템은 같은 아이템 칸 → 빈 가방 칸 → 빈 퀵슬롯 순으로 들어간다. 칸당 개수: 물고기 99, 목재 30, 도구 1.

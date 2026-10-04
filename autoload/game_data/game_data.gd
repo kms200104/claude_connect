@@ -14,6 +14,7 @@ const PLANTS_PATH: String = "res://data/plants/plants.json"
 const EMOTES_PATH: String = "res://data/emotes/emotes.json"
 const MUSEUM_PATH: String = "res://data/places/museum.json"
 const AIRPORT_PATH: String = "res://data/places/airport.json"
+const FACE_PATH: String = "res://data/looks/face_parts.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -49,6 +50,8 @@ var emotes: Array[EmoteInfo] = []
 var emote_quick_slots: int = 4
 ## 박물관 · 공항.
 var museum: KeeperPlace = null
+## 얼굴 꾸미기 목록 (눈·코·입·피부·머리 모양·머리 색).
+var face: FaceCatalog = null
 var airport: KeeperPlace = null
 
 var _icons: Dictionary[String, Texture2D] = {}
@@ -104,6 +107,7 @@ func _ready() -> void:
 		if entry is Dictionary:
 			emotes.append(EmoteInfo.from_dict(entry))
 	museum = KeeperPlace.from_dict(_read_json(MUSEUM_PATH), "curator", "donate_range")
+	face = FaceCatalog.from_dict(_read_json(FACE_PATH))
 	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
@@ -212,3 +216,11 @@ func _read_json(path: String) -> Dictionary:
 		return parsed
 	push_error("GameData: %s 를 읽을 수 없음" % path)
 	return {}
+
+
+## 플레이어 겉모습: 자리별 옷 색 + 거울에서 고른 얼굴 (face 가 비면 자리 기본 얼굴).
+func player_look(slot: int, face_ids: Dictionary = {}) -> CharacterLook:
+	var look: CharacterLook = CharacterLook.for_player(slot)
+	if face != null:
+		look.apply_face(face.sanitize(face_ids, slot), face)
+	return look

@@ -9,7 +9,7 @@
     "personality": "pilot",
     "color": "#3A4A70",
     "voice": 1.05,
-    "look": { "hair": "#2A1E18", "style": "short", "top": "#3A4A70", "bottom": "#E9E4D8", "shoes": "#2A2A30" },
+    "look": { "hair": "#2A1E18", "style": "short", "top": "#3A4A70", "bottom": "#E9E4D8", "shoes": "#2A2A30", "eyes": "almond", "nose": "button", "mouth": "smile" },
     "about": "공항의 조종사 겸 안내원. 하늘 이야기만 나오면 눈이 반짝인다.",
     "x": -3.4, "z": -72.6, "yaw": 0.4
   },

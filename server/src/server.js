@@ -16,6 +16,7 @@ import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, moodAf
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
 import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
+import { applyFaceRequest, nearMirror } from './face.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const UID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -55,6 +56,7 @@ export function createServer(overrides = {}) {
       friends,
       outfit: { ...player.profile.outfit },
       emotes: { known: [...player.profile.emotes.known], quick: [...player.profile.emotes.quick] },
+      face: { ...player.profile.face },
     };
   };
   const sendProfile = (player) => sendTo(player, { t: 'profile', ...profileWire(player) });
@@ -754,6 +756,21 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  // ---- 거울: 얼굴 꾸미기 ----
+
+  /** 거울 앞에서 얼굴(눈·코·입·피부·머리)을 바꾼다. 바꾼 얼굴은 방 모두에게 알린다 (요청한 사람에게는 rid 와 함께). */
+  function handleFace(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (inShop(player) || !nearMirror(data, room.placed, player.x, player.z)) return fail(ErrorCode.notNearMirror);
+    const next = applyFaceRequest(player.profile.face, msg.face, data.face);
+    if (!next) return fail(ErrorCode.badFace);
+    player.profile.face = next;
+    sendTo(player, { t: 'face', rid: msg.rid, id: player.id, face: { ...next } });
+    room.broadcast({ t: 'face', id: player.id, face: { ...next } }, player.id);
+    rooms.save(room);
+  }
+
   // ---- 가구 설치 · 옷 ----
 
   function handleFurniture(ctx, msg, fail) {
@@ -866,6 +883,8 @@ export function createServer(overrides = {}) {
         return handleEmote(ctx, msg, fail);
       case 'donate':
         return handleDonate(ctx, msg, fail);
+      case 'set_face':
+        return handleFace(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -979,6 +998,7 @@ export function createServer(overrides = {}) {
       case 'emote':
       case 'emote_quick':
       case 'donate':
+      case 'set_face':
       case 'talk_topic':
         return handleAction(ctx, msg);
       default:

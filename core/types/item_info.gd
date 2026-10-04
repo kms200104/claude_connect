@@ -30,6 +30,8 @@ var model: Array = []
 ## 윗옷을 입으면 스웨터를 이 색으로 바꾼다 (알파 0 = 그대로 두고 모양만 덧붙임).
 var tint: Color = Color(0.0, 0.0, 0.0, 0.0)
 ## 씨앗이면 심었을 때 자라는 나무 종류 (round/pine/birch) 또는 꽃 종류 (tulip …). 아니면 빈 문자열.
+## 거울 가구 (앞에 서면 얼굴을 꾸밀 수 있다).
+var is_mirror: bool = false
 var plant_tree: String = ""
 var plant_flower: String = ""
 
@@ -45,6 +47,7 @@ static func from_item_dict(data: Dictionary) -> ItemInfo:
 	info.price = int(data.get("price", 0))
 	info.buy_price = int(data.get("buy", 0))
 	info.wear_slot = str(data.get("wear", ""))
+	info.is_mirror = bool(data.get("mirror", false))
 	if data.has("tint"):
 		info.tint = Color.html(str(data["tint"]))
 	var plant: Variant = data.get("plant")

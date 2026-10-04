@@ -12,5 +12,5 @@
 | 아이템 아이콘 12장 | `assets/icons/items/` (`tools/render_icons.gd` 의 `HAND_MADE`) | 참고 이미지 `furniture.png`, `fishing_items.png` 에서 오림 | 위와 같음 | 아이템 칸 |
 | 아이템 아이콘 50장 | `assets/icons/items/` (그 밖) | 게임 모형을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 |
 | 3D 모형 전부 | `game/**` 코드 (`ClayMesh`, `CharacterModel`, `PartMesh` 데이터) | 프로젝트 자체 제작 (참고 이미지를 보고 새로 빚음, 트레이싱 없음) | 프로젝트 | 캐릭터·나무·집·가구 |
-| 바닥 텍스처 | `assets/textures/` | `tools/art/gen_ground.py` 로 생성 | 프로젝트 | 마을 바닥 |
+| 바닥 텍스처 (리소스팩) | `assets/packs/low/`, `assets/packs/high/` | `tools/art/gen_ground.py` 로 생성 | 프로젝트 | 마을 바닥 (화질별 해상도) |
 | 효과음 39개 · 배경음악 2곡 | `assets/audio/` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |

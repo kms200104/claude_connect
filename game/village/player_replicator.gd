@@ -25,6 +25,7 @@ var _last_velocity: Vector3 = Vector3.ZERO
 func _ready() -> void:
 	Net.welcomed.connect(_on_welcomed)
 	Net.peer_joined.connect(_on_peer_joined)
+	Net.face_changed.connect(_on_face_changed)
 	Net.peer_left.connect(_on_peer_left)
 	Net.peer_status_changed.connect(_on_peer_status_changed)
 	Net.snapshot_received.connect(_on_snapshot)
@@ -143,8 +144,18 @@ func _sync_held_item() -> void:
 ## 내 옷을 서버가 알려 준 대로 입힌다.
 func _sync_outfit() -> void:
 	if player != null and player.rig != null:
-		player.rig.set_look(CharacterLook.for_player(Net.my_id))
+		player.rig.set_look(Net.look_of(Net.my_id))
 		player.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
+
+
+## 거울에서 얼굴을 바꿨다 (나 또는 상대).
+func _on_face_changed(id: int, _face: Dictionary) -> void:
+	if id == Net.my_id:
+		_sync_outfit()
+		return
+	var remote: RemotePlayer = _remotes.get(id)
+	if remote != null and remote.rig != null:
+		remote.rig.set_look(Net.look_of(id))
 
 
 func _on_peer_action(id: int, kind: String, target: String) -> void:

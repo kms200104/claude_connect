@@ -70,6 +70,8 @@ signal planted(kind: String, id: String)
 signal flower_picked(item_id: String)
 ## 다른 사람의 감정표현·몸짓(브레이크).
 signal peer_emoted(player_id: int, emote_id: String)
+## 누군가(나 포함) 거울에서 얼굴을 바꿨다.
+signal face_changed(player_id: int, face: Dictionary)
 ## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
 signal npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String)
 ## 대화 주제로 수다를 떨었다 (gain: 오른 친밀도).
@@ -150,6 +152,8 @@ var emotes_known: PackedStringArray = ["hello"]
 var emotes_quick: PackedStringArray = ["hello"]
 ## 주민 id → 지금 기분.
 var npc_moods: Dictionary[String, String] = {}
+## 자리 번호 → 거울에서 고른 얼굴 (FaceCatalog id 사전). 없으면 자리 기본 얼굴.
+var faces: Dictionary[int, Dictionary] = {}
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -369,6 +373,16 @@ func talk_topic(topic: String) -> void:
 	_send({"t": "talk_topic", "topic": topic})
 
 
+## 거울 앞에서 얼굴을 바꾼다 (바꿀 항목만 보내도 된다). 결과는 face_changed.
+func set_face(face: Dictionary) -> void:
+	_request("set_face", {"face": face})
+
+
+## 이 자리 사람의 겉모습 (옷 색 + 얼굴).
+func look_of(player_id: int) -> CharacterLook:
+	return GameData.player_look(player_id, faces.get(player_id, {}))
+
+
 ## 박물관 관장에게 칸의 물고기를 기증한다.
 func donate(slot: int) -> void:
 	_request("donate", {"slot": slot})
@@ -572,7 +586,9 @@ func _handle_text(text: String) -> void:
 			if joined_data is Dictionary:
 				partner_present = true
 				partner_online = true
-				peer_joined.emit(NetPlayerState.from_dict(joined_data))
+				var joined: NetPlayerState = NetPlayerState.from_dict(joined_data)
+				faces[joined.id] = joined.face
+				peer_joined.emit(joined)
 		"peer_status":
 			var pid: int = int(msg.get("id", 0))
 			partner_online = bool(msg.get("online", false))
@@ -589,6 +605,13 @@ func _handle_text(text: String) -> void:
 			_apply_inventory(msg)
 		"profile":
 			_apply_profile(msg)
+		"face":
+			var face_id: int = int(msg.get("id", 0))
+			_pending.erase(str(msg.get("rid", "")))
+			var face_data: Variant = msg.get("face", {})
+			if face_data is Dictionary:
+				faces[face_id] = face_data
+				face_changed.emit(face_id, face_data)
 		"weather":
 			weather = str(msg.get("w", weather))
 			weather_changed.emit(weather)
@@ -721,7 +744,9 @@ func _on_welcome(msg: Dictionary) -> void:
 	_attempt = 0
 	var me: NetPlayerState = null
 	var others: Array[NetPlayerState] = []
+	faces.clear()
 	for player_state: NetPlayerState in _parse_states(msg.get("players", [])):
+		faces[player_state.id] = player_state.face
 		if player_state.id == my_id:
 			me = player_state
 		else:
@@ -857,6 +882,9 @@ func _apply_profile(data: Variant) -> void:
 	if e is Dictionary:
 		emotes_known = PackedStringArray(Array(e.get("known", ["hello"])).map(func(x: Variant) -> String: return str(x)))
 		emotes_quick = PackedStringArray(Array(e.get("quick", ["hello"])).map(func(x: Variant) -> String: return str(x)))
+	var my_face: Variant = data.get("face", null)
+	if my_face is Dictionary and my_id > 0:
+		faces[my_id] = my_face
 	profile_updated.emit()
 
 

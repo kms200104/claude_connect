@@ -187,8 +187,8 @@ func _build_card() -> void:
 func _build_banner() -> void:
 	_banner = PanelContainer.new()
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_banner.position = Vector2(90, 300)
 	_banner.custom_minimum_size = Vector2(900, 0)
+	HudLayout.center_top(_banner, 900.0, 300.0)
 	_banner.add_theme_stylebox_override("panel", _box(Color(1.0, 0.97, 0.9, 0.97), ACCENT, 40, 8, 30))
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 22)

@@ -9,7 +9,7 @@
     "personality": "curator",
     "color": "#9A7A5A",
     "voice": 0.82,
-    "look": { "hair": "#5A4A3A", "style": "bun", "top": "#8A6A4A", "bottom": "#4A3A2A", "shoes": "#3A2A20" },
+    "look": { "hair": "#5A4A3A", "style": "bun", "top": "#8A6A4A", "bottom": "#4A3A2A", "shoes": "#3A2A20", "eyes": "bright", "nose": "long", "mouth": "tiny" },
     "about": "박물관 관장. 동그란 안경 너머로 물고기 이야기를 하면 밤을 새운다.",
     "x": 44.6, "z": -13.2, "yaw": 0.6
   },

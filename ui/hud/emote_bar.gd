@@ -24,7 +24,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_toggle = _round_button(EmoteInfo.icon("happy"), button_size)
-	_toggle.position = Vector2(1080.0 - 24.0 - button_size, anchor_y)
+	HudLayout.right_top(_toggle, Vector2(button_size, button_size), 24.0, anchor_y)
 	_toggle.pressed.connect(toggle)
 	add_child(_toggle)
 	_strip = PanelContainer.new()
@@ -37,6 +37,7 @@ func _ready() -> void:
 	add_child(_strip)
 	# 펼친 줄은 실제 크기를 재서 웃는 얼굴 단추 바로 왼쪽에 붙인다.
 	_strip.minimum_size_changed.connect(_place_strip)
+	resized.connect(_place_strip)
 	Net.profile_updated.connect(_refresh)
 	Net.state_changed.connect(func(_s: int) -> void: _refresh())
 	_refresh()
