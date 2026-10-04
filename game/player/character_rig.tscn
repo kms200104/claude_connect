@@ -1,0 +1,253 @@
+[gd_scene load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://game/player/character_rig.gd" id="1_rig"]
+[ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="2_nose"]
+[ext_resource type="Material" path="res://assets/materials/rod_wood.tres" id="3_rod"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_nose"]
+size = Vector3(0.22, 0.22, 0.32)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_rod"]
+top_radius = 0.02
+bottom_radius = 0.035
+height = 1.6
+radial_segments = 8
+rings = 1
+
+[sub_resource type="Animation" id="Animation_idle"]
+resource_name = "idle"
+length = 2.4
+loop_mode = 1
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.2, 2.4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, -0.01, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1.2, 2.4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0.02, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 1.2, 2.4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1.02, 0.975, 1.02), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Rod:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 1.2, 2.4),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0.3, 0, -0.1), Vector3(0.34, 0, -0.1), Vector3(0.3, 0, -0.1)]
+}
+
+[sub_resource type="Animation" id="Animation_walk"]
+resource_name = "walk"
+length = 0.6
+loop_mode = 1
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.15, 0.3, 0.45, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, 0.07, 0), Vector3(0, 0, 0), Vector3(0, 0.07, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.15, 0.3, 0.45, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.12, 0, 0.05), Vector3(-0.12, 0, 0), Vector3(-0.12, 0, -0.05), Vector3(-0.12, 0, 0), Vector3(-0.12, 0, 0.05)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.3, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1, 1, 1), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Rod:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.3, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0.3, 0, -0.1), Vector3(0.5, 0, -0.1), Vector3(0.3, 0, -0.1)]
+}
+
+[sub_resource type="Animation" id="Animation_fishing"]
+resource_name = "fishing"
+length = 2.0
+loop_mode = 1
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.0, 2.0),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0, -0.05, 0), Vector3(0, -0.06, 0), Vector3(0, -0.05, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1.0, 2.0),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.2, 0, 0), Vector3(-0.25, 0, 0), Vector3(-0.2, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 1.0, 2.0),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1, 1, 1), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Rod:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 1.0, 2.0),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(-1.1, 0, 0), Vector3(-1.0, 0, 0.03), Vector3(-1.1, 0, 0)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_rig"]
+_data = {
+&"fishing": SubResource("Animation_fishing"),
+&"idle": SubResource("Animation_idle"),
+&"walk": SubResource("Animation_walk")
+}
+
+[sub_resource type="AnimationNodeAnimation" id="AN_idle"]
+animation = &"idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AN_walk"]
+animation = &"walk"
+
+[sub_resource type="AnimationNodeAnimation" id="AN_fishing"]
+animation = &"fishing"
+
+[sub_resource type="AnimationNodeBlendSpace1D" id="BlendSpace_locomotion"]
+blend_point_0/node = SubResource("AN_idle")
+blend_point_0/pos = 0.0
+blend_point_1/node = SubResource("AN_walk")
+blend_point_1/pos = 1.0
+min_space = 0.0
+max_space = 1.0
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_fishing"]
+
+[sub_resource type="AnimationNodeBlendTree" id="BlendTree_rig"]
+graph_offset = Vector2(-300, 0)
+nodes/Locomotion/node = SubResource("BlendSpace_locomotion")
+nodes/Locomotion/position = Vector2(-100, 0)
+nodes/Fishing/node = SubResource("AN_fishing")
+nodes/Fishing/position = Vector2(-100, 160)
+nodes/FishBlend/node = SubResource("Blend2_fishing")
+nodes/FishBlend/position = Vector2(120, 40)
+nodes/output/position = Vector2(320, 40)
+node_connections = [&"FishBlend", 0, &"Locomotion", &"FishBlend", 1, &"Fishing", &"output", 0, &"FishBlend"]
+
+[node name="Rig" type="Node3D" node_paths=PackedStringArray("capsule", "tree")]
+script = ExtResource("1_rig")
+capsule = NodePath("Visual/Capsule")
+tree = NodePath("AnimationTree")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Capsule" type="MeshInstance3D" parent="Visual"]
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="Nose" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.42)
+mesh = SubResource("BoxMesh_nose")
+surface_material_override/0 = ExtResource("2_nose")
+
+[node name="Rod" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 0.25, -0.12)
+
+[node name="RodMesh" type="MeshInstance3D" parent="Visual/Rod"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("CylinderMesh_rod")
+surface_material_override/0 = ExtResource("3_rod")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_rig")
+}
+
+[node name="AnimationTree" type="AnimationTree" parent="."]
+tree_root = SubResource("BlendTree_rig")
+anim_player = NodePath("../AnimationPlayer")
+active = true
+parameters/Locomotion/blend_position = 0.0
+parameters/FishBlend/blend_amount = 0.0

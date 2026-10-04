@@ -111,7 +111,7 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 	for state: NetPlayerState in states:
 		if state.id == Net.my_id:
 			continue
-		_spawn_remote(state).push_sample(server_time_ms, state.position, state.yaw, state.velocity)
+		_spawn_remote(state).push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing)
 
 
 func _on_position_corrected(position: Vector3) -> void:

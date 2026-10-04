@@ -15,12 +15,22 @@ signal connection_lost
 signal session_lost(reason: String)
 signal error_received(code: String)
 signal latency_updated(rtt_ms: float)
+signal inventory_updated(items: Array[InventoryItem], capacity: int)
+signal fish_started
+signal fish_nibble
+## 진짜 입질. 이 순간부터 `window_ms` 안에 챔질해야 한다.
+signal fish_bite(window_ms: int)
+## 서버가 확정한 낚시 결과. 성공이면 `fish_id`가 물고기 종류, 실패면 `reason`(NetProtocol.FISH_*).
+signal fish_result(success: bool, fish_id: String, reason: String)
+## 낚시·인벤토리 요청이 거부됨 (NetProtocol.ERR_*).
+signal action_rejected(code: String)
 
 enum State { DISCONNECTED, CONNECTING, JOINING, ONLINE, RECONNECTING }
 
 enum Intent { NONE, CREATE, JOIN, RESUME }
 
-const SETTINGS_PATH: String = "user://net.cfg"
+const SETTINGS_BASE: String = "user://net"
+const MAX_LOCAL_INSTANCES: int = 8
 
 @export_group("Connection")
 @export var default_server_url: String = "ws://127.0.0.1:8080"
@@ -41,6 +51,11 @@ var my_id: int = 0
 var partner_present: bool = false
 var partner_online: bool = false
 var rtt_ms: float = 0.0
+var uid: String = ""
+## 같은 PC에서 여러 인스턴스를 띄울 때 서로 다른 저장 슬롯(1, 2, …)을 쓴다. 폰에서는 항상 1.
+var profile_slot: int = 1
+var inventory: Array[InventoryItem] = []
+var inventory_capacity: int = 20
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -55,10 +70,15 @@ var _attempt: int = 0
 var _clock_offset_ms: float = 0.0
 var _clock_samples: Array[Vector2] = []  # (rtt, offset)
 var _user_closed: bool = false
+var _join_fallback_tried: bool = false
+var _rid_counter: int = 0
+var _fishing_rid: String = ""
 
 
 func _ready() -> void:
+	profile_slot = _claim_profile_slot()
 	server_url = last_server_url()
+	uid = _load_or_create_uid()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
@@ -105,6 +125,27 @@ func send_move(position: Vector3, yaw: float, velocity: Vector3) -> void:
 		"yaw": snappedf(yaw, 0.001),
 		"vx": snappedf(velocity.x, 0.001), "vz": snappedf(velocity.z, 0.001),
 	})
+
+
+## 낚시터에 던지기 요청. 결과는 fish_started / action_rejected 로 온다.
+func cast_fishing(spot_id: String) -> void:
+	_fishing_rid = _next_rid()
+	_send({"t": "fish_cast", "rid": _fishing_rid, "spot": spot_id})
+
+
+## 챔질 요청. `reaction_ms`는 입질 연출이 보인 뒤 버튼을 누르기까지 걸린 시간(없으면 0).
+func hook_fishing(reaction_ms: float) -> void:
+	if _fishing_rid.is_empty():
+		return
+	_send({"t": "fish_hook", "rid": _fishing_rid, "reaction": snappedf(reaction_ms, 0.1)})
+
+
+func cancel_fishing() -> void:
+	_send({"t": "fish_cancel"})
+
+
+func discard_item(fish_id: String, count: int = 1) -> void:
+	_send({"t": "inv_discard", "rid": _next_rid(), "id": fish_id, "n": count})
 
 
 ## 서버 기준 현재 시각(ms). 원격 플레이어 보간의 시간축.
@@ -194,9 +235,9 @@ func _on_socket_open() -> void:
 	_set_state(State.JOINING if state != State.RECONNECTING else State.RECONNECTING)
 	match _intent:
 		Intent.CREATE:
-			_send({"t": "create", "v": NetProtocol.VERSION})
+			_send({"t": "create", "v": NetProtocol.VERSION, "uid": uid})
 		Intent.JOIN:
-			_send({"t": "join", "v": NetProtocol.VERSION, "code": room_code})
+			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code})
 		Intent.RESUME:
 			_send({"t": "resume", "v": NetProtocol.VERSION, "token": _token})
 
@@ -272,8 +313,19 @@ func _handle_text(text: String) -> void:
 			position_corrected.emit(Vector3(float(msg.get("x", 0.0)), float(msg.get("y", 0.0)), float(msg.get("z", 0.0))))
 		"pong":
 			_on_pong(msg)
+		"inventory":
+			_apply_inventory(msg)
+		"fish_started":
+			fish_started.emit()
+		"fish_nibble":
+			fish_nibble.emit()
+		"fish_bite":
+			fish_bite.emit(int(msg.get("windowMs", 600)))
+		"fish_result":
+			_fishing_rid = ""
+			fish_result.emit(bool(msg.get("ok", false)), str(msg.get("fish", "")), str(msg.get("reason", "")))
 		"error":
-			_on_server_error(str(msg.get("code", "")))
+			_on_server_error(str(msg.get("code", "")), msg)
 
 
 func _on_welcome(msg: Dictionary) -> void:
@@ -292,10 +344,43 @@ func _on_welcome(msg: Dictionary) -> void:
 			others.append(player_state)
 	partner_present = not others.is_empty()
 	partner_online = partner_present and others[0].online
+	_join_fallback_tried = false
+	_fishing_rid = ""
+	_apply_inventory(msg.get("inv", {}))
 	_save_session()
 	_set_state(State.ONLINE)
 	if me != null:
 		welcomed.emit(me, others, resumed)
+
+
+func _next_rid() -> String:
+	_rid_counter += 1
+	return "%s-%d" % [uid.left(6), _rid_counter]
+
+
+func _apply_inventory(data: Variant) -> void:
+	if not data is Dictionary:
+		return
+	var parsed: Array[InventoryItem] = []
+	var entries: Variant = data.get("items", [])
+	if entries is Array:
+		for entry: Variant in entries:
+			if entry is Dictionary:
+				parsed.append(InventoryItem.new(str(entry.get("id", "")), int(entry.get("n", 0))))
+	inventory = parsed
+	inventory_capacity = int(data.get("cap", inventory_capacity))
+	inventory_updated.emit(inventory, inventory_capacity)
+
+
+func _load_or_create_uid() -> String:
+	var cfg: ConfigFile = _load_settings()
+	var saved: String = str(cfg.get_value("settings", "uid", ""))
+	if saved.length() >= 8:
+		return saved
+	var created: String = Crypto.new().generate_random_bytes(12).hex_encode()
+	cfg.set_value("settings", "uid", created)
+	cfg.save(_settings_path())
+	return created
 
 
 func _parse_states(entries: Variant) -> Array[NetPlayerState]:
@@ -324,14 +409,24 @@ func _on_pong(msg: Dictionary) -> void:
 	latency_updated.emit(rtt)
 
 
-func _on_server_error(code: String) -> void:
+func _on_server_error(code: String, msg: Dictionary = {}) -> void:
 	if code == NetProtocol.ERR_RATE_LIMITED:
 		push_warning("Net: 서버가 요청 속도 제한을 알림")
 		return
 	if _intent == Intent.RESUME:
+		# 서버가 재시작되어 세션이 사라졌어도 방 코드와 내 uid로 자리를 되찾을 수 있다(방은 파일에 저장되어 있다).
+		if code == NetProtocol.ERR_RESUME_FAILED and not room_code.is_empty() and not _join_fallback_tried:
+			_join_fallback_tried = true
+			_intent = Intent.JOIN
+			_token = ""
+			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code})
+			return
 		_give_up(code)
 		return
 	if state == State.ONLINE:
+		# 방에 들어온 뒤의 에러는 낚시·인벤토리 요청 거부다.
+		if msg.get("rid") != null or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM]:
+			action_rejected.emit(code)
 		return
 	_close_socket(1000, "error")
 	_forget_session()
@@ -346,16 +441,38 @@ func _set_state(new_state: State) -> void:
 	state_changed.emit(int(new_state))
 
 
+func _settings_path() -> String:
+	return "%s.cfg" % SETTINGS_BASE if profile_slot == 1 else "%s_%d.cfg" % [SETTINGS_BASE, profile_slot]
+
+
+## 실행 인자 `--profile=N`이 있으면 그 슬롯, 없으면 다른 인스턴스가 쓰고 있지 않은 가장 작은 슬롯을 잡는다.
+## (슬롯마다 uid가 달라서, 한 PC의 두 인스턴스가 같은 사람으로 취급되어 서로 쫓아내는 일을 막는다.)
+func _claim_profile_slot() -> int:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--profile="):
+			return clampi(int(arg.trim_prefix("--profile=")), 1, 99)
+	var me: int = OS.get_process_id()
+	for slot: int in range(1, MAX_LOCAL_INSTANCES + 1):
+		var lock_path: String = "%s_slot_%d.pid" % [SETTINGS_BASE, slot]
+		var owner: int = int(FileAccess.get_file_as_string(lock_path)) if FileAccess.file_exists(lock_path) else 0
+		if owner == 0 or owner == me or not OS.is_process_running(owner):
+			var f: FileAccess = FileAccess.open(lock_path, FileAccess.WRITE)
+			if f != null:
+				f.store_string(str(me))
+			return slot
+	return 1
+
+
 func _load_settings() -> ConfigFile:
 	var cfg: ConfigFile = ConfigFile.new()
-	cfg.load(SETTINGS_PATH)
+	cfg.load(_settings_path())
 	return cfg
 
 
 func _save_server_url(url: String) -> void:
 	var cfg: ConfigFile = _load_settings()
 	cfg.set_value("settings", "server_url", url)
-	cfg.save(SETTINGS_PATH)
+	cfg.save(_settings_path())
 
 
 func _save_session() -> void:
@@ -363,7 +480,7 @@ func _save_session() -> void:
 	cfg.set_value("session", "url", server_url)
 	cfg.set_value("session", "code", room_code)
 	cfg.set_value("session", "token", _token)
-	cfg.save(SETTINGS_PATH)
+	cfg.save(_settings_path())
 
 
 func _forget_session() -> void:
@@ -375,4 +492,4 @@ func _forget_session() -> void:
 	var cfg: ConfigFile = _load_settings()
 	if cfg.has_section("session"):
 		cfg.erase_section("session")
-		cfg.save(SETTINGS_PATH)
+		cfg.save(_settings_path())

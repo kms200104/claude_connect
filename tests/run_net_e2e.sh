@@ -9,14 +9,14 @@ DIR="$(mktemp -d)"
 cleanup() { kill "${SERVER_PID:-0}" "${HOST_PID:-0}" "${GUEST_PID:-0}" 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
 
-(cd "$ROOT/server" && PORT="$PORT" node src/index.js >"$DIR/server.log" 2>&1) &
+(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1
 
 ARGS=(--headless --path "$ROOT" res://tests/net_e2e.tscn --)
-"$GODOT" "${ARGS[@]}" --role=host --server="ws://127.0.0.1:$PORT" --dir="$DIR" >"$DIR/host.log" 2>&1 &
+"$GODOT" "${ARGS[@]}" --role=host --profile=1 --server="ws://127.0.0.1:$PORT" --dir="$DIR" >"$DIR/host.log" 2>&1 &
 HOST_PID=$!
-"$GODOT" "${ARGS[@]}" --role=guest --server="ws://127.0.0.1:$PORT" --dir="$DIR" >"$DIR/guest.log" 2>&1 &
+"$GODOT" "${ARGS[@]}" --role=guest --profile=2 --server="ws://127.0.0.1:$PORT" --dir="$DIR" >"$DIR/guest.log" 2>&1 &
 GUEST_PID=$!
 
 wait "$GUEST_PID"; GUEST_RC=$?

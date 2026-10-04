@@ -3,8 +3,13 @@ import { WebSocketServer } from 'ws';
 import { defaultConfig } from './config.js';
 import { CloseCode, ErrorCode, PROTOCOL_VERSION } from './protocol.js';
 import { RoomManager } from './rooms.js';
+import { RoomStore } from './persistence.js';
+import { loadGameData } from './gamedata.js';
+import { createFishing } from './fishing.js';
+import { removeItem, toWire as inventoryToWire } from './inventory.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const UID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
  * 서버 권위 원칙: 클라이언트가 보내는 건 항상 "요청"이다.
@@ -12,7 +17,9 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
  */
 export function createServer(overrides = {}) {
   const cfg = { ...defaultConfig, ...overrides };
-  const rooms = new RoomManager(cfg.maxPlayers);
+  const store = overrides.store ?? new RoomStore(cfg.saveDir);
+  const rooms = new RoomManager(cfg, store);
+  const data = loadGameData(cfg.dataDir);
   const wss = new WebSocketServer({ port: cfg.port, maxPayload: cfg.maxMessageBytes });
   const now = () => performance.now();
 
@@ -20,12 +27,35 @@ export function createServer(overrides = {}) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
   };
   const sendError = (ws, code, msg = '') => send(ws, { t: 'error', code, msg });
+  const sendTo = (player, message) => player.ws && send(player.ws, message);
+  const roomOf = (player) => [...rooms.rooms.values()].find((r) => r.players.get(player.id) === player);
+
+  const fishing = createFishing({
+    cfg,
+    data,
+    random: overrides.random,
+    notify: sendTo,
+    onFishingChanged: (player) => {
+      const room = roomOf(player);
+      if (room) room.dirty = true; // 스냅샷에 fishing 플래그를 실어 보낸다
+    },
+    onInventoryChanged: (player, fishId) => {
+      const room = roomOf(player);
+      sendTo(player, { t: 'inventory', ...inventoryToWire(player.items, cfg) });
+      if (!room) return;
+      room.stats.totalCatches += 1;
+      room.stats.species[fishId] = (room.stats.species[fishId] ?? 0) + 1;
+      rooms.save(room); // 인벤토리 변경은 바로 저장
+    },
+  });
 
   function detach(ctx, { startGrace }) {
     const { room, player } = ctx;
     if (!room || !player || player.ws !== ctx.ws) return;
     player.ws = null;
+    fishing.drop(player);
     room.broadcast({ t: 'peer_status', id: player.id, online: false });
+    room.saveDirty = true;
     if (!startGrace) return;
     player.graceTimer = setTimeout(() => {
       rooms.removePlayer(room, player);
@@ -40,6 +70,7 @@ export function createServer(overrides = {}) {
       // 서버가 아직 끊김을 모르는 낡은 연결을 새 연결로 교체.
       const old = player.ws;
       player.ws = null;
+      fishing.drop(player);
       old.close(CloseCode.replaced, 'replaced');
     }
     ctx.room = room;
@@ -55,9 +86,11 @@ export function createServer(overrides = {}) {
       resumed,
       st: now(),
       players: [...room.players.values()].map((p) => p.toWire()),
+      inv: inventoryToWire(player.items, cfg),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
     room.dirty = true;
+    rooms.save(room);
   }
 
   function checkVersion(ctx, msg) {
@@ -66,6 +99,43 @@ export function createServer(overrides = {}) {
       return false;
     }
     return true;
+  }
+
+  function validUid(ctx, msg) {
+    if (typeof msg.uid === 'string' && UID_RE.test(msg.uid)) return true;
+    sendError(ctx.ws, ErrorCode.badMessage, 'uid');
+    return false;
+  }
+
+  /** 낚시·인벤토리 요청. 결과는 항상 서버가 확정해서 알린다. */
+  function handleAction(ctx, msg) {
+    const { player, room } = ctx;
+    if (!player) return sendError(ctx.ws, ErrorCode.notInRoom);
+    const fail = (code) => send(ctx.ws, { t: 'error', code, rid: msg.rid ?? null });
+    switch (msg.t) {
+      case 'fish_cast': {
+        if (!player.acceptRid(msg.rid)) return; // 중복 요청 무시
+        const err = fishing.cast(player, msg.rid, msg.spot);
+        if (err) fail(err);
+        return;
+      }
+      case 'fish_hook': {
+        const err = fishing.hook(player, msg.rid, msg.reaction);
+        if (err) fail(err);
+        return;
+      }
+      case 'fish_cancel':
+        return fishing.cancel(player);
+      case 'inv_discard': {
+        if (!player.acceptRid(msg.rid)) return;
+        if (typeof msg.id !== 'string' || !data.fish.has(msg.id)) return fail(ErrorCode.badItem);
+        const n = msg.n === undefined ? 1 : msg.n;
+        if (!removeItem(player.items, msg.id, n)) return fail(ErrorCode.badItem);
+        send(ctx.ws, { t: 'inventory', ...inventoryToWire(player.items, cfg) });
+        rooms.save(room);
+        return;
+      }
+    }
   }
 
   function handleMove(ctx, msg) {
@@ -105,6 +175,8 @@ export function createServer(overrides = {}) {
     player.vx = vx * vk;
     player.vz = vz * vk;
     room.dirty = true;
+    room.saveDirty = true;
+    fishing.onMove(player);
 
     if (corrected) send(ctx.ws, { t: 'correct', x: player.x, y: player.y, z: player.z });
   }
@@ -116,18 +188,22 @@ export function createServer(overrides = {}) {
       case 'create': {
         if (!checkVersion(ctx, msg)) return;
         if (ctx.player) return sendError(ctx.ws, ErrorCode.alreadyInRoom);
+        if (!validUid(ctx, msg)) return;
         const room = rooms.createRoom();
-        return bind(ctx, room, rooms.addPlayer(room), false);
+        const { player } = rooms.addPlayer(room, msg.uid);
+        return bind(ctx, room, player, false);
       }
       case 'join': {
         if (!checkVersion(ctx, msg)) return;
         if (ctx.player) return sendError(ctx.ws, ErrorCode.alreadyInRoom);
+        if (!validUid(ctx, msg)) return;
         if (typeof msg.code !== 'string') return sendError(ctx.ws, ErrorCode.badMessage, 'code');
         const room = rooms.getRoom(msg.code);
         if (!room) return sendError(ctx.ws, ErrorCode.roomNotFound);
-        const player = rooms.addPlayer(room);
-        if (!player) return sendError(ctx.ws, ErrorCode.roomFull);
-        return bind(ctx, room, player, false);
+        const added = rooms.addPlayer(room, msg.uid);
+        if (!added) return sendError(ctx.ws, ErrorCode.roomFull);
+        // 같은 uid가 이미 방에 있으면(다른 기기/재접속) 그 자리를 이어받는다.
+        return bind(ctx, room, added.player, added.existing);
       }
       case 'resume': {
         if (!checkVersion(ctx, msg)) return;
@@ -138,6 +214,11 @@ export function createServer(overrides = {}) {
       }
       case 'move':
         return handleMove(ctx, msg);
+      case 'fish_cast':
+      case 'fish_hook':
+      case 'fish_cancel':
+      case 'inv_discard':
+        return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
     }
@@ -187,7 +268,7 @@ export function createServer(overrides = {}) {
       room.broadcast({
         t: 'snap',
         st: now(),
-        p: [...room.players.values()].map((p) => ({ id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, vx: p.vx, vz: p.vz })),
+        p: [...room.players.values()].map((p) => ({ id: p.id, fishing: p.fishing !== null, x: p.x, y: p.y, z: p.z, yaw: p.yaw, vx: p.vx, vz: p.vz })),
       });
     }
   }, 1000 / cfg.tickRate);
@@ -204,19 +285,32 @@ export function createServer(overrides = {}) {
     }
   }, cfg.heartbeatMs);
 
+  const autosave = setInterval(() => rooms.saveDirtyRooms(), cfg.saveIntervalMs);
+  autosave.unref?.();
+
   return {
     wss,
     rooms,
+    store,
+    data,
     config: cfg,
     get port() {
       return wss.address().port;
     },
-    close() {
+    /** 종료: 타이머를 멈추고, 메모리의 방을 전부 저장한 뒤 닫는다. */
+    async close() {
       clearInterval(tick);
       clearInterval(heartbeat);
-      for (const room of rooms.rooms.values()) for (const p of room.players.values()) clearTimeout(p.graceTimer);
+      clearInterval(autosave);
+      for (const room of rooms.rooms.values()) {
+        for (const p of room.players.values()) {
+          clearTimeout(p.graceTimer);
+          fishing.drop(p);
+        }
+      }
+      await rooms.flushAll();
       for (const ws of wss.clients) ws.terminate();
-      return new Promise((resolve) => wss.close(resolve));
+      await new Promise((resolve) => wss.close(resolve));
     },
   };
 }

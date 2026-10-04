@@ -5,6 +5,7 @@ extends Node3D
 
 @export_group("References")
 @export var body: Node3D
+@export var rig: CharacterRig
 @export var name_label: Label3D
 
 @export_group("Interpolation")
@@ -18,10 +19,18 @@ extends Node3D
 @export_range(1.0, 60.0, 0.5) var follow_smoothing: float = 30.0
 @export_range(4, 100) var max_samples: int = 40
 
+@export_group("Animation")
+## 이 속도(m/s)로 움직이면 walk 애니메이션이 100% 재생된다 (플레이어 최대 속도와 같게).
+@export_range(0.5, 20.0, 0.1, "suffix:m/s") var walk_speed_reference: float = 4.5
+## 화면에서 실제 움직인 속도를 이 정도로 부드럽게 따라가며 걷기 애니메이션에 쓴다.
+@export_range(1.0, 40.0, 0.5) var speed_smoothing: float = 12.0
+
 var player_id: int = 0
 var online: bool = true
+var fishing: bool = false
 
 var _samples: Array[Sample] = []
+var _shown_speed: float = 0.0
 
 
 class Sample:
@@ -29,12 +38,14 @@ class Sample:
 	var position: Vector3
 	var yaw: float
 	var velocity: Vector3
+	var fishing: bool
 
-	func _init(t: float, p: Vector3, y: float, v: Vector3) -> void:
+	func _init(t: float, p: Vector3, y: float, v: Vector3, f: bool) -> void:
 		time_ms = t
 		position = p
 		yaw = y
 		velocity = v
+		fishing = f
 
 
 func setup(state: NetPlayerState) -> void:
@@ -52,7 +63,7 @@ func set_online(value: bool) -> void:
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
-func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity: Vector3) -> void:
+func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity: Vector3, is_fishing: bool = false) -> void:
 	if not _samples.is_empty():
 		var last: Sample = _samples[-1]
 		if server_time_ms <= last.time_ms:
@@ -60,7 +71,7 @@ func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity:
 		if last.position.distance_to(position) > teleport_distance:
 			_samples.clear()
 			global_position = position
-	_samples.append(Sample.new(server_time_ms, position, yaw, velocity))
+	_samples.append(Sample.new(server_time_ms, position, yaw, velocity, is_fishing))
 	if _samples.size() > max_samples:
 		_samples.pop_front()
 
@@ -71,15 +82,18 @@ func _process(delta: float) -> void:
 	var render_time: float = Net.server_time_ms() - interpolation_delay_ms
 	var target_pos: Vector3
 	var target_yaw: float
+	var target_fishing: bool
 	var last: Sample = _samples[-1]
 
 	if render_time >= last.time_ms:
 		var ahead: float = minf(render_time - last.time_ms, max_extrapolation_ms) / 1000.0
 		target_pos = last.position + last.velocity * ahead
 		target_yaw = last.yaw
+		target_fishing = last.fishing
 	elif render_time <= _samples[0].time_ms:
 		target_pos = _samples[0].position
 		target_yaw = _samples[0].yaw
+		target_fishing = _samples[0].fishing
 	else:
 		var i: int = _samples.size() - 2
 		while i > 0 and _samples[i].time_ms > render_time:
@@ -90,8 +104,16 @@ func _process(delta: float) -> void:
 		var f: float = clampf((render_time - a.time_ms) / span, 0.0, 1.0)
 		target_pos = a.position.lerp(b.position, f)
 		target_yaw = lerp_angle(a.yaw, b.yaw, f)
+		target_fishing = a.fishing
 
 	var weight: float = 1.0 - exp(-follow_smoothing * delta)
+	var before: Vector3 = global_position
 	global_position = global_position.lerp(target_pos, weight)
+	if rig != null and delta > 0.0:
+		# 실제로 화면에서 움직인 속도로 걷기 애니메이션을 정한다 (낚시 중에는 서 있는다).
+		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta
+		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-speed_smoothing * delta))
+		rig.set_move_speed(0.0 if target_fishing else _shown_speed / walk_speed_reference)
+		rig.set_fishing(target_fishing)
 	if body != null:
 		body.rotation.y = lerp_angle(body.rotation.y, target_yaw, weight)

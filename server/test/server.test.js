@@ -1,53 +1,11 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { WebSocket } from 'ws';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
-
-class Client {
-  constructor(port) {
-    this.ws = new WebSocket(`ws://127.0.0.1:${port}`);
-    this.inbox = [];
-    this.waiters = [];
-    this.closed = null;
-    this.ws.on('message', (d) => {
-      const m = JSON.parse(d.toString());
-      const i = this.waiters.findIndex((w) => w.pred(m));
-      if (i >= 0) this.waiters.splice(i, 1)[0].resolve(m);
-      else this.inbox.push(m);
-    });
-    this.ws.on('close', (code) => {
-      this.closed = code;
-    });
-    this.opened = new Promise((r) => this.ws.on('open', r));
-  }
-  send(m) {
-    this.ws.send(JSON.stringify(m));
-  }
-  next(pred, ms = 1500) {
-    const i = this.inbox.findIndex(pred);
-    if (i >= 0) return Promise.resolve(this.inbox.splice(i, 1)[0]);
-    return new Promise((resolve, reject) => {
-      const w = { pred, resolve };
-      this.waiters.push(w);
-      setTimeout(() => {
-        const j = this.waiters.indexOf(w);
-        if (j >= 0) {
-          this.waiters.splice(j, 1);
-          reject(new Error('timeout waiting for message'));
-        }
-      }, ms);
-    });
-  }
-  type(t, ms) {
-    return this.next((m) => m.t === t, ms);
-  }
-  kill() {
-    this.ws.terminate();
-  }
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+import { Client, sleep, uid } from './helpers.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 describe('session server', () => {
   let server;
@@ -58,24 +16,27 @@ describe('session server', () => {
     await c.opened;
     return c;
   };
+  let saveDir;
   before(() => {
-    server = createServer({ port: 0, reconnectGraceMs: 400, tickRate: 50, rateLimitPerSec: 20, rateLimitBurst: 30 });
+    saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-test-'));
+    server = createServer({ port: 0, saveDir, reconnectGraceMs: 400, tickRate: 50, rateLimitPerSec: 20, rateLimitBurst: 30 });
   });
   after(async () => {
     for (const c of clients) c.kill();
     await server.close();
+    rmSync(saveDir, { recursive: true, force: true });
   });
 
   it('방 만들기 → 코드로 참가, 두 번째 플레이어는 스폰 위치가 다르다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const wa = await a.type('welcome');
     assert.equal(wa.id, 1);
     assert.match(wa.code, /^[A-Z2-9]{6}$/);
     assert.equal(wa.players.length, 1);
 
     const b = await connect();
-    b.send({ t: 'join', v: PROTOCOL_VERSION, code: wa.code.toLowerCase() });
+    b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code: wa.code.toLowerCase() });
     const wb = await b.type('welcome');
     assert.equal(wb.id, 2);
     assert.equal(wb.players.length, 2);
@@ -86,28 +47,28 @@ describe('session server', () => {
 
   it('없는 방 / 가득 찬 방 / 버전 불일치는 에러', async () => {
     const x = await connect();
-    x.send({ t: 'join', v: PROTOCOL_VERSION, code: 'ZZZZZZ' });
+    x.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code: 'ZZZZZZ' });
     assert.equal((await x.type('error')).code, 'room_not_found');
-    x.send({ t: 'create', v: 999 });
+    x.send({ t: 'create', v: 999, uid: uid() });
     assert.equal((await x.type('error')).code, 'bad_version');
 
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const { code } = await a.type('welcome');
     const b = await connect();
-    b.send({ t: 'join', v: PROTOCOL_VERSION, code });
+    b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code });
     await b.type('welcome');
     const c = await connect();
-    c.send({ t: 'join', v: PROTOCOL_VERSION, code });
+    c.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code });
     assert.equal((await c.type('error')).code, 'room_full');
   });
 
   it('위치가 상대에게 스냅샷으로 전달된다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const { code } = await a.type('welcome');
     const b = await connect();
-    b.send({ t: 'join', v: PROTOCOL_VERSION, code });
+    b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code });
     await b.type('welcome');
     a.send({ t: 'move', x: 0.2, y: 0.1, z: -0.2, yaw: 1.5, vx: 2, vz: -2 });
     const snap = await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.yaw === 1.5);
@@ -119,7 +80,7 @@ describe('session server', () => {
 
   it('속도 상한을 넘는 이동은 잘라내고 correct를 보낸다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     await a.type('welcome');
     a.send({ t: 'move', x: 50, y: 0.1, z: 0, yaw: 0, vx: 0, vz: 0 });
     const c = await a.type('correct');
@@ -128,7 +89,7 @@ describe('session server', () => {
 
   it('경계 밖 좌표는 경계로 되돌린다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     await a.type('welcome');
     a.send({ t: 'move', x: 0, y: 500, z: 0, yaw: 0 });
     const c = await a.type('correct');
@@ -137,10 +98,10 @@ describe('session server', () => {
 
   it('끊겼다가 token으로 resume하면 같은 자리로 복귀하고 상대가 알림을 받는다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const wa = await a.type('welcome');
     const b = await connect();
-    b.send({ t: 'join', v: PROTOCOL_VERSION, code: wa.code });
+    b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code: wa.code });
     await b.type('welcome');
     a.send({ t: 'move', x: 0.3, y: 0.1, z: 0.3, yaw: 0, vx: 0, vz: 0 });
     await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.x === 0.3);
@@ -162,10 +123,10 @@ describe('session server', () => {
 
   it('유예 시간이 지나면 자리가 비워지고 resume은 실패한다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const wa = await a.type('welcome');
     const b = await connect();
-    b.send({ t: 'join', v: PROTOCOL_VERSION, code: wa.code });
+    b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code: wa.code });
     await b.type('welcome');
     a.kill();
     const left = await b.type('peer_left', 1500);
@@ -178,7 +139,7 @@ describe('session server', () => {
 
   it('서버가 끊김을 모르는 상태에서 resume하면 낡은 연결을 교체한다', async () => {
     const a = await connect();
-    a.send({ t: 'create', v: PROTOCOL_VERSION });
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const wa = await a.type('welcome');
     const a2 = await connect();
     a2.send({ t: 'resume', v: PROTOCOL_VERSION, token: wa.token });

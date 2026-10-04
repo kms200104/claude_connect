@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -10,6 +10,23 @@ export const ErrorCode = Object.freeze({
   roomFull: 'room_full',
   resumeFailed: 'resume_failed',
   rateLimited: 'rate_limited',
+  // 낚시 / 인벤토리
+  notAtSpot: 'not_at_spot',
+  alreadyFishing: 'already_fishing',
+  notFishing: 'not_fishing',
+  inventoryFull: 'inventory_full',
+  badItem: 'bad_item',
+});
+
+// fish_result.reason
+export const FishFail = Object.freeze({
+  early: 'early', // 입질 전에(또는 가짜 입질에) 당김
+  late: 'late', // 허용 창을 넘김
+  escaped: 'escaped', // 아예 반응이 없어 도망감
+  moved: 'moved', // 움직여서 취소됨
+  cancelled: 'cancelled',
+  inventoryFull: 'inventory_full',
+  disconnected: 'disconnected',
 });
 
 // 헷갈리는 글자(0/O, 1/I/L)를 뺀 방 코드 문자.

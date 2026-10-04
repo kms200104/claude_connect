@@ -87,6 +87,8 @@ func _run_guest(village: Node) -> void:
 	var remote: RemotePlayer = null
 	var frames: int = 0
 	var samples: Array[Vector3] = []
+	var times: Array[float] = []
+	var max_walk: float = 0.0
 	var t_end: float = Time.get_ticks_msec() + 5000.0
 	# 호스트가 움직이는 동안 매 프레임 원격 캐릭터 위치를 기록
 	while Time.get_ticks_msec() < t_end:
@@ -97,6 +99,8 @@ func _run_guest(village: Node) -> void:
 					remote = child
 		if remote != null:
 			samples.append(remote.global_position)
+			times.append(Time.get_ticks_usec() / 1000.0)
+			max_walk = maxf(max_walk, remote.rig._move_target)
 		frames += 1
 	_check(remote != null, "원격 캐릭터 생성")
 	var max_step: float = 0.0
@@ -104,14 +108,18 @@ func _run_guest(village: Node) -> void:
 	var moving_frames: int = 0
 	for i: int in range(1, samples.size()):
 		var dx: float = samples[i].x - samples[i - 1].x
-		max_step = maxf(max_step, absf(dx))
+		# 헤드리스에서 프레임이 늦어질 수 있어 거리가 아니라 속도(m/s)로 튐을 판정한다.
+		var dt_s: float = maxf((times[i] - times[i - 1]) / 1000.0, 0.001)
+		max_step = maxf(max_step, absf(dx) / dt_s)
 		max_back = maxf(max_back, -dx)
 		if dx > 0.0005:
 			moving_frames += 1
 	var final_x: float = samples[-1].x if not samples.is_empty() else 0.0
 	_check(final_x > 5.0, "원격 캐릭터가 호스트 위치로 도달 (x=%.2f)" % final_x)
-	_check(max_step < 0.35, "프레임당 최대 이동 %.3fm (튐 없음, %d프레임)" % [max_step, frames])
+	_check(max_step < 8.0, "프레임 간 최대 속도 %.2fm/s (호스트 최대 4.5, 튐 없음, %d프레임)" % [max_step, frames])
 	_check(max_back < 0.02, "되돌아감 없음 (%.4f)" % max_back)
+	_check(max_walk > 0.5, "원격 캐릭터가 걷는 동안 walk 애니메이션 가중치가 올라감 (%.2f)" % max_walk)
+	_check(remote != null and remote.rig._move_target < 0.2, "멈추면 idle로 돌아감 (%.2f)" % remote.rig._move_target)
 	_check(moving_frames > 20, "연속 프레임에서 부드럽게 이동 (%d프레임)" % moving_frames)
 
 	# 재접속: 소켓을 갑자기 끊는다

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "fish": [
+    { "id": "crucian",   "name": "붕어",     "size": "M",  "rarity": "common",   "weight": 40, "hook_window_ms": 700 },
+    { "id": "loach",     "name": "미꾸라지", "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700 },
+    { "id": "minnow",    "name": "송사리",   "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700 },
+    { "id": "carp",      "name": "잉어",     "size": "L",  "rarity": "common",   "weight": 25, "hook_window_ms": 650 },
+    { "id": "catfish",   "name": "메기",     "size": "L",  "rarity": "uncommon", "weight": 12, "hook_window_ms": 550 },
+    { "id": "mandarin",  "name": "쏘가리",   "size": "M",  "rarity": "uncommon", "weight": 10, "hook_window_ms": 550 },
+    { "id": "goldfish",  "name": "금붕어",   "size": "S",  "rarity": "rare",     "weight": 4,  "hook_window_ms": 500 },
+    { "id": "sturgeon",  "name": "철갑상어", "size": "XL", "rarity": "rare",     "weight": 3,  "hook_window_ms": 450 }
+  ]
+}

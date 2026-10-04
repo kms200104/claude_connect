@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://game/fishing/bobber.gd" id="1_bobber"]
+[ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="2_mat"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_bobber"]
+radius = 0.12
+height = 0.24
+radial_segments = 12
+rings = 6
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_stick"]
+top_radius = 0.01
+bottom_radius = 0.01
+height = 0.3
+radial_segments = 6
+rings = 1
+
+[node name="Bobber" type="Node3D" node_paths=PackedStringArray("visual")]
+script = ExtResource("1_bobber")
+visual = NodePath("Visual")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Ball" type="MeshInstance3D" parent="Visual"]
+mesh = SubResource("SphereMesh_bobber")
+surface_material_override/0 = ExtResource("2_mat")
+
+[node name="Stick" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.24, 0)
+mesh = SubResource("CylinderMesh_stick")
+surface_material_override/0 = ExtResource("2_mat")

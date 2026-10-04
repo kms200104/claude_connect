@@ -1,3 +1,8 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
 // 모든 수치는 환경변수로 덮어쓸 수 있다 (테스트에서는 짧은 값을 쓴다).
 const num = (name, fallback) => {
   const v = Number(process.env[name]);
@@ -28,6 +33,32 @@ export const defaultConfig = {
   // 이 횟수만큼 상한을 초과하면 연결을 끊는다.
   rateLimitKickAfter: num('RATE_LIMIT_KICK_AFTER', 300),
   maxMessageBytes: num('MAX_MESSAGE_BYTES', 1024),
+
+  // 저장·데이터 위치. 저장은 방 코드별 JSON 파일(<saveDir>/<CODE>.json).
+  saveDir: process.env.SAVE_DIR || path.resolve(here, '../saves'),
+  dataDir: process.env.DATA_DIR || path.resolve(here, '../../data'),
+  // 변경이 있는 방을 이 주기로 저장한다. 인벤토리 변경은 즉시 저장.
+  saveIntervalMs: num('SAVE_INTERVAL_MS', 5000),
+
+  // 인벤토리: 물고기 종류 칸 수와 한 칸에 쌓을 수 있는 개수.
+  inventoryCapacity: num('INVENTORY_CAPACITY', 20),
+  inventoryStackSize: num('INVENTORY_STACK_SIZE', 99),
+
+  // 낚시. 입질까지 기다리는 시간은 fishTimeScale 배로 줄이거나 늘릴 수 있다(테스트는 0.01).
+  fishTimeScale: num('FISH_TIME_SCALE', 1),
+  fishFirstNibbleMinMs: num('FISH_FIRST_NIBBLE_MIN_MS', 2000),
+  fishFirstNibbleMaxMs: num('FISH_FIRST_NIBBLE_MAX_MS', 4000),
+  fishGapMinMs: num('FISH_GAP_MIN_MS', 1500),
+  fishGapMaxMs: num('FISH_GAP_MAX_MS', 3000),
+  fishMaxFakeNibbles: num('FISH_MAX_FAKE_NIBBLES', 3),
+  // 입질 후 챔질 허용 창에 더해 주는 네트워크 여유. 지연이 판정에 불리하게 작용하지 않도록.
+  fishHookGraceMs: num('FISH_HOOK_GRACE_MS', 1500),
+  // 사람이 낼 수 있는 가장 빠른 반응 시간 (이보다 빠르면 매크로로 보고 거부).
+  fishMinReactionMs: num('FISH_MIN_REACTION_MS', 80),
+  // 클라이언트가 보고한 반응 시간이 서버가 측정한 경과 시간을 이만큼까지 넘는 건 허용.
+  fishReactionSlackMs: num('FISH_REACTION_SLACK_MS', 100),
+  // 낚시 중 캐스팅 지점에서 이 이상 움직이면 낚시가 취소된다.
+  fishMaxMoveMeters: num('FISH_MAX_MOVE_M', 1.5),
 };
 
 // 슬롯(1부터)별 스폰 위치.

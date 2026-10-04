@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=36 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -14,6 +14,13 @@
 [ext_resource type="PackedScene" path="res://game/player/remote_player.tscn" id="12_remote"]
 [ext_resource type="Material" path="res://assets/materials/remote_body.tres" id="13_remote_body"]
 [ext_resource type="PackedScene" path="res://ui/hud/room_panel.tscn" id="14_panel"]
+[ext_resource type="Script" path="res://game/fishing/fishing_spot.gd" id="15_spot"]
+[ext_resource type="Material" path="res://assets/materials/water.tres" id="16_water"]
+[ext_resource type="Material" path="res://assets/materials/rod_wood.tres" id="17_rod"]
+[ext_resource type="PackedScene" path="res://game/fishing/bobber.tscn" id="18_bobber"]
+[ext_resource type="Script" path="res://game/fishing/fishing_controller.gd" id="19_fishing"]
+[ext_resource type="PackedScene" path="res://ui/hud/fishing_hud.tscn" id="20_hud"]
+[ext_resource type="PackedScene" path="res://ui/panels/inventory_panel.tscn" id="21_inventory"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -52,6 +59,9 @@ size = Vector3(4, 0.4, 8)
 [sub_resource type="BoxMesh" id="Mesh_ramp"]
 size = Vector3(4, 0.4, 8)
 
+[sub_resource type="PlaneMesh" id="Mesh_water"]
+size = Vector2(12, 10)
+
 [node name="Village" type="Node3D"]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -72,7 +82,7 @@ world_environment = NodePath("../WorldEnvironment")
 focus = NodePath("../Player")
 toon_shader = ExtResource("5_toon")
 lit_shader = ExtResource("6_lit")
-materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose"), ExtResource("13_remote_body")])
+materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose"), ExtResource("13_remote_body"), ExtResource("16_water"), ExtResource("17_rod")])
 
 [node name="Terrain" type="Node3D" parent="."]
 
@@ -127,6 +137,14 @@ surface_material_override/0 = ExtResource("8_block")
 [node name="Shape" type="CollisionShape3D" parent="Terrain/Ramp"]
 shape = SubResource("Shape_ramp")
 
+[node name="Pond" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water")]
+script = ExtResource("15_spot")
+water = NodePath("Water")
+
+[node name="Water" type="MeshInstance3D" parent="Terrain/Pond"]
+mesh = SubResource("Mesh_water")
+surface_material_override/0 = ExtResource("16_water")
+
 [node name="Player" parent="." instance=ExtResource("1_player") node_paths=PackedStringArray("joystick", "camera")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 joystick = NodePath("../HUD/Joystick")
@@ -137,6 +155,15 @@ script = ExtResource("11_replicator")
 player = NodePath("../Player")
 remote_scene = ExtResource("12_remote")
 remote_parent = NodePath("..")
+
+[node name="Bobber" parent="." instance=ExtResource("18_bobber")]
+
+[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud")]
+script = ExtResource("19_fishing")
+player = NodePath("../Player")
+spot = NodePath("../Terrain/Pond")
+bobber = NodePath("../Bobber")
+hud = NodePath("../HUD/FishingHud")
 
 [node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "camera")]
 script = ExtResource("2_camera")
@@ -157,3 +184,8 @@ grow_vertical = 2
 script = ExtResource("3_joystick")
 
 [node name="RoomPanel" parent="HUD" instance=ExtResource("14_panel")]
+
+[node name="FishingHud" parent="HUD" instance=ExtResource("20_hud")]
+
+[node name="InventoryPanel" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
+player = NodePath("../../Player")
