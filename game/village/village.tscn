@@ -41,6 +41,9 @@
 [ext_resource type="PackedScene" path="res://ui/hud/top_bar.tscn" id="39_top_bar"]
 [ext_resource type="Material" path="res://assets/materials/axe_metal.tres" id="40_axe"]
 [ext_resource type="Material" path="res://assets/materials/eye_dark.tres" id="41_eye"]
+[ext_resource type="Script" path="res://game/furniture/furniture_field.gd" id="42_furniture"]
+[ext_resource type="Script" path="res://game/shop/shop_controller.gd" id="43_shop"]
+[ext_resource type="PackedScene" path="res://ui/shop/shop_window.tscn" id="44_shop_window"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -220,6 +223,20 @@ roof_material = ExtResource("27_roof")
 door_material = ExtResource("17_rod")
 window_material = ExtResource("28_window")
 
+[node name="Furniture" type="Node3D" parent="."]
+script = ExtResource("42_furniture")
+material = ExtResource("23_foliage")
+
+[node name="Shop" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "toast_hud")]
+script = ExtResource("43_shop")
+player = NodePath("../Player")
+camera_rig = NodePath("../CameraRig")
+sky = NodePath("../SkyController")
+keeper_scene = ExtResource("25_actor")
+material = ExtResource("23_foliage")
+glow_material = ExtResource("28_window")
+toast_hud = NodePath("../HUD/FishingHud")
+
 [node name="Lamps" type="Node3D" parent="."]
 
 [node name="LampA" type="StaticBody3D" parent="Lamps"]
@@ -309,22 +326,26 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "dialogue", "fishing", "action_hud", "toast_hud")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "dialogue", "fishing", "action_hud", "toast_hud")]
 script = ExtResource("34_interaction")
 player = NodePath("../Player")
 trees = NodePath("../Trees")
 npcs = NodePath("../Npcs")
+shop = NodePath("../Shop")
+furniture = NodePath("../Furniture")
 dialogue = NodePath("../DialogueController")
 fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud")]
+[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop")]
 script = ExtResource("35_dialogue")
 player = NodePath("../Player")
 npcs = NodePath("../Npcs")
 box = NodePath("../HUD/DialogueBox")
 toast_hud = NodePath("../HUD/FishingHud")
+shop_window = NodePath("../HUD/ShopWindow")
+shop = NodePath("../Shop")
 
 [node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "camera")]
 script = ExtResource("2_camera")
@@ -364,6 +385,9 @@ script = ExtResource("3_joystick")
 [node name="DialogueBox" parent="HUD" instance=ExtResource("38_dialogue_box")]
 
 [node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
+player = NodePath("../../Player")
+
+[node name="ShopWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("44_shop_window")]
 player = NodePath("../../Player")
 
 [connection signal="bag_pressed" from="HUD/Hotbar" to="HUD/InventoryWindow" method="toggle"]

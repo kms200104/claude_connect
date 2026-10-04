@@ -37,7 +37,7 @@ function newProfile(uid, slot, cfg) {
     slot,
     slots: ensureStarterTools(emptySlots(cfg), cfg),
     held: 0,
-    sol: 0,
+    sol: cfg.startSol ?? 0,
     catches: 0,
     x: spawn.x,
     y: spawn.y,

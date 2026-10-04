@@ -88,6 +88,8 @@ export const defaultConfig = {
   doorGraceMs: num('DOOR_GRACE_MS', 1500),
   // 상점 포인트 배율 (시연·테스트용. 1이면 거래한 솔만큼 포인트).
   shopPointsScale: num('SHOP_POINTS_SCALE', 1),
+  // 처음 들어온 사람이 가진 솔 (시연·테스트용).
+  startSol: num('START_SOL', 0),
   // 한 사람이 마을에 설치할 수 있는 가구 수.
   maxPlacedPerPlayer: num('MAX_PLACED_PER_PLAYER', 30),
   // 부탁 종류를 하나로 고정한다 (quests.json 의 템플릿 id, 시연·테스트용). 비우면 전부.

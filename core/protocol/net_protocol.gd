@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 3
+const VERSION: int = 4
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -35,6 +35,17 @@ const ERR_NOT_TALKING: String = "not_talking"
 const ERR_NO_OFFER: String = "no_offer"
 const ERR_BAD_QUEST: String = "bad_quest"
 const ERR_QUEST_NOT_READY: String = "quest_not_ready"
+
+# 상점 / 가구 / 옷
+const ERR_NOT_NEAR_DOOR: String = "not_near_door"
+const ERR_NOT_IN_SHOP: String = "not_in_shop"
+const ERR_NOT_FOR_SALE: String = "not_for_sale"
+const ERR_NOT_ENOUGH_SOL: String = "not_enough_sol"
+const ERR_CANT_SELL: String = "cant_sell"
+const ERR_BAD_PLACE: String = "bad_place"
+const ERR_PLACE_LIMIT: String = "place_limit"
+const ERR_NOT_OWNER: String = "not_owner"
+const ERR_NOT_WEARABLE: String = "not_wearable"
 
 # 날씨
 const WEATHER_CLEAR: String = "clear"

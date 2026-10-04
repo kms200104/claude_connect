@@ -16,6 +16,8 @@ static var _eyes_mesh: ArrayMesh = null
 @export var rod: Node3D
 @export var axe: Node3D
 @export var eye_material: Material
+## 옷·모자 메시 머티리얼 (정점 색을 쓰는 흰 툰 머티리얼).
+@export var outfit_material: Material
 
 @export_group("Animation")
 ## 클수록 idle ↔ walk 전환이 빠르다 (지수 감쇠 계수).
@@ -36,6 +38,8 @@ var _move_value: float = 0.0
 var _fishing_target: float = 0.0
 var _fishing_value: float = 0.0
 var _eyes: MeshInstance3D = null
+var _outfit: Dictionary[String, MeshInstance3D] = {}
+var _outfit_ids: Dictionary[String, String] = {"hat": "", "top": ""}
 
 
 func _ready() -> void:
@@ -47,9 +51,42 @@ func _ready() -> void:
 	set_held(held_item)
 
 
-## 0 = 서 있음, 1 = 기준 속도로 걷는 중 (0~1로 잘라 쓴다).
+## 0 = 서 있음, 1 = 걷기, 2 = 달리기 (0~2로 잘라 쓴다). speed_to_blend 로 속도를 바꿔 넣는다.
 func set_move_speed(normalized: float) -> void:
-	_move_target = clampf(normalized, 0.0, 1.0)
+	_move_target = clampf(normalized, 0.0, 2.0)
+
+
+## 실제 속도(m/s) → 이동 애니메이션 값. 걷기 속도까지 0~1, 거기서 달리기 속도까지 1~2.
+static func speed_to_blend(speed: float, walk_speed: float, run_speed: float) -> float:
+	if speed <= walk_speed:
+		return speed / maxf(walk_speed, 0.01)
+	return 1.0 + (speed - walk_speed) / maxf(run_speed - walk_speed, 0.01)
+
+
+## 입은 옷 (아이템 id, 빈 문자열 = 벗음). 아이템 데이터의 모양으로 메시를 만들어 몸에 붙인다.
+func set_outfit(hat_id: String, top_id: String) -> void:
+	_set_outfit_part("hat", hat_id)
+	_set_outfit_part("top", top_id)
+
+
+func outfit_item(part: String) -> String:
+	return _outfit_ids.get(part, "")
+
+
+func _set_outfit_part(part: String, item_id: String) -> void:
+	if _outfit_ids.get(part, "") == item_id or visual == null:
+		return
+	_outfit_ids[part] = item_id
+	var mi: MeshInstance3D = _outfit.get(part)
+	if mi == null:
+		mi = MeshInstance3D.new()
+		mi.name = "Outfit_%s" % part
+		mi.material_override = outfit_material
+		visual.add_child(mi)
+		_outfit[part] = mi
+	var info: ItemInfo = GameData.item(item_id) if not item_id.is_empty() else null
+	mi.visible = info != null and not info.model.is_empty()
+	mi.mesh = PartMesh.get_mesh(item_id, info.model) if mi.visible else null
 
 
 func set_fishing(active: bool) -> void:

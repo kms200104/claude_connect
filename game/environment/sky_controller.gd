@@ -52,6 +52,8 @@ var clouds: float = 0.0
 var rain_amount: float = 0.0
 var wetness: float = 0.0
 var flash: float = 0.0
+## 실내(상점 안)에 있으면 비·안개·젖은 땅을 보이지 않는다. ShopController 가 켜고 끈다.
+var indoor: bool = false
 
 var _flash_tween: Tween = null
 
@@ -139,20 +141,20 @@ func _apply(delta: float, instant: bool) -> void:
 		env.ambient_light_energy = lerpf(night_ambient_energy, day_ambient_energy, daylight) * (1.0 - 0.2 * clouds) + flash * 1.5
 		# 비·밤에는 옅은 안개로 먼 곳을 흐리게 (먼 물체가 덜 보여 그리기도 가볍다).
 		var fog: float = maxf(rain_amount * 0.9, (1.0 - daylight) * 0.1)
-		env.fog_enabled = fog > 0.02
+		env.fog_enabled = fog > 0.02 and not indoor
 		env.fog_light_color = sky
 		env.fog_density = 0.002 + 0.01 * fog
 
 	var lamps: float = clampf(maxf(1.0 - daylight * 1.4, clouds * rain_amount * 0.5), 0.0, 1.0)
 	RenderingServer.global_shader_parameter_set("night_light", lamps)
-	RenderingServer.global_shader_parameter_set("world_wetness", wetness)
+	RenderingServer.global_shader_parameter_set("world_wetness", 0.0 if indoor else wetness)
 	for light: OmniLight3D in lamp_lights:
 		if light != null:
 			light.visible = lamps > 0.05
 			light.light_energy = lamps * 1.4
 
 	if rain != null:
-		rain.visible = rain_amount > 0.02
+		rain.visible = rain_amount > 0.02 and not indoor
 		var material: ShaderMaterial = rain.material_override as ShaderMaterial
 		if material != null:
 			material.set_shader_parameter("intensity", rain_amount)

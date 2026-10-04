@@ -38,6 +38,13 @@ func _physics_process(delta: float) -> void:
 	global_position = global_position.lerp(_goal_position(), weight)
 
 
+## 순간이동(상점 문 등) 뒤에 마을을 가로질러 미끄러지지 않도록 바로 따라붙는다.
+func snap_to_target() -> void:
+	if target != null:
+		_apply_framing()
+		global_position = _goal_position()
+
+
 func _apply_framing() -> void:
 	rotation_degrees = Vector3(-pitch_degrees, yaw_degrees, 0.0)
 	if camera != null:

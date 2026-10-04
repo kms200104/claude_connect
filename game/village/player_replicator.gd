@@ -33,6 +33,7 @@ func _ready() -> void:
 	Net.state_changed.connect(_on_state_changed)
 	Net.inventory_updated.connect(func(_slots: Array[InventoryItem], _held: int) -> void: _sync_held_item())
 	Net.peer_action.connect(_on_peer_action)
+	Net.profile_updated.connect(_sync_outfit)
 	_sync_held_item()
 
 
@@ -114,13 +115,21 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 	for state: NetPlayerState in states:
 		if state.id == Net.my_id:
 			continue
-		_spawn_remote(state).push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
+		var remote: RemotePlayer = _spawn_remote(state)
+		remote.push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
+		remote.set_outfit(state.hat, state.top)
 
 
 ## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.
 func _sync_held_item() -> void:
 	if player != null and Net.state == Net.State.ONLINE:
 		player.set_held_item(Net.held_item_id())
+
+
+## 내 옷을 서버가 알려 준 대로 입힌다.
+func _sync_outfit() -> void:
+	if player != null and player.rig != null:
+		player.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 
 func _on_peer_action(id: int, kind: String, _target: String) -> void:

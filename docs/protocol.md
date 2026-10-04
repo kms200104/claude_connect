@@ -1,9 +1,10 @@
-# 네트워크 프로토콜 v3
+# 네트워크 프로토콜 v4
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
 
 v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베기, 주민 대화·부탁, 마을 시계·날씨·번개.
+v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가구 설치·줍기, 옷 입기·벗기, 소지품 부탁, 달리기 속도(최대 7.2m/s 허용).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -25,6 +26,14 @@ v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베
 | `quest_accept` | `rid` | 이번 대화에서 받은 부탁 제안 수락 |
 | `quest_decline` | | 제안 거절 |
 | `quest_turnin` | `rid quest` | 부탁 완료. 그 부탁을 한 주민과 대화 중이고 아이템이 다 있어야 한다 |
+| `shop_enter` | `rid` | 상점 문(`door`)에서 `enter_range` 안이면 서버가 실내로 옮긴다 → `shop_door` |
+| `shop_exit` | `rid` | 실내 출구(`exit`)에서 `exit_range` 안이면 밖으로 옮긴다 → `shop_door` |
+| `shop_sell` | `rid slot n` | 칸의 물건 n개 팔기 (실내에서만, 도구는 `cant_sell`) |
+| `shop_buy` | `rid item n` | 지금 단계까지 열린 진열품 n개 사기 (실내에서만) |
+| `place` | `rid slot x z rot` | 가구 설치. 서버가 0.5m 격자로 맞추고, 3m 안·물/나무/다른 가구/상점 앞이 아닌 곳만 |
+| `pickup` | `rid id` | 내가 놓은 가구를 2.5m 안에서 줍기 |
+| `wear` | `rid slot` | 칸의 옷 입기 (입던 옷은 그 칸으로) |
+| `unwear` | `rid part` | `hat` / `top` 벗기 (가방에 빈자리가 있어야) |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -51,19 +60,25 @@ v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베
 | `quest_accepted` | `rid quest` | 부탁 수락 확정 |
 | `quest_done` | `rid quest npc reward sol` | 부탁 완료. 아이템을 가져가고 `reward`솔을 줬다 |
 | `weather` | `w` | 날씨 변화: `clear` / `cloudy` / `rain` / `thunder` |
+| `shop_door` | `inside x y z shop` | 서버가 나를 상점 안/밖으로 옮겼다 (클라이언트는 그 자리로 순간이동) |
+| `shop_result` | `rid kind item n sol amount` | 사고팔기 성공 (`kind` = `buy`/`sell`, `amount` = 오간 솔) |
+| `shop` | `level points next up` | 상점 단계·포인트 (방 전체). `next` = 다음 단계 문턱(마지막이면 null), `up` = 방금 커졌다 |
+| `placed` | `rid by f` | 가구가 놓였다 (방 전체). `f` = `{id, item, x, z, rot, owner}` (`owner` = 놓은 사람 자리 번호) |
+| `unplaced` | `rid id` | 가구가 치워졌다 (방 전체) |
 | `lightning` | `st power` | 번개 (뇌우일 때, 방의 모두에게 같은 순간). `power` 0.6~1 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, held, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id — 상대 캐릭터 표시용). `st`/`s`는 서버 단조 시계(ms).
+`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용).
+`profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable`
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
 - `clock` = `{g, s, st}`: 서버 시각 `st`(ms)일 때 마을 시각이 `g`(마을 시간대 벽시계를 epoch ms로 나타낸 값)이고 `s`배로 흐른다. 클라이언트는 `g + (서버시각 − st) × s` 로 지금 마을 시각을 계산한다. 하루는 **새벽 5시**에 바뀐다.
-- `w` = 지금 날씨, `trees[]` = `{id, s, c}` 전체, `npcs[]` = 주민 위치 전체.
+- `w` = 지금 날씨, `trees[]` = `{id, s, c}` 전체, `npcs[]` = 주민 위치 전체, `shop` = `shop` 메시지와 같은 모양, `placed[]` = 설치된 가구 전체.
 
 ## 흐름
 - **입장**: `create`/`join` → `welcome`(+상대에게 `peer_joined`). 클라이언트는 `welcome`의 내 위치로 캐릭터를 맞춘다.
@@ -100,16 +115,28 @@ v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베
 - 날씨는 방마다 저장된 시드로 하루를 3시간 블록 8개로 나눠 정한다(맑음 50 · 흐림 25 · 비 18 · 뇌우 7, 직전 블록과 같을 확률 50%). 같은 시드·날짜·시각이면 언제 계산해도 같다. 바뀌면 `weather`로 알린다.
 - 뇌우일 때는 6~18초마다 `lightning`을 방 전체에 보낸다.
 
+## 상점 (서버 판정)
+- 실내는 마을에서 멀리 떨어진 공간(`interior`, z≈59)이다. 문을 지나면 서버가 위치를 바꾸고 `shop_door`로 알린다(이동 속도 검사를 거치지 않는 유일한 순간이동). 문을 지난 직후 1.5초(`DOOR_GRACE_MS`) 동안은 문 반대편(10m 넘게 떨어진 곳)에서 늦게 도착한 `move`를 무시한다.
+- 사고팔기는 실내(`interior` 사각형 안)에서만. 파는 값 = 기본 가격(`price`) × 개수 × (1 + 단계 보너스 0 / 5% / 10%), 사는 값 = `buy` × 개수.
+- **사고판 솔만큼 상점 포인트가 쌓인다**(마을 공용, `SHOP_POINTS_SCALE` 배). 1500포인트 → 2단계 잡화점, 6000포인트 → 3단계 백화점. 단계가 오르면 진열품이 늘고(이전 단계 물건도 계속 판다) 방 전체에 `shop{up: true}`.
+- 상점 주인(달보)과의 대화는 클라이언트만의 연출이다(서버 대화 잠금 없음, 두 사람이 같이 거래할 수 있다).
+
+## 가구 · 옷 (서버 판정)
+- 설치: 가구 아이템 1개를 칸에서 빼서 마을에 놓는다. 위치 0.5m 격자, 방향 90° 단위. 다른 가구·나무와 1m, 물과 0.6m, 상점 앞 5.5m 안, 상점 실내에는 못 놓는다. 한 사람당 30개(`MAX_PLACED_PER_PLAYER`).
+- 가구는 마을 공용으로 보이고, 놓은 사람만 주울 수 있다(`not_owner`).
+- 옷: 모자(`hat`)·상의(`top`) 한 벌씩. 입은 옷은 인벤토리 칸을 차지하지 않는다. 갈아입으면 입던 옷이 방금 비운 칸으로 돌아오므로 가방이 꽉 차도 갈아입을 수 있다.
+
 ## 인벤토리
 퀵슬롯 5칸 + 가방 20칸. 새 아이템은 같은 아이템 칸 → 빈 가방 칸 → 빈 퀵슬롯 순으로 들어간다. 칸당 개수: 물고기 99, 목재 30, 도구 1.
-처음 들어오면 퀵슬롯 1번에 낚싯대, 2번에 도끼가 있고 1번을 손에 들고 있다. 도구는 버릴 수 없다.
+처음 들어오면 퀵슬롯 1번에 낚싯대, 2번에 도끼가 있고 1번을 손에 들고 있다(솔은 `START_SOL`, 기본 0). 도구는 버릴 수 없다.
+아이템 종류: 도구, 재료(목재 6종), 소지품(부탁·선물용 10종), 가구(11종), 옷(모자 4·상의 4), 물고기(20종). 나무 종류(둥근·소나무·자작나무)마다 나오는 목재·소지품이 다르다.
 물고기 칸이 가득 차면 던지기 전에 `inventory_full`로 거절하고, 던진 뒤 칸이 찼다면 `fish_result(inventory_full)`로 놓친다.
 
 ## 저장
 방(마을) 하나 = JSON 파일 하나: `<SAVE_DIR>/<방코드>.json`
-(`schema: 2`, `createdAt`, `world{totalCatches, species, weatherSeed, trees{<id>: {s, c, d, f}}}`,
-`profiles{<uid>: {slot, slots, held, sol, catches, x, y, z, yaw, npcs{<id>: {f, talkDay, offerDay}}, quests[], questSeq, lastQuestDay}}`).
+(`schema: 3`, `createdAt`, `world{totalCatches, species, weatherSeed, trees{<id>: {s, c, d, f}}, shopPoints, placed[], placedSeq}`,
+`profiles{<uid>: {slot, slots, held, sol, catches, x, y, z, yaw, npcs{<id>: {f, talkDay, offerDay}}, quests[], questSeq, lastQuestDay, outfit{hat, top}}}`).
 - 사람은 `uid`로 구분한다. 서버가 재시작되어 `token`이 사라져도, 클라이언트가 방 코드 + `uid`로 `join`하면 같은 자리·인벤토리·위치로 돌아온다(클라이언트가 `resume_failed` 뒤 자동으로 시도).
-- 아이템 수가 바뀌는 일(낚시·도끼질·버리기·부탁 완료)과 부탁·친밀도 변화, 입퇴장은 즉시 저장한다. 칸 옮기기·손에 든 칸·위치는 5초 주기로 저장한다. 쓰기는 임시 파일 → rename 으로 원자적이다. 종료 시에는 메모리의 방을 전부 저장한다.
+- 아이템 수가 바뀌는 일(낚시·도끼질·버리기·부탁 완료·사고팔기·가구 설치/줍기·옷 입기/벗기)과 부탁·친밀도·상점 포인트 변화, 입퇴장은 즉시 저장한다. 칸 옮기기·손에 든 칸·위치는 5초 주기로 저장한다. 쓰기는 임시 파일 → rename 으로 원자적이다. 종료 시에는 메모리의 방을 전부 저장한다.
 - `schema: 1` 파일(물고기 목록 `items`)은 읽을 때 칸 인벤토리로 옮기고 도구를 챙겨 준다.
 - 방 코드는 파일 이름이라 형식(`[A-HJ-KM-NP-Z2-9]{6}`)을 검사한 뒤에만 쓴다. 깨진 파일은 `.corrupt-<시각>`으로 옮겨 두고 방이 없는 것으로 처리한다.

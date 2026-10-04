@@ -22,6 +22,8 @@ extends Node3D
 @export_group("Animation")
 ## 이 속도(m/s)로 움직이면 walk 애니메이션이 100% 재생된다 (플레이어 최대 속도와 같게).
 @export_range(0.5, 20.0, 0.1, "suffix:m/s") var walk_speed_reference: float = 4.5
+## 이 속도면 run 애니메이션이 100% (플레이어 달리기 속도와 같게).
+@export_range(0.5, 20.0, 0.1, "suffix:m/s") var run_speed_reference: float = 7.0
 ## 화면에서 실제 움직인 속도를 이 정도로 부드럽게 따라가며 걷기 애니메이션에 쓴다.
 @export_range(1.0, 40.0, 0.5) var speed_smoothing: float = 12.0
 
@@ -52,6 +54,12 @@ class Sample:
 		held = h
 
 
+## 입은 옷 (스냅샷마다 온다).
+func set_outfit(hat: String, top: String) -> void:
+	if rig != null:
+		rig.set_outfit(hat, top)
+
+
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
 	global_position = state.position
@@ -59,6 +67,7 @@ func setup(state: NetPlayerState) -> void:
 		body.rotation.y = state.yaw
 	set_online(state.online)
 	_apply_held(state.held)
+	set_outfit(state.hat, state.top)
 
 
 func set_online(value: bool) -> void:
@@ -134,7 +143,7 @@ func _process(delta: float) -> void:
 		# 실제로 화면에서 움직인 속도로 걷기 애니메이션을 정한다 (낚시 중에는 서 있는다).
 		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-speed_smoothing * delta))
-		rig.set_move_speed(0.0 if target_fishing else _shown_speed / walk_speed_reference)
+		rig.set_move_speed(0.0 if target_fishing else CharacterRig.speed_to_blend(_shown_speed, walk_speed_reference, run_speed_reference))
 		rig.set_fishing(target_fishing)
 	if body != null:
 		body.rotation.y = lerp_angle(body.rotation.y, target_yaw, weight)

@@ -7,6 +7,7 @@ const ITEMS_PATH: String = "res://data/items/items.json"
 const TREES_PATH: String = "res://data/world/trees.json"
 const NPCS_PATH: String = "res://data/npcs/npcs.json"
 const DIALOGUE_PATH: String = "res://data/npcs/dialogue.json"
+const SHOP_PATH: String = "res://data/shop/shop.json"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
 const PLAYER_NAMES: PackedStringArray = ["보리", "새미"]
@@ -22,6 +23,9 @@ var chop_range: float = 2.2
 ## 주민에게 말을 걸 수 있는 거리 (서버 판정과 같은 값).
 var talk_range: float = 3.0
 
+## 상점 데이터 (data/shop/shop.json): 문·실내 위치, 단계별 이름·포인트·진열품.
+var shop: ShopData = null
+
 var _dialogue: Dictionary = {}
 var _choices: Dictionary = {}
 
@@ -31,7 +35,7 @@ func _ready() -> void:
 		if entry is Dictionary:
 			var info: FishInfo = FishInfo.from_dict(entry)
 			fish[info.id] = info
-			items[info.id] = ItemInfo.from_fish(info, str(entry.get("desc", "")))
+			items[info.id] = ItemInfo.from_fish(info, str(entry.get("desc", "")), int(entry.get("price", 0)))
 	for entry: Variant in _read_json(SPOTS_PATH).get("spots", []):
 		if entry is Dictionary:
 			var spot: SpotInfo = SpotInfo.from_dict(entry)
@@ -55,6 +59,7 @@ func _ready() -> void:
 	var dialogue_file: Dictionary = _read_json(DIALOGUE_PATH)
 	_dialogue = dialogue_file.get("personalities", {})
 	_choices = dialogue_file.get("choices", {})
+	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 
 
 func fish_name(id: String) -> String:

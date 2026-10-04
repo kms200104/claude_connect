@@ -1,12 +1,15 @@
 class_name InteractionController
 extends Node
-## 상황 버튼으로 하는 일: 주민에게 말 걸기, 도끼로 나무 베기. (낚시는 FishingController 가 맡는다.)
-## 우선순위: 주민 > 나무 > (물가면 낚시). 판정은 서버가 하고 여기서는 가까운 대상을 고르고 연출만 한다.
+## 상황 버튼으로 하는 일: 주민·상점 주인에게 말 걸기, 상점 드나들기, 도끼로 나무 베기, 내 가구 줍기.
+## (낚시는 FishingController 가 맡는다.) 우선순위: 주민 > 상점 주인 > 상점 문 > 나무 > 가구 > (물가면 낚시).
+## 판정은 서버가 하고 여기서는 가까운 대상을 고르고 연출만 한다.
 
 @export_group("References")
 @export var player: Player
 @export var trees: TreeField
 @export var npcs: NpcCrowd
+@export var shop: ShopController
+@export var furniture: FurnitureField
 @export var dialogue: DialogueController
 @export var fishing: FishingController
 @export var action_hud: ActionHud
@@ -19,7 +22,10 @@ extends Node
 ## 도끼를 휘두르는 동안 멈춰 있는 시간.
 @export_range(0.1, 1.5, 0.05, "suffix:s") var chop_lock_time: float = 0.45
 
-enum Target { NONE, TALK, CHOP }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP }
+
+## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
+const PICKUP_RANGE: float = 2.0
 
 var target: Target = Target.NONE
 var target_id: String = ""
@@ -29,6 +35,7 @@ func _ready() -> void:
 	action_hud.action_pressed.connect(_on_action_pressed)
 	Net.chop_succeeded.connect(_on_chop_succeeded)
 	Net.request_failed.connect(_on_request_failed)
+	Net.furniture_placed.connect(_on_furniture_placed)
 
 
 ## 지금 말 걸기·베기 대상이 있는지 (있으면 낚시 버튼을 숨긴다).
@@ -43,6 +50,12 @@ func _process(_delta: float) -> void:
 			action_hud.show_action("대화")
 		Target.CHOP:
 			action_hud.show_action("베기")
+		Target.ENTER_SHOP:
+			action_hud.show_action("들어가기")
+		Target.EXIT_SHOP:
+			action_hud.show_action("나가기")
+		Target.PICKUP:
+			action_hud.show_action("줍기")
 		_:
 			action_hud.hide_action()
 
@@ -60,11 +73,28 @@ func _pick_target() -> void:
 		target = Target.TALK
 		target_id = npc_id
 		return
+	if shop != null:
+		if shop.is_inside(pos):
+			if shop.keeper != null and _flat(pos, shop.keeper.global_position) <= GameData.talk_range:
+				target = Target.TALK
+				target_id = GameData.shop.keeper.id
+			elif shop.near_exit(pos):
+				target = Target.EXIT_SHOP
+			return
+		if shop.near_entrance(pos):
+			target = Target.ENTER_SHOP
+			return
 	if player.held_item == "axe":
 		var tree_id: String = trees.nearest_grown(pos, GameData.chop_range - safety_margin)
 		if not tree_id.is_empty():
 			target = Target.CHOP
 			target_id = tree_id
+			return
+	if furniture != null:
+		var furniture_id: String = furniture.nearest_own(pos, PICKUP_RANGE)
+		if not furniture_id.is_empty():
+			target = Target.PICKUP
+			target_id = furniture_id
 
 
 func _on_action_pressed() -> void:
@@ -73,6 +103,12 @@ func _on_action_pressed() -> void:
 			dialogue.start(target_id)
 		Target.CHOP:
 			_chop(target_id)
+		Target.ENTER_SHOP:
+			Net.enter_shop()
+		Target.EXIT_SHOP:
+			Net.exit_shop()
+		Target.PICKUP:
+			Net.pickup_furniture(target_id)
 
 
 func _chop(tree_id: String) -> void:
@@ -91,7 +127,33 @@ func _on_chop_succeeded(_tree_id: String, item_id: String, felled: bool) -> void
 	toast_hud.show_toast("쿵! %s" % text if felled else text, true)
 
 
+func _on_furniture_placed(info: PlacedInfo, by_player: int) -> void:
+	if by_player == Net.my_id:
+		toast_hud.show_toast("%s을(를) 놓았어요" % GameData.item_name(info.item), true)
+
+
+static func _flat(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
 func _on_request_failed(kind: String, code: String) -> void:
+	match kind:
+		"place":
+			match code:
+				NetProtocol.ERR_PLACE_LIMIT:
+					toast_hud.show_toast("가구를 더 놓을 수 없어요", false)
+				_:
+					toast_hud.show_toast("여기에는 놓을 수 없어요", false)
+			return
+		"pickup":
+			toast_hud.show_toast("가방이 가득 찼어요" if code == NetProtocol.ERR_INVENTORY_FULL else "주울 수 없어요", false)
+			return
+		"wear", "unwear":
+			toast_hud.show_toast("가방이 가득 차서 벗을 수 없어요" if code == NetProtocol.ERR_INVENTORY_FULL else "입을 수 없는 물건이에요", false)
+			return
+		"shop_enter", "shop_exit":
+			toast_hud.show_toast("문에 더 가까이 가야 해요", false)
+			return
 	if kind != "chop":
 		return
 	match code:

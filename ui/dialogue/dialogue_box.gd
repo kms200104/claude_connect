@@ -86,6 +86,12 @@ func close() -> void:
 		chosen.emit(-1)
 
 
+## 기다리는 쪽을 깨우지 않고 창만 숨긴다 (대화 도중 다른 창을 잠깐 열 때).
+func close_quietly() -> void:
+	_panel.visible = false
+	_clear_choices()
+
+
 func _on_panel_input(event: InputEvent) -> void:
 	# 폰의 터치는 마우스 클릭으로도 들어온다(emulate_mouse_from_touch). 두 번 넘어가지 않게 마우스만 본다.
 	var mouse: InputEventMouseButton = event as InputEventMouseButton

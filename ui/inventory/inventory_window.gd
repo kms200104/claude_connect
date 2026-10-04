@@ -21,16 +21,23 @@ signal closed
 @onready var _desc: Label = %ItemDesc
 @onready var _meta: Label = %ItemMeta
 @onready var _discard: Button = %DiscardButton
+## 가구는 "설치하기", 옷은 "입기".
+@onready var _use: Button = %UseButton
+@onready var _outfit_row: HBoxContainer = %OutfitRow
 @onready var _hint: Label = %HintLabel
 
 var selected_slot: int = -1
 var _slots: Array[ItemSlot] = []
+## 입은 옷 칸 (hat, top). 누르면 벗는다.
+var _outfit_slots: Dictionary[String, ItemSlot] = {}
 
 
 func _ready() -> void:
 	visible = false
 	_close.pressed.connect(close)
 	_discard.pressed.connect(_on_discard_pressed)
+	_use.pressed.connect(_on_use_pressed)
+	Net.profile_updated.connect(_refresh_outfit)
 	_grid.columns = bag_columns
 	add_to_group(&"blocks_joystick")
 	Net.inventory_updated.connect(func(_s: Array[InventoryItem], _h: int) -> void: _refresh())
@@ -55,6 +62,7 @@ func open() -> void:
 	selected_slot = -1
 	_preview.set_open(true)
 	_refresh()
+	_refresh_outfit()
 	_refresh_sol()
 
 
@@ -148,6 +156,7 @@ func _refresh_detail() -> void:
 	var item: InventoryItem = _item_at(selected_slot)
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	_discard.visible = info != null and not info.is_tool()
+	_use.visible = info != null and (info.is_furniture() or info.is_clothing())
 	if info == null:
 		_name.text = "아이템을 골라 보세요"
 		_desc.text = "칸을 누르면 캐릭터가 그 아이템을 바라봐요."
@@ -157,14 +166,46 @@ func _refresh_detail() -> void:
 	_name.text = info.display_name
 	_name.add_theme_color_override("font_color", info.color.darkened(0.25))
 	_desc.text = info.description
-	var kind: String = {"tool": "도구", "material": "재료", "fish": "물고기"}.get(info.kind, info.kind)
-	_meta.text = "%s · %d개%s" % [kind, item.count, " · 손에 듦" if selected_slot == Net.held_slot else ""]
+	var price: String = " · 상점에서 %s솔" % _format_number(info.price) if info.price > 0 else ""
+	_meta.text = "%s · %d개%s%s" % [info.kind_label(), item.count, " · 손에 듦" if selected_slot == Net.held_slot else "", price]
 	_discard.text = "놓아주기" if info.is_fish() else "버리기"
+	_use.text = "설치하기" if info.is_furniture() else "입기"
 	_hint.text = "옮길 칸을 누르면 자리를 바꿔요"
 
 
 func _refresh_sol() -> void:
 	_sol.text = "%s솔" % _format_number(Net.sol)
+
+
+## 가구: 캐릭터 앞 1.5m 에 캐릭터를 바라보게 놓는다. 옷: 입는다 (입던 옷은 이 칸으로).
+func _on_use_pressed() -> void:
+	var item: InventoryItem = _item_at(selected_slot)
+	var info: ItemInfo = GameData.item(item.id) if item != null else null
+	if info == null:
+		return
+	if info.is_clothing():
+		Net.wear(selected_slot)
+		_select(-1)
+		return
+	if info.is_furniture() and player != null:
+		var yaw: float = player.body.rotation.y if player.body != null else 0.0
+		var forward: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+		var rot: int = posmod(roundi(yaw / (PI * 0.5)), 4)
+		Net.place_furniture(selected_slot, player.global_position + forward * 1.5, rot)
+		close()
+
+
+func _refresh_outfit() -> void:
+	if _outfit_slots.is_empty():
+		for part: String in ["hat", "top"]:
+			var slot: ItemSlot = ItemSlot.new()
+			slot.custom_minimum_size = Vector2(100, 100)
+			slot.pressed.connect(func() -> void: Net.unwear(part))
+			_outfit_row.add_child(slot)
+			_outfit_slots[part] = slot
+	_outfit_slots["hat"].set_item(InventoryItem.new(Net.outfit_hat, 1) if not Net.outfit_hat.is_empty() else null)
+	_outfit_slots["top"].set_item(InventoryItem.new(Net.outfit_top, 1) if not Net.outfit_top.is_empty() else null)
+	_preview.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 
 func _on_discard_pressed() -> void:

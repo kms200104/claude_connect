@@ -29,6 +29,14 @@ extends Control
 @export var idle_alpha_scale: float = 0.6
 
 var output: Vector2 = Vector2.ZERO
+## 달리는 중이면 테두리를 주황빛으로 (Player 가 켠다).
+var boost: bool = false:
+	set(value):
+		if boost != value:
+			boost = value
+			queue_redraw()
+
+@export var boost_color: Color = Color(1.0, 0.65, 0.25, 0.9)
 
 var _touch_index: int = -1
 var _center: Vector2 = Vector2.ZERO
@@ -101,5 +109,5 @@ func _draw() -> void:
 	var rim: Color = Color(rim_color, rim_color.a * scale_a)
 	var knob: Color = Color(knob_color, knob_color.a * scale_a)
 	draw_circle(_center, radius, base)
-	draw_arc(_center, radius, 0.0, TAU, 64, rim, 4.0, true)
+	draw_arc(_center, radius, 0.0, TAU, 64, boost_color if boost else rim, 8.0 if boost else 4.0, true)
 	draw_circle(_center + _knob_offset, knob_radius, knob)

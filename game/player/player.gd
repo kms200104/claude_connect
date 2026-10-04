@@ -13,6 +13,14 @@ extends CharacterBody3D
 
 @export_group("Movement")
 @export_range(0.5, 20.0, 0.1, "suffix:m/s") var max_speed: float = 4.5
+
+@export_group("Running")
+## 조이스틱을 끝까지(이 비율 이상) 민 채로 run_delay 가 지나면 달린다.
+@export_range(0.5, 1.0, 0.01) var run_threshold: float = 0.95
+@export_range(0.0, 3.0, 0.05, "suffix:s") var run_delay: float = 0.7
+@export_range(0.5, 20.0, 0.1, "suffix:m/s") var run_speed: float = 7.0
+## 달리다가 입력이 이 비율 아래로 떨어지면 걷기로 돌아간다 (조금 덜 밀어도 바로 멈추지 않게).
+@export_range(0.0, 1.0, 0.01) var run_release_threshold: float = 0.7
 @export_range(1.0, 100.0, 0.5, "suffix:m/s²") var acceleration: float = 16.0
 @export_range(1.0, 100.0, 0.5, "suffix:m/s²") var deceleration: float = 22.0
 @export_range(0.0, 60.0, 0.5, "suffix:m/s²") var gravity: float = 24.0
@@ -29,16 +37,21 @@ extends CharacterBody3D
 
 ## 손에 든 아이템 id (빈손이면 빈 문자열).
 var held_item: String = "rod"
+## 달리는 중인지 (조이스틱을 끝까지 0.7초 이상 밀고 있음).
+var running: bool = false
 
 var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
 var _look_active: bool = false
+var _full_push_time: float = 0.0
 
 
 func _physics_process(delta: float) -> void:
 	var input: Vector2 = _read_input()
+	_update_running(input.length(), delta)
 	var move_dir: Vector3 = _input_to_world(input)
-	var target_velocity: Vector3 = move_dir * max_speed * minf(input.length(), 1.0)
+	var top_speed: float = run_speed if running else max_speed
+	var target_velocity: Vector3 = move_dir * top_speed * minf(input.length(), 1.0)
 
 	var horizontal: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
 	var rate: float = acceleration if input.length() > 0.0 else deceleration
@@ -55,7 +68,9 @@ func _physics_process(delta: float) -> void:
 	_turn_body(move_dir, input.length(), delta)
 	if rig != null:
 		var reference: float = walk_speed_reference if walk_speed_reference > 0.0 else max_speed
-		rig.set_move_speed(Vector3(velocity.x, 0.0, velocity.z).length() / reference)
+		rig.set_move_speed(CharacterRig.speed_to_blend(Vector3(velocity.x, 0.0, velocity.z).length(), reference, run_speed))
+	if joystick != null:
+		joystick.boost = running
 
 
 ## 이동 입력을 막거나 푼다. 사유별로 따로 기록해서 여러 곳(낚시, 가방 창)이 서로 간섭하지 않는다.
@@ -98,6 +113,18 @@ func set_held_item(item_id: String) -> void:
 func play_chop() -> void:
 	if rig != null:
 		rig.play_chop()
+
+
+## 끝까지 민 채로 run_delay 가 지나면 달리기 시작, 덜 밀거나 놓으면 걷기.
+func _update_running(amount: float, delta: float) -> void:
+	if amount >= run_threshold:
+		_full_push_time += delta
+	else:
+		_full_push_time = 0.0
+	if running:
+		running = amount >= run_release_threshold
+	else:
+		running = _full_push_time >= run_delay
 
 
 func _read_input() -> Vector2:

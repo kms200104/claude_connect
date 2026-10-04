@@ -45,6 +45,15 @@ func _count(item_id: String) -> int:
 	return n
 
 
+## 도구가 아닌 아이템 개수 (나무에서 목재·가지·도토리 등이 나온다).
+func _count_drops() -> int:
+	var n: int = 0
+	for item: InventoryItem in Net.inventory:
+		if item != null and not GameData.item(item.id).is_tool():
+			n += item.count
+	return n
+
+
 func _run() -> void:
 	var player: Player = _village.get_node("Player")
 	var trees: TreeField = _village.get_node("Trees")
@@ -78,13 +87,12 @@ func _run() -> void:
 	var tree_id: String = "t13"
 	player.global_position = trees.tree_position(tree_id) + Vector3(1.3, 0.1, 0.0)
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.CHOP and interaction.target_id == tree_id, 2.0), "나무 곁에서 '베기' 버튼")
-	var before: int = _count("wood") + _count("softwood") + _count("hardwood")
+	var before: int = _count_drops()
 	for i: int in 3:
 		await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.CHOP, 2.0)
 		interaction.action_hud.action_pressed.emit()
 		await Net.chop_succeeded
-	var wood_total: Callable = func() -> int: return _count("wood") + _count("softwood") + _count("hardwood")
-	_check(await _wait_until(func() -> bool: return wood_total.call() - before == 3, 2.0), "도끼질 3번 → 목재 3개가 인벤토리로 (%d → %d)" % [before, wood_total.call()])
+	_check(await _wait_until(func() -> bool: return _count_drops() - before == 3, 2.0), "도끼질 3번 → 나무에서 나온 것 3개가 인벤토리로 (%d → %d)" % [before, _count_drops()])
 	_check(await _wait_until(func() -> bool: return trees.stage_of(tree_id) == NetProtocol.TREE_STUMP, 2.0), "세 번째에 나무가 쓰러져 그루터기")
 	_check(interaction.target != InteractionController.Target.CHOP or interaction.target_id != tree_id, "그루터기는 더 못 벤다")
 
@@ -94,7 +102,7 @@ func _run() -> void:
 	_check(player.is_input_locked(), "가방 창이 열려 있으면 캐릭터가 멈춤")
 	var wood_slot: int = -1
 	for i: int in range(Net.quick_slot_count, Net.inventory.size()):
-		if Net.inventory[i] != null and Net.inventory[i].id in ["wood", "softwood", "hardwood"]:
+		if Net.inventory[i] != null and not GameData.item(Net.inventory[i].id).is_tool():
 			wood_slot = i
 			break
 	window.press_slot(wood_slot)
@@ -136,10 +144,11 @@ func _run() -> void:
 	_check(top_bar.quest_lines().size() == 1 and top_bar.quest_lines()[0].begins_with("무진"), "부탁 목록에 표시: %s" % str(top_bar.quest_lines()))
 
 	# 목재가 모자라면 근처 나무를 더 벤다.
-	for id: String in ["t09", "t08", "t10", "t11", "t23"]:
+	for id: String in ["t09", "t23", "t15", "t24", "t01", "t05", "t19"]:  # 둥근 나무: 목재가 가장 잘 나온다
 		if Net.quest_from("mujin").is_ready():
 			break
 		player.global_position = trees.tree_position(id) + Vector3(1.3, 0.1, 0.0)
+		await get_tree().create_timer(0.3).timeout  # 새 위치가 서버에 닿을 때까지
 		for i: int in 3:
 			if not await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.CHOP, 2.0):
 				break

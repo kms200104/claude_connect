@@ -33,6 +33,14 @@ signal talk_opened(reply: TalkReply)
 signal talk_closed(npc_id: String)
 signal quest_accepted(quest: QuestInfo)
 signal quest_completed(quest_id: String, npc_id: String, reward: int)
+## 상점 단계·포인트가 바뀜 (방 전체). leveled_up = 방금 커졌다.
+signal shop_updated(leveled_up: bool)
+## 서버가 상점 문으로 나를 옮겼다 (inside = 들어감).
+signal shop_door_passed(inside: bool, position: Vector3)
+## 사고팔기 성공. kind = "buy" / "sell", amount = 오간 솔.
+signal shop_traded(kind: String, item_id: String, count: int, amount: int)
+signal furniture_placed(info: PlacedInfo, by_player: int)
+signal furniture_removed(id: String)
 ## 요청이 거부됨. kind = 요청 종류(chop, talk, quest_accept, quest_turnin, inv_move, inv_discard …), code = NetProtocol.ERR_*
 signal request_failed(kind: String, code: String)
 signal fish_started
@@ -89,6 +97,15 @@ var weather: String = NetProtocol.WEATHER_CLEAR
 var tree_stages: Dictionary[String, String] = {}
 ## 마지막으로 받은 주민 위치.
 var npc_states: Array[NetNpcState] = []
+## 상점 (마을 공용): 단계, 포인트, 다음 단계 문턱(-1 = 마지막 단계).
+var shop_level: int = 1
+var shop_points: int = 0
+var shop_next: int = -1
+## 마을에 설치된 가구 (id → 정보).
+var placed: Dictionary[String, PlacedInfo] = {}
+## 내가 입은 옷 (아이템 id).
+var outfit_hat: String = ""
+var outfit_top: String = ""
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -220,6 +237,41 @@ func decline_quest() -> void:
 
 func turn_in_quest(quest_id: String) -> void:
 	_request("quest_turnin", {"quest": quest_id})
+
+
+func enter_shop() -> void:
+	_request("shop_enter", {})
+
+
+func exit_shop() -> void:
+	_request("shop_exit", {})
+
+
+func sell_item(slot: int, count: int = 1) -> void:
+	_request("shop_sell", {"slot": slot, "n": count})
+
+
+func buy_item(item_id: String, count: int = 1) -> void:
+	_request("shop_buy", {"item": item_id, "n": count})
+
+
+## 가구 설치 (x, z 는 서버가 0.5m 격자로 맞춘다, rot 은 90° 단위).
+func place_furniture(slot: int, position: Vector3, rot: int) -> void:
+	_request("place", {"slot": slot, "x": snappedf(position.x, 0.01), "z": snappedf(position.z, 0.01), "rot": rot})
+
+
+func pickup_furniture(id: String) -> void:
+	_request("pickup", {"id": id})
+
+
+## 칸에 든 옷을 입는다 (입던 옷은 그 칸으로 돌아온다).
+func wear(slot: int) -> void:
+	_request("wear", {"slot": slot})
+
+
+## part = "hat" / "top"
+func unwear(part: String) -> void:
+	_request("unwear", {"part": part})
 
 
 ## 손에 든 아이템 id (빈손이면 빈 문자열).
@@ -445,6 +497,29 @@ func _handle_text(text: String) -> void:
 			var accepted: Variant = msg.get("quest", {})
 			if accepted is Dictionary:
 				quest_accepted.emit(QuestInfo.from_dict(accepted))
+		"shop":
+			_apply_shop(msg)
+			shop_updated.emit(bool(msg.get("up", false)))
+		"shop_door":
+			_pending.erase(str(msg.get("rid", "")))
+			_apply_shop(msg.get("shop", {}))
+			shop_door_passed.emit(bool(msg.get("inside", false)), Vector3(float(msg.get("x", 0.0)), float(msg.get("y", 0.0)), float(msg.get("z", 0.0))))
+		"shop_result":
+			_pending.erase(str(msg.get("rid", "")))
+			sol = int(msg.get("sol", sol))
+			shop_traded.emit(str(msg.get("kind", "")), str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("amount", 0)))
+		"placed":
+			_pending.erase(str(msg.get("rid", "")))
+			var f: Variant = msg.get("f", {})
+			if f is Dictionary:
+				var info: PlacedInfo = PlacedInfo.from_dict(f)
+				placed[info.id] = info
+				furniture_placed.emit(info, int(msg.get("by", 0)))
+		"unplaced":
+			_pending.erase(str(msg.get("rid", "")))
+			var removed_id: String = str(msg.get("id", ""))
+			placed.erase(removed_id)
+			furniture_removed.emit(removed_id)
 		"quest_done":
 			_pending.erase(str(msg.get("rid", "")))
 			sol = int(msg.get("sol", sol))
@@ -492,6 +567,14 @@ func _on_welcome(msg: Dictionary) -> void:
 			if entry is Dictionary:
 				tree_stages[str(entry.get("id", ""))] = str(entry.get("s", NetProtocol.TREE_GROWN))
 	npc_states = _parse_npcs(msg.get("npcs", []))
+	_apply_shop(msg.get("shop", {}))
+	placed.clear()
+	var placed_list: Variant = msg.get("placed", [])
+	if placed_list is Array:
+		for entry: Variant in placed_list:
+			if entry is Dictionary:
+				var p: PlacedInfo = PlacedInfo.from_dict(entry)
+				placed[p.id] = p
 	_save_session()
 	_set_state(State.ONLINE)
 	if me != null:
@@ -550,7 +633,20 @@ func _apply_profile(data: Variant) -> void:
 	if f is Dictionary:
 		for npc_id: Variant in f:
 			friends[str(npc_id)] = int(f[npc_id])
+	var o: Variant = data.get("outfit", {})
+	if o is Dictionary:
+		outfit_hat = str(o.get("hat", ""))
+		outfit_top = str(o.get("top", ""))
 	profile_updated.emit()
+
+
+func _apply_shop(data: Variant) -> void:
+	if not data is Dictionary or not data.has("level"):
+		return
+	shop_level = int(data.get("level", shop_level))
+	shop_points = int(data.get("points", shop_points))
+	var next: Variant = data.get("next")
+	shop_next = int(next) if next != null else -1
 
 
 func _apply_clock(data: Variant) -> void:
@@ -628,7 +724,7 @@ func _on_server_error(code: String, msg: Dictionary = {}) -> void:
 		_pending.erase(rid)
 		if not kind.is_empty():
 			request_failed.emit(kind, code)
-		if not rid.is_empty() or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL]:
+		if (not rid.is_empty() and kind in ["", "fish_cast"]) or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL]:
 			action_rejected.emit(code)
 		return
 	_close_socket(1000, "error")

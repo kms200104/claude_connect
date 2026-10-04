@@ -10,6 +10,9 @@ signal finished
 @export var npcs: NpcCrowd
 @export var box: DialogueBox
 @export var toast_hud: FishingHud
+## 상점 주인과 이야기하면 여는 창.
+@export var shop_window: ShopWindow
+@export var shop: ShopController
 
 @export_group("Feel")
 ## 서버가 답하지 않으면 이 시간 뒤 대화를 접는다.
@@ -41,6 +44,9 @@ func start(id: String) -> void:
 	_session += 1
 	npc_id = id
 	player.set_input_lock(&"dialogue", true)
+	if GameData.shop.keeper != null and id == GameData.shop.keeper.id:
+		await _shopkeeper_flow()
+		return
 	var actor: NpcActor = npcs.actor(id)
 	if actor != null:
 		player.look_toward(actor.global_position - player.global_position)
@@ -58,7 +64,8 @@ func stop() -> void:
 		return
 	_active = false
 	_session += 1
-	Net.end_talk()
+	if GameData.shop.keeper == null or npc_id != GameData.shop.keeper.id:
+		Net.end_talk()
 	box.close()
 	player.set_input_lock(&"dialogue", false)
 	player.clear_look_direction()
@@ -130,6 +137,46 @@ func _on_talk_opened(reply: TalkReply) -> void:
 	else:
 		if not await _say(token, info, GameData.dialogue_line(p, "chat", values)):
 			return
+		await _say(token, info, GameData.dialogue_line(p, "bye", values))
+	if token == _session:
+		stop()
+
+
+## 상점 주인: 서버에 말을 걸지 않는다 (움직이지 않고, 여러 손님을 함께 받는다). 사고팔기는 상점 창에서 서버에 요청한다.
+func _shopkeeper_flow() -> void:
+	var token: int = _session
+	var info: NpcInfo = GameData.shop.keeper
+	var actor: NpcActor = shop.keeper if shop != null else null
+	if actor != null:
+		player.look_toward(actor.global_position - player.global_position)
+	var values: Dictionary = {
+		"player": GameData.player_name(Net.my_id),
+		"shop": GameData.shop.level_info(Net.shop_level).display_name,
+		"left": InventoryWindow._format_number(maxi(Net.shop_next - Net.shop_points, 0)),
+	}
+	var p: String = info.personality
+	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):
+		return
+	while token == _session:
+		if not await _say(token, info, GameData.dialogue_line(p, "menu", values)):
+			return
+		var pick: int = await _choose(token, [GameData.choice_text("shop_buy"), GameData.choice_text("shop_sell"), GameData.choice_text("shop_talk"), GameData.choice_text("shop_leave")])
+		if pick == 0 or pick == 1:
+			box.close_quietly()
+			shop_window.open(ShopWindow.MODE_BUY if pick == 0 else ShopWindow.MODE_SELL)
+			await shop_window.closed
+			if token != _session:
+				return
+			values["shop"] = GameData.shop.level_info(Net.shop_level).display_name
+			values["left"] = InventoryWindow._format_number(maxi(Net.shop_next - Net.shop_points, 0))
+		elif pick == 2:
+			if not await _say(token, info, GameData.dialogue_line(p, "level_%d" % Net.shop_level, values)):
+				return
+			if not await _say(token, info, GameData.dialogue_line(p, "upgrade_hint" if Net.shop_next >= 0 else "max_level", values)):
+				return
+		else:
+			break
+	if token == _session:
 		await _say(token, info, GameData.dialogue_line(p, "bye", values))
 	if token == _session:
 		stop()
