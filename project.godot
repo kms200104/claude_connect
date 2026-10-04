@@ -1,0 +1,47 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="솔바람 마을"
+run/main_scene="res://game/village/village.tscn"
+config/features=PackedStringArray("4.5", "Mobile")
+run/max_fps=30
+
+[debug]
+
+gdscript/warnings/untyped_declaration=1
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1920
+window/size/window_width_override=540
+window/size/window_height_override=960
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="mobile"
+lights_and_shadows/directional_shadow/size=2048
+
+[shader_globals]
+
+world_curve_strength={
+"type": "float",
+"value": 0.004
+}
+world_curve_origin={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+toon_softness={
+"type": "float",
+"value": 0.35
+}

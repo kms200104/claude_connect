@@ -1,0 +1,147 @@
+[gd_scene load_steps=22 format=3]
+
+[ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
+[ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
+[ext_resource type="Script" path="res://ui/hud/virtual_joystick.gd" id="3_joystick"]
+[ext_resource type="Script" path="res://game/lighting/world_style.gd" id="4_style"]
+[ext_resource type="Shader" path="res://assets/shaders/toon_world.gdshader" id="5_toon"]
+[ext_resource type="Shader" path="res://assets/shaders/lit_world.gdshader" id="6_lit"]
+[ext_resource type="Material" path="res://assets/materials/ground_gray.tres" id="7_ground"]
+[ext_resource type="Material" path="res://assets/materials/block_gray.tres" id="8_block"]
+[ext_resource type="Material" path="res://assets/materials/player_body.tres" id="9_body"]
+[ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="10_nose"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
+sky_top_color = Color(0.55, 0.7, 0.85, 1)
+sky_horizon_color = Color(0.8, 0.85, 0.9, 1)
+ground_bottom_color = Color(0.8, 0.85, 0.9, 1)
+ground_horizon_color = Color(0.8, 0.85, 0.9, 1)
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("Sky_mat")
+
+[sub_resource type="Environment" id="Env_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_color = Color(0.75, 0.78, 0.82, 1)
+ambient_light_energy = 0.6
+tonemap_mode = 2
+
+[sub_resource type="PlaneMesh" id="Mesh_ground"]
+size = Vector2(160, 160)
+subdivide_width = 63
+subdivide_depth = 63
+
+[sub_resource type="BoxShape3D" id="Shape_ground"]
+size = Vector3(160, 1, 160)
+
+[sub_resource type="BoxMesh" id="Mesh_block"]
+size = Vector3(3, 1.5, 3)
+
+[sub_resource type="BoxShape3D" id="Shape_block"]
+size = Vector3(3, 1.5, 3)
+
+[sub_resource type="BoxShape3D" id="Shape_ramp"]
+size = Vector3(4, 0.4, 8)
+
+[sub_resource type="BoxMesh" id="Mesh_ramp"]
+size = Vector3(4, 0.4, 8)
+
+[node name="Village" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 8, 0)
+shadow_enabled = true
+shadow_bias = 0.05
+shadow_normal_bias = 1.0
+directional_shadow_mode = 0
+directional_shadow_max_distance = 28.0
+
+[node name="WorldStyle" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment", "focus")]
+script = ExtResource("4_style")
+sun = NodePath("../Sun")
+world_environment = NodePath("../WorldEnvironment")
+focus = NodePath("../Player")
+toon_shader = ExtResource("5_toon")
+lit_shader = ExtResource("6_lit")
+materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose")])
+
+[node name="Terrain" type="Node3D" parent="."]
+
+[node name="Ground" type="StaticBody3D" parent="Terrain"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Terrain/Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("Mesh_ground")
+surface_material_override/0 = ExtResource("7_ground")
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/Ground"]
+shape = SubResource("Shape_ground")
+
+[node name="BlockA" type="StaticBody3D" parent="Terrain"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.75, -6)
+
+[node name="Mesh" type="MeshInstance3D" parent="Terrain/BlockA"]
+mesh = SubResource("Mesh_block")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/BlockA"]
+shape = SubResource("Shape_block")
+
+[node name="BlockB" type="StaticBody3D" parent="Terrain"]
+transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -7, 0.75, -10)
+
+[node name="Mesh" type="MeshInstance3D" parent="Terrain/BlockB"]
+mesh = SubResource("Mesh_block")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/BlockB"]
+shape = SubResource("Shape_block")
+
+[node name="BlockC" type="StaticBody3D" parent="Terrain"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.75, 8)
+
+[node name="Mesh" type="MeshInstance3D" parent="Terrain/BlockC"]
+mesh = SubResource("Mesh_block")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/BlockC"]
+shape = SubResource("Shape_block")
+
+[node name="Ramp" type="StaticBody3D" parent="Terrain"]
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 8, 0.4, 7)
+
+[node name="Mesh" type="MeshInstance3D" parent="Terrain/Ramp"]
+mesh = SubResource("Mesh_ramp")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/Ramp"]
+shape = SubResource("Shape_ramp")
+
+[node name="Player" parent="." instance=ExtResource("1_player") node_paths=PackedStringArray("joystick", "camera")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+joystick = NodePath("../HUD/Joystick")
+camera = NodePath("../CameraRig/Camera3D")
+
+[node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "camera")]
+script = ExtResource("2_camera")
+target = NodePath("../Player")
+camera = NodePath("Camera3D")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Joystick" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_joystick")

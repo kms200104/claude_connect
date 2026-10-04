@@ -1,0 +1,36 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://game/player/player.gd" id="1_player"]
+[ext_resource type="Material" path="res://assets/materials/player_body.tres" id="2_body"]
+[ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="3_nose"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_nose"]
+size = Vector3(0.22, 0.22, 0.32)
+
+[node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("body")]
+script = ExtResource("1_player")
+body = NodePath("Body")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="Body" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+
+[node name="Capsule" type="MeshInstance3D" parent="Body"]
+mesh = SubResource("CapsuleMesh_body")
+surface_material_override/0 = ExtResource("2_body")
+
+[node name="Nose" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.42)
+mesh = SubResource("BoxMesh_nose")
+surface_material_override/0 = ExtResource("3_nose")
