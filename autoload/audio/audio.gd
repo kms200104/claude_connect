@@ -1,10 +1,15 @@
 extends Node
 ## 소리 담당 (전역): 배경음악 두 곡을 엇갈려 바꾸고, 효과음은 미리 만든 플레이어 묶음에서 돌려 쓴다.
-## 버스: Music / Sfx / Ambient (Master 아래). 소리 파일은 tools/audio/gen_audio.py 로 합성한 오리지널.
+## 버스: Music / Sfx / Ambient (Master 아래). 소리 파일 출처는 assets/audio/CREDITS.md
+## (대부분 tools/audio/gen_audio.py 로 합성, 발소리와 마을 음악 4곡은 받은 파일).
 ## 게임 코드는 play_sfx / play_at / play_ui / play_music / set_loop / babble 만 부른다.
 
 const MUSIC_TITLE: String = "title_theme"
+## 마을 음악: 낮 · 밤 · 비 · 이벤트 (SoundDirector 가 고른다).
 const MUSIC_VILLAGE: String = "village_theme"
+const MUSIC_NIGHT: String = "night_theme"
+const MUSIC_RAIN: String = "rain_theme"
+const MUSIC_EVENT: String = "event_theme"
 
 const SFX_CONFIRM: String = "ui_confirm"
 const SFX_CANCEL: String = "ui_cancel"
@@ -33,6 +38,9 @@ var _music_a: AudioStreamPlayer = null
 var _music_b: AudioStreamPlayer = null
 var _music_current: String = ""
 var _music_tween: Tween = null
+var _music_in_tween: Tween = null
+## 지금 곡을 내는 플레이어 (_music_a 또는 _music_b).
+var _music_active: AudioStreamPlayer = null
 var _voices: Array[AudioStreamPlayer] = []
 var _voices_3d: Array[AudioStreamPlayer3D] = []
 var _next_voice: int = 0
@@ -47,6 +55,7 @@ func _ready() -> void:
 	_ensure_bus("Ambient", ambient_volume_db)
 	_music_a = _make_player("Music")
 	_music_b = _make_player("Music")
+	_music_active = _music_a
 	for i: int in voice_count:
 		_voices.append(_make_player("Sfx"))
 	# 효과음은 처음 날 때 읽느라 프레임이 끊기지 않게 미리 읽어 둔다 (모두 합쳐 1MB 남짓).
@@ -62,19 +71,31 @@ func _ready() -> void:
 		_voices_3d.append(p)
 
 
-## 배경음악 바꾸기 (같은 곡이면 그대로). 빈 문자열이면 끈다.
-func play_music(track: String) -> void:
+## 지금 흐르는 배경음악 이름 (없으면 빈 문자열).
+func current_music() -> String:
+	return _music_current
+
+
+## 배경음악 바꾸기 (같은 곡이면 그대로). 빈 문자열이면 끈다. fade 가 0 보다 크면 그만큼 엇갈린다 (기본 music_fade).
+func play_music(track: String, fade: float = -1.0) -> void:
 	if track == _music_current:
 		return
+	var seconds: float = fade if fade > 0.0 else music_fade
 	_music_current = track
-	var outgoing: AudioStreamPlayer = _music_a if _music_a.playing else _music_b
+	# 지금 곡을 내보내고 다른 플레이어로 새 곡을 들인다. 바꾸는 도중에 또 바뀌면,
+	# 아직 사라지는 중이던 곡은 바로 끄고(겹쳐 남지 않게) 들어오던 곡을 내보낸다.
+	var outgoing: AudioStreamPlayer = _music_active
 	var incoming: AudioStreamPlayer = _music_b if outgoing == _music_a else _music_a
 	if _music_tween != null and _music_tween.is_valid():
 		_music_tween.kill()
+	if _music_in_tween != null and _music_in_tween.is_valid():
+		_music_in_tween.kill()
+	incoming.stop()
 	if outgoing.playing:
 		_music_tween = create_tween()
-		_music_tween.tween_property(outgoing, "volume_db", -40.0, music_fade)
+		_music_tween.tween_property(outgoing, "volume_db", -40.0, seconds)
 		_music_tween.tween_callback(outgoing.stop)
+	_music_active = incoming
 	if track.is_empty():
 		return
 	var stream: AudioStream = _stream("%s/%s.ogg" % [MUSIC_DIR, track])
@@ -83,7 +104,8 @@ func play_music(track: String) -> void:
 	incoming.stream = stream
 	incoming.volume_db = -40.0
 	incoming.play()
-	create_tween().tween_property(incoming, "volume_db", 0.0, music_fade)
+	_music_in_tween = create_tween()
+	_music_in_tween.tween_property(incoming, "volume_db", 0.0, seconds)
 
 
 ## 내 주변에서 나는 효과음 (위치 없음). pitch_jitter 만큼 음높이를 흔들어 같은 소리가 덜 반복돼 들린다.

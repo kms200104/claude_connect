@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""솔바람 마을의 효과음과 배경음악을 합성한다 (외부 음원 없음, 모두 이 스크립트로 만든 오리지널).
+"""솔바람 마을의 효과음과 배경음악을 합성한다.
+발소리(step_*)와 마을 음악(village/night/rain/event_theme)은 받은 파일로 바꿨으므로 덮어쓰지 않는다
+(EXTERNAL, 출처는 assets/audio/CREDITS.md). 합성본으로 되돌리려면 --force.
 
   assets/audio/sfx/*.wav     22.05kHz 모노 16bit — 발소리, 달리기, 낚시, 도끼질, 주민 말소리, 비·천둥, 새·풀벌레, UI
   assets/audio/music/*.ogg   32kHz 스테레오 Vorbis — title_theme(오르골 왈츠), village_theme(느긋한 칼림바 로파이)
@@ -82,7 +84,22 @@ def fade(x: np.ndarray, fin: float = 0.002, fout: float = 0.01, sr: int = SR) ->
     return x
 
 
+## 받은 파일이라 합성으로 덮어쓰지 않는 소리 (--force 로 강제).
+EXTERNAL = {f"step_{m}_{i}" for m in ("grass", "dirt", "run", "wood", "stone", "metal", "water") for i in (1, 2, 3)} | {
+    "village_theme", "night_theme", "rain_theme", "event_theme"}
+FORCE = False
+
+
+def _external(name: str) -> bool:
+    if name in EXTERNAL and not FORCE:
+        print("skip (external)", name)
+        return True
+    return False
+
+
 def save_wav(name: str, x: np.ndarray, peak: float = 0.9) -> None:
+    if _external(name):
+        return
     SFX_DIR.mkdir(parents=True, exist_ok=True)
     data = (normalize(x, peak) * 32767).astype(np.int16)
     with wave.open(str(SFX_DIR / f"{name}.wav"), "wb") as w:
@@ -547,6 +564,8 @@ def render_song(name: str, bpm: float, beats_per_bar: int, chords, key: int, lea
         ch[: n - loop_n] += ch[loop_n:]
     stereo = np.stack([left[:loop_n], right[:loop_n]], axis=1)
     stereo = stereo / np.max(np.abs(stereo)) * 0.85
+    if _external(name):
+        return
     MUSIC_DIR.mkdir(parents=True, exist_ok=True)
     raw = (stereo * 32767).astype(np.int16).tobytes()
     out = MUSIC_DIR / f"{name}.ogg"
@@ -649,6 +668,9 @@ def v06_sounds() -> None:
 
 if __name__ == "__main__":
     import sys
+    if "--force" in sys.argv:
+        FORCE = True
+        sys.argv.remove("--force")
     # 인자를 주면 그 묶음만 다시 만든다 (예: python3 tools/audio/gen_audio.py v06_sounds). 기존 소리는 공유 난수를 쓰므로 통째로 만들 때만 같다.
     if len(sys.argv) > 1:
         for group in sys.argv[1:]:

@@ -1,12 +1,21 @@
 class_name Footsteps
 extends RefCounted
-## 발소리: 걸은 거리가 보폭을 넘을 때마다 바닥에 맞는 소리(풀 · 흙길 · 나무 판자)를 낸다. 달릴 때는 쿵쿵 더 센 소리.
-## 내 캐릭터는 위치 없는 소리, 상대 플레이어는 그 자리에서 나는 3D 소리로 낸다.
+## 발소리: 걸은 거리가 보폭을 넘을 때마다 발밑 재질에 맞는 소리를 낸다.
+##   grass 풀밭 · dirt 흙길·모래톱·모래사장 · stone 광장(돌 포장) · wood 선착장·상점 안 · metal 공항 활주로 · water 바닷가 물기 있는 모래
+## 비가 오면 바깥의 흙·돌 바닥은 물웅덩이(water) 소리. 풀·흙에서 달리면 쿵쿵 더 센 달리기 소리(step_run),
+## 그 밖의 재질은 달려도 그 재질 소리를 조금 크게 낸다.
+## 내 캐릭터는 위치 없는 소리, 상대 플레이어는 그 자리에서 나는 3D 소리로 낸다 (RemotePlayer 도 이 클래스).
 
 ## 보폭: 걷기 애니메이션(0.6초에 두 걸음)·달리기 애니메이션(0.4초에 두 걸음)과 발이 땅에 닿는 박자가 맞도록
 ## 걷기 4.5m/s ÷ 초당 3.3걸음, 달리기 7m/s ÷ 초당 5걸음.
 const WALK_STRIDE: float = 1.35
 const RUN_STRIDE: float = 1.4
+## 재질별 소리 파일 수 (assets/audio/sfx/step_<재질>_<n>.wav).
+const VARIANTS: Dictionary[String, int] = {"grass": 3, "dirt": 3, "run": 3, "wood": 2, "stone": 3, "metal": 2, "water": 2}
+## 재질별 걷기 소리 크기 (dB). 달리면 +4.
+const VOLUME: Dictionary[String, float] = {"grass": -5.0, "dirt": -5.0, "wood": -5.0, "stone": -6.0, "metal": -7.0, "water": -5.0}
+## 바닷가에서 물기 있는 모래로 치는 폭 (해안선에서 m, 바닥 그림의 젖은 모래 띠와 같다).
+const WET_BEACH: float = 2.5
 
 var _travelled: float = 0.0
 var _index: int = 0
@@ -23,24 +32,35 @@ func advance(moved: float, running: bool, position: Vector3, positional: bool) -
 		return
 	_travelled = 0.0
 	_index += 1
-	var id: String = "%s_%d" % [surface_sound(position, running), 1 + _index % (2 if surface_of(position) == "wood" else 3)]
-	var volume: float = (-1.0 if running else -5.0) + (0.0 if positional else 0.0)
+	var sound: String = surface_sound(position, running)
+	var material: String = sound.trim_prefix("step_")
+	var id: String = "%s_%d" % [sound, 1 + _index % int(VARIANTS.get(material, 2))]
+	var volume: float = float(VOLUME.get(surface_of(position), -5.0)) + (4.0 if running else 0.0)
 	if positional:
 		Audio.play_at(id, position, volume - 2.0)
 	else:
 		Audio.play_sfx(id, volume)
 
 
+## 이 자리·이 걸음에 낼 소리 이름 (step_grass, step_run, step_stone …). 비 오는 바깥의 흙·돌은 물웅덩이.
 static func surface_sound(position: Vector3, running: bool) -> String:
 	var surface: String = surface_of(position)
-	if surface == "wood":
-		return "step_wood"
-	if running:
+	if (surface == "dirt" or surface == "stone") and is_raining_outside(position):
+		surface = "water"
+	if running and (surface == "grass" or surface == "dirt"):
 		return "step_run"
-	return "step_dirt" if surface == "dirt" else "step_grass"
+	return "step_" + surface
 
 
-## 발밑 바닥: wood(선착장·상점 안) / dirt(길·광장·모래톱) / grass.
+## 비가 오고 바깥(상점 안이 아님)인지.
+static func is_raining_outside(position: Vector3) -> bool:
+	if Net.weather != NetProtocol.WEATHER_RAIN and Net.weather != NetProtocol.WEATHER_THUNDER:
+		return false
+	return GameData.shop == null or not GameData.shop.is_inside(position)
+
+
+## 발밑 바닥: wood(선착장·상점 안) / metal(공항 활주로) / water(바닷가 젖은 모래) / dirt(모래사장·길·모래톱) /
+## stone(큰 광장·박물관 앞·공항 앞 광장) / grass.
 static func surface_of(position: Vector3) -> String:
 	var p: Vector2 = Vector2(position.x, position.z)
 	if GameData.shop != null and GameData.shop.is_inside(position):
@@ -50,8 +70,19 @@ static func surface_of(position: Vector3) -> String:
 		return "grass"
 	if layout.dock_size.x > 0.0 and layout.dock_rect().grow(0.1).has_point(p):
 		return "wood"
+	if GameData.airport != null:
+		var runway: Dictionary = GameData.airport.extra.get("runway", {})
+		if not runway.is_empty() and p.x >= float(runway.x0) and p.x <= float(runway.x1) and absf(p.y - float(runway.z)) <= float(runway.width) * 0.5:
+			return "metal"
 	if not layout.on_grass_land(p, -1.0):
-		return "dirt"  # 바닷가 모래사장
+		# 모래사장: 해안선 가까이 젖은 띠는 철벅철벅.
+		var to_coast: float = (1.0 - layout.island_shape(p)) * layout.island_half
+		return "water" if layout.island_half > 0.0 and to_coast < WET_BEACH else "dirt"
+	if p.distance_to(layout.plaza_center) <= layout.plaza_radius + 0.1:
+		return "stone"
+	for plaza: Vector3 in layout.plazas:
+		if p.distance_to(Vector2(plaza.x, plaza.y)) <= plaza.z + 0.1:
+			return "stone"
 	if layout.on_path(p, 0.1):
 		return "dirt"
 	for spot: SpotInfo in GameData.spots.values():

@@ -33,7 +33,7 @@ npm test                  # 서버 단위·통합 테스트
 - `tests/run_events_e2e.sh` — 떠돌이 상인(이벤트 칩·알림판·노점·찾는 물건 2배로 팔기·보따리 사기) · 선물 풍선 줍기 · 나무 넘어지는 연출 · 상점 문으로 걸어 드나들기
 - `tests/run_island_e2e.sh` — 섬·박물관·공항 · 달리다 반대로 꺾으면 브레이크 · 감정표현과 주민 반응 · 대화(기분 이름표·감정표현 배우기·주제 수다) · 도토리 심기 → 나무로 자람 · 튤립 심기 → 피면 따기 · 박물관 기증(수조) · 공항 기념품
 - `tests/run_mirror_e2e.sh` — 광장 거울 앞 "거울 보기" · 얼굴 클로즈업 · 눈·코·입·피부·머리 고르기(미리 보기) · 닫으면 되돌림 · 완료하면 저장 · 거울에서 멀면 거절 · 거울 가구를 놓고 그 앞에서도 · 가방에 넣기
-- 렌더러 없이 도는 검사: `godot --headless --path . res://tests/face_check.tscn` (얼굴 부품이 머리 겉면 밖인지 · 캐릭터 삼각형 4,000 이하, 절약·고화질 둘 다), `res://tests/quality_check.tscn` (화질 두 단계 · S24/폴드7 3D 해상도 · 리소스팩)
+- 렌더러 없이 도는 검사: `godot --headless --path . res://tests/face_check.tscn` (얼굴 부품이 머리 겉면 밖인지 · 캐릭터 삼각형 4,000 이하, 절약·고화질 둘 다), `res://tests/quality_check.tscn` (화질 두 단계 · S24/폴드7 3D 해상도 · 리소스팩), `res://tests/audio_check.tscn` (발소리 재질 · 비 오는 날 물웅덩이 · 낮/밤/비/이벤트 음악 고르기 · 음악 연달아 바꾸기 · 소리 파일)
 - `tests/run_title_e2e.sh` — 첫 화면: 새 마을 만들기 → 다시 켜면 서버 주소·마지막 방이 채워져 있고 "시작하기"로 같은 방에 들어감
 - `godot --headless --path . res://tests/anim_check.tscn` — AnimationTree 블렌딩 (걷기·달리기 팔다리·낚시·도끼질·브레이크·감정표현·자랑)
 

@@ -127,7 +127,7 @@ func _enter(connect_action: Callable) -> void:
 		return
 	_started = true
 	Audio.play_ui(Audio.SFX_CONFIRM)
-	Audio.play_music(Audio.MUSIC_VILLAGE)
+	# 마을 음악(낮·밤·비·이벤트)은 들어가면 SoundDirector 가 고른다.
 	var game_camera: Camera3D = _village.get_node("CameraRig/Camera3D")
 	game_camera.current = true
 	if _camera != null:

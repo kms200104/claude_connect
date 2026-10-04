@@ -2,13 +2,23 @@ class_name SoundDirector
 extends Node
 ## 마을의 사건 소리: 도끼질·아이템 얻기·선물·별 조각 줍기·상점 문 종·사고팔기·상점 성장·부탁 완료·천둥,
 ## 그리고 날씨와 시각에 맞춘 환경음(비·새·풀벌레)과 마을 배경음악. 발소리·낚시·대사 소리는 각자 낸다.
+## 배경음악은 1초마다 고른다 — 이벤트가 열려 있으면 이벤트 곡 > 비·뇌우면 비 곡 > 밤이면 밤 곡 > 낮 곡.
+## 낮·밤이 바뀔 때는 천천히(time_fade), 비·이벤트는 조금 빠르게(weather_fade) 엇갈린다.
 
 @export var sky: SkyController
 @export var trees: TreeField
 @export var shop: ShopController
 @export var player: Player
 
+## 밤 곡이 흐르는 시각 (마을 시각, 시). night_start 부터 다음 날 night_end 전까지.
+@export_range(0.0, 24.0, 0.25) var night_start: float = 19.0
+@export_range(0.0, 24.0, 0.25) var night_end: float = 5.5
+## 엇갈리는 시간 (초).
+@export_range(0.5, 10.0, 0.1) var time_fade: float = 4.0
+@export_range(0.5, 10.0, 0.1) var weather_fade: float = 2.2
+
 var _thunder_index: int = 0
+var _music_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -30,10 +40,38 @@ func _ready() -> void:
 			Audio.play_sfx("quest_done", -6.0, 1.2, 0.0))
 	Net.state_changed.connect(func(state: int) -> void:
 		if state == Net.State.ONLINE:
-			Audio.play_music(Audio.MUSIC_VILLAGE))
+			_update_music(true))
+	Net.weather_changed.connect(func(_w: String) -> void: _update_music(false))
+	Net.events_changed.connect(func(_started: PackedStringArray) -> void: _update_music(false))
+
+
+## 지금 흘러야 할 마을 음악: 이벤트 > 비 > 밤 > 낮.
+static func pick_music(hour: float, weather: String, event_active: bool, night_from: float = 19.0, night_to: float = 5.5) -> String:
+	if event_active:
+		return Audio.MUSIC_EVENT
+	if weather == NetProtocol.WEATHER_RAIN or weather == NetProtocol.WEATHER_THUNDER:
+		return Audio.MUSIC_RAIN
+	var night: bool = hour >= night_from or hour < night_to if night_from > night_to else (hour >= night_from and hour < night_to)
+	return Audio.MUSIC_NIGHT if night else Audio.MUSIC_VILLAGE
+
+
+func _update_music(entering: bool) -> void:
+	if Net.state != Net.State.ONLINE:
+		return
+	var track: String = pick_music(Net.game_hour(), Net.weather, not Net.events.is_empty(), night_start, night_end)
+	var current: String = Audio.current_music()
+	if track == current:
+		return
+	# 낮 ↔ 밤은 천천히, 비·이벤트로 바뀔 때는 조금 빠르게. 처음 들어올 때는 기본 빠르기.
+	var day_night: bool = (current == Audio.MUSIC_VILLAGE and track == Audio.MUSIC_NIGHT) or (current == Audio.MUSIC_NIGHT and track == Audio.MUSIC_VILLAGE)
+	Audio.play_music(track, -1.0 if entering else (time_fade if day_night else weather_fade))
 
 
 func _process(delta: float) -> void:
+	_music_timer -= delta
+	if _music_timer <= 0.0:
+		_music_timer = 1.0
+		_update_music(false)
 	if sky == null:
 		return
 	var indoor: float = 0.25 if sky.indoor else 1.0

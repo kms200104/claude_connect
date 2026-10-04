@@ -31,13 +31,19 @@ static func burst(parent: Node, center: Vector3, color: Color, count: int = 8, s
 		tween.chain().tween_callback(blob.queue_free)
 
 
-## 발밑 흙먼지 (풀밭은 연두, 흙길은 모래색).
+## 발밑 흙먼지 (풀밭은 연두, 흙길은 모래색, 돌 광장은 연한 베이지, 활주로는 회색, 젖은 모래는 물보라).
 static func dust_color(position: Vector3) -> Color:
 	match Footsteps.surface_of(position):
 		"wood":
 			return Color("#C9A37A")
 		"dirt":
 			return Color("#E3CFA4")
+		"stone":
+			return Color("#EBDDC0")
+		"metal":
+			return Color("#B9BCC2")
+		"water":
+			return Color("#CFE9EE")
 	return Color("#C8DCA0")
 
 

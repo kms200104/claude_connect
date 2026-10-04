@@ -13,4 +13,6 @@
 | 아이템 아이콘 50장 | `assets/icons/items/` (그 밖) | 게임 모형을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 |
 | 3D 모형 전부 | `game/**` 코드 (`ClayMesh`, `CharacterModel`, `PartMesh` 데이터) | 프로젝트 자체 제작 (참고 이미지를 보고 새로 빚음, 트레이싱 없음) | 프로젝트 | 캐릭터·나무·집·가구 |
 | 바닥 텍스처 (리소스팩) | `assets/packs/low/`, `assets/packs/high/` | `tools/art/gen_ground.py` 로 생성 | 프로젝트 | 마을 바닥 (화질별 해상도) |
-| 효과음 39개 · 배경음악 2곡 | `assets/audio/` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |
+| 효과음 (발소리 제외) · 첫 화면 음악 | `assets/audio/sfx/`, `assets/audio/music/title_theme.ogg` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |
+| 발소리 18개 (풀·흙·달리기·나무·돌·금속·물) | `assets/audio/sfx/step_*.wav` | Freesound (swuing · Ali_6868 · Eelke · EminYILDIRIM), 자세한 출처는 `assets/audio/CREDITS.md` | CC BY 3.0 (일부 CC0) — **출처 표시 필요** | 발소리 |
+| 마을 음악 4곡 (낮·밤·비·이벤트) | `assets/audio/music/{village,night,rain,event}_theme.ogg` | 받은 파일 (`game_audio.zip`) | **미기재 — 공개 전 확인 필요** | 배경음악 |
