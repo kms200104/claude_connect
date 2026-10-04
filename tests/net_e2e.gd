@@ -106,11 +106,15 @@ func _run_guest(village: Node) -> void:
 	var max_step: float = 0.0
 	var max_back: float = 0.0
 	var moving_frames: int = 0
+	var window_start: int = 0
 	for i: int in range(1, samples.size()):
 		var dx: float = samples[i].x - samples[i - 1].x
-		# 헤드리스에서 프레임이 늦어질 수 있어 거리가 아니라 속도(m/s)로 튐을 판정한다.
-		var dt_s: float = maxf((times[i] - times[i - 1]) / 1000.0, 0.001)
-		max_step = maxf(max_step, absf(dx) / dt_s)
+		# 헤드리스에서는 프레임 간격이 들쭉날쭉해서 한 프레임만 보면 속도가 튀어 보인다.
+		# 거리가 아니라 0.1초 이상 구간의 평균 속도(m/s)로 튐을 판정한다 (순간이동·되돌림은 그래도 잡힌다).
+		while window_start < i - 1 and times[i] - times[window_start + 1] >= 100.0:
+			window_start += 1
+		var dt_s: float = maxf((times[i] - times[window_start]) / 1000.0, 0.001)
+		max_step = maxf(max_step, absf(samples[i].x - samples[window_start].x) / dt_s)
 		max_back = maxf(max_back, -dx)
 		if dx > 0.0005:
 			moving_frames += 1

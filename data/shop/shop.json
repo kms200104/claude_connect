@@ -19,17 +19,17 @@
   "enter_range": 2.2,
   "interior": {
     "x": 0,
-    "z": 59,
+    "z": 190,
     "half_x": 6.5,
     "half_z": 5
   },
   "inside_spawn": {
     "x": 0,
-    "z": 61.4
+    "z": 192.4
   },
   "exit": {
     "x": 0,
-    "z": 63.0
+    "z": 194.0
   },
   "exit_range": 1.3,
   "points_per_sol": 1,
@@ -39,7 +39,7 @@
       "name": "솔바람 구멍가게",
       "points": 0,
       "sell_bonus": 0,
-      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie"]
+      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos"]
     },
     {
       "level": 2,
@@ -58,6 +58,6 @@
   ],
   "room_origin": {
     "x": 0,
-    "z": 63.5
+    "z": 194.5
   }
 }

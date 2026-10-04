@@ -1,16 +1,18 @@
 import { performance } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { defaultConfig } from './config.js';
-import { CloseCode, ErrorCode, PROTOCOL_VERSION } from './protocol.js';
+import { CloseCode, ErrorCode, MOTIONS, PROTOCOL_VERSION, TOPICS } from './protocol.js';
 import { RoomManager } from './rooms.js';
 import { RoomStore } from './persistence.js';
 import { loadGameData, pickWeighted } from './gamedata.js';
 import { createFishing } from './fishing.js';
 import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
 import { createClock, isWeather, timeBand, weatherAt } from './clock.js';
-import { chopTree, refreshTree, treeWire, TreeStage } from './trees.js';
-import { beginTalk, endTalk, npcWire, stepNpcs } from './npcs.js';
-import { addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
+import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
+import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs } from './npcs.js';
+import { addChatFriendship, addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
+import { flowerWire, pickFlower, plantProblem, refreshFlower, snapPlant } from './plants.js';
+import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, moodAfterEmote, setMood } from './social.js';
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
 import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
@@ -52,6 +54,7 @@ export function createServer(overrides = {}) {
       quests: player.profile.quests.map((q) => questWire(q, player.slots, data)),
       friends,
       outfit: { ...player.profile.outfit },
+      emotes: { known: [...player.profile.emotes.known], quick: [...player.profile.emotes.quick] },
     };
   };
   const sendProfile = (player) => sendTo(player, { t: 'profile', ...profileWire(player) });
@@ -65,6 +68,43 @@ export function createServer(overrides = {}) {
     for (const drops of Object.values(data.chopDrops)) for (const d of drops) if (data.kindOf(d.id) === 'goods') pool.add(d.id);
     return [...pool];
   };
+
+  // ---- 나무 · 꽃 성장 ----
+
+  /** 나무가 단계마다 머무는 시간 (심은 나무는 새싹부터, 베인 나무는 그루터기부터). */
+  const treeMinutes = (def) => (def?.planted ? { ...data.treeRules.regrowMinutes, ...data.plants.tree_minutes } : { ...data.plants.tree_minutes, ...data.treeRules.regrowMinutes });
+  const treeWireOf = (room, id) => treeWire(id, room.trees.get(id), room.treeDef(id, data));
+  const refreshOne = (room, id) => refreshTree(room.trees.get(id), clock.day(), clock.gameMs(), treeMinutes(room.treeDef(id, data)), cfg.growthScale);
+
+  /** 자란 나무·꽃을 알린다 (worldTick 에서). */
+  function tickGrowth(room) {
+    for (const id of room.trees.keys()) {
+      if (refreshOne(room, id)) {
+        room.broadcast({ t: 'tree', ...treeWireOf(room, id) });
+        room.saveDirty = true;
+      }
+    }
+    const rainy = ['rain', 'thunder'].includes(weatherOf(room));
+    for (const f of room.flowers.values()) {
+      if (refreshFlower(f, data.flowerDefs.get(f.sp), clock.gameMs(), cfg.growthScale, rainy)) {
+        room.broadcast({ t: 'flower', f: flowerWire(f) });
+        room.saveDirty = true;
+      }
+    }
+  }
+
+  /** 주민 기분: 바탕 기분(3시간마다 바뀜)과 덮어쓴 기분. 바뀌면 주민 방송에 실린다. */
+  function tickMoods(room, weather, eventDay, t) {
+    let index = 0;
+    for (const npc of room.npcs.values()) {
+      npc.baseMood = baseMood({ seed: room.weatherSeed, day: clock.day(), hour: clock.hour(), index: index++, def: npc.def, weather, eventDay });
+      const mood = currentMood(npc, t);
+      if (mood !== npc.mood) {
+        npc.mood = mood;
+        room.npcsDirty = true;
+      }
+    }
+  }
 
   // ---- 이벤트 ----
 
@@ -186,6 +226,8 @@ export function createServer(overrides = {}) {
     player.ws = ctx.ws;
     player.lastMoveAt = now();
     advanceDay(room);
+    // 들어오자마자 주민 기분이 보이도록 (worldTick 을 기다리지 않는다).
+    tickMoods(room, weatherOf(room), activeOf(room).length > 0, now());
     send(ctx.ws, {
       t: 'welcome',
       v: PROTOCOL_VERSION,
@@ -199,7 +241,9 @@ export function createServer(overrides = {}) {
       prof: profileWire(player),
       clock: clockWire(),
       w: weatherOf(room),
-      trees: [...room.trees].map(([id, st]) => treeWire(id, st)),
+      trees: [...room.trees.keys()].map((id) => treeWireOf(room, id)),
+      flowers: [...room.flowers.values()].map(flowerWire),
+      museum: museumWire(room),
       npcs: [...room.npcs.values()].map(npcWire),
       shop: roomShopWire(room),
       placed: [...room.placed.values()].map((f) => placedWire(f, (uid) => room.slotOfUid(uid))),
@@ -230,8 +274,8 @@ export function createServer(overrides = {}) {
     const today = clock.day();
     if (room.day === today) return;
     room.day = today;
-    for (const [id, st] of room.trees) {
-      if (refreshTree(st, today)) room.broadcast({ t: 'tree', ...treeWire(id, st) });
+    for (const id of room.trees.keys()) {
+      if (refreshOne(room, id)) room.broadcast({ t: 'tree', ...treeWireOf(room, id) });
     }
     for (const profile of room.profiles.values()) {
       const kept = pruneExpired(profile.quests, today);
@@ -293,13 +337,13 @@ export function createServer(overrides = {}) {
     if (!player.acceptRid(msg.rid)) return;
     if (player.heldItem !== 'axe') return fail(ErrorCode.noTool);
     if (player.fishing) return fail(ErrorCode.alreadyFishing);
-    const def = typeof msg.tree === 'string' ? data.trees.get(msg.tree) : null;
+    const def = typeof msg.tree === 'string' ? room.treeDef(msg.tree, data) : null;
     if (!def || Math.hypot(player.x - def.x, player.z - def.z) > data.treeRules.chopRange) return fail(ErrorCode.notNearTree);
     const t = now();
     if (t - player.lastChopAt < cfg.chopCooldownMs) return fail(ErrorCode.tooFast);
     const state = room.trees.get(def.id);
     const today = clock.day();
-    refreshTree(state, today);
+    refreshOne(room, def.id);
     if (state.s !== TreeStage.grown) return fail(ErrorCode.treeNotReady);
     const drop = pickWeighted(data.chopDrops[def.kind], (d) => d.weight, random).id;
     // 나무꾼의 날에는 두 개씩.
@@ -308,12 +352,12 @@ export function createServer(overrides = {}) {
     // 가방이 가득 차면 나무를 찍지 않는다(찍힌 횟수도 그대로).
     if (!canAdd(player.slots, drop, count, data.limitOf)) return fail(ErrorCode.inventoryFull);
     player.lastChopAt = t;
-    const result = chopTree(state, today, data.treeRules.chopsToFell);
+    const result = chopTree(state, today, clock.gameMs(), data.treeRules.chopsToFell);
     addItem(player.slots, drop, count, cfg, data.limitOf);
     send(ctx.ws, { t: 'chop_result', rid: msg.rid, ok: true, item: drop, n: count, tree: def.id, felled: result.felled });
     sendInventory(player);
     sendProfile(player);
-    room.broadcast({ t: 'tree', ...treeWire(def.id, state) });
+    room.broadcast({ t: 'tree', ...treeWireOf(room, def.id) });
     room.broadcast({ t: 'act', id: player.id, kind: 'chop', tree: def.id }, player.id);
     rooms.save(room);
   }
@@ -347,8 +391,25 @@ export function createServer(overrides = {}) {
         if (first) {
           rel.talkDay = today;
           addFriendship(rel, data.quests.friend_per_talk);
+        } else {
+          // 같은 날 또 말을 걸어도 조금씩 친해진다 (수다와 합쳐 하루 상한).
+          addChatFriendship(rel, today, data.npcRules.talkExtraFriend, data.npcRules.topicFriendPerDay);
         }
-        const reply = { t: 'talk_open', rid: msg.rid, npc: npc.id, f: rel.f, first };
+        const reply = { t: 'talk_open', rid: msg.rid, npc: npc.id, f: rel.f, first, m: currentMood(npc, now()) };
+        // 친해진 만큼 감정표현을 하나씩 가르쳐 준다.
+        const teach = emoteToTeach(npc.def, rel.f, profile.emotes.known);
+        if (teach) {
+          profile.emotes.known.push(teach);
+          if (profile.emotes.quick.length < data.emotes.quick_slots) profile.emotes.quick.push(teach);
+          reply.teach = teach;
+        }
+        // 친한 주민은 가끔 선물을 챙겨 준다 (가방이 꽉 차 있으면 다음에).
+        const gift = giftToGive({ def: npc.def, rel, rules: data.npcRules.gift, today, random });
+        if (gift && addItem(player.slots, gift, 1, cfg, data.limitOf)) {
+          rel.giftDay = today;
+          reply.gift = gift;
+          sendInventory(player);
+        }
         const active = profile.quests.find((q) => q.npc === npc.id);
         if (active) {
           reply.quest = questWire(active, player.slots, data);
@@ -365,7 +426,27 @@ export function createServer(overrides = {}) {
         }
         if (profile.lastQuestDay === null) profile.lastQuestDay = today; // 첫 만남부터 "며칠째 부탁 없음"을 센다
         send(ctx.ws, reply);
+        if (reply.teach || reply.gift) sendProfile(player);
         rooms.save(room);
+        return;
+      }
+      case 'talk_topic': {
+        // 대화 주제 하나를 골라 수다를 떨었다: 하루 몇 번까지 친밀도가 오르고, 주민 기분이 조금 풀린다.
+        const npc = touch();
+        if (!npc || npc.talkingWith !== player.id) return fail(ErrorCode.notTalking);
+        if (!TOPICS.includes(msg.topic)) return fail(ErrorCode.badTopic);
+        const rel = relationOf(player.profile, npc.id);
+        const gain = addChatFriendship(rel, clock.day(), 1, data.npcRules.topicFriendPerDay);
+        const t = now();
+        const mood = currentMood(npc, t);
+        if (gain > 0 && (mood === 'sad' || mood === 'grumpy') && random() < 0.5) {
+          setMood(npc, 'calm', t);
+          npc.mood = 'calm';
+          room.npcsDirty = true;
+        }
+        send(ctx.ws, { t: 'talk_topic', npc: npc.id, topic: msg.topic, f: rel.f, gain, m: npc.mood });
+        if (gain > 0) sendProfile(player);
+        room.saveDirty = true;
         return;
       }
       case 'talk_end': {
@@ -400,6 +481,9 @@ export function createServer(overrides = {}) {
         removeWhere(player.slots, questAccepts(quest, data), quest.n);
         player.profile.sol += quest.reward;
         addFriendship(relationOf(player.profile, npc.id), data.quests.friend_per_quest);
+        setMood(npc, 'happy', now());
+        npc.mood = 'happy';
+        room.npcsDirty = true;
         player.profile.quests = player.profile.quests.filter((q) => q !== quest);
         send(ctx.ws, { t: 'quest_done', rid: msg.rid, quest: quest.id, npc: npc.id, reward: quest.reward, sol: player.profile.sol });
         sendInventory(player);
@@ -447,6 +531,7 @@ export function createServer(overrides = {}) {
         const n = msg.n === undefined ? 1 : msg.n;
         if (!Number.isInteger(n) || n < 1 || n > 99) return fail(ErrorCode.badItem);
         if (msg.at === 'merchant') return handleMerchant(ctx, msg, n, fail);
+        if (msg.at === 'airport') return handleAirport(ctx, msg, n, fail);
         if (!inShop(player)) return fail(ErrorCode.notInShop);
         const before = levelFor(room.shopPoints, shopLevels).level;
         let item;
@@ -515,6 +600,160 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  // ---- 씨앗 심기 · 꽃 따기 ----
+
+  function handlePlant(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (msg.t === 'pick') {
+      const f = typeof msg.id === 'string' ? room.flowers.get(msg.id) : null;
+      if (!f || f.s !== 'bloom' || Math.hypot(player.x - f.x, player.z - f.z) > data.plants.plant_range + 0.5) return fail(ErrorCode.noFlower);
+      const def = data.flowerDefs.get(f.sp);
+      if (!addItem(player.slots, def.item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+      pickFlower(f, def, clock.gameMs(), cfg.growthScale);
+      send(ctx.ws, { t: 'pick_result', rid: msg.rid, id: f.id, item: def.item });
+      sendInventory(player);
+      sendProfile(player);
+      room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
+      rooms.save(room);
+      return;
+    }
+    // plant: 손에 든 씨앗을 (x, z) 에 심는다.
+    if (player.fishing) return fail(ErrorCode.alreadyFishing);
+    const held = player.profile.held;
+    const seedId = player.heldItem;
+    const seed = data.seedOf(seedId);
+    if (!seed) return fail(ErrorCode.notSeed);
+    const x = snapPlant(Number(msg.x));
+    const z = snapPlant(Number(msg.z));
+    const kind = seed.tree ? 'tree' : 'flower';
+    if (kind === 'tree' && room.plantedTrees.size >= data.plants.max_planted_trees) return fail(ErrorCode.plantLimit);
+    if (kind === 'flower' && room.flowers.size >= data.plants.max_flowers) return fail(ErrorCode.plantLimit);
+    const problem = plantProblem({ kind, x, z, player, data, trees: room.allTreeSpots(data), flowers: room.flowers, placed: room.placed });
+    if (problem) return fail(ErrorCode.badPlant);
+    removeAt(player.slots, held, 1);
+    let id;
+    if (kind === 'tree') {
+      room.plantSeq += 1;
+      id = `p${room.plantSeq}`;
+      room.plantedTrees.set(id, { id, kind: seed.tree, x, z, by: player.id, planted: true });
+      room.trees.set(id, newTreeState(TreeStage.sprout, clock.gameMs()));
+      room.broadcast({ t: 'tree', ...treeWireOf(room, id), by: player.id });
+    } else {
+      room.flowerSeq += 1;
+      id = `g${room.flowerSeq}`;
+      const def = data.flowerDefs.get(seed.flower);
+      const f = { id, sp: seed.flower, c: Math.floor(random() * def.colors.length), x, z, s: 'sprout', t: clock.gameMs(), by: player.id };
+      room.flowers.set(id, f);
+      room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
+    }
+    send(ctx.ws, { t: 'plant_result', rid: msg.rid, id, kind, x, z });
+    sendInventory(player);
+    sendProfile(player);
+    rooms.save(room);
+  }
+
+  // ---- 감정표현 · 주민 반응 ----
+
+  function handleEmote(ctx, msg, fail) {
+    const { player, room } = ctx;
+    const t = now();
+    if (msg.t === 'emote_quick') {
+      if (!Array.isArray(msg.quick)) return fail(ErrorCode.badMessage);
+      const known = player.profile.emotes.known;
+      player.profile.emotes.quick = [...new Set(msg.quick.filter((e) => typeof e === 'string' && known.includes(e)))].slice(0, data.emotes.quick_slots);
+      sendProfile(player);
+      room.saveDirty = true;
+      return;
+    }
+    const e = msg.e;
+    const motion = MOTIONS.includes(e);
+    if (typeof e !== 'string' || (!motion && !player.profile.emotes.known.includes(e))) return fail(ErrorCode.unknownEmote);
+    // 몸짓(브레이크)과 감정표현은 따로 센다 (달리다 멈추며 인사해도 둘 다 보인다).
+    const key = motion ? 'lastMotionAt' : 'lastEmoteAt';
+    if (t - (player[key] ?? -Infinity) < (motion ? 200 : data.emotes.cooldown_ms)) return fail(ErrorCode.tooFast);
+    player[key] = t;
+    room.broadcast({ t: 'act', id: player.id, kind: 'emote', e }, player.id);
+    if (motion) return;
+    // 근처 주민이 성격·기분대로 반응한다. 하루 한 번은 친밀도도 조금 오른다.
+    const today = clock.day();
+    for (const npc of room.npcs.values()) {
+      if (npc.talkingWith !== null && npc.talkingWith !== player.id) continue;
+      if (Math.hypot(player.x - npc.x, player.z - npc.z) > data.emotes.react_range) continue;
+      if (t - npc.reactAt < data.emotes.npc_react_cooldown_ms) continue;
+      npc.reactAt = t;
+      const def = npc.def;
+      const reaction = chooseReaction({ emotes: data.emotes, personality: def.personality, mood: currentMood(npc, t), emote: e, random });
+      const after = moodAfterEmote(data.emotes, def.personality, e);
+      if (after) setMood(npc, after, t);
+      npc.mood = currentMood(npc, t);
+      pauseFor(npc, player.x, player.z, t, 2600);
+      const rel = relationOf(player.profile, npc.id);
+      let gain = 0;
+      if (rel.emoteDay !== today && e !== 'angry') {
+        rel.emoteDay = today;
+        addFriendship(rel, data.emotes.friend_per_reaction);
+        gain = data.emotes.friend_per_reaction;
+      }
+      room.npcsDirty = true;
+      room.broadcast({ t: 'npc_emote', npc: npc.id, e: reaction, to: player.id, m: npc.mood, from: e });
+      if (gain > 0) sendProfile(player);
+    }
+    room.saveDirty = true;
+  }
+
+  // ---- 박물관 ----
+
+  function museumWire(room) {
+    return { fish: { ...room.museum.fish } };
+  }
+
+  function handleDonate(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const curator = data.museum.curator;
+    if (Math.hypot(player.x - curator.x, player.z - curator.z) > data.museum.donate_range + 0.5) return fail(ErrorCode.notNearKeeper);
+    const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+    if (!slot) return fail(ErrorCode.badItem);
+    if (!data.isFish(slot.id)) return fail(ErrorCode.notFish);
+    if (room.museum.fish[slot.id] !== undefined) return fail(ErrorCode.alreadyDonated);
+    removeAt(player.slots, msg.slot, 1);
+    room.museum.fish[slot.id] = player.id;
+    player.profile.sol += data.museum.reward_sol;
+    // 기증 수가 문턱을 넘으면 기념품 (가방이 차 있으면 다음 기증 때 다시 준다).
+    const count = Object.keys(room.museum.fish).length;
+    const gifts = [];
+    for (const m of data.museum.milestones) {
+      if (count < m.count || room.museum.claimed.includes(m.count)) continue;
+      if (!addItem(player.slots, m.item, 1, cfg, data.limitOf)) break;
+      room.museum.claimed.push(m.count);
+      gifts.push(m.item);
+    }
+    send(ctx.ws, { t: 'donate_result', rid: msg.rid, fish: slot.id, reward: data.museum.reward_sol, sol: player.profile.sol, count, gifts });
+    sendInventory(player);
+    sendProfile(player);
+    room.broadcast({ t: 'museum', ...museumWire(room), id: slot.id, by: player.id });
+    rooms.save(room);
+  }
+
+  /** 공항 기념품 가게: 조종사 곁에서만, 공항 물건만. 상점 포인트는 쌓이지 않는다. */
+  function handleAirport(ctx, msg, n, fail) {
+    const { player, room } = ctx;
+    const pilot = data.airport.pilot;
+    if (Math.hypot(player.x - pilot.x, player.z - pilot.z) > data.airport.shop_range + 0.5) return fail(ErrorCode.notNearKeeper);
+    if (msg.t !== 'shop_buy') return fail(ErrorCode.cantSell);
+    const item = msg.item;
+    if (typeof item !== 'string' || !data.airport.stock.includes(item)) return fail(ErrorCode.notForSale);
+    const amount = data.items.get(item).buy * n;
+    if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
+    if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+    player.profile.sol -= amount;
+    send(ctx.ws, { t: 'shop_result', rid: msg.rid, kind: 'buy', item, n, sol: player.profile.sol, amount, at: 'airport' });
+    sendInventory(player);
+    sendProfile(player);
+    rooms.save(room);
+  }
+
   // ---- 가구 설치 · 옷 ----
 
   function handleFurniture(ctx, msg, fail) {
@@ -528,7 +767,7 @@ export function createServer(overrides = {}) {
         if (mine >= cfg.maxPlacedPerPlayer) return fail(ErrorCode.placeLimit);
         const x = snap(Number(msg.x));
         const z = snap(Number(msg.z));
-        if (placementProblem({ x, z, player, placed: room.placed, data, cfg })) return fail(ErrorCode.badPlace);
+        if (placementProblem({ x, z, player, placed: room.placed, data, trees: room.allTreeSpots(data), flowers: room.flowers })) return fail(ErrorCode.badPlace);
         removeAt(player.slots, msg.slot, 1);
         room.placedSeq += 1;
         const rot = Number.isInteger(msg.rot) ? ((msg.rot % 4) + 4) % 4 : 0;
@@ -619,6 +858,14 @@ export function createServer(overrides = {}) {
         return handleFurniture(ctx, msg, fail);
       case 'collect':
         return handleCollect(ctx, msg, fail);
+      case 'plant':
+      case 'pick':
+        return handlePlant(ctx, msg, fail);
+      case 'emote':
+      case 'emote_quick':
+        return handleEmote(ctx, msg, fail);
+      case 'donate':
+        return handleDonate(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -727,6 +974,12 @@ export function createServer(overrides = {}) {
       case 'wear':
       case 'unwear':
       case 'collect':
+      case 'plant':
+      case 'pick':
+      case 'emote':
+      case 'emote_quick':
+      case 'donate':
+      case 'talk_topic':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -846,6 +1099,8 @@ export function createServer(overrides = {}) {
         room.broadcast(wire);
       }
       tickDrops(room, active, t);
+      tickGrowth(room);
+      tickMoods(room, weather, active.length > 0, t);
       if (weather === 'thunder' && t >= room.nextLightningAt) {
         if (room.nextLightningAt > 0) room.broadcast({ t: 'lightning', st: t, power: Math.round((0.6 + random() * 0.4) * 100) / 100 });
         room.nextLightningAt = t + cfg.lightningMinMs + random() * (cfg.lightningMaxMs - cfg.lightningMinMs);

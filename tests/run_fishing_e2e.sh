@@ -21,7 +21,7 @@ sleep 1
 GODOT_PID=$!
 
 # 클라이언트가 물고기를 잡을 때까지 기다린 뒤 서버를 정상 종료(저장) → 같은 저장소로 재시작
-for _ in $(seq 1 300); do [ -f "$DIR/caught" ] && break; sleep 0.1; done
+for _ in $(seq 1 900); do [ -f "$DIR/caught" ] && break; sleep 0.1; done
 read -r CODE FISH < "$DIR/caught" 2>/dev/null || true
 kill -TERM "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null
 echo "[runner] saved file: $(ls "$DIR/saves")"

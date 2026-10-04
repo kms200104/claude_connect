@@ -10,6 +10,10 @@ const DIALOGUE_PATH: String = "res://data/npcs/dialogue.json"
 const SHOP_PATH: String = "res://data/shop/shop.json"
 const LAYOUT_PATH: String = "res://data/world/village_layout.json"
 const EVENTS_PATH: String = "res://data/events/events.json"
+const PLANTS_PATH: String = "res://data/plants/plants.json"
+const EMOTES_PATH: String = "res://data/emotes/emotes.json"
+const MUSEUM_PATH: String = "res://data/places/museum.json"
+const AIRPORT_PATH: String = "res://data/places/airport.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -34,10 +38,24 @@ var layout: VillageLayout = null
 var events: Dictionary[String, EventInfo] = {}
 ## 선물·별 조각을 주울 수 있는 거리 (서버 판정과 같은 값).
 var collect_range: float = 2.0
+## 꽃 종류 (id → 정보).
+var flowers: Dictionary[String, FlowerSpecies] = {}
+## 씨앗을 심을 수 있는 거리, 나무·꽃끼리 떨어져야 하는 거리 (서버 판정과 같은 값).
+var plant_range: float = 2.2
+var tree_clearance: float = 2.2
+var flower_clearance: float = 0.85
+## 감정표현 (순서 = 감정표현 창에 늘어놓는 순서).
+var emotes: Array[EmoteInfo] = []
+var emote_quick_slots: int = 4
+## 박물관 · 공항.
+var museum: KeeperPlace = null
+var airport: KeeperPlace = null
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
 var _choices: Dictionary = {}
+## 물고기를 낚았을 때의 외침 (희귀도 → 문장 목록).
+var _catch_shouts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -69,8 +87,24 @@ func _ready() -> void:
 	var dialogue_file: Dictionary = _read_json(DIALOGUE_PATH)
 	_dialogue = dialogue_file.get("personalities", {})
 	_choices = dialogue_file.get("choices", {})
+	_catch_shouts = dialogue_file.get("catch_shouts", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
+	var plants_file: Dictionary = _read_json(PLANTS_PATH)
+	plant_range = float(plants_file.get("plant_range", plant_range))
+	tree_clearance = float(plants_file.get("tree_clearance", tree_clearance))
+	flower_clearance = float(plants_file.get("flower_clearance", flower_clearance))
+	for entry: Variant in plants_file.get("flowers", []):
+		if entry is Dictionary:
+			var flower: FlowerSpecies = FlowerSpecies.from_dict(entry)
+			flowers[flower.id] = flower
+	var emotes_file: Dictionary = _read_json(EMOTES_PATH)
+	emote_quick_slots = int(emotes_file.get("quick_slots", emote_quick_slots))
+	for entry: Variant in emotes_file.get("emotes", []):
+		if entry is Dictionary:
+			emotes.append(EmoteInfo.from_dict(entry))
+	museum = KeeperPlace.from_dict(_read_json(MUSEUM_PATH), "curator", "donate_range")
+	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
 	for group: String in ["daily", "night"]:
@@ -99,6 +133,37 @@ func item_icon(id: String) -> Texture2D:
 	return icon
 
 
+func emote(id: String) -> EmoteInfo:
+	for e: EmoteInfo in emotes:
+		if e.id == id:
+			return e
+	return null
+
+
+func emote_name(id: String) -> String:
+	var e: EmoteInfo = emote(id)
+	return e.display_name if e != null else id
+
+
+## 주민·상점 주인·관장·조종사 누구든 id 로 찾는다.
+func any_npc(id: String) -> NpcInfo:
+	if npcs.has(id):
+		return npcs[id]
+	if shop != null and shop.keeper != null and shop.keeper.id == id:
+		return shop.keeper
+	if museum != null and museum.keeper.id == id:
+		return museum.keeper
+	if airport != null and airport.keeper.id == id:
+		return airport.keeper
+	return null
+
+
+## 대사 묶음이 있는지 (성격 · 키).
+func has_dialogue(personality: String, key: String) -> bool:
+	var pool: Variant = _dialogue.get(personality, {}).get(key, [])
+	return pool is Array and not pool.is_empty()
+
+
 func event_info(id: String) -> EventInfo:
 	return events.get(id)
 
@@ -109,7 +174,7 @@ func item_name(id: String) -> String:
 
 
 func npc_name(id: String) -> String:
-	var info: NpcInfo = npcs.get(id)
+	var info: NpcInfo = any_npc(id)
 	return info.display_name if info != null else id
 
 
@@ -126,6 +191,14 @@ func dialogue_line(personality: String, key: String, values: Dictionary = {}) ->
 	for token: String in values:
 		line = line.replace("{%s}" % token, str(values[token]))
 	return line
+
+
+## 희귀도별 낚시 외침 ("와---!! 대어를 낚았어!"). {fish} 를 채운다.
+func catch_shout(rarity: String, fish_name_text: String) -> String:
+	var pool: Variant = _catch_shouts.get(rarity, _catch_shouts.get("common", []))
+	if not pool is Array or pool.is_empty():
+		return "%s을(를) 낚았다!" % fish_name_text
+	return str(pool[randi() % pool.size()]).replace("{fish}", fish_name_text)
 
 
 ## 대화 선택지 문구 (accept / decline / turn_in / not_yet / bye).

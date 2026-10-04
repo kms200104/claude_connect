@@ -109,7 +109,8 @@ func show_result(text: String, success: bool) -> void:
 func show_toast(text: String, success: bool) -> void:
 	_toast.text = text
 	_toast.modulate = Color(0.75, 1.0, 0.8) if success else Color(1.0, 0.85, 0.7)
-	_toast.visible = true
+	# 빈 글이면 토스트 없이 조작 단추만 숨긴다 (자랑 카드가 대신 뜰 때).
+	_toast.visible = not text.is_empty()
 	_toast_token += 1
 	var token: int = _toast_token
 	await get_tree().create_timer(toast_seconds).timeout

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""마을 바닥 텍스처를 만든다: 잔디 바탕 + 흙길 + 광장 + 호숫가 모래톱 (data/world/village_layout.json, data/fish/spots.json).
+"""마을 바닥 텍스처를 만든다: 잔디 바탕 + 흙길 + 광장 + 호숫가 모래톱 + 섬 바닷가 모래사장·얕은 바다 밑 + 공항 활주로
+(data/world/village_layout.json, data/fish/spots.json, data/places/airport.json).
 
-  assets/textures/ground_map.png    512×512, 마을 가운데 ±map_extent 미터를 덮는 색 지도 (알파 = 잔디 정도)
+  assets/textures/ground_map.png    1024×1024, 마을 가운데 ±map_extent 미터를 덮는 색 지도 (알파 = 잔디 정도)
   assets/textures/ground_detail.png 256×256, 바둑판처럼 이어지는 잔결 (3m마다 반복, 회색조)
 사용: python3 tools/art/gen_ground.py   (numpy, pillow 필요)
 """
@@ -12,7 +13,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SIZE = 512
+SIZE = 1024
 DETAIL = 256
 
 GRASS = np.array([0.56, 0.78, 0.43])
@@ -23,6 +24,11 @@ PATH_EDGE = np.array([0.8, 0.69, 0.5])
 PLAZA = np.array([0.92, 0.86, 0.7])
 SAND = np.array([0.94, 0.87, 0.67])
 LAKE_BED = np.array([0.42, 0.66, 0.66])
+BEACH = np.array([0.96, 0.9, 0.72])
+BEACH_WET = np.array([0.86, 0.8, 0.62])
+SEA_BED = np.array([0.38, 0.68, 0.7])
+RUNWAY = np.array([0.5, 0.52, 0.55])
+RUNWAY_LINE = np.array([0.97, 0.96, 0.9])
 
 
 def periodic_noise(size: int, cells: int, seed: int) -> np.ndarray:
@@ -86,6 +92,8 @@ def main() -> None:
             dist = np.minimum(dist, segment_distance(px, pz, tuple(a), tuple(b)))
     plaza = layout["plaza"]
     plaza_d = np.hypot(px - plaza["x"], pz - plaza["z"]) - plaza["r"] + 0.0
+    for extra in layout.get("plazas", []):
+        plaza_d = np.minimum(plaza_d, np.hypot(px - extra["x"], pz - extra["z"]) - extra["r"])
     path_d = np.minimum(dist - half, plaza_d) + wobble
     path_mask = smoothstep(0.35, -0.15, path_d)
     edge_mask = smoothstep(0.35, 0.0, np.abs(path_d)) * path_mask
@@ -109,6 +117,34 @@ def main() -> None:
         bed = smoothstep(1.0, 0.94, shape(hx, hz))
         color = color * (1 - sand[..., None]) + SAND * sand[..., None]
         color = color * (1 - bed[..., None]) + LAKE_BED * bed[..., None]
+        grassiness = grassiness * (1 - sand)
+
+    # 공항 활주로: 회색 띠 + 가운데 흰 점선 + 양끝 흰 줄무늬.
+    airport = json.loads((ROOT / "data/places/airport.json").read_text(encoding="utf-8"))
+    w = airport["runway"]
+    half_w = w["width"] * 0.5
+    inside = (px >= w["x0"]) & (px <= w["x1"]) & (np.abs(pz - w["z"]) <= half_w)
+    soft = smoothstep(half_w + 0.3, half_w - 0.1, np.abs(pz - w["z"])) * smoothstep(w["x0"] - 0.3, w["x0"] + 0.1, px) * smoothstep(w["x1"] + 0.3, w["x1"] - 0.1, px)
+    color = color * (1 - soft[..., None]) + RUNWAY * soft[..., None]
+    dash = inside & (np.abs(pz - w["z"]) < 0.16) & (((px - w["x0"]) % 4.0) < 2.2)
+    stripes = inside & ((px - w["x0"] < 2.0) | (w["x1"] - px < 2.0)) & ((np.abs(pz - w["z"]) % 1.0) < 0.5) & (np.abs(pz - w["z"]) < half_w - 0.4)
+    color[dash | stripes] = RUNWAY_LINE
+    grassiness = grassiness * (1 - soft)
+
+    # 섬: 바닷가 모래사장(물가로 갈수록 젖은 모래) → 해안선 너머 얕은 바다 밑.
+    island = layout.get("island")
+    if island:
+        half = float(island["half"])
+        power = float(island.get("power", 4.0))
+        beach = float(island.get("beach", 8.0))
+        shape = (np.abs(px / half) ** power + np.abs(pz / half) ** power) ** (1.0 / power)
+        coast = (shape - 1.0) * half + wobble * 1.4  # 해안선까지의 거리 (안쪽 음수, 미터)
+        sand = smoothstep(-beach - 0.6, -beach + 0.6, coast)
+        wet = smoothstep(-2.5, 0.0, coast)
+        sea = smoothstep(0.0, 1.2, coast)
+        beach_color = BEACH * (1 - wet[..., None]) + BEACH_WET * wet[..., None]
+        color = color * (1 - sand[..., None]) + beach_color * sand[..., None]
+        color = color * (1 - sea[..., None]) + SEA_BED * sea[..., None]
         grassiness = grassiness * (1 - sand)
 
     rgba = np.dstack([np.clip(color, 0, 1), grassiness])

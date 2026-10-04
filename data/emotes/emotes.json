@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "_comment": "감정표현. 처음엔 '안녕'만 알고, 나머지는 주민과 친해지면 배운다 (npcs.json 의 teaches). 주민은 근처에서 한 감정표현에 성격·기분에 맞게 반응한다.",
+  "default": ["hello"],
+  "quick_slots": 4,
+  "react_range": 7.0,
+  "cooldown_ms": 700,
+  "npc_react_cooldown_ms": 3500,
+  "friend_per_reaction": 1,
+  "emotes": [
+    { "id": "hello", "name": "안녕", "sound": "emote_up", "mood": "happy" },
+    { "id": "happy", "name": "신나!", "sound": "emote_up", "mood": "happy" },
+    { "id": "laugh", "name": "하하", "sound": "emote_up", "mood": "happy" },
+    { "id": "surprise", "name": "깜짝!", "sound": "emote_hey", "mood": "excited" },
+    { "id": "love", "name": "좋아해", "sound": "emote_up", "mood": "happy" },
+    { "id": "sad", "name": "시무룩", "sound": "emote_down", "mood": "sad" },
+    { "id": "angry", "name": "흥!", "sound": "emote_hey", "mood": "grumpy" },
+    { "id": "think", "name": "음…", "sound": "emote_pop", "mood": "" },
+    { "id": "clap", "name": "짝짝", "sound": "emote_up", "mood": "happy" },
+    { "id": "bow", "name": "꾸벅", "sound": "emote_pop", "mood": "calm" },
+    { "id": "sleepy", "name": "졸려", "sound": "emote_down", "mood": "sleepy" }
+  ],
+  "reactions": {
+    "kind": {
+      "hello": ["hello", "bow"], "happy": ["clap", "happy"], "laugh": ["laugh"], "surprise": ["surprise"],
+      "love": ["love"], "sad": ["sad", "think"], "angry": ["sad"], "think": ["think"], "clap": ["happy", "clap"],
+      "bow": ["bow"], "sleepy": ["sleepy", "think"]
+    },
+    "lively": {
+      "hello": ["hello", "happy"], "happy": ["happy"], "laugh": ["laugh", "happy"], "surprise": ["surprise", "laugh"],
+      "love": ["happy", "surprise"], "sad": ["surprise", "clap"], "angry": ["angry", "surprise"], "think": ["think"],
+      "clap": ["happy", "clap"], "bow": ["hello"], "sleepy": ["surprise", "happy"]
+    },
+    "lazy": {
+      "hello": ["hello", "sleepy"], "happy": ["clap", "laugh"], "laugh": ["laugh"], "surprise": ["sleepy", "surprise"],
+      "love": ["love", "happy"], "sad": ["think", "sad"], "angry": ["sleepy", "sad"], "think": ["think", "sleepy"],
+      "clap": ["laugh"], "bow": ["bow", "sleepy"], "sleepy": ["sleepy"]
+    },
+    "gruff": {
+      "hello": ["think", "bow"], "happy": ["think"], "laugh": ["think", "laugh"], "surprise": ["angry", "surprise"],
+      "love": ["surprise", "angry"], "sad": ["think", "clap"], "angry": ["angry"], "think": ["think"],
+      "clap": ["clap", "think"], "bow": ["bow"], "sleepy": ["angry", "sleepy"]
+    },
+    "snooty": {
+      "hello": ["bow", "hello"], "happy": ["laugh", "clap"], "laugh": ["laugh", "think"], "surprise": ["surprise", "angry"],
+      "love": ["love", "laugh"], "sad": ["think", "love"], "angry": ["angry", "think"], "think": ["think", "laugh"],
+      "clap": ["bow", "laugh"], "bow": ["bow"], "sleepy": ["think", "angry"]
+    },
+    "dreamy": {
+      "hello": ["hello", "love"], "happy": ["happy", "love"], "laugh": ["laugh", "happy"], "surprise": ["surprise", "think"],
+      "love": ["love"], "sad": ["sad", "love"], "angry": ["sad", "surprise"], "think": ["think", "love"],
+      "clap": ["clap", "happy"], "bow": ["bow", "hello"], "sleepy": ["sleepy", "love"]
+    }
+  },
+  "mood_reactions": {
+    "sleepy": ["sleepy"],
+    "grumpy": ["angry", "think"],
+    "sad": ["sad", "think"],
+    "excited": ["happy", "surprise", "clap"]
+  }
+}

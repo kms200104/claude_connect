@@ -1,6 +1,6 @@
 class_name VillageDecor
 extends Node3D
-## 마을 꾸밈: 이끼 낀 바위, 나무 울타리, 꽃밭·들꽃, 풀 덤불, 호수 선착장. 배치는 data/world/village_layout.json.
+## 마을 꾸밈: 이끼 낀 바위, 나무 울타리, 꽃밭·들꽃, 풀 덤불, 호수 선착장, 바닷가 야자수·조개·불가사리. 배치는 data/world/village_layout.json.
 ## 반복되는 것(풀·꽃·울타리)은 MultiMesh 한 덩어리씩, 바위는 모두 합쳐 메시 하나로 그린다 (전부 드로우콜 9개).
 ## 큰 바위·울타리·선착장은 충돌체를 둔다. 풀·꽃은 길·호수·집·상점·나무 자리를 피해서 흩뿌린다 (시드 고정, 매번 같은 자리).
 
@@ -8,7 +8,9 @@ extends Node3D
 @export var clay_material: Material
 @export var seed_value: int = 20240611
 ## 풀·꽃을 흩뿌리는 범위 (마을 가운데 ±미터).
-@export_range(10.0, 80.0, 1.0, "suffix:m") var scatter_extent: float = 44.0
+@export_range(10.0, 120.0, 1.0, "suffix:m") var scatter_extent: float = 94.0
+## 바닷가에 심는 야자수 수.
+@export_range(0, 64) var palm_count: int = 26
 
 const WOOD: Color = Color("#A9724A")
 const WOOD_LIGHT: Color = Color("#C99466")
@@ -32,6 +34,7 @@ func _ready() -> void:
 	_build_dock()
 	_build_flowers()
 	_build_grass()
+	_build_beach()
 
 
 func _build_rocks() -> void:
@@ -184,9 +187,17 @@ func _random_point() -> Vector2:
 	return Vector2(_rng.randf_range(-scatter_extent, scatter_extent), _rng.randf_range(-scatter_extent, scatter_extent))
 
 
-## 풀·들꽃이 나면 안 되는 자리: 길, 호수와 모래톱, 집, 상점, 나무 밑동, 바위, 꽃밭.
+## 풀·들꽃이 나면 안 되는 자리: 바닷가, 길, 호수와 모래톱, 집, 상점·박물관·공항, 나무 밑동, 바위, 꽃밭.
 func _blocked(p: Vector2, margin: float) -> bool:
+	if not _layout.on_grass_land(p, margin + 0.5):
+		return true
 	if _layout.on_path(p, margin):
+		return true
+	for place: KeeperPlace in [GameData.museum, GameData.airport]:
+		if place != null and _in_building(place, p, 1.0 + margin):
+			return true
+	var runway: Dictionary = GameData.airport.extra.get("runway", {}) if GameData.airport != null else {}
+	if not runway.is_empty() and p.x > float(runway.x0) - 1.0 and p.x < float(runway.x1) + 1.0 and absf(p.y - float(runway.z)) < float(runway.width) * 0.5 + 1.0:
 		return true
 	for spot: SpotInfo in GameData.spots.values():
 		var q: Vector2 = (p - spot.center).abs() / (spot.half_extent + Vector2.ONE * (_layout.lake_shore + margin))
@@ -208,6 +219,108 @@ func _blocked(p: Vector2, margin: float) -> bool:
 		if p.distance_to(bed.center) < bed.radius:
 			return true
 	return false
+
+
+## 건물 바닥 사각형 안인지 (앞면 가운데 기준, 앞면이 +Z).
+static func _in_building(place: KeeperPlace, p: Vector2, pad: float) -> bool:
+	var b: Vector3 = place.building_position
+	var half_w: float = place.building_size.x * 0.5 + pad
+	return p.x > b.x - half_w and p.x < b.x + half_w and p.y > b.z - place.building_size.y - pad and p.y < b.z + pad
+
+
+## 바닷가: 모래사장을 따라 기우뚱한 야자수, 그리고 조개·불가사리.
+func _build_beach() -> void:
+	if _layout.island_half <= 0.0:
+		return
+	var palms: Array[Transform3D] = []
+	var shells: Array[Transform3D] = []
+	var stars: Array[Transform3D] = []
+	var half: float = _layout.island_half
+	var tries: int = 0
+	while palms.size() < palm_count and tries < palm_count * 40:
+		tries += 1
+		var a: float = _rng.randf() * TAU
+		var dir: Vector2 = Vector2(cos(a), sin(a))
+		# 해안선에서 안쪽으로 모래사장 가운데쯤.
+		var inset: float = _rng.randf_range(_layout.island_beach * 0.45, _layout.island_beach * 0.85)
+		var r: float = half * (1.0 - inset / half) / _layout.island_shape(dir * half)
+		var p: Vector2 = dir * r
+		if _near_runway_or_building(p, 3.0):
+			continue
+		var too_close: bool = false
+		for other: Transform3D in palms:
+			if Vector2(other.origin.x, other.origin.z).distance_to(p) < 9.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		# 바다 쪽으로 기울어 자란다.
+		var lean: Basis = Basis(Vector3(dir.y, 0.0, -dir.x), -_rng.randf_range(0.12, 0.28))
+		var s: float = _rng.randf_range(0.85, 1.2)
+		palms.append(Transform3D(lean * Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(p.x, 0.0, p.y)))
+		_add_collider(Vector3(p.x, 1.0, p.y), Vector3(0.6, 2.0, 0.6), 0.0)
+	for i: int in 90:
+		var a: float = _rng.randf() * TAU
+		var dir: Vector2 = Vector2(cos(a), sin(a))
+		var inset: float = _rng.randf_range(1.2, _layout.island_beach - 1.0)
+		var r: float = half * (1.0 - inset / half) / _layout.island_shape(dir * half)
+		var p: Vector2 = dir * r
+		if _near_runway_or_building(p, 1.0):
+			continue
+		var xf: Transform3D = Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * _rng.randf_range(0.8, 1.3)), Vector3(p.x, 0.0, p.y))
+		if i % 3 == 0:
+			stars.append(xf)
+		else:
+			shells.append(xf)
+	_add_multimesh("Palms", _palm_mesh(), palms)
+	_add_multimesh("Shells", _shell_mesh(), shells)
+	_add_multimesh("Starfish", _starfish_mesh(), stars)
+
+
+func _near_runway_or_building(p: Vector2, pad: float) -> bool:
+	for place: KeeperPlace in [GameData.museum, GameData.airport]:
+		if place != null and _in_building(place, p, pad):
+			return true
+	var runway: Dictionary = GameData.airport.extra.get("runway", {}) if GameData.airport != null else {}
+	return not runway.is_empty() and p.x > float(runway.x0) - pad and p.x < float(runway.x1) + pad and absf(p.y - float(runway.z)) < float(runway.width) * 0.5 + pad
+
+
+## 야자수: 마디진 줄기 + 늘어진 잎 일곱 장 + 코코넛 셋 (삼각형 약 600개).
+static func _palm_mesh() -> ArrayMesh:
+	var st: SurfaceTool = ClayMesh.begin()
+	var bark: Color = Color("#A9824E")
+	var top: Vector3 = Vector3.ZERO
+	for i: int in 6:
+		var a: Vector3 = Vector3(0.05 * i * i * 0.08, 0.55 * i, 0.0)
+		var b: Vector3 = Vector3(0.05 * (i + 1) * (i + 1) * 0.08, 0.55 * (i + 1), 0.0)
+		ClayMesh.add_rod(st, a, b, 0.17 - 0.012 * i, 0.15 - 0.012 * i, bark.lightened(0.06 * float(i % 2)), 8)
+		top = b
+	var leaf: Callable = ClayMesh.vertical_gradient(Color("#3E7A3A"), Color("#7FBF5A"), 0.6)
+	for k: int in 7:
+		var a: float = TAU * float(k) / 7.0
+		var out: Vector3 = Vector3(cos(a), 0.0, sin(a))
+		var mid: Vector3 = top + out * 0.75 + Vector3(0.0, 0.18, 0.0)
+		ClayMesh.add_ellipsoid(st, mid, Vector3(0.85, 0.05, 0.22), leaf, 10, 3, Basis(Vector3.UP, -a) * Basis(Vector3.FORWARD, -0.32))
+		ClayMesh.add_ellipsoid(st, top + out * 1.45 - Vector3(0.0, 0.18, 0.0), Vector3(0.45, 0.04, 0.16), leaf, 8, 3, Basis(Vector3.UP, -a) * Basis(Vector3.FORWARD, -0.75))
+	for k: int in 3:
+		var a: float = TAU * float(k) / 3.0 + 0.5
+		ClayMesh.add_ellipsoid(st, top + Vector3(cos(a) * 0.17, -0.14, sin(a) * 0.17), Vector3(0.13, 0.14, 0.13), Color("#7A5230"), 8, 5)
+	return ClayMesh.commit(st)
+
+
+static func _shell_mesh() -> ArrayMesh:
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.03, 0.0), Vector3(0.12, 0.05, 0.1), ClayMesh.vertical_gradient(Color("#E8B8A8"), Color("#FFF0E6"), 0.08), 10, 3, Basis(), ClayMesh.scallop_wobble(7, 0.35))
+	return ClayMesh.commit(st)
+
+
+static func _starfish_mesh() -> ArrayMesh:
+	var st: SurfaceTool = ClayMesh.begin()
+	for k: int in 5:
+		var a: float = TAU * float(k) / 5.0
+		ClayMesh.add_ellipsoid(st, Vector3(cos(a) * 0.08, 0.02, sin(a) * 0.08), Vector3(0.1, 0.025, 0.04), Color("#F28A5A"), 6, 2, Basis(Vector3.UP, -a))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.03, 0.0), Vector3(0.05, 0.03, 0.05), Color("#F7A070"), 6, 2)
+	return ClayMesh.commit(st)
 
 
 func _add_mesh_instance(node_name: String, mesh: Mesh) -> void:

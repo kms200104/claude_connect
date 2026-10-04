@@ -12,6 +12,9 @@ enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
 @export var hud: FishingHud
 ## 주민·나무가 가까이 있으면 그쪽 버튼이 우선이라 낚시 버튼을 숨긴다 (없어도 된다).
 @export var interaction: InteractionController
+## 낚으면 카메라가 다가가 물고기를 든 캐릭터를 비추고, 자랑 카드를 띄운다 (없어도 된다).
+@export var camera_rig: FollowCamera
+@export var catch_card: CatchCard
 
 @export_group("Feel")
 ## 캐릭터 앞쪽 몇 미터에 찌를 던질지 (수역 안쪽으로 잘라 쓴다).
@@ -22,6 +25,8 @@ enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
 @export_range(0.1, 2.0, 0.05, "suffix:s") var flight_time: float = 0.55
 ## 결과를 보여 주고 다시 움직일 수 있게 되기까지의 시간.
 @export_range(0.2, 5.0, 0.1, "suffix:s") var result_hold: float = 1.6
+## 낚은 물고기를 두 손으로 내밀고 자랑하는 시간 (희귀할수록 조금 더 길게).
+@export_range(0.5, 8.0, 0.1, "suffix:s") var show_off_time: float = 3.2
 @export var vibrate_on_bite: bool = true
 
 var phase: Phase = Phase.IDLE
@@ -134,11 +139,55 @@ func _on_result(success: bool, fish_id: String, reason: String) -> void:
 	phase = Phase.RESULT
 	bobber.hide_bobber()
 	player.set_fishing_pose(false)
+	if success and GameData.fish.has(fish_id):
+		await _show_off(fish_id)
+		return
 	hud.show_result(_describe(success, fish_id, reason), success)
 	Audio.play_sfx("fish_catch" if success else "fish_escape", -2.0, 1.0, 0.0)
 	await get_tree().create_timer(result_hold).timeout
 	if phase == Phase.RESULT:
 		_reset()
+
+
+## 낚았다! 카메라 쪽으로 돌아서서 물고기를 두 손으로 쭉 내밀어 들고, 카메라가 다가가고, 희귀도별 외침과 물고기 한마디.
+func _show_off(fish_id: String) -> void:
+	var fish: FishInfo = GameData.fish[fish_id]
+	var shout: String = GameData.catch_shout(fish.rarity, fish.display_name)
+	player.look_toward(Vector3.BACK)
+	if player.rig != null:
+		var size_scale: float = {"S": 0.75, "M": 1.0, "L": 1.25}.get(fish.size, 1.0)
+		player.rig.show_off(FishModel.mesh(fish), size_scale)
+	if camera_rig != null:
+		camera_rig.set_focus(1.0, 0.7)
+	# 외침은 자랑 카드에 크게 뜨니 낚시 토스트에는 겹쳐 띄우지 않는다.
+	hud.show_result("" if catch_card != null else shout, true)
+	if catch_card != null:
+		catch_card.show_catch(fish_id, shout)
+	match fish.rarity:
+		"rare":
+			Audio.play_sfx("fanfare_big", 0.0, 1.0, 0.0)
+		"uncommon":
+			Audio.play_sfx("fanfare_small", -1.0, 1.0, 0.0)
+		_:
+			Audio.play_sfx("fish_catch", -2.0, 1.0, 0.0)
+	var hold: float = show_off_time + (1.0 if fish.rarity == "rare" else 0.0)
+	var waited: float = 0.0
+	# 카드를 누르면 바로 끝낸다.
+	while waited < hold and phase == Phase.RESULT and (catch_card == null or catch_card.is_showing()):
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	_end_show_off()
+	if phase == Phase.RESULT:
+		_reset()
+
+
+func _end_show_off() -> void:
+	if player.rig != null and player.rig.is_showing_off():
+		player.rig.show_off(null)
+	if camera_rig != null and camera_rig.focus > 0.0:
+		camera_rig.set_focus(0.0, 0.5)
+	if catch_card != null:
+		catch_card.hide_card()
 
 
 func _on_rejected(code: String) -> void:
@@ -155,6 +204,7 @@ func _on_net_state_changed(new_state: int) -> void:
 
 
 func _reset() -> void:
+	_end_show_off()
 	phase = Phase.IDLE
 	_hooked = false
 	bobber.hide_bobber()

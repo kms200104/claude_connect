@@ -46,6 +46,15 @@
 [ext_resource type="Material" path="res://assets/materials/star_glow.tres" id="50_star_glow"]
 [ext_resource type="Script" path="res://ui/hud/event_hud.gd" id="51_event_hud"]
 [ext_resource type="Script" path="res://ui/hud/meteor_overlay.gd" id="52_meteor"]
+[ext_resource type="Script" path="res://game/environment/island_terrain.gd" id="53_island"]
+[ext_resource type="Script" path="res://game/places/museum_site.gd" id="54_museum"]
+[ext_resource type="Script" path="res://game/places/airport_site.gd" id="55_airport"]
+[ext_resource type="Script" path="res://game/plants/flower_field.gd" id="56_flowers"]
+[ext_resource type="Script" path="res://game/emotes/emote_controller.gd" id="57_emotes"]
+[ext_resource type="Script" path="res://ui/hud/emote_bar.gd" id="58_emote_bar"]
+[ext_resource type="Script" path="res://ui/emotes/emote_window.gd" id="59_emote_window"]
+[ext_resource type="Script" path="res://ui/museum/museum_window.gd" id="60_museum_window"]
+[ext_resource type="Script" path="res://ui/hud/catch_card.gd" id="61_catch_card"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -65,12 +74,10 @@ ambient_light_energy = 0.6
 tonemap_mode = 2
 
 [sub_resource type="PlaneMesh" id="Mesh_ground"]
-size = Vector2(160, 160)
-subdivide_width = 63
-subdivide_depth = 63
+size = Vector2(240, 240)
 
 [sub_resource type="BoxShape3D" id="Shape_ground"]
-size = Vector3(160, 1, 160)
+size = Vector3(248, 1, 248)
 
 [sub_resource type="PlaneMesh" id="Mesh_water"]
 size = Vector2(18, 14)
@@ -141,6 +148,13 @@ surface_material_override/0 = ExtResource("7_ground")
 [node name="Shape" type="CollisionShape3D" parent="Terrain/Ground"]
 shape = SubResource("Shape_ground")
 
+[node name="Island" type="Node3D" parent="Terrain" node_paths=PackedStringArray("ground_mesh", "ground_shape", "player")]
+script = ExtResource("53_island")
+ground_mesh = NodePath("../Ground/Mesh")
+ground_shape = NodePath("../Ground/Shape")
+water_material = ExtResource("16_water")
+player = NodePath("../../Player")
+
 [node name="Lake" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
 spot_id = "lake"
@@ -185,6 +199,22 @@ glow_material = ExtResource("50_star_glow")
 [node name="Merchant" type="Node3D" parent="."]
 script = ExtResource("49_merchant")
 actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
+
+[node name="Museum" type="Node3D" parent="."]
+script = ExtResource("54_museum")
+actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
+
+[node name="Airport" type="Node3D" parent="."]
+script = ExtResource("55_airport")
+actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
+
+[node name="Flowers" type="Node3D" parent="."]
+script = ExtResource("56_flowers")
 clay_material = ExtResource("23_foliage")
 
 [node name="Furniture" type="Node3D" parent="."]
@@ -284,16 +314,21 @@ remote_parent = NodePath("..")
 
 [node name="Bobber" parent="." instance=ExtResource("18_bobber")]
 
-[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction")]
+[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction", "camera_rig", "catch_card")]
 script = ExtResource("19_fishing")
+camera_rig = NodePath("../CameraRig")
+catch_card = NodePath("../HUD/CatchCard")
 player = NodePath("../Player")
 spot = NodePath("../Terrain/Lake")
 bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "dialogue", "fishing", "action_hud", "toast_hud")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "dialogue", "fishing", "action_hud", "toast_hud")]
 script = ExtResource("34_interaction")
+museum = NodePath("../Museum")
+airport = NodePath("../Airport")
+flowers = NodePath("../Flowers")
 drops = NodePath("../Drops")
 merchant = NodePath("../Merchant")
 player = NodePath("../Player")
@@ -306,8 +341,11 @@ fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop", "merchant")]
+[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop", "merchant", "museum", "airport", "museum_window")]
 script = ExtResource("35_dialogue")
+museum = NodePath("../Museum")
+airport = NodePath("../Airport")
+museum_window = NodePath("../HUD/MuseumWindow")
 merchant = NodePath("../Merchant")
 player = NodePath("../Player")
 npcs = NodePath("../Npcs")
@@ -315,6 +353,16 @@ box = NodePath("../HUD/DialogueBox")
 toast_hud = NodePath("../HUD/FishingHud")
 shop_window = NodePath("../HUD/ShopWindow")
 shop = NodePath("../Shop")
+
+[node name="EmoteController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "dialogue", "fishing", "emote_bar", "emote_window", "toast_hud")]
+script = ExtResource("57_emotes")
+player = NodePath("../Player")
+npcs = NodePath("../Npcs")
+dialogue = NodePath("../DialogueController")
+fishing = NodePath("../FishingController")
+emote_bar = NodePath("../HUD/EmoteBar")
+emote_window = NodePath("../HUD/EmoteWindow")
+toast_hud = NodePath("../HUD/FishingHud")
 
 [node name="SoundDirector" type="Node" parent="." node_paths=PackedStringArray("sky", "trees", "shop", "player")]
 script = ExtResource("46_sound")
@@ -379,12 +427,52 @@ script = ExtResource("51_event_hud")
 
 [node name="Hotbar" parent="HUD" instance=ExtResource("37_hotbar")]
 
+[node name="EmoteBar" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("58_emote_bar")
+
+[node name="CatchCard" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("61_catch_card")
+
 [node name="DialogueBox" parent="HUD" instance=ExtResource("38_dialogue_box")]
 
 [node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
 player = NodePath("../../Player")
 
 [node name="ShopWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("44_shop_window")]
+player = NodePath("../../Player")
+
+[node name="EmoteWindow" type="Control" parent="HUD" node_paths=PackedStringArray("player")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("59_emote_window")
+player = NodePath("../../Player")
+
+[node name="MuseumWindow" type="Control" parent="HUD" node_paths=PackedStringArray("player")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("60_museum_window")
 player = NodePath("../../Player")
 
 [connection signal="bag_pressed" from="HUD/Hotbar" to="HUD/InventoryWindow" method="toggle"]

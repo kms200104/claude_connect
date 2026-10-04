@@ -10,6 +10,15 @@ extends Node3D
 @export var window_material: Material
 
 const HOUSE_SIZE: Vector3 = Vector3(4.0, 2.4, 3.0)
+## 기분별로 혼자 하는 몸짓 (calm 은 조용히 지낸다).
+const MOOD_GESTURES: Dictionary = {
+	"happy": ["happy", "clap"], "excited": ["surprise", "happy"], "sad": ["sad"], "grumpy": ["angry", "think"], "sleepy": ["sleepy"],
+}
+
+## 이 간격(초)쯤마다 화면 안의 주민 하나가 기분대로 혼자 몸짓을 하며 중얼거린다.
+@export_range(2.0, 60.0, 0.5, "suffix:s") var mood_gesture_interval: float = 11.0
+
+var _gesture_left: float = 6.0
 
 var _actors: Dictionary[String, NpcActor] = {}
 
@@ -29,6 +38,23 @@ func _ready() -> void:
 
 func actor(id: String) -> NpcActor:
 	return _actors.get(id)
+
+
+func _process(delta: float) -> void:
+	_gesture_left -= delta
+	if _gesture_left > 0.0 or Net.state != Net.State.ONLINE:
+		return
+	_gesture_left = randf_range(mood_gesture_interval * 0.6, mood_gesture_interval * 1.4)
+	var candidates: Array[NpcActor] = []
+	for a: NpcActor in _actors.values():
+		if a.talking_with == 0 and MOOD_GESTURES.has(a.mood) and a.rig != null and a.rig.tree != null and a.rig.tree.active:
+			candidates.append(a)
+	if candidates.is_empty():
+		return
+	var who: NpcActor = candidates[randi() % candidates.size()]
+	var options: Array = MOOD_GESTURES[who.mood]
+	var line: String = MoodSpeech.apply(GameData.dialogue_line(who.info.personality, "mutter_" + who.mood), who.mood, who.info)
+	who.play_emote(str(options[randi() % options.size()]), line)
 
 
 ## 말을 걸 수 있는 가장 가까운 주민 (다른 사람과 이야기 중인 주민은 뺀다). 없으면 빈 문자열.

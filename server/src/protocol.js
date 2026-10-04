@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -44,7 +44,25 @@ export const ErrorCode = Object.freeze({
   noDrop: 'no_drop', // 주울 선물·별 조각이 없거나 너무 멂
   merchantAway: 'merchant_away', // 떠돌이 상인이 없거나 너무 멂
   notWanted: 'not_wanted', // 떠돌이 상인이 찾는 물건이 아님
+  // 심기 · 꽃
+  notSeed: 'not_seed', // 손에 든 게 씨앗이 아님
+  badPlant: 'bad_plant', // 물·길·건물·나무와 겹치거나 너무 멂
+  plantLimit: 'plant_limit', // 마을에 심을 수 있는 수를 넘음
+  noFlower: 'no_flower', // 딸 꽃이 없거나 아직 안 핌, 너무 멂
+  // 감정표현
+  unknownEmote: 'unknown_emote', // 아직 배우지 않은 감정표현
+  // 박물관 · 공항
+  notNearKeeper: 'not_near_keeper', // 관장·조종사 곁이 아님
+  alreadyDonated: 'already_donated', // 이미 기증한 물고기
+  notFish: 'not_fish',
+  // 대화 주제
+  badTopic: 'bad_topic',
 });
+
+// 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
+export const MOTIONS = Object.freeze(['brake']);
+// 대화 주제 (talk_topic.topic).
+export const TOPICS = Object.freeze(['mood', 'hobby', 'gossip', 'fish', 'past', 'dream', 'food', 'you']);
 
 export const Weather = Object.freeze({
   clear: 'clear',

@@ -1,7 +1,8 @@
 // 주민 부탁(퀘스트). 말을 걸 때 서버가 확률로 부탁을 만들고, 받은 부탁은 아이템을 가져가면 완료된다.
 // 부탁 내용은 지금 시각·날씨에 실제로 구할 수 있는 것만 고른다 (불가능한 부탁 방지).
 //
-// profile.npcs[npcId] = { f: 친밀도 0~100, talkDay: 마지막으로 처음 말 건 날, offerDay: 마지막으로 부탁을 받은 날 }
+// profile.npcs[npcId] = { f: 친밀도 0~100, talkDay: 마지막으로 처음 말 건 날, offerDay: 마지막으로 부탁을 받은 날,
+//                       giftDay: 마지막으로 선물 받은 날, emoteDay: 감정표현으로 친밀도가 오른 날, chatDay/chatCount: 오늘 수다로 오른 횟수 }
 // profile.quests = [{ id, npc, kind, item?, n, reward, exp }]   exp: 이 날짜까지 유효
 import { availableFish, pickWeighted } from './gamedata.js';
 import { countWhere } from './inventory.js';
@@ -15,12 +16,24 @@ export function friendStage(f) {
 }
 
 export function relationOf(profile, npcId) {
-  profile.npcs[npcId] ??= { f: 0, talkDay: null, offerDay: null };
+  profile.npcs[npcId] ??= { f: 0, talkDay: null, offerDay: null, giftDay: null, emoteDay: null, chatDay: null, chatCount: 0 };
   return profile.npcs[npcId];
 }
 
 export function addFriendship(rel, amount) {
   rel.f = Math.min(FRIEND_MAX, rel.f + amount);
+}
+
+/** 오늘 수다(대화 주제·두 번째 대화)로 친밀도를 더 올릴 수 있으면 올린다. 오른 양을 돌려준다. */
+export function addChatFriendship(rel, today, amount, perDay) {
+  if (rel.chatDay !== today) {
+    rel.chatDay = today;
+    rel.chatCount = 0;
+  }
+  if (rel.chatCount >= perDay) return 0;
+  rel.chatCount += 1;
+  addFriendship(rel, amount);
+  return amount;
 }
 
 /** 이번 대화에서 부탁을 할지. chance 가 null 이면 데이터의 확률(+친밀도 보너스)을 쓴다. */
@@ -114,6 +127,10 @@ export function sanitizeRelations(raw, data) {
       f: Number.isInteger(r.f) ? Math.max(0, Math.min(FRIEND_MAX, r.f)) : 0,
       talkDay: Number.isInteger(r.talkDay) ? r.talkDay : null,
       offerDay: Number.isInteger(r.offerDay) ? r.offerDay : null,
+      giftDay: Number.isInteger(r.giftDay) ? r.giftDay : null,
+      emoteDay: Number.isInteger(r.emoteDay) ? r.emoteDay : null,
+      chatDay: Number.isInteger(r.chatDay) ? r.chatDay : null,
+      chatCount: Number.isInteger(r.chatCount) ? r.chatCount : 0,
     };
   }
   return out;

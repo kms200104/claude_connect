@@ -80,10 +80,33 @@ func set_online(value: bool) -> void:
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
-## 상대의 동작 이벤트 (지금은 도끼질만).
+## 상대의 동작 이벤트 (도끼질).
 func play_action(kind: String) -> void:
 	if kind == "chop" and rig != null:
 		rig.play_chop()
+
+
+## 상대의 감정표현·몸짓. 브레이크는 몸을 젖히고 끼이익 미끄러지며 흙먼지를 일으킨다.
+func play_emote(emote_id: String) -> void:
+	if emote_id == NetProtocol.MOTION_BRAKE:
+		_brake()
+		return
+	if rig != null:
+		rig.play_emote(emote_id)
+	EmoteBubble.pop(self, emote_id)
+	var info: EmoteInfo = GameData.emote(emote_id)
+	Audio.play_at(info.sound if info != null else "emote_pop", global_position + Vector3(0.0, 1.5, 0.0), -3.0)
+
+
+func _brake() -> void:
+	if rig == null:
+		return
+	rig.set_braking(true)
+	Audio.play_at("skid", global_position, -1.0, 1.0, 0.06)
+	for i: int in 6:
+		Puff.burst(get_parent(), global_position + Vector3(0.0, 0.05, 0.0), Puff.dust_color(global_position), 2, 0.45, 0.25, 0.08, 0.45)
+		await get_tree().create_timer(0.07).timeout
+	rig.set_braking(false)
 
 
 func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity: Vector3, is_fishing: bool = false, held: String = "") -> void:

@@ -2,7 +2,8 @@ class_name CharacterRig
 extends Node3D
 ## 캐릭터 시각 부분. AnimationTree 가 idle ↔ walk ↔ run (속도로 블렌드), 낚시 자세(가중치로 블렌드), 도끼질(원샷)을 섞는다.
 ## 로컬 플레이어·원격 플레이어·주민·가방 창 미리보기가 같은 리그를 쓰고,
-## 게임 로직은 set_look / set_move_speed / set_fishing / set_held / play_chop / set_eye_offset / set_outfit 만 호출한다.
+## 게임 로직은 set_look / set_move_speed / set_fishing / set_held / play_chop / set_eye_offset / set_outfit,
+## 그리고 set_braking(미끄러지며 멈춤) / play_emote(감정표현) / play_plant(심기) / show_off(잡은 물고기 자랑) 만 호출한다.
 ## 몸·팔·다리 메시는 CharacterModel 이 겉모습(CharacterLook)마다 한 번 만들어 공유한다.
 
 @export_group("References")
@@ -25,10 +26,17 @@ extends Node3D
 @export_range(0.5, 40.0, 0.5) var speed_smoothing: float = 10.0
 ## 클수록 낚시 자세에 빨리 들어가고 나온다.
 @export_range(0.5, 40.0, 0.5) var fishing_blend_speed: float = 6.0
+## 브레이크 자세에 들어가고 나오는 빠르기.
+@export_range(0.5, 40.0, 0.5) var brake_blend_speed: float = 18.0
 
 @export_group("Eyes")
 ## 눈동자가 시선 방향으로 움직이는 최대 거리 (x: 좌우, y: 위아래).
 @export var eye_travel: Vector2 = Vector2(0.05, 0.035)
+
+## play_emote 로 할 수 있는 감정표현 (data/emotes/emotes.json 의 id 와 같다).
+const EMOTES: PackedStringArray = ["hello", "happy", "laugh", "surprise", "love", "sad", "angry", "think", "clap", "bow", "sleepy"]
+## 자랑할 때 손에 든 물건의 자리 (몸통 기준, 턱 아래 앞으로 내민 두 손 위). 머리가 커서 머리 위로 들면 팔이 닿지 않는다.
+const SHOW_HOLD_POSITION: Vector3 = Vector3(0.0, 0.0, -0.44)
 
 var held_item: String = "rod"
 var look: CharacterLook = CharacterLook.for_player(1)
@@ -37,6 +45,13 @@ var _move_target: float = 0.0
 var _move_value: float = 0.0
 var _fishing_target: float = 0.0
 var _fishing_value: float = 0.0
+var _brake_target: float = 0.0
+var _brake_value: float = 0.0
+var _show_target: float = 0.0
+var _show_value: float = 0.0
+## 자랑할 때 머리 위로 드는 물건 (show_off).
+var _hold: Node3D = null
+var _held_before_show: String = ""
 var _eyes: MeshInstance3D = null
 var _limbs: Array[MeshInstance3D] = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
@@ -90,6 +105,9 @@ func set_fishing(active: bool) -> void:
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
 func set_held(item_id: String) -> void:
 	held_item = item_id
+	if _show_target > 0.5:
+		_held_before_show = item_id
+		return
 	if rod != null:
 		rod.visible = item_id == "rod"
 	if axe != null:
@@ -105,6 +123,71 @@ func play_chop() -> void:
 func play_cast() -> void:
 	if tree != null:
 		tree.set("parameters/CastShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
+## 감정표현 한 번 (EMOTES 중 하나). 모르는 id 는 무시.
+func play_emote(emote_id: String) -> void:
+	if tree == null or not emote_id in EMOTES:
+		return
+	tree.set("parameters/EmoteSwitch/transition_request", emote_id)
+	tree.set("parameters/EmoteShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
+func is_emoting() -> bool:
+	return tree != null and bool(tree.get("parameters/EmoteShot/active"))
+
+
+## 쪼그려 앉아 흙을 토닥이는 동작 (씨앗 심기).
+func play_plant() -> void:
+	if tree != null:
+		tree.set("parameters/PlantShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
+## 달리다 방향을 확 틀 때: 몸을 젖히고 앞발로 버티는 자세.
+func set_braking(active: bool) -> void:
+	_brake_target = 1.0 if active else 0.0
+
+
+func is_braking() -> bool:
+	return _brake_target > 0.5
+
+
+## 잡은 물건을 두 손으로 앞으로 쭉 내밀어 들고 자랑한다. mesh 가 null 이면 내려놓는다. 드는 동안 도구는 숨긴다.
+func show_off(mesh: Mesh, mesh_scale: float = 1.0, material: Material = null) -> void:
+	if visual == null:
+		return
+	if _hold == null:
+		_hold = Node3D.new()
+		_hold.name = "ShowHold"
+		visual.add_child(_hold)
+		_hold.position = SHOW_HOLD_POSITION
+		var mi: MeshInstance3D = MeshInstance3D.new()
+		mi.name = "Mesh"
+		_hold.add_child(mi)
+	var holder: MeshInstance3D = _hold.get_node("Mesh")
+	if mesh == null:
+		_show_target = 0.0
+		_hold.visible = false
+		holder.mesh = null
+		set_held(_held_before_show)
+		return
+	if _show_target < 0.5:
+		_held_before_show = held_item
+	holder.mesh = mesh
+	holder.material_override = material if material != null else clay_material
+	holder.scale = Vector3.ONE * mesh_scale
+	# 물고기 모형은 옆모습이 XY 평면이라 그대로 들면 몸 앞뒤로 옆모습이 보인다 (머리는 캐릭터 오른쪽).
+	holder.rotation = Vector3.ZERO
+	_hold.visible = true
+	_show_target = 1.0
+	if rod != null:
+		rod.visible = false
+	if axe != null:
+		axe.visible = false
+
+
+func is_showing_off() -> bool:
+	return _show_target > 0.5
 
 
 func is_chopping() -> bool:
@@ -133,6 +216,10 @@ func _process(delta: float) -> void:
 	_fishing_value = lerpf(_fishing_value, _fishing_target, 1.0 - exp(-fishing_blend_speed * delta))
 	tree.set("parameters/Locomotion/blend_position", _move_value)
 	tree.set("parameters/FishBlend/blend_amount", _fishing_value)
+	_brake_value = move_toward(_brake_value, _brake_target, brake_blend_speed * delta)
+	tree.set("parameters/BrakeBlend/blend_amount", _brake_value)
+	_show_value = lerpf(_show_value, _show_target, 1.0 - exp(-10.0 * delta))
+	tree.set("parameters/ShowBlend/blend_amount", _show_value)
 
 
 ## 겉모습과 상관없는 부분: 눈, 도구, 팔다리 메시 자리.

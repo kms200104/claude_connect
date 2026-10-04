@@ -568,7 +568,92 @@ def music() -> None:
     render_song("village_theme", 84, 4, verse + verse + bridge + verse, 65, kalimba, 5, "lofi")
 
 
+# ---------------------------------------------------------------- v0.6 추가 (따로 고정한 난수로 만들어 기존 소리는 그대로)
+
+def v06_sounds() -> None:
+    global rng
+    saved = rng
+    rng = np.random.default_rng(606)
+    try:
+        # 끼이익: 운동화 고무가 바닥에 끌리는 높은 삐걱 (음높이가 떨면서 내려온다) + 흙 긁는 소리.
+        dur = 0.62
+        t = t_axis(dur)
+        n = len(t)
+        f = 2300 - 900 * (t / dur) ** 0.8 + 120 * np.sin(2 * np.pi * 38 * t)
+        ph = 2 * np.pi * np.cumsum(f) / SR
+        squeal = (np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.12 * np.sin(3 * ph)) * (1 - np.exp(-t / 0.02)) * np.exp(-t / 0.32)
+        squeal *= 0.7 + 0.3 * np.sin(2 * np.pi * 23 * t)
+        scrape = biquad_bp(noise(n), 1400, 0.7) * np.exp(-t / 0.22) * (0.6 + 0.4 * rng.uniform(0, 1, n))
+        save_wav("skid", fade(0.55 * squeal + 0.8 * scrape, fout=0.08), 0.8)
+        # 감정표현 말풍선 퐁.
+        dur = 0.16
+        t = t_axis(dur)
+        f = 600 + 900 * (1 - np.exp(-t * 40))
+        save_wav("emote_pop", fade(np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(len(t), 0.002, 0.04)), 0.5)
+        # 기쁜 몸짓: 올라가는 세 음.
+        x = np.zeros(int(0.5 * SR))
+        for i, semi in enumerate([0, 4, 7]):
+            mix_at(x, kalimba(784 * 2 ** (semi / 12), 0.35, SR), int(i * 0.07 * SR), 0.6)
+        save_wav("emote_up", fade(x, fout=0.08), 0.55)
+        # 시무룩·졸린 몸짓: 내려가는 두 음 (느릿하게).
+        x = np.zeros(int(0.7 * SR))
+        for i, semi in enumerate([0, -5]):
+            mix_at(x, kalimba(523 * 2 ** (semi / 12), 0.5, SR), int(i * 0.18 * SR), 0.6)
+        save_wav("emote_down", fade(x, fout=0.1), 0.5)
+        # 깜짝·흥: 보잉 하고 튀는 소리.
+        dur = 0.3
+        t = t_axis(dur)
+        f = 300 + 500 * np.exp(-t * 12) * (1 + 0.3 * np.sin(2 * np.pi * 18 * t))
+        save_wav("emote_hey", fade(np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(len(t), 0.003, 0.12), fout=0.04), 0.55)
+        # 흙 파기·심기: 삽이 흙을 떠내는 서걱 + 토닥토닥 두 번.
+        x = np.zeros(int(0.75 * SR))
+        n = int(0.18 * SR)
+        mix_at(x, onepole_lp(noise(n), 1800) * env_ad(n, 0.01, 0.06), 0, 1.0)
+        for at in (0.32, 0.5):
+            m = int(0.09 * SR)
+            pat = onepole_lp(noise(m), 500) * env_ad(m, 0.002, 0.02) + 0.6 * np.sin(2 * np.pi * 110 * t_axis(0.09)) * env_ad(m, 0.002, 0.03)
+            mix_at(x, pat, int(at * SR), 0.9)
+        save_wav("dig", fade(x, fout=0.05), 0.7)
+        # 쑥: 새싹이 한 단계 자람 (부드러운 퐁 + 작은 반짝).
+        x = np.zeros(int(0.6 * SR))
+        dur = 0.22
+        t = t_axis(dur)
+        f = 220 + 520 * (1 - np.exp(-t * 18))
+        mix_at(x, np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(len(t), 0.004, 0.08), 0, 0.8)
+        for i in range(3):
+            mix_at(x, tone(rng.uniform(2600, 3600), 0.3, ((1, 1.0),), decay=0.08), int((0.12 + i * 0.06) * SR), 0.25)
+        save_wav("grow", fade(x, fout=0.08), 0.55)
+        # 낚시 자랑 팡파레: 조금 귀한 것(짧게)·귀한 것(크게, "와--!!").
+        x = np.zeros(int(1.1 * SR))
+        for i, semi in enumerate([0, 4, 7, 12]):
+            mix_at(x, kalimba(659.3 * 2 ** (semi / 12), 0.5, SR), int(i * 0.09 * SR), 0.6)
+        save_wav("fanfare_small", fade(x, fout=0.1), 0.7)
+        x = np.zeros(int(2.4 * SR))
+        seq = [(0, 0.0), (4, 0.11), (7, 0.22), (12, 0.33), (7, 0.5), (12, 0.6), (16, 0.72), (19, 0.84)]
+        for semi, at in seq:
+            mix_at(x, music_box(523.3 * 2 ** (semi / 12), 0.8, SR), int(at * SR), 0.55)
+        for semi in (0, 4, 7, 12, 16):
+            mix_at(x, kalimba(261.6 * 2 ** (semi / 12), 1.4, SR), int(0.84 * SR), 0.3)
+        for i in range(8):
+            mix_at(x, tone(rng.uniform(2800, 4600), 0.4, ((1, 1.0), (2.76, 0.2)), decay=0.1), int((0.9 + i * 0.07) * SR), 0.22)
+        save_wav("fanfare_big", fade(x, fout=0.2), 0.8)
+        # 비행기 프로펠러 (공항): 낮게 웅웅 도는 소리 루프.
+        dur = 3.0
+        t = t_axis(dur + 0.5)
+        hum = np.sin(2 * np.pi * 92 * t) * (0.6 + 0.4 * np.sin(2 * np.pi * 23 * t)) + 0.4 * np.sin(2 * np.pi * 184 * t)
+        hum += 0.5 * onepole_lp(noise(len(t)), 600)
+        save_wav("plane_loop", loop_crossfade(hum, 0.5), 0.35)
+    finally:
+        rng = saved
+
+
 if __name__ == "__main__":
+    import sys
+    # 인자를 주면 그 묶음만 다시 만든다 (예: python3 tools/audio/gen_audio.py v06_sounds). 기존 소리는 공유 난수를 쓰므로 통째로 만들 때만 같다.
+    if len(sys.argv) > 1:
+        for group in sys.argv[1:]:
+            globals()[group]()
+        raise SystemExit(0)
     footsteps()
     fishing()
     chopping()
@@ -578,3 +663,4 @@ if __name__ == "__main__":
     tree_fall_parts()
     event_sounds()
     music()
+    v06_sounds()

@@ -60,6 +60,24 @@ signal drop_removed(id: String, by: int)
 signal collected(kind: String, item_id: String)
 ## 낚시 대회 상금을 받았다.
 signal fish_bonus(amount: int)
+## 누군가 씨앗을 심어 새 나무가 생겼다 (상태는 tree_changed 로도 온다).
+signal tree_planted(info: TreeInfo)
+## 심은 꽃이 생기거나 자라거나 따였다 (by: 그렇게 한 사람, 0 = 저절로 자람).
+signal flower_changed(flower: FlowerState, by: int)
+## 내가 심었다 (kind = "tree" / "flower").
+signal planted(kind: String, id: String)
+## 내가 꽃을 땄다.
+signal flower_picked(item_id: String)
+## 다른 사람의 감정표현·몸짓(브레이크).
+signal peer_emoted(player_id: int, emote_id: String)
+## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
+signal npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String)
+## 대화 주제로 수다를 떨었다 (gain: 오른 친밀도).
+signal topic_answered(npc_id: String, topic: String, gain: int)
+## 박물관에 기증된 물고기가 늘었다 (마을 공용).
+signal museum_changed(fish_id: String, by: int)
+## 내가 기증했다 (reward: 감사 솔, gifts: 기념품 아이템).
+signal donated(fish_id: String, reward: int, count: int, gifts: PackedStringArray)
 
 enum State { DISCONNECTED, CONNECTING, JOINING, ONLINE, RECONNECTING }
 
@@ -121,6 +139,17 @@ var events: Array[ActiveEvent] = []
 var drops: Dictionary[String, DropInfo] = {}
 ## 마지막 도끼질로 얻은 개수 (나무꾼의 날에는 2).
 var last_chop_count: int = 1
+## 씨앗을 심어 생긴 나무 (id → 정보). 데이터 나무는 GameData.trees.
+var planted_trees: Dictionary[String, TreeInfo] = {}
+## 마을에 심은 꽃 (id → 상태).
+var flowers: Dictionary[String, FlowerState] = {}
+## 박물관에 기증된 물고기 (물고기 id → 기증한 사람 자리 번호).
+var museum_fish: Dictionary[String, int] = {}
+## 배운 감정표현과 감정표현 퀵슬롯.
+var emotes_known: PackedStringArray = ["hello"]
+var emotes_quick: PackedStringArray = ["hello"]
+## 주민 id → 지금 기분.
+var npc_moods: Dictionary[String, String] = {}
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -312,6 +341,37 @@ func sell_multiplier(item_id: String, at: String = "") -> float:
 		return m.multiplier if m != null and item_id in m.wanted else 0.0
 	var b: ActiveEvent = event_active(EventInfo.BARGAIN)
 	return b.multiplier if b != null and item_id in b.wanted else 1.0
+
+
+## 손에 든 씨앗을 (x, z) 에 심는다 (서버가 0.5m 격자로 맞춘다).
+func plant(position: Vector3) -> void:
+	_request("plant", {"x": snappedf(position.x, 0.01), "z": snappedf(position.z, 0.01)})
+
+
+func pick_flower(flower_id: String) -> void:
+	_request("pick", {"id": flower_id})
+
+
+## 감정표현·몸짓을 한다 (근처 주민이 반응한다). 결과를 기다리지 않는다.
+func send_emote(emote_id: String) -> void:
+	_send({"t": "emote", "e": emote_id})
+
+
+## 감정표현 퀵슬롯 (배운 것만, 최대 GameData.emote_quick_slots 개).
+func set_emote_quick(ids: PackedStringArray) -> void:
+	emotes_quick = ids
+	profile_updated.emit()
+	_send({"t": "emote_quick", "quick": Array(ids)})
+
+
+## 대화 중인 주민과 이 주제로 수다를 떤다.
+func talk_topic(topic: String) -> void:
+	_send({"t": "talk_topic", "topic": topic})
+
+
+## 박물관 관장에게 칸의 물고기를 기증한다.
+func donate(slot: int) -> void:
+	_request("donate", {"slot": slot})
 
 
 ## 가구 설치 (x, z 는 서버가 0.5m 격자로 맞춘다, rot 은 90° 단위).
@@ -536,13 +596,50 @@ func _handle_text(text: String) -> void:
 			lightning_struck.emit(float(msg.get("power", 1.0)))
 		"tree":
 			var tree_id: String = str(msg.get("id", ""))
+			if msg.has("k") and not planted_trees.has(tree_id):
+				var info: TreeInfo = TreeInfo.planted_from_dict(msg)
+				planted_trees[tree_id] = info
+				tree_stages[tree_id] = str(msg.get("s", NetProtocol.TREE_SPROUT))
+				tree_planted.emit(info)
 			tree_stages[tree_id] = str(msg.get("s", NetProtocol.TREE_GROWN))
 			tree_changed.emit(tree_id, tree_stages[tree_id], int(msg.get("c", 0)))
+		"flower":
+			var fd: Variant = msg.get("f", {})
+			if fd is Dictionary:
+				var flower: FlowerState = FlowerState.from_dict(fd)
+				flowers[flower.id] = flower
+				flower_changed.emit(flower, int(msg.get("by", 0)))
+		"plant_result":
+			_pending.erase(str(msg.get("rid", "")))
+			planted.emit(str(msg.get("kind", "")), str(msg.get("id", "")))
+		"pick_result":
+			_pending.erase(str(msg.get("rid", "")))
+			flower_picked.emit(str(msg.get("item", "")))
+		"npc_emote":
+			var npc_id: String = str(msg.get("npc", ""))
+			npc_moods[npc_id] = str(msg.get("m", npc_moods.get(npc_id, "calm")))
+			npc_emoted.emit(npc_id, str(msg.get("e", "")), int(msg.get("to", 0)), npc_moods[npc_id])
+		"talk_topic":
+			var talked: String = str(msg.get("npc", ""))
+			npc_moods[talked] = str(msg.get("m", npc_moods.get(talked, "calm")))
+			topic_answered.emit(talked, str(msg.get("topic", "")), int(msg.get("gain", 0)))
+		"museum":
+			_apply_museum(msg)
+			museum_changed.emit(str(msg.get("id", "")), int(msg.get("by", 0)))
+		"donate_result":
+			_pending.erase(str(msg.get("rid", "")))
+			sol = int(msg.get("sol", sol))
+			var gifts: PackedStringArray = []
+			for g: Variant in msg.get("gifts", []):
+				gifts.append(str(g))
+			donated.emit(str(msg.get("fish", "")), int(msg.get("reward", 0)), int(msg.get("count", 0)), gifts)
 		"npcs":
 			npc_states = _parse_npcs(msg.get("n", []))
 			npcs_received.emit(float(msg.get("st", 0.0)), npc_states)
 		"act":
-			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", "")))
+			if str(msg.get("kind", "")) == "emote":
+				peer_emoted.emit(int(msg.get("id", 0)), str(msg.get("e", "")))
+			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", msg.get("e", ""))))
 		"chop_result":
 			_pending.erase(str(msg.get("rid", "")))
 			last_chop_count = int(msg.get("n", 1))
@@ -639,11 +736,24 @@ func _on_welcome(msg: Dictionary) -> void:
 	_apply_clock(msg.get("clock", {}))
 	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
 	tree_stages.clear()
+	planted_trees.clear()
 	var tree_list: Variant = msg.get("trees", [])
 	if tree_list is Array:
 		for entry: Variant in tree_list:
 			if entry is Dictionary:
 				tree_stages[str(entry.get("id", ""))] = str(entry.get("s", NetProtocol.TREE_GROWN))
+				if entry.has("k"):
+					var planted_info: TreeInfo = TreeInfo.planted_from_dict(entry)
+					planted_trees[planted_info.id] = planted_info
+	flowers.clear()
+	var flower_list: Variant = msg.get("flowers", [])
+	if flower_list is Array:
+		for entry: Variant in flower_list:
+			if entry is Dictionary:
+				var fl: FlowerState = FlowerState.from_dict(entry)
+				flowers[fl.id] = fl
+	museum_fish.clear()
+	_apply_museum(msg.get("museum", {}))
 	npc_states = _parse_npcs(msg.get("npcs", []))
 	_apply_shop(msg.get("shop", {}))
 	placed.clear()
@@ -743,7 +853,21 @@ func _apply_profile(data: Variant) -> void:
 	if o is Dictionary:
 		outfit_hat = str(o.get("hat", ""))
 		outfit_top = str(o.get("top", ""))
+	var e: Variant = data.get("emotes", {})
+	if e is Dictionary:
+		emotes_known = PackedStringArray(Array(e.get("known", ["hello"])).map(func(x: Variant) -> String: return str(x)))
+		emotes_quick = PackedStringArray(Array(e.get("quick", ["hello"])).map(func(x: Variant) -> String: return str(x)))
 	profile_updated.emit()
+
+
+func _apply_museum(data: Variant) -> void:
+	if not data is Dictionary:
+		return
+	var fish_map: Variant = (data as Dictionary).get("fish", {})
+	if fish_map is Dictionary:
+		museum_fish.clear()
+		for fish_id: Variant in fish_map:
+			museum_fish[str(fish_id)] = int(fish_map[fish_id])
 
 
 func _apply_shop(data: Variant) -> void:
@@ -768,7 +892,9 @@ func _parse_npcs(entries: Variant) -> Array[NetNpcState]:
 	if entries is Array:
 		for entry: Variant in entries:
 			if entry is Dictionary:
-				states.append(NetNpcState.from_dict(entry))
+				var npc_state: NetNpcState = NetNpcState.from_dict(entry)
+				npc_moods[npc_state.id] = npc_state.mood
+				states.append(npc_state)
 	return states
 
 

@@ -24,8 +24,9 @@ export const defaultConfig = {
   maxSpeed: num('MAX_SPEED', 7.2),
   speedTolerance: num('SPEED_TOLERANCE', 1.6),
   moveSlackMeters: num('MOVE_SLACK_M', 0.6),
-  // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위.
-  worldHalfExtent: num('WORLD_HALF_EXTENT', 78),
+  // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위. 섬(±100m)과 바다 너머 상점 실내(z≈190)를 모두 담는다.
+  // 설치·심기는 섬 경계(village_layout.json 의 island)로 따로 막는다.
+  worldHalfExtent: num('WORLD_HALF_EXTENT', 200),
   minY: num('MIN_Y', -5),
   maxY: num('MAX_Y', 30),
   // 연결당 초당 메시지 상한 (토큰 버킷).
@@ -100,6 +101,12 @@ export const defaultConfig = {
   eventWanted: process.env.EVENT_WANTED || '',
   // 선물·별 조각이 떨어지는 간격 배율 (테스트는 작게).
   eventSpawnScale: num('EVENT_SPAWN_SCALE', 1),
+  // 나무·꽃이 자라는 시간 배율 (1 = 데이터의 게임 분 그대로, 테스트·시연은 작게).
+  growthScale: num('GROWTH_SCALE', 1),
+  // 처음 들어온 사람의 주민 친밀도 (시연·테스트용: 선물·감정표현 배우기를 바로 보려고).
+  startFriendship: num('START_FRIENDSHIP', 0),
+  // 처음 들어온 사람에게 줄 물건 (시연·테스트용, "seed_tulip:5,acorn:2").
+  startItems: process.env.START_ITEMS || '',
 };
 
 // 슬롯(1부터)별 스폰 위치.

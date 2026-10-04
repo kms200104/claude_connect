@@ -23,6 +23,10 @@ export function createNpcRuntime(defs, now, random) {
       waitUntil: now + random() * 3000,
       talkingWith: null,
       talkTouchedAt: 0,
+      baseMood: 'calm', // social.js: 오늘의 바탕 기분
+      moodOverride: null, // 감정표현·대화로 잠시 바뀐 기분 { m, until }
+      mood: 'calm', // 지금 기분 (방송용)
+      reactAt: -Infinity, // 마지막으로 감정표현에 반응한 시각
     });
   }
   return npcs;
@@ -74,6 +78,14 @@ function chooseWaypoint(n, mode, random) {
   return next;
 }
 
+/** 감정표현에 반응: 잠깐 멈춰 서서 그 사람을 바라본다. */
+export function pauseFor(n, x, z, now, ms) {
+  if (n.talkingWith !== null) return;
+  n.target = null;
+  n.waitUntil = Math.max(n.waitUntil, now + ms);
+  n.yaw = yawToward(x - n.x, z - n.z);
+}
+
 /** 대화 시작: 걷던 걸 멈추고 상대를 바라본다. */
 export function beginTalk(n, player, now) {
   n.talkingWith = player.id;
@@ -88,5 +100,5 @@ export function endTalk(n, now) {
 }
 
 export function npcWire(n) {
-  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0 };
+  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0, m: n.mood };
 }

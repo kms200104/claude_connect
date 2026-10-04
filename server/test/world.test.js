@@ -61,27 +61,37 @@ describe('날씨', () => {
 });
 
 describe('나무', () => {
-  it('세 번 찍으면 쓰러지고, 다음 날 묘목·그다음 날 다 자란다', () => {
+  it('세 번 찍으면 쓰러지고, 게임 시간이 지나면 묘목 → 어린 나무 → 다 자란 나무', () => {
+    const min = 60000;
+    const minutes = { stump: 8, sapling: 10, young: 10 };
     const t = newTreeState();
-    assert.deepEqual(chopTree(t, 10, 3), { felled: false });
-    assert.deepEqual(chopTree(t, 10, 3), { felled: false });
-    assert.deepEqual(chopTree(t, 10, 3), { felled: true });
+    assert.deepEqual(chopTree(t, 10, 0, 3), { felled: false });
+    assert.deepEqual(chopTree(t, 10, 0, 3), { felled: false });
+    assert.deepEqual(chopTree(t, 10, 1000, 3), { felled: true });
     assert.equal(t.s, 'stump');
-    assert.equal(chopTree(t, 10, 3), null, '그루터기는 찍을 수 없다');
-    refreshTree(t, 11);
+    assert.equal(chopTree(t, 10, 1000, 3), null, '그루터기는 찍을 수 없다');
+    assert.equal(refreshTree(t, 10, 1000 + 7 * min, minutes), false, '아직 그루터기');
+    assert.equal(refreshTree(t, 10, 1000 + 8 * min, minutes), true);
     assert.equal(t.s, 'sapling');
-    assert.equal(chopTree(t, 11, 3), null);
-    refreshTree(t, 12);
+    assert.equal(chopTree(t, 10, 1000 + 8 * min, 3), null);
+    refreshTree(t, 10, 1000 + 18 * min, minutes);
+    assert.equal(t.s, 'young');
+    // 오래 비워 둔 마을: 한 번에 여러 단계를 건너뛴다.
+    refreshTree(t, 11, 1000 + 999 * min, minutes);
     assert.deepEqual({ s: t.s, c: t.c }, { s: 'grown', c: 0 });
+    // 배율을 줄이면 빨리 자란다 (테스트·시연).
+    const fast = newTreeState('sprout', 0);
+    refreshTree(fast, 1, 1000, { sprout: 8, sapling: 10, young: 10 }, 0.0001);
+    assert.equal(fast.s, 'grown');
   });
 
   it('덜 찍힌 나무는 날이 바뀌면 회복된다', () => {
     const t = newTreeState();
-    chopTree(t, 3, 3);
-    chopTree(t, 3, 3);
-    assert.equal(refreshTree(t, 4), true);
+    chopTree(t, 3, 0, 3);
+    chopTree(t, 3, 0, 3);
+    assert.equal(refreshTree(t, 4, 0, {}), true);
     assert.equal(t.c, 0);
-    assert.deepEqual(chopTree(t, 4, 3), { felled: false });
+    assert.deepEqual(chopTree(t, 4, 0, 3), { felled: false });
   });
 
   it('저장 파일 정리: 모르는 나무는 버리고 없는 나무는 기본값', () => {

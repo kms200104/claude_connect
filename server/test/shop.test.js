@@ -196,7 +196,7 @@ describe('상점 · 가구 설치 · 옷', () => {
         const back = await a2.next((m) => m.t === 'inventory' && m.slots.some((x) => x?.id === 'wood_chair'));
         assert.ok(back);
         const saved = JSON.parse(readFileSync(path.join(dir, `${w.code}.json`), 'utf8'));
-        assert.equal(saved.schema, 3);
+        assert.equal(saved.schema, 4);
       } finally {
         await s2.close();
       }

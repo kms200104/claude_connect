@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { inHours } from './clock.js';
+import { blockedAreas } from './world.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -49,6 +50,38 @@ export function loadGameData(dataDir, cfg) {
   const quests = read('quests/quests.json');
   for (const t of quests.templates) if (t.item && !items.has(t.item)) throw new Error(`quest ${t.id}: unknown item ${t.item}`);
 
+  // 씨앗 심기·꽃
+  const plants = read('plants/plants.json');
+  const flowerDefs = new Map(plants.flowers.map((f) => [f.id, f]));
+  for (const f of flowerDefs.values()) if (!items.has(f.item)) throw new Error(`flower ${f.id}: unknown item ${f.item}`);
+  const treeKinds = Object.keys(chopDrops);
+  /** 씨앗 아이템 → { tree: 나무 종류 } | { flower: 꽃 종류 } */
+  const seedOf = (id) => {
+    const plant = items.get(id)?.plant;
+    if (!plant) return null;
+    if (plant.tree && treeKinds.includes(plant.tree)) return { tree: plant.tree };
+    if (plant.flower && flowerDefs.has(plant.flower)) return { flower: plant.flower };
+    return null;
+  };
+  for (const it of items.values()) if (it.plant && !seedOf(it.id)) throw new Error(`item ${it.id}: plant 대상을 모름`);
+
+  // 감정표현
+  const emotes = read('emotes/emotes.json');
+  const emoteIds = new Set(emotes.emotes.map((e) => e.id));
+  for (const n of npcs.values()) {
+    for (const [e] of n.teaches ?? []) if (!emoteIds.has(e)) throw new Error(`npc ${n.id}: unknown emote ${e}`);
+    for (const g of n.gifts ?? []) if (!items.has(g)) throw new Error(`npc ${n.id}: unknown gift ${g}`);
+  }
+  for (const [p, table] of Object.entries(emotes.reactions)) {
+    for (const list of Object.values(table)) for (const e of list) if (!emoteIds.has(e)) throw new Error(`emote reaction ${p}: unknown ${e}`);
+  }
+
+  // 박물관 · 공항
+  const museum = read('places/museum.json');
+  for (const m of museum.milestones) if (!items.has(m.item)) throw new Error(`museum milestone: unknown item ${m.item}`);
+  const airport = read('places/airport.json');
+  for (const id of airport.stock) if (!items.get(id)?.buy) throw new Error(`airport: ${id} 에 buy 가격이 없음`);
+
   const isFish = (id) => fish.has(id);
   const isKnown = (id) => fish.has(id) || items.has(id);
   const limitOf = (id) => (fish.has(id) ? cfg.inventoryStackSize : (items.get(id)?.stack ?? 1));
@@ -57,19 +90,33 @@ export function loadGameData(dataDir, cfg) {
   // 상점에 팔 때 받는 기본 가격 (도구는 못 판다 → 0).
   const priceOf = (id) => (fish.has(id) ? fish.get(id).price ?? 0 : isTool(id) ? 0 : (items.get(id)?.price ?? 0));
 
-  return {
+  const data = {
     fish,
     spots,
     items,
     chopDrops,
     trees,
-    treeRules: { chopRange: treesFile.chop_range, chopsToFell: treesFile.chops_to_fell },
+    treeRules: { chopRange: treesFile.chop_range, chopsToFell: treesFile.chops_to_fell, regrowMinutes: treesFile.regrow_minutes ?? {} },
     npcs,
-    npcRules: { talkRange: npcsFile.talk_range, walkSpeed: npcsFile.walk_speed },
+    npcRules: {
+      talkRange: npcsFile.talk_range,
+      walkSpeed: npcsFile.walk_speed,
+      gift: npcsFile.gift_rules ?? { min_friendship: 12, chance: 0.45, cooldown_days: 1 },
+      topicFriendPerDay: npcsFile.topic_friend_per_day ?? 3,
+      talkExtraFriend: npcsFile.talk_extra_friend ?? 1,
+    },
     quests,
     shop,
     events,
     layout,
+    plants,
+    flowerDefs,
+    treeKinds,
+    seedOf,
+    emotes,
+    emoteIds,
+    museum,
+    airport,
     kindOf,
     priceOf,
     isFish,
@@ -77,6 +124,8 @@ export function loadGameData(dataDir, cfg) {
     isTool,
     limitOf,
   };
+  data.blocked = blockedAreas(data);
+  return data;
 }
 
 /** 점과 낚시터 사각형 사이의 거리(안쪽이면 0). */

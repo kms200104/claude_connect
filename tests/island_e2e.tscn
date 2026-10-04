@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/island_e2e.gd" id="1_island"]
+
+[node name="IslandE2E" type="Node"]
+script = ExtResource("1_island")

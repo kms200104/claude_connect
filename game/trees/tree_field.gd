@@ -1,6 +1,7 @@
 class_name TreeField
 extends Node3D
-## 마을의 나무 전체. 위치는 data/world/trees.json(서버 판정과 같은 출처), 상태(다 자람/그루터기/묘목)는 서버가 알려 준다.
+## 마을의 나무 전체. 위치는 data/world/trees.json(서버 판정과 같은 출처) + 씨앗을 심어 생긴 나무(서버가 알려 준다).
+## 상태(새싹 → 묘목 → 어린 나무 → 다 자람, 베면 그루터기)는 서버가 알려 주고, 자랄 때마다 쑥 소리와 함께 통통 튄다.
 ## 나무 한 그루 = 메시 1개(줄기·잎을 정점 색으로 칠해 머티리얼 1개) + 충돌체. 같은 모양은 메시를 공유한다.
 
 @export var foliage_material: Material
@@ -39,12 +40,15 @@ class TreeNode:
 	var shape: CollisionShape3D
 	var stage: String = NetProtocol.TREE_GROWN
 	var tween: Tween = null
+	## 어린 나무는 다 자란 나무를 작게 줄여 그린다.
+	var base_scale: float = 1.0
 
 
 func _ready() -> void:
 	for info: TreeInfo in GameData.trees.values():
 		_trees[info.id] = _spawn(info)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void: _apply_all())
+	Net.tree_planted.connect(_on_tree_planted)
 	Net.tree_changed.connect(_on_tree_changed)
 	Net.chop_succeeded.connect(_on_chop_succeeded)
 	Net.peer_action.connect(_on_peer_action)
@@ -63,10 +67,27 @@ func _on_chop_succeeded(id: String, _item: String, felled: bool) -> void:
 		shake(id)
 
 
+## 누군가 씨앗을 심었다: 새싹이 흙에서 쏙 올라온다.
+func _on_tree_planted(info: TreeInfo) -> void:
+	if _trees.has(info.id):
+		return
+	var node: TreeNode = _spawn(info)
+	_trees[info.id] = node
+	_apply_stage(node, Net.tree_stages.get(info.id, NetProtocol.TREE_SPROUT))
+	node.mesh.scale = Vector3(0.01, 0.01, 0.01)
+	create_tween().tween_property(node.mesh, "scale", Vector3.ONE * node.base_scale, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	Puff.burst(self, info.position + Vector3(0.0, 0.05, 0.0), Color("#8A6A4A"), 6, 0.5, 0.3, 0.07)
+
+
 func _on_tree_changed(id: String, stage: String, _chops: int) -> void:
 	var node: TreeNode = _trees.get(id)
 	var was_grown: bool = node != null and node.stage == NetProtocol.TREE_GROWN
+	var grew: bool = node != null and _stage_rank(stage) > _stage_rank(node.stage) and stage != NetProtocol.TREE_STUMP
 	_set_stage(id, stage, true)
+	if grew:
+		# 한 단계 자랐다: 쑥 소리와 반짝이는 잎.
+		Audio.play_at("grow", node.info.position + Vector3(0.0, 0.5, 0.0), -3.0)
+		Puff.burst(self, node.info.position + Vector3(0.0, 0.4 + 0.6 * node.base_scale, 0.0), LEAF_ROUND.lightened(0.25), 7, 0.6, 0.5, 0.06)
 	# 상대가 쓰러뜨린 나무: 가장 가까이 있는 사람 반대쪽으로 넘어진다 (내가 쓰러뜨린 건 이미 넘어지는 중).
 	if stage == NetProtocol.TREE_STUMP and was_grown and Time.get_ticks_msec() - _local_fells.get(id, -100000) > 1500:
 		fell(id, _nearest_chopper(tree_position(id)))
@@ -184,8 +205,39 @@ func shake(id: String) -> void:
 
 
 func _apply_all() -> void:
+	# 다른 마을의 심은 나무는 치우고, 이 마을의 심은 나무를 세운다.
+	for id: String in _trees.keys():
+		var node: TreeNode = _trees[id]
+		if node.info.planted and not Net.planted_trees.has(id):
+			node.body.queue_free()
+			_trees.erase(id)
+	for info: TreeInfo in Net.planted_trees.values():
+		if not _trees.has(info.id):
+			_trees[info.id] = _spawn(info)
 	for id: String in _trees:
 		_set_stage(id, Net.tree_stages.get(id, NetProtocol.TREE_GROWN), false)
+
+
+## 자란 정도 (새싹 1 · 묘목 2 · 어린 나무 3 · 다 자람 4, 그루터기 0).
+static func _stage_rank(stage: String) -> int:
+	match stage:
+		NetProtocol.TREE_SPROUT:
+			return 1
+		NetProtocol.TREE_SAPLING:
+			return 2
+		NetProtocol.TREE_YOUNG:
+			return 3
+		NetProtocol.TREE_GROWN:
+			return 4
+	return 0
+
+
+## 이 자리에 나무를 심을 수 있을 만큼 다른 나무와 떨어져 있는지 (서버와 같은 간격).
+func clear_for_tree(position: Vector3, clearance: float) -> bool:
+	for node: TreeNode in _trees.values():
+		if Vector2(position.x - node.info.position.x, position.z - node.info.position.z).length() < clearance:
+			return false
+	return true
 
 
 func _spawn(info: TreeInfo) -> TreeNode:
@@ -215,14 +267,24 @@ func _set_stage(id: String, stage: String, animate: bool) -> void:
 	_apply_stage(node, stage)
 	if animate:
 		# 쓰러지거나 자라날 때 살짝 튀어 오르는 연출.
-		node.mesh.scale = Vector3(1.15, 0.7, 1.15)
-		create_tween().tween_property(node.mesh, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		node.mesh.scale = Vector3(1.15, 0.7, 1.15) * node.base_scale
+		create_tween().tween_property(node.mesh, "scale", Vector3.ONE * node.base_scale, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _apply_stage(node: TreeNode, stage: String) -> void:
 	node.stage = stage
+	node.base_scale = 1.0
 	var cylinder: CylinderShape3D = node.shape.shape
 	match stage:
+		NetProtocol.TREE_SPROUT:
+			node.mesh.mesh = _mesh("sprout")
+			node.shape.disabled = true
+		NetProtocol.TREE_YOUNG:
+			node.mesh.mesh = _mesh(node.info.kind)
+			node.base_scale = 0.62
+			cylinder.radius = 0.3
+			cylinder.height = 1.9
+			node.shape.disabled = false
 		NetProtocol.TREE_STUMP:
 			node.mesh.mesh = _mesh("stump")
 			cylinder.radius = 0.45
@@ -236,6 +298,7 @@ func _apply_stage(node: TreeNode, stage: String) -> void:
 			cylinder.radius = 0.4
 			cylinder.height = 3.0
 			node.shape.disabled = false
+	node.mesh.scale = Vector3.ONE * node.base_scale
 	node.shape.position = Vector3(0.0, cylinder.height * 0.5, 0.0)
 
 
@@ -265,6 +328,12 @@ static func _mesh(kind: String) -> ArrayMesh:
 					return STUMP_TOP.lerp(STUMP_TOP.darkened(0.18), clampf(ring * 0.5 + 0.5, 0.0, 1.0) * 0.6)
 				return TRUNK_COLOR.darkened(0.08 * (1.0 - local.y))
 			ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.46, 0.36, 0.0, 0.45, 0.05, 2), 14, Transform3D(), stump_color)
+		"sprout":
+			# 흙 둔덕 위에 떡잎 두 장.
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.02, 0.0), Vector3(0.28, 0.07, 0.28), Color("#8A6A4A"), 10, 3)
+			ClayMesh.add_rod(st, Vector3(0.0, 0.05, 0.0), Vector3(0.0, 0.22, 0.0), 0.02, 0.016, Color("#6FA35A"), 5)
+			for side: float in [-1.0, 1.0]:
+				ClayMesh.add_ellipsoid(st, Vector3(side * 0.08, 0.24, 0.0), Vector3(0.09, 0.025, 0.05), LEAF_ROUND.lightened(0.22), 8, 3, Basis(Vector3.BACK, side * 0.4))
 		"sapling":
 			ClayMesh.add_rod(st, Vector3.ZERO, Vector3(0.0, 0.62, 0.0), 0.05, 0.035, TRUNK_COLOR, 6)
 			for i: int in 3:

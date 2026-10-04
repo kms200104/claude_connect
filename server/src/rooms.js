@@ -3,10 +3,11 @@ import { performance } from 'node:perf_hooks';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './protocol.js';
 import { spawnPoints } from './config.js';
 import { SAVE_SCHEMA_VERSION } from './persistence.js';
-import { emptySlots, hasItem, sanitize } from './inventory.js';
-import { sanitizeTrees } from './trees.js';
+import { addItem, emptySlots, hasItem, sanitize } from './inventory.js';
+import { sanitizePlanted, sanitizeTrees } from './trees.js';
+import { sanitizeFlowers } from './plants.js';
 import { createNpcRuntime } from './npcs.js';
-import { sanitizeQuests, sanitizeRelations } from './quests.js';
+import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -48,7 +49,25 @@ function newProfile(uid, slot, cfg) {
     questSeq: 0,
     lastQuestDay: null,
     outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
+    emotes: { known: ['hello'], quick: ['hello'] }, // 배운 감정표현과 감정표현 퀵슬롯
   };
+}
+
+/** 배운 감정표현 (모르는 id 는 버리고, 기본 감정표현은 항상 안다) 과 퀵슬롯. */
+function sanitizeEmotes(raw, data, cfg) {
+  const base = data.emotes.default ?? ['hello'];
+  const known = [...new Set([...base, ...(Array.isArray(raw?.known) ? raw.known : [])])].filter((e) => data.emoteIds.has(e));
+  const quick = (Array.isArray(raw?.quick) ? raw.quick : base).filter((e) => known.includes(e)).slice(0, data.emotes.quick_slots ?? 4);
+  return { known, quick: quick.length > 0 || Array.isArray(raw?.quick) ? quick : [...base] };
+}
+
+/** 박물관 (마을 공용): 기증한 물고기 id → 기증한 사람 자리 번호, 받은 기념품 단계. */
+function sanitizeMuseum(raw, data) {
+  const out = { fish: {}, claimed: [] };
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, by] of Object.entries(raw.fish ?? {})) if (data.isFish(id)) out.fish[id] = Number.isInteger(by) ? by : 0;
+  if (Array.isArray(raw.claimed)) out.claimed = raw.claimed.filter((n) => data.museum.milestones.some((m) => m.count === n));
+  return out;
 }
 
 function sanitizeOutfit(raw, data) {
@@ -77,6 +96,8 @@ export class Player {
     this.lastMoveAt = 0; // performance.now() 기준 ms
     this.lastChopAt = -Infinity;
     this.doorAt = -Infinity; // 상점 문을 지난 시각
+    this.lastEmoteAt = -Infinity; // 감정표현 간격
+    this.lastMotionAt = -Infinity; // 몸짓(브레이크) 간격
     this.graceTimer = null;
     this.fishing = null; // 낚시 세션 (fishing.js)
     this.talkingTo = null; // 대화 중인 NPC id
@@ -144,6 +165,13 @@ export class Room {
     this.stats = { totalCatches: 0, species: {} }; // 월드(마을) 공용 상태
     this.weatherSeed = randomInt(0x7fffffff);
     this.trees = sanitizeTrees(null, data.trees);
+    // 씨앗을 심어 생긴 나무 (id → { id, kind, x, z, by, planted }). 상태는 this.trees 에 같은 id 로.
+    this.plantedTrees = new Map();
+    this.plantSeq = 0;
+    // 심은 꽃 (plants.js).
+    this.flowers = new Map();
+    this.flowerSeq = 0;
+    this.museum = { fish: {}, claimed: [] };
     this.shopPoints = 0; // 상점 포인트 (마을 공용, 단계는 포인트로 정해진다)
     this.placed = new Map(); // 설치된 가구 (furniture.js)
     this.placedSeq = 0;
@@ -172,6 +200,13 @@ export class Room {
     }
     if (Number.isInteger(world.weatherSeed)) room.weatherSeed = world.weatherSeed;
     room.trees = sanitizeTrees(world.trees, data.trees);
+    const planted = sanitizePlanted(world.planted, data.treeKinds, data.plants.max_planted_trees);
+    room.plantedTrees = planted.defs;
+    for (const [id, st] of planted.states) room.trees.set(id, st);
+    room.plantSeq = Math.max(0, intOr(world.plantSeq, 0));
+    room.flowers = sanitizeFlowers(world.flowers, data);
+    room.flowerSeq = Math.max(0, intOr(world.flowerSeq, 0));
+    room.museum = sanitizeMuseum(world.museum, data);
     room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0)));
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
@@ -197,6 +232,7 @@ export class Room {
         questSeq: Math.max(0, intOr(p.questSeq, 0)),
         lastQuestDay: intOr(p.lastQuestDay, null),
         outfit: sanitizeOutfit(p.outfit, data),
+        emotes: sanitizeEmotes(p.emotes, data, cfg),
       });
     }
     return room;
@@ -210,7 +246,8 @@ export class Room {
       profiles[uid] = structuredClone(profile);
     }
     const trees = {};
-    for (const [id, st] of this.trees) trees[id] = { ...st };
+    for (const [id, st] of this.trees) if (!this.plantedTrees.has(id)) trees[id] = { ...st };
+    const planted = [...this.plantedTrees.values()].map((d) => ({ id: d.id, kind: d.kind, x: d.x, z: d.z, by: d.by, st: { ...this.trees.get(d.id) } }));
     return {
       schema: SAVE_SCHEMA_VERSION,
       code: this.code,
@@ -224,9 +261,24 @@ export class Room {
         shopPoints: this.shopPoints,
         placed: [...this.placed.values()].map((f) => ({ ...f })),
         placedSeq: this.placedSeq,
+        planted,
+        plantSeq: this.plantSeq,
+        flowers: [...this.flowers.values()].map((f) => ({ ...f })),
+        flowerSeq: this.flowerSeq,
+        museum: structuredClone(this.museum),
       },
       profiles,
     };
+  }
+
+  /** 나무 정의 (데이터 나무 또는 심은 나무). */
+  treeDef(id, data) {
+    return data.trees.get(id) ?? this.plantedTrees.get(id) ?? null;
+  }
+
+  /** 모든 나무 자리 (설치·심기 간격 검사용). */
+  allTreeSpots(data) {
+    return [...data.trees.values(), ...this.plantedTrees.values()];
   }
 
   /** 저장된 사람 uid → 자리 번호 (없으면 0). */
@@ -289,6 +341,7 @@ export class RoomManager {
       const slot = room.freeSlot();
       if (slot === null) return null;
       profile = newProfile(uid, slot, this.cfg);
+      this.applyStarter(profile);
       room.profiles.set(uid, profile);
     }
     const token = randomBytes(16).toString('hex');
@@ -297,6 +350,17 @@ export class RoomManager {
     this.tokens.set(token, { room, player });
     room.saveDirty = true;
     return { player, existing: false };
+  }
+
+  /** 시연·테스트용 시작 선물 (START_ITEMS) 과 주민 친밀도 (START_FRIENDSHIP). */
+  applyStarter(profile) {
+    for (const entry of String(this.cfg.startItems ?? '').split(',')) {
+      const [id, n] = entry.trim().split(':');
+      if (id && this.data.isKnown(id)) addItem(profile.slots, id, Math.max(1, parseInt(n ?? '1', 10) || 1), this.cfg, this.data.limitOf);
+    }
+    if (this.cfg.startFriendship > 0) {
+      for (const id of this.data.npcs.keys()) relationOf(profile, id).f = Math.min(100, this.cfg.startFriendship);
+    }
   }
 
   findByToken(token) {

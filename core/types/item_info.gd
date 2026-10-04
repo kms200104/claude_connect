@@ -29,6 +29,9 @@ var wear_slot: String = ""
 var model: Array = []
 ## 윗옷을 입으면 스웨터를 이 색으로 바꾼다 (알파 0 = 그대로 두고 모양만 덧붙임).
 var tint: Color = Color(0.0, 0.0, 0.0, 0.0)
+## 씨앗이면 심었을 때 자라는 나무 종류 (round/pine/birch) 또는 꽃 종류 (tulip …). 아니면 빈 문자열.
+var plant_tree: String = ""
+var plant_flower: String = ""
 
 
 static func from_item_dict(data: Dictionary) -> ItemInfo:
@@ -44,6 +47,10 @@ static func from_item_dict(data: Dictionary) -> ItemInfo:
 	info.wear_slot = str(data.get("wear", ""))
 	if data.has("tint"):
 		info.tint = Color.html(str(data["tint"]))
+	var plant: Variant = data.get("plant")
+	if plant is Dictionary:
+		info.plant_tree = str(plant.get("tree", ""))
+		info.plant_flower = str(plant.get("flower", ""))
 	var parts: Variant = data.get("model", [])
 	if parts is Array:
 		info.model = parts
@@ -100,3 +107,8 @@ func kind_label() -> String:
 			return "옷 · 모자" if wear_slot == "hat" else "옷 · 상의"
 		_:
 			return "재료"
+
+
+## 심을 수 있는 씨앗인지.
+func is_seed() -> bool:
+	return not plant_tree.is_empty() or not plant_flower.is_empty()

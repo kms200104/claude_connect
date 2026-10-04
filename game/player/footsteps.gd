@@ -3,8 +3,10 @@ extends RefCounted
 ## 발소리: 걸은 거리가 보폭을 넘을 때마다 바닥에 맞는 소리(풀 · 흙길 · 나무 판자)를 낸다. 달릴 때는 쿵쿵 더 센 소리.
 ## 내 캐릭터는 위치 없는 소리, 상대 플레이어는 그 자리에서 나는 3D 소리로 낸다.
 
-const WALK_STRIDE: float = 0.62
-const RUN_STRIDE: float = 0.95
+## 보폭: 걷기 애니메이션(0.6초에 두 걸음)·달리기 애니메이션(0.4초에 두 걸음)과 발이 땅에 닿는 박자가 맞도록
+## 걷기 4.5m/s ÷ 초당 3.3걸음, 달리기 7m/s ÷ 초당 5걸음.
+const WALK_STRIDE: float = 1.35
+const RUN_STRIDE: float = 1.4
 
 var _travelled: float = 0.0
 var _index: int = 0
@@ -48,6 +50,8 @@ static func surface_of(position: Vector3) -> String:
 		return "grass"
 	if layout.dock_size.x > 0.0 and layout.dock_rect().grow(0.1).has_point(p):
 		return "wood"
+	if not layout.on_grass_land(p, -1.0):
+		return "dirt"  # 바닷가 모래사장
 	if layout.on_path(p, 0.1):
 		return "dirt"
 	for spot: SpotInfo in GameData.spots.values():

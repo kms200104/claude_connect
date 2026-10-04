@@ -4,12 +4,14 @@ extends Control
 ## 값·재고 판정은 서버가 하고, 여기서는 목록을 보여 주고 요청만 보낸다. 사고팔면 상점 포인트 막대가 차오른다.
 ## 떠돌이 상인 모드(at = AT_MERCHANT): 상인의 보따리 물건을 사고, 상인이 찾는 물건만 2배 값에 판다 (포인트는 쌓이지 않음).
 ## 특가 매입의 날에는 고른 물건 줄에 "×2 특가" 표시와 두 배 값을 보여 준다.
+## 공항 모드(at = AT_AIRPORT): 조종사의 여행 기념품(씨앗·소품)만 산다 (팔기 없음, 포인트 없음).
 
 signal closed
 
 const MODE_BUY: String = "buy"
 const MODE_SELL: String = "sell"
 const AT_MERCHANT: String = "merchant"
+const AT_AIRPORT: String = "airport"
 
 @export var player: Player
 
@@ -67,9 +69,10 @@ func close() -> void:
 
 
 func set_mode(new_mode: String) -> void:
-	mode = new_mode
+	mode = MODE_BUY if at == AT_AIRPORT else new_mode
 	_buy_tab.disabled = mode == MODE_BUY
 	_sell_tab.disabled = mode == MODE_SELL
+	_sell_tab.visible = at != AT_AIRPORT
 	_refresh()
 
 
@@ -89,17 +92,19 @@ func _refresh() -> void:
 	var merchant: ActiveEvent = Net.event_active(EventInfo.MERCHANT) if at == AT_MERCHANT else null
 	if at == AT_MERCHANT:
 		_title.text = "떠돌이 상인 누리의 보따리"
+	elif at == AT_AIRPORT:
+		_title.text = "%s 기념품 가게" % GameData.airport.display_name
 	else:
 		var lv: ShopData.Level = shop.level_info(Net.shop_level)
 		_title.text = "%s  Lv.%d" % [lv.display_name, lv.level]
 	_sol.text = "%s솔" % InventoryWindow._format_number(Net.sol)
-	_points_bar.visible = at != AT_MERCHANT
-	_points_label.visible = at != AT_MERCHANT
+	_points_bar.visible = at == ""
+	_points_label.visible = at == ""
 	_refresh_points()
 	for child: Node in _list.get_children():
 		child.queue_free()
 	if mode == MODE_BUY:
-		var stock: PackedStringArray = merchant.stock if merchant != null else shop.stock_for(Net.shop_level)
+		var stock: PackedStringArray = merchant.stock if merchant != null else (GameData.airport.stock if at == AT_AIRPORT else shop.stock_for(Net.shop_level))
 		for item_id: String in stock:
 			_list.add_child(_buy_row(GameData.item(item_id)))
 	else:
@@ -231,6 +236,8 @@ func _on_request_failed(kind: String, code: String) -> void:
 			_message.text = "그건 팔 수 없어요"
 		NetProtocol.ERR_NOT_FOR_SALE:
 			_message.text = "지금은 팔지 않는 물건이에요"
+		NetProtocol.ERR_NOT_NEAR_KEEPER:
+			_message.text = "조종사 곁에서만 살 수 있어요"
 		NetProtocol.ERR_MERCHANT_AWAY:
 			_message.text = "누리에게 더 가까이 가야 해요"
 		NetProtocol.ERR_NOT_WANTED:

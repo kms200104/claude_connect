@@ -13,6 +13,12 @@ var quest: QuestInfo = null
 var ready: bool = false
 ## 새 부탁 제안 (없으면 null). 수락하면 quest_accept 를 보낸다.
 var offer: QuestInfo = null
+## 지금 기분 (말투가 바뀐다).
+var mood: String = "calm"
+## 이번에 가르쳐 준 감정표현 (없으면 빈 문자열).
+var teach: String = ""
+## 친해져서 챙겨 준 선물 아이템 (없으면 빈 문자열). 이미 가방에 들어 있다.
+var gift: String = ""
 
 
 static func from_dict(data: Dictionary) -> TalkReply:
@@ -21,6 +27,9 @@ static func from_dict(data: Dictionary) -> TalkReply:
 	r.friendship = int(data.get("f", 0))
 	r.first_today = bool(data.get("first", false))
 	r.ready = bool(data.get("ready", false))
+	r.mood = str(data.get("m", "calm"))
+	r.teach = str(data.get("teach", ""))
+	r.gift = str(data.get("gift", ""))
 	var q: Variant = data.get("quest")
 	if q is Dictionary:
 		r.quest = QuestInfo.from_dict(q)

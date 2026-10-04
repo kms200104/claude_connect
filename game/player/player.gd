@@ -2,6 +2,10 @@ class_name Player
 extends CharacterBody3D
 ## 조이스틱(없으면 방향키)으로 움직이는 캐릭터. 이동 방향은 카메라 기준.
 ## 입력 방향으로 가속하고, 입력이 없으면 감속한다. 모델(Body)만 부드럽게 회전한다.
+## 달리다가 반대쪽으로 확 틀면 몸을 젖혀 버티며 끼이익 미끄러져 멈춘 뒤 돌아선다 (braked 신호).
+
+## 달리다 브레이크를 잡았다 (미끄러지기 시작).
+signal braked
 
 @export_group("References")
 @export var joystick: TouchJoystick
@@ -25,6 +29,17 @@ extends CharacterBody3D
 @export_range(1.0, 100.0, 0.5, "suffix:m/s²") var deceleration: float = 22.0
 @export_range(0.0, 60.0, 0.5, "suffix:m/s²") var gravity: float = 24.0
 
+@export_group("Braking")
+## 달리는 중(이 속도 이상)에 진행 방향과 이 각도 이상 어긋나게 밀면 브레이크를 잡는다.
+@export_range(1.0, 20.0, 0.1, "suffix:m/s") var brake_min_speed: float = 5.2
+@export_range(90.0, 180.0, 1.0, "suffix:°") var brake_angle: float = 125.0
+## 미끄러지는 동안의 감속 (작을수록 멀리 미끄러진다).
+@export_range(1.0, 60.0, 0.5, "suffix:m/s²") var brake_deceleration: float = 13.0
+## 이 속도 아래로 떨어지면 미끄러짐이 끝나고 돌아선다.
+@export_range(0.0, 3.0, 0.05, "suffix:m/s") var brake_stop_speed: float = 0.7
+## 흙먼지를 일으키는 간격.
+@export_range(0.02, 0.5, 0.01, "suffix:s") var brake_dust_interval: float = 0.07
+
 @export_group("Turning")
 ## 클수록 빨리 돌아선다 (지수 감쇠 계수, 프레임레이트와 무관).
 @export_range(1.0, 40.0, 0.5) var turn_smoothing: float = 10.0
@@ -41,12 +56,15 @@ var held_item: String = "rod"
 var running: bool = false
 ## 이번 프레임에 가려고 한 방향 × 입력 세기 (월드 XZ). 벽에 막혀 멈춰 있어도 미는 방향을 알 수 있다 (상점 문).
 var move_intent: Vector3 = Vector3.ZERO
+## 브레이크를 잡고 미끄러지는 중.
+var braking: bool = false
 
 var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
 var _footsteps: Footsteps = Footsteps.new()
+var _brake_dust_left: float = 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -58,8 +76,20 @@ func _physics_process(delta: float) -> void:
 	var target_velocity: Vector3 = move_dir * top_speed * minf(input.length(), 1.0)
 
 	var horizontal: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
-	var rate: float = acceleration if input.length() > 0.0 else deceleration
-	horizontal = horizontal.move_toward(target_velocity, rate * delta)
+	if not braking and _should_brake(horizontal, move_dir, input.length()):
+		_start_brake()
+	if braking:
+		# 미끄러지는 동안은 입력을 받지 않고 진행 방향으로 쭉 밀려 가다 선다.
+		horizontal = horizontal.move_toward(Vector3.ZERO, brake_deceleration * delta)
+		_brake_dust_left -= delta
+		if _brake_dust_left <= 0.0 and is_inside_tree():
+			_brake_dust_left = brake_dust_interval
+			Puff.burst(get_parent(), global_position + Vector3(0.0, 0.05, 0.0), Puff.dust_color(global_position), 2, 0.45, 0.25, 0.08, 0.45)
+		if horizontal.length() <= brake_stop_speed:
+			_end_brake()
+	else:
+		var rate: float = acceleration if input.length() > 0.0 else deceleration
+		horizontal = horizontal.move_toward(target_velocity, rate * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 
@@ -70,8 +100,9 @@ func _physics_process(delta: float) -> void:
 
 	var before: Vector3 = global_position
 	move_and_slide()
-	_footsteps.advance(Vector2(global_position.x - before.x, global_position.z - before.z).length(), running, global_position, false)
-	_turn_body(move_dir, input.length(), delta)
+	if not braking:
+		_footsteps.advance(Vector2(global_position.x - before.x, global_position.z - before.z).length(), running, global_position, false)
+		_turn_body(move_dir, input.length(), delta)
 	if rig != null:
 		var reference: float = walk_speed_reference if walk_speed_reference > 0.0 else max_speed
 		rig.set_move_speed(CharacterRig.speed_to_blend(Vector3(velocity.x, 0.0, velocity.z).length(), reference, run_speed))
@@ -133,8 +164,50 @@ func play_chop() -> void:
 		rig.play_chop()
 
 
+## 쪼그려 앉아 흙을 토닥이는 동작 (씨앗 심기·꽃 따기).
+func play_plant() -> void:
+	if rig != null:
+		rig.play_plant()
+
+
+## 감정표현 (몸짓 + 머리 위 말풍선 + 소리). 서버에 알리는 건 EmoteController.
+func play_emote(emote_id: String) -> void:
+	if rig != null:
+		rig.play_emote(emote_id)
+	EmoteBubble.pop(self, emote_id)
+	var info: EmoteInfo = GameData.emote(emote_id)
+	Audio.play_sfx(info.sound if info != null else "emote_pop", -3.0)
+
+
+## 빠르게 달리는 중에 거의 반대쪽으로 밀었는가.
+func _should_brake(horizontal: Vector3, move_dir: Vector3, input_amount: float) -> bool:
+	var speed: float = horizontal.length()
+	if speed < brake_min_speed or input_amount < 0.5 or move_dir == Vector3.ZERO:
+		return false
+	return (horizontal / speed).dot(move_dir) <= cos(deg_to_rad(brake_angle))
+
+
+func _start_brake() -> void:
+	braking = true
+	running = false
+	_full_push_time = 0.0
+	_brake_dust_left = 0.0
+	if rig != null:
+		rig.set_braking(true)
+	Audio.play_sfx("skid", -1.0, 1.0, 0.06)
+	braked.emit()
+
+
+func _end_brake() -> void:
+	braking = false
+	if rig != null:
+		rig.set_braking(false)
+
+
 ## 끝까지 민 채로 run_delay 가 지나면 달리기 시작, 덜 밀거나 놓으면 걷기.
 func _update_running(amount: float, delta: float) -> void:
+	if braking:
+		return
 	if amount >= run_threshold:
 		_full_push_time += delta
 	else:

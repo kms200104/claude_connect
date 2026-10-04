@@ -85,8 +85,19 @@ func _run() -> void:
 	var first_bag: InventoryItem = Net.inventory[Net.quick_slot_count]
 	_check(_count_fish() == 1 and first_bag != null and first_bag.count == 1, "가방 첫 칸에 물고기 1마리: %s" % (GameData.fish_name(first_bag.id) if first_bag != null else "없음"))
 	_check(hotbar.slot_button(0).held and hotbar.slot_button(0).get_item().id == "rod", "퀵슬롯 1번(낚싯대)이 손에 든 칸으로 표시")
-	await get_tree().create_timer(2.0).timeout
-	_check(controller.phase == FishingController.Phase.IDLE and not player.is_input_locked(), "잠시 뒤 IDLE로 돌아오고 다시 움직일 수 있음")
+	# 자랑: 물고기를 머리 위로 들고, 카메라가 다가가고, 희귀도 외침과 물고기 한마디 카드가 뜬다.
+	var card: CatchCard = _village.get_node("HUD/CatchCard")
+	var camera: FollowCamera = _village.get_node("CameraRig")
+	_check(player.rig.is_showing_off() and not player.rig.rod.visible, "잡은 물고기를 머리 위로 들고 자랑 (낚싯대는 숨김)")
+	_check(not card.shout_text().is_empty() and not card.line_text().is_empty(), "자랑 카드: %s / %s" % [card.shout_text(), card.line_text()])
+	var caught: FishInfo = GameData.fish.get(first_bag.id) if first_bag != null else null
+	_check(caught != null and card.line_text() == caught.catch_line, "물고기마다 다른 한마디")
+	await get_tree().create_timer(0.8).timeout
+	_check(camera.focus > 0.8, "카메라가 클로즈업 (%.2f)" % camera.focus)
+	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.IDLE, 6.0) and not player.is_input_locked(), "자랑이 끝나면 IDLE로 돌아오고 다시 움직일 수 있음")
+	_check(not player.rig.is_showing_off() and player.rig.rod.visible and not card.is_showing(), "물고기를 내리고 낚싯대를 다시 듦")
+	await get_tree().create_timer(0.7).timeout
+	_check(camera.focus < 0.1, "카메라가 제자리로")
 	_check(player.rig._fishing_target == 0.0, "낚시 자세 해제")
 
 	# 놓아주기는 서버가 확정한다
@@ -99,6 +110,7 @@ func _run() -> void:
 	await get_tree().create_timer(0.15).timeout
 	hud.action_pressed.emit()
 	await _wait_until(func() -> bool: return _count_fish() == 1, 3.0)
+	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.IDLE, 6.0)
 	var kept: String = Net.inventory[Net.quick_slot_count].id
 	var my_id: int = Net.my_id
 	var pos_before: Vector3 = player.global_position

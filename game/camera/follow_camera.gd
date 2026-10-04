@@ -15,6 +15,16 @@ extends Node3D
 ## 캐릭터 발 기준으로 카메라가 바라볼 지점의 오프셋.
 @export var target_offset: Vector3 = Vector3(0.0, 1.0, 0.0)
 
+@export_group("Focus")
+## 클로즈업(focus = 1)일 때의 거리·각도·바라보는 높이 (낚은 물고기를 자랑할 때).
+@export_range(1.0, 30.0, 0.1, "suffix:m") var focus_distance: float = 3.4
+@export_range(0.0, 85.0, 0.5, "suffix:°") var focus_pitch_degrees: float = 20.0
+@export_range(0.0, 3.0, 0.05, "suffix:m") var focus_height: float = 1.55
+
+## 0 = 평소, 1 = 클로즈업. set_focus 로 부드럽게 바꾼다.
+var focus: float = 0.0
+var _focus_tween: Tween = null
+
 @export_group("Smoothing")
 ## 클수록 캐릭터에 딱 붙는다 (지수 감쇠 계수, 프레임레이트와 무관).
 @export_range(0.5, 30.0, 0.1) var follow_smoothing: float = 5.0
@@ -45,15 +55,23 @@ func snap_to_target() -> void:
 		global_position = _goal_position()
 
 
+## 클로즈업으로 다가가거나(1) 평소로 물러난다(0).
+func set_focus(amount: float, duration: float = 0.6) -> void:
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	_focus_tween = create_tween()
+	_focus_tween.tween_property(self, "focus", clampf(amount, 0.0, 1.0), duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
 func _apply_framing() -> void:
-	rotation_degrees = Vector3(-pitch_degrees, yaw_degrees, 0.0)
+	rotation_degrees = Vector3(-lerpf(pitch_degrees, focus_pitch_degrees, focus), yaw_degrees, 0.0)
 	if camera != null:
-		camera.position = Vector3(0.0, 0.0, distance)
+		camera.position = Vector3(0.0, 0.0, lerpf(distance, focus_distance, focus))
 		camera.fov = fov
 
 
 func _goal_position() -> Vector3:
-	var goal: Vector3 = target.global_position + target_offset
+	var goal: Vector3 = target.global_position + target_offset.lerp(Vector3(0.0, focus_height, 0.0), focus)
 	if look_ahead_time > 0.0 and target is CharacterBody3D:
 		var body: CharacterBody3D = target
 		goal += Vector3(body.velocity.x, 0.0, body.velocity.z) * look_ahead_time

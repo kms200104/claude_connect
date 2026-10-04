@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "_comment": "솔바람 공항 (북쪽 해변). 조종사에게 말을 걸어 여행 기념품(씨앗·소품)을 사거나 친구 초대 코드를 들을 수 있다. 활주로의 빨간 수상비행기는 마을 시계에 맞춰 뜨고 내린다 (모두에게 같은 순간).",
+  "name": "솔바람 공항",
+  "building": { "x": 0, "z": -76, "yaw": 0, "width": 12, "depth": 8 },
+  "pilot": {
+    "id": "pilot",
+    "name": "제비",
+    "personality": "pilot",
+    "color": "#3A4A70",
+    "voice": 1.05,
+    "look": { "hair": "#2A1E18", "style": "short", "top": "#3A4A70", "bottom": "#E9E4D8", "shoes": "#2A2A30" },
+    "about": "공항의 조종사 겸 안내원. 하늘 이야기만 나오면 눈이 반짝인다.",
+    "x": -3.4, "z": -72.6, "yaw": 0.4
+  },
+  "shop_range": 3.2,
+  "stock": ["seed_sunflower", "seed_hydrangea", "seed_tulip", "seed_cosmos", "postcard", "globe", "plane_model", "travel_trunk", "pilot_cap"],
+  "runway": { "x0": 12, "x1": 46, "z": -78, "width": 6 },
+  "flight": { "cycle_minutes": 6, "away_minutes": 2.5 }
+}

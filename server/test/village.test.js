@@ -9,7 +9,7 @@ import { Client, sleep, uid } from './helpers.js';
 
 /** 테스트가 마음대로 돌리는 시계. */
 function fakeClock(hour = 12, day = 100) {
-  const c = { hour: () => c.h, day: () => c.d, gameMs: () => 0, scale: 1, h: hour, d: day };
+  const c = { hour: () => c.h, day: () => c.d, gameMs: () => c.g, scale: 1, h: hour, d: day, g: 0 };
   return c;
 }
 
@@ -67,8 +67,11 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal(w.w, 'rain');
     assert.equal(w.trees.length, server.data.trees.size);
     assert.ok(w.trees.every((t) => t.s === 'grown'));
-    assert.deepEqual(w.npcs.map((n) => n.id).sort(), ['haerang', 'morak', 'mujin', 'tongtong']);
-    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' } });
+    assert.deepEqual(w.npcs.map((n) => n.id).sort(), ['danchu', 'haerang', 'morak', 'mujin', 'rara', 'tongtong']);
+    assert.ok(w.npcs.every((n) => typeof n.m === 'string'), '주민 기분이 함께 온다');
+    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] } });
+    assert.deepEqual(w.flowers, []);
+    assert.deepEqual(w.museum, { fish: {} });
     assert.deepEqual(w.shop, { level: 1, points: 0, next: 1500 });
     assert.deepEqual(w.placed, []);
     assert.equal(typeof w.clock.g, 'number');
@@ -108,7 +111,7 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal((await a.type('error')).code, 'tree_not_ready', '그루터기는 못 벤다');
   });
 
-  it('날이 지나면 그루터기가 묘목 → 나무로 자란다', async () => {
+  it('시간이 지나면 그루터기가 묘목 → 어린 나무 → 나무로 자란다', async () => {
     const a = await open();
     const w = await enter(a);
     await moveTo(a, tree('t14').x + 1, tree('t14').z);
@@ -119,9 +122,14 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     }
     assert.equal(server.rooms.getRoom(w.code).trees.get('t14').s, 'stump');
     a.inbox.length = 0; // 도끼질 때 받은 tree 메시지는 버린다
-    clock.d += 1;
+    const minutes = server.data.treeRules.regrowMinutes;
+    clock.g += minutes.stump * 60000;
     assert.equal((await a.next((m) => m.t === 'tree' && m.id === 't14', 2500)).s, 'sapling');
-    clock.d += 1;
+    clock.g += minutes.sapling * 60000;
+    assert.equal((await a.next((m) => m.t === 'tree' && m.id === 't14', 2500)).s, 'young');
+    a.send({ t: 'chop', rid: newRid(), tree: 't14' });
+    assert.equal((await a.type('error')).code, 'tree_not_ready', '어린 나무는 못 벤다');
+    clock.g += minutes.young * 60000;
     assert.equal((await a.next((m) => m.t === 'tree' && m.id === 't14', 2500)).s, 'grown');
   });
 
@@ -149,6 +157,8 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     a.send({ t: 'talk', rid: newRid(), npc: 'mujin' });
     const open1 = await a.type('talk_open');
     assert.equal(open1.first, true);
+    assert.equal(open1.teach, 'angry');
+    assert.equal(typeof open1.m, 'string');
     assert.equal(open1.f, 2, '오늘 처음 말 걸면 친밀도 +2');
     assert.deepEqual({ kind: open1.offer.kind, item: open1.offer.item, n: open1.offer.n, reward: open1.offer.reward }, { kind: 'deliver', item: 'wood', n: 3, reward: 220 });
     const talking = await a.next((m) => m.t === 'npcs' && m.n.find((n) => n.id === 'mujin')?.talk === 1);
@@ -157,8 +167,8 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     a.send({ t: 'quest_accept', rid: newRid() });
     const accepted = await a.type('quest_accepted');
     assert.equal(accepted.quest.have, 0);
-    const prof = await a.type('profile');
-    assert.equal(prof.quests.length, 1);
+    const prof = await a.next((m) => m.t === 'profile' && m.quests.length === 1);
+    assert.deepEqual(prof.emotes.known, ['hello', 'angry'], '처음 말 건 날 무진이 감정표현을 가르쳐 줬다');
     a.send({ t: 'quest_turnin', rid: newRid(), quest: accepted.quest.id });
     assert.equal((await a.type('error')).code, 'quest_not_ready');
     a.send({ t: 'talk_end' });
@@ -188,8 +198,8 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.deepEqual({ reward: done.reward, sol: done.sol }, { reward: 220, sol: 220 });
     const inv = await a.next((m) => m.t === 'inventory' && !m.slots.some((s) => s?.id === 'wood'));
     assert.ok(inv, '목재 3개가 빠진다');
-    const final = await a.next((m) => m.t === 'profile' && m.quests.length === 0);
-    assert.equal(final.friends.mujin, 7);
+    const final = await a.next((m) => m.t === 'profile' && m.quests.length === 0 && m.sol === 220);
+    assert.equal(final.friends.mujin, 8, '처음 대화 +2, 같은 날 두 번째 대화 +1, 부탁 완료 +5');
     a.send({ t: 'talk', rid: newRid(), npc: 'mujin' });
     assert.equal((await a.type('talk_open')).offer, undefined, '같은 날 같은 주민은 부탁을 한 번만 한다');
   });

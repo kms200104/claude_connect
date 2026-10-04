@@ -8,6 +8,6 @@
 shader = ExtResource("1_shader")
 shader_parameter/map_texture = ExtResource("2_map")
 shader_parameter/detail_texture = ExtResource("3_detail")
-shader_parameter/map_extent = 64.0
+shader_parameter/map_extent = 104.0
 shader_parameter/detail_tile = 3.0
 shader_parameter/detail_strength = 0.3

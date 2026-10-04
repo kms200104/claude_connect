@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 5
+const VERSION: int = 6
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -57,6 +57,15 @@ const WEATHER_THUNDER: String = "thunder"
 const TREE_GROWN: String = "grown"
 const TREE_STUMP: String = "stump"
 const TREE_SAPLING: String = "sapling"
+## 씨앗을 심은 직후 (v6)
+const TREE_SPROUT: String = "sprout"
+## 묘목과 다 자란 나무 사이 (v6). 아직 벨 수 없다.
+const TREE_YOUNG: String = "young"
+
+# 꽃 상태 (v6)
+const FLOWER_SPROUT: String = "sprout"
+const FLOWER_BUD: String = "bud"
+const FLOWER_BLOOM: String = "bloom"
 
 # 부탁 종류
 const QUEST_DELIVER: String = "deliver"
@@ -85,3 +94,19 @@ const ROOM_CODE_LENGTH: int = 6
 const ERR_NO_DROP: String = "no_drop"
 const ERR_MERCHANT_AWAY: String = "merchant_away"
 const ERR_NOT_WANTED: String = "not_wanted"
+
+# 섬 생활 (v6): 심기 · 꽃 · 감정표현 · 박물관 · 공항 · 대화 주제
+const ERR_NOT_SEED: String = "not_seed"
+const ERR_BAD_PLANT: String = "bad_plant"
+const ERR_PLANT_LIMIT: String = "plant_limit"
+const ERR_NO_FLOWER: String = "no_flower"
+const ERR_UNKNOWN_EMOTE: String = "unknown_emote"
+const ERR_NOT_NEAR_KEEPER: String = "not_near_keeper"
+const ERR_ALREADY_DONATED: String = "already_donated"
+const ERR_NOT_FISH: String = "not_fish"
+const ERR_BAD_TOPIC: String = "bad_topic"
+
+## 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
+const MOTION_BRAKE: String = "brake"
+## 대화 주제 (talk_topic.topic).
+const TOPICS: PackedStringArray = ["mood", "hobby", "gossip", "fish", "past", "dream", "food", "you"]

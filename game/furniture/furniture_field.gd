@@ -30,6 +30,18 @@ func nearest_own(position: Vector3, max_distance: float) -> String:
 	return best
 
 
+## 누구 것이든 가장 가까운 가구 (max_distance 안). 없으면 빈 문자열.
+func nearest_any(position: Vector3, max_distance: float) -> String:
+	var best: String = ""
+	var best_d: float = max_distance
+	for info: PlacedInfo in Net.placed.values():
+		var d: float = Vector2(position.x - info.position.x, position.z - info.position.z).length()
+		if d <= best_d:
+			best_d = d
+			best = info.id
+	return best
+
+
 func has_furniture(id: String) -> bool:
 	return _bodies.has(id)
 

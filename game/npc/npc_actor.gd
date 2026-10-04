@@ -50,6 +50,7 @@ func setup(npc: NpcInfo) -> void:
 
 func apply_state(state: NetNpcState) -> void:
 	talking_with = state.talking_with
+	mood = state.mood
 	_target_yaw = state.yaw
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:
 		global_position = state.position
@@ -65,6 +66,23 @@ func set_mark(text: String) -> void:
 		return
 	mark.visible = not text.is_empty()
 	mark.text = text
+
+
+## 지금 기분 (서버가 알려 준다). 가끔 혼자서 기분대로 몸짓을 한다 (NpcCrowd).
+var mood: String = "calm"
+
+
+## 감정표현 (몸짓 + 머리 위 말풍선 + 말소리). line 이 있으면 머리 위에 짧은 대사도 띄운다.
+func play_emote(emote_id: String, line: String = "") -> void:
+	if rig != null:
+		rig.play_emote(emote_id)
+	EmoteBubble.pop(self, emote_id, 2.25)
+	var voice: float = info.voice if info != null else 1.0
+	var sample: String = line if not line.is_empty() else "웅"
+	for i: int in mini(sample.length(), 3):
+		Audio.babble(sample[i], voice, global_position + Vector3(0.0, 1.5, 0.0))
+	if not line.is_empty():
+		EmoteBubble.say(self, line)
 
 
 ## 서버가 방향을 알려 주기 전에 먼저 상대를 돌아본다 (대화 시작 반응).

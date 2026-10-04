@@ -147,10 +147,19 @@ func _sync_outfit() -> void:
 		player.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 
-func _on_peer_action(id: int, kind: String, _target: String) -> void:
+func _on_peer_action(id: int, kind: String, target: String) -> void:
 	var remote: RemotePlayer = _remotes.get(id)
-	if remote != null:
+	if remote == null:
+		return
+	if kind == "emote":
+		remote.play_emote(target)
+	else:
 		remote.play_action(kind)
+
+
+## 다른 사람 캐릭터 (없으면 null).
+func remote(id: int) -> RemotePlayer:
+	return _remotes.get(id)
 
 
 func _on_position_corrected(position: Vector3) -> void:

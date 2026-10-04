@@ -55,6 +55,33 @@ func _ready() -> void:
 		await get_tree().create_timer(0.05).timeout
 		swing = maxf(swing, absf(rig.leg_left.rotation.x - rig.leg_right.rotation.x))
 	_check(swing > 0.6, "walk: 두 다리가 엇갈려 움직임 (%.2f)" % swing)
+	# 브레이크: 몸을 뒤로 젖히고(+X) 앞발로 버틴다. 풀면 돌아온다.
+	await _settle(rig, 0.0, false)
+	rig.set_braking(true)
+	await get_tree().create_timer(0.3).timeout
+	_check(visual.rotation.x > 0.2 and rig.leg_left.rotation.x > 0.4, "brake: 몸을 젖히고 앞발로 버팀 (몸 %.2f, 다리 %.2f)" % [visual.rotation.x, rig.leg_left.rotation.x])
+	rig.set_braking(false)
+	await get_tree().create_timer(0.5).timeout
+	_check(absf(visual.rotation.x) < 0.06, "brake 해제 (%.2f)" % visual.rotation.x)
+	# 감정표현: 원샷. 안녕은 오른손을 번쩍 들어 흔든다, 시무룩은 고개를 숙인다.
+	rig.set_held("")
+	rig.play_emote("hello")
+	await get_tree().create_timer(0.2).timeout
+	_check(rig.is_emoting() and rig.arm_right.rotation.z > 1.8, "안녕: 오른손을 들어 흔듦 (%.2f)" % rig.arm_right.rotation.z)
+	await get_tree().create_timer(1.4).timeout
+	_check(not rig.is_emoting(), "감정표현이 끝나면 원래대로")
+	rig.play_emote("sad")
+	await get_tree().create_timer(0.45).timeout
+	_check(visual.rotation.x < -0.15, "시무룩: 고개를 푹 (%.2f)" % visual.rotation.x)
+	await get_tree().create_timer(1.6).timeout
+	# 자랑: 물고기를 머리 위로, 도구는 숨김.
+	rig.set_held("rod")
+	var fish: FishInfo = GameData.fish.values()[0]
+	rig.show_off(FishModel.mesh(fish))
+	await get_tree().create_timer(0.6).timeout
+	_check(rig.is_showing_off() and not rig.rod.visible and rig.arm_left.rotation.x > 1.5 and rig.arm_right.rotation.x > 1.5, "자랑: 두 손을 앞으로 쭉 (%.2f)" % rig.arm_left.rotation.x)
+	rig.show_off(null)
+	_check(rig.rod.visible, "자랑이 끝나면 낚싯대를 다시 듦")
 	rig.set_eye_offset(Vector2(1.0, 0.0))
 	_check(rig.get_eye_offset().is_equal_approx(Vector2(1.0, 0.0)), "눈동자 위치를 옮길 수 있음")
 	print("ANIM %s (fishing lean %.2f)" % ["PASS" if _failures == 0 else "FAIL", fish_lean])

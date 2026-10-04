@@ -7,6 +7,8 @@ var position: Vector3 = Vector3.ZERO
 var yaw: float = 0.0
 ## 대화 중인 플레이어 id (0이면 아무도 아님).
 var talking_with: int = 0
+## 지금 기분 (happy / calm / sad / grumpy / sleepy / excited). 말투와 머리 위 표정이 바뀐다.
+var mood: String = "calm"
 
 
 static func from_dict(data: Dictionary) -> NetNpcState:
@@ -15,4 +17,5 @@ static func from_dict(data: Dictionary) -> NetNpcState:
 	state.position = Vector3(float(data.get("x", 0.0)), 0.0, float(data.get("z", 0.0)))
 	state.yaw = float(data.get("yaw", 0.0))
 	state.talking_with = int(data.get("talk", 0))
+	state.mood = str(data.get("m", "calm"))
 	return state
