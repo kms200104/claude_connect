@@ -27,6 +27,9 @@ extends CharacterBody3D
 ## 이 속도(m/s)로 걸을 때 walk 애니메이션이 100% 재생된다. 0이면 max_speed를 쓴다.
 @export_range(0.0, 20.0, 0.1, "suffix:m/s") var walk_speed_reference: float = 0.0
 
+## 손에 든 아이템 id (빈손이면 빈 문자열).
+var held_item: String = "rod"
+
 var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
 var _look_active: bool = false
@@ -83,6 +86,18 @@ func clear_look_direction() -> void:
 func set_fishing_pose(active: bool) -> void:
 	if rig != null:
 		rig.set_fishing(active)
+
+
+## 손에 든 아이템 (퀵슬롯에서 고른 것). 낚싯대·도끼는 모델에 보인다.
+func set_held_item(item_id: String) -> void:
+	held_item = item_id
+	if rig != null:
+		rig.set_held(item_id)
+
+
+func play_chop() -> void:
+	if rig != null:
+		rig.play_chop()
 
 
 func _read_input() -> Vector2:

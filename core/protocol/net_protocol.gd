@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 2
+const VERSION: int = 3
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -20,6 +20,37 @@ const ERR_ALREADY_FISHING: String = "already_fishing"
 const ERR_NOT_FISHING: String = "not_fishing"
 const ERR_INVENTORY_FULL: String = "inventory_full"
 const ERR_BAD_ITEM: String = "bad_item"
+const ERR_CANT_DISCARD: String = "cant_discard"
+
+# 도구 / 나무 베기
+const ERR_NO_TOOL: String = "no_tool"
+const ERR_NOT_NEAR_TREE: String = "not_near_tree"
+const ERR_TREE_NOT_READY: String = "tree_not_ready"
+const ERR_TOO_FAST: String = "too_fast"
+
+# 주민 대화 / 부탁
+const ERR_NOT_NEAR_NPC: String = "not_near_npc"
+const ERR_NPC_BUSY: String = "npc_busy"
+const ERR_NOT_TALKING: String = "not_talking"
+const ERR_NO_OFFER: String = "no_offer"
+const ERR_BAD_QUEST: String = "bad_quest"
+const ERR_QUEST_NOT_READY: String = "quest_not_ready"
+
+# 날씨
+const WEATHER_CLEAR: String = "clear"
+const WEATHER_CLOUDY: String = "cloudy"
+const WEATHER_RAIN: String = "rain"
+const WEATHER_THUNDER: String = "thunder"
+
+# 나무 상태
+const TREE_GROWN: String = "grown"
+const TREE_STUMP: String = "stump"
+const TREE_SAPLING: String = "sapling"
+
+# 부탁 종류
+const QUEST_DELIVER: String = "deliver"
+const QUEST_DELIVER_FISH: String = "deliver_fish"
+const QUEST_ANY_FISH: String = "any_fish"
 
 # fish_result.reason
 const FISH_EARLY: String = "early"

@@ -1,0 +1,200 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://ui/inventory/inventory_window.gd" id="1_window"]
+[ext_resource type="PackedScene" path="res://ui/inventory/character_preview.tscn" id="2_preview"]
+
+[sub_resource type="StyleBoxFlat" id="Style_panel"]
+bg_color = Color(0.99, 0.95, 0.86, 0.98)
+border_width_left = 8
+border_width_top = 8
+border_width_right = 8
+border_width_bottom = 8
+border_color = Color(0.55, 0.4, 0.28, 1)
+corner_radius_top_left = 48
+corner_radius_top_right = 48
+corner_radius_bottom_right = 48
+corner_radius_bottom_left = 48
+content_margin_left = 28.0
+content_margin_top = 28.0
+content_margin_right = 28.0
+content_margin_bottom = 28.0
+
+[sub_resource type="StyleBoxFlat" id="Style_detail"]
+bg_color = Color(1, 1, 1, 0.75)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_right = 28
+corner_radius_bottom_left = 28
+content_margin_left = 28.0
+content_margin_top = 20.0
+content_margin_right = 28.0
+content_margin_bottom = 20.0
+
+[sub_resource type="StyleBoxFlat" id="Style_stage"]
+bg_color = Color(0.86, 0.93, 0.9, 1)
+corner_radius_top_left = 32
+corner_radius_top_right = 32
+corner_radius_bottom_right = 32
+corner_radius_bottom_left = 32
+
+[node name="InventoryWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_window")
+
+[node name="Backdrop" type="TextureRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.08, 0.06, 0.55)
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 150.0
+offset_right = -24.0
+offset_bottom = -60.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.4, 0.27, 0.17, 1)
+theme_override_font_sizes/font_size = 56
+text = "가방"
+
+[node name="SolLabel" type="Label" parent="Panel/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.45, 0.1, 1)
+theme_override_font_sizes/font_size = 42
+text = "0솔"
+vertical_alignment = 1
+
+[node name="CloseButton" type="Button" parent="Panel/VBox/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 90)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "닫기"
+
+[node name="Body" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 20
+
+[node name="Left" type="VBoxContainer" parent="Panel/VBox/Body"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="BagGrid" type="GridContainer" parent="Panel/VBox/Body/Left"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 4
+
+[node name="QuickLabel" type="Label" parent="Panel/VBox/Body/Left"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.4, 0.28, 1)
+theme_override_font_sizes/font_size = 32
+text = "퀵슬롯"
+
+[node name="QuickRow" type="HBoxContainer" parent="Panel/VBox/Body/Left"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Stage" type="PanelContainer" parent="Panel/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_styles/panel = SubResource("Style_stage")
+
+[node name="CharacterPreview" parent="Panel/VBox/Body/Stage" instance=ExtResource("2_preview")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Detail" type="PanelContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 300)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_detail")
+
+[node name="VBox" type="VBoxContainer" parent="Panel/VBox/Detail"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ItemName" type="Label" parent="Panel/VBox/Detail/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.27, 0.17, 1)
+theme_override_font_sizes/font_size = 44
+text = "아이템을 골라 보세요"
+
+[node name="ItemMeta" type="Label" parent="Panel/VBox/Detail/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.45, 0.35, 1)
+theme_override_font_sizes/font_size = 30
+
+[node name="ItemDesc" type="Label" parent="Panel/VBox/Detail/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.3, 0.24, 0.18, 1)
+theme_override_font_sizes/font_size = 34
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="Panel/VBox/Detail/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HintLabel" type="Label" parent="Panel/VBox/Detail/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.55, 0.45, 0.35, 1)
+theme_override_font_sizes/font_size = 28
+vertical_alignment = 1
+
+[node name="DiscardButton" type="Button" parent="Panel/VBox/Detail/VBox/Actions"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(210, 84)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 34
+text = "버리기"

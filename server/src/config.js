@@ -83,6 +83,8 @@ export const defaultConfig = {
   talkLeaveMeters: num('TALK_LEAVE_M', 6),
   // 부탁(퀘스트) 확률. 비우면 data/quests/quests.json 의 값.
   questChance: process.env.QUEST_CHANCE !== undefined && process.env.QUEST_CHANCE !== '' ? Number(process.env.QUEST_CHANCE) : null,
+  // 부탁 종류를 하나로 고정한다 (quests.json 의 템플릿 id, 시연·테스트용). 비우면 전부.
+  questTemplate: process.env.QUEST_TEMPLATE || '',
 };
 
 // 슬롯(1부터)별 스폰 위치.

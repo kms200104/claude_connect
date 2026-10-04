@@ -1,0 +1,18 @@
+class_name NetNpcState
+extends RefCounted
+## 서버가 보내는 주민 한 명의 위치. 주민은 땅 위만 걸으므로 높이는 없다.
+
+var id: String = ""
+var position: Vector3 = Vector3.ZERO
+var yaw: float = 0.0
+## 대화 중인 플레이어 id (0이면 아무도 아님).
+var talking_with: int = 0
+
+
+static func from_dict(data: Dictionary) -> NetNpcState:
+	var state: NetNpcState = NetNpcState.new()
+	state.id = str(data.get("id", ""))
+	state.position = Vector3(float(data.get("x", 0.0)), 0.0, float(data.get("z", 0.0)))
+	state.yaw = float(data.get("yaw", 0.0))
+	state.talking_with = int(data.get("talk", 0))
+	return state

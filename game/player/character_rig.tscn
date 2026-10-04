@@ -1,8 +1,10 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://game/player/character_rig.gd" id="1_rig"]
 [ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="2_nose"]
 [ext_resource type="Material" path="res://assets/materials/rod_wood.tres" id="3_rod"]
+[ext_resource type="Material" path="res://assets/materials/axe_metal.tres" id="4_axe"]
+[ext_resource type="Material" path="res://assets/materials/eye_dark.tres" id="5_eye"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
 radius = 0.4
@@ -17,6 +19,81 @@ bottom_radius = 0.035
 height = 1.6
 radial_segments = 8
 rings = 1
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_handle"]
+top_radius = 0.03
+bottom_radius = 0.035
+height = 0.7
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="BoxMesh_axe_head"]
+size = Vector3(0.24, 0.16, 0.06)
+
+[sub_resource type="Animation" id="Animation_chop"]
+resource_name = "chop"
+length = 0.45
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:rotation")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.15, 0.25, 0.45),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0.18, 0, 0), Vector3(-0.3, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual/Axe:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.15, 0.25, 0.45),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0.3, 0, 0), Vector3(1.4, 0, 0), Vector3(-1.5, 0, 0), Vector3(0.3, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:position")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.25, 0.45),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, -0.04, 0), Vector3(0, 0, 0)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual:scale")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.25, 0.45),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1.03, 0.97, 1.03), Vector3(1, 1, 1)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Visual/Rod:rotation")
+tracks/4/interp = 2
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.45),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector3(0.3, 0, -0.1), Vector3(0.3, 0, -0.1)]
+}
 
 [sub_resource type="Animation" id="Animation_idle"]
 resource_name = "idle"
@@ -182,6 +259,7 @@ tracks/3/keys = {
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_rig"]
 _data = {
+&"chop": SubResource("Animation_chop"),
 &"fishing": SubResource("Animation_fishing"),
 &"idle": SubResource("Animation_idle"),
 &"walk": SubResource("Animation_walk")
@@ -195,6 +273,13 @@ animation = &"walk"
 
 [sub_resource type="AnimationNodeAnimation" id="AN_fishing"]
 animation = &"fishing"
+
+[sub_resource type="AnimationNodeAnimation" id="AN_chop"]
+animation = &"chop"
+
+[sub_resource type="AnimationNodeOneShot" id="OneShot_chop"]
+fadein_time = 0.05
+fadeout_time = 0.1
 
 [sub_resource type="AnimationNodeBlendSpace1D" id="BlendSpace_locomotion"]
 blend_point_0/node = SubResource("AN_idle")
@@ -214,13 +299,21 @@ nodes/Fishing/node = SubResource("AN_fishing")
 nodes/Fishing/position = Vector2(-100, 160)
 nodes/FishBlend/node = SubResource("Blend2_fishing")
 nodes/FishBlend/position = Vector2(120, 40)
-nodes/output/position = Vector2(320, 40)
-node_connections = [&"FishBlend", 0, &"Locomotion", &"FishBlend", 1, &"Fishing", &"output", 0, &"FishBlend"]
+nodes/Chop/node = SubResource("AN_chop")
+nodes/Chop/position = Vector2(120, 200)
+nodes/ChopShot/node = SubResource("OneShot_chop")
+nodes/ChopShot/position = Vector2(320, 40)
+nodes/output/position = Vector2(520, 40)
+node_connections = [&"FishBlend", 0, &"Locomotion", &"FishBlend", 1, &"Fishing", &"ChopShot", 0, &"FishBlend", &"ChopShot", 1, &"Chop", &"output", 0, &"ChopShot"]
 
-[node name="Rig" type="Node3D" node_paths=PackedStringArray("capsule", "tree")]
+[node name="Rig" type="Node3D" node_paths=PackedStringArray("capsule", "tree", "visual", "rod", "axe")]
 script = ExtResource("1_rig")
 capsule = NodePath("Visual/Capsule")
 tree = NodePath("AnimationTree")
+visual = NodePath("Visual")
+rod = NodePath("Visual/Rod")
+axe = NodePath("Visual/Axe")
+eye_material = ExtResource("5_eye")
 
 [node name="Visual" type="Node3D" parent="."]
 
@@ -240,6 +333,20 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 mesh = SubResource("CylinderMesh_rod")
 surface_material_override/0 = ExtResource("3_rod")
 
+[node name="Axe" type="Node3D" parent="Visual"]
+visible = false
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 0.15, -0.12)
+
+[node name="Handle" type="MeshInstance3D" parent="Visual/Axe"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("CylinderMesh_handle")
+surface_material_override/0 = ExtResource("3_rod")
+
+[node name="Head" type="MeshInstance3D" parent="Visual/Axe"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, 0.64, 0)
+mesh = SubResource("BoxMesh_axe_head")
+surface_material_override/0 = ExtResource("4_axe")
+
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 libraries = {
 &"": SubResource("AnimationLibrary_rig")
@@ -251,3 +358,6 @@ anim_player = NodePath("../AnimationPlayer")
 active = true
 parameters/Locomotion/blend_position = 0.0
 parameters/FishBlend/blend_amount = 0.0
+parameters/ChopShot/active = false
+parameters/ChopShot/internal_active = false
+parameters/ChopShot/request = 0

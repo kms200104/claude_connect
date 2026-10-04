@@ -31,6 +31,21 @@ func _ready() -> void:
 	await get_tree().create_timer(0.35).timeout
 	var mid_rod: float = rod.rotation.x
 	_check(mid_rod < idle_rod - 0.1 and mid_rod > fish_rod + 0.1, "낚시 자세로 들어가는 중간 단계가 있다 (%.2f)" % mid_rod)
+	# 도끼 들기 · 도끼질 원샷
+	rig.set_held("axe")
+	_check(rig.axe.visible and not rig.rod.visible, "도끼를 들면 도끼만 보임")
+	await _settle(rig, 0.0, false)
+	var axe: Node3D = rig.get_node("Visual/Axe")
+	var rest_axe: float = axe.rotation.x
+	rig.play_chop()
+	await get_tree().create_timer(0.17).timeout
+	_check(rig.is_chopping() and axe.rotation.x > rest_axe + 0.5, "도끼질: 도끼를 들어 올림 (%.2f → %.2f)" % [rest_axe, axe.rotation.x])
+	var visual_scale: Vector3 = rig.get_node("Visual").scale
+	_check(visual_scale.y > 0.9 and visual_scale.x > 0.9, "도끼질 중에도 몸 크기가 그대로 (%s)" % str(visual_scale))
+	await get_tree().create_timer(0.6).timeout
+	_check(not rig.is_chopping() and absf(axe.rotation.x - rest_axe) < 0.15, "도끼질이 끝나면 원래 자세 (%.2f)" % axe.rotation.x)
+	rig.set_eye_offset(Vector2(1.0, 0.0))
+	_check(rig.get_eye_offset().is_equal_approx(Vector2(1.0, 0.0)), "눈동자 위치를 옮길 수 있음")
 	print("ANIM %s (fishing lean %.2f)" % ["PASS" if _failures == 0 else "FAIL", fish_lean])
 	get_tree().quit(_failures)
 

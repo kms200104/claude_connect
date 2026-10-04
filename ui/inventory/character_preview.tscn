@@ -1,0 +1,79 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://ui/inventory/character_preview.gd" id="1_preview"]
+[ext_resource type="PackedScene" path="res://game/player/character_rig.tscn" id="2_rig"]
+[ext_resource type="Material" path="res://assets/materials/player_body.tres" id="3_body"]
+[ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="4_pedestal"]
+
+[sub_resource type="Environment" id="Env_preview"]
+background_mode = 1
+background_color = Color(0, 0, 0, 0)
+ambient_light_source = 2
+ambient_light_color = Color(0.98, 0.88, 0.78, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+
+[sub_resource type="CylinderMesh" id="Mesh_pedestal"]
+top_radius = 0.75
+bottom_radius = 0.8
+height = 0.12
+radial_segments = 24
+rings = 1
+
+[node name="CharacterPreview" type="SubViewportContainer" node_paths=PackedStringArray("viewport", "camera", "pivot", "rig", "bubble")]
+custom_minimum_size = Vector2(360, 600)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+stretch = true
+script = ExtResource("1_preview")
+viewport = NodePath("Viewport")
+camera = NodePath("Viewport/Stage/Camera3D")
+pivot = NodePath("Viewport/Stage/Pivot")
+rig = NodePath("Viewport/Stage/Pivot/Rig")
+bubble = NodePath("Viewport/Stage/Bubble")
+
+[node name="Viewport" type="SubViewport" parent="."]
+own_world_3d = true
+transparent_bg = true
+handle_input_locally = false
+msaa_3d = 1
+size = Vector2i(360, 600)
+render_target_update_mode = 0
+
+[node name="Stage" type="Node3D" parent="Viewport"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Viewport/Stage"]
+environment = SubResource("Env_preview")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="Viewport/Stage"]
+transform = Transform3D(0.866025, -0.25, 0.433013, 0, 0.866025, 0.5, -0.5, -0.433013, 0.75, 0, 3, 0)
+light_color = Color(1, 0.92, 0.8, 1)
+light_energy = 0.9
+
+[node name="Camera3D" type="Camera3D" parent="Viewport/Stage"]
+transform = Transform3D(1, 0, 0, 0, 0.996195, 0.0871557, 0, -0.0871557, 0.996195, 0, 1.25, 4.2)
+fov = 32.0
+
+[node name="Pedestal" type="MeshInstance3D" parent="Viewport/Stage"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_pedestal")
+surface_material_override/0 = ExtResource("4_pedestal")
+
+[node name="Pivot" type="Node3D" parent="Viewport/Stage"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="Rig" parent="Viewport/Stage/Pivot" instance=ExtResource("2_rig")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+body_material = ExtResource("3_body")
+
+[node name="Bubble" type="Label3D" parent="Viewport/Stage"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.95, 0)
+pixel_size = 0.01
+billboard = 1
+no_depth_test = true
+modulate = Color(1, 0.82, 0.25, 1)
+text = "!"
+font_size = 64
+outline_size = 16

@@ -27,7 +27,7 @@
     {
       "id": "mujin", "name": "무진", "personality": "gruff", "color": "#9C8BD1",
       "about": "말수 적은 목수. 무뚝뚝하지만 부탁을 들어주면 몰래 기뻐한다.",
-      "house": { "x": 26, "z": 6, "yaw": 1.5708 },
+      "house": { "x": 26, "z": 6, "yaw": -1.5708 },
       "waypoints": [[22, 6], [18, 0], [22, -2], [20, 12]],
       "likes": ["wood", "hardwood"]
     }

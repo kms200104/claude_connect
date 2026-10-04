@@ -46,16 +46,17 @@ func _run() -> void:
 	var player: Player = _village.get_node("Player")
 	var controller: FishingController = _village.get_node("FishingController")
 	var hud: FishingHud = _village.get_node("HUD/FishingHud")
-	var panel: InventoryPanel = _village.get_node("HUD/InventoryPanel")
-	var pond: FishingSpot = _village.get_node("Terrain/Pond")
+	var hotbar: Hotbar = _village.get_node("HUD/Hotbar")
+	var pond: FishingSpot = _village.get_node("Terrain/Lake")
 
-	_check(pond.info != null and pond.global_position.is_equal_approx(Vector3(-14, 0, 2)), "낚시터가 spots.json 위치에 놓임")
+	_check(pond.info != null and pond.global_position.is_equal_approx(Vector3(-20, 0, 2)), "호수가 spots.json 위치에 놓임")
 	Net.fish_result.connect(func(ok: bool, fish_id: String, reason: String) -> void: print("[fishing] result ok=%s fish=%s reason=%s" % [ok, fish_id, reason]))
 	Net.fish_bite.connect(func(window_ms: int) -> void: print("[fishing] bite window=%d" % window_ms))
 	Net.create_room(_server)
 	await Net.welcomed
 	var code: String = Net.room_code
-	_check(Net.inventory.is_empty(), "새 방의 인벤토리는 비어 있음")
+	_check(_count_fish() == 0, "새 방의 가방에는 물고기가 없음")
+	_check(Net.held_item_id() == "rod" and player.held_item == "rod", "낚싯대를 손에 들고 시작")
 
 	# 물에서 멀면 던질 수 없다
 	await get_tree().create_timer(0.2).timeout
@@ -81,24 +82,24 @@ func _run() -> void:
 	await get_tree().create_timer(0.15).timeout
 	hud.action_pressed.emit()
 	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.RESULT, 3.0), "결과가 확정됨")
-	_check(Net.inventory.size() == 1 and Net.inventory[0].count == 1, "인벤토리에 물고기 1마리: %s" % (GameData.fish_name(Net.inventory[0].id) if not Net.inventory.is_empty() else "없음"))
-	_check(panel._bag_button.text == "가방 1/20", "가방 버튼 표시 갱신 (%s)" % panel._bag_button.text)
+	var first_bag: InventoryItem = Net.inventory[Net.quick_slot_count]
+	_check(_count_fish() == 1 and first_bag != null and first_bag.count == 1, "가방 첫 칸에 물고기 1마리: %s" % (GameData.fish_name(first_bag.id) if first_bag != null else "없음"))
+	_check(hotbar.slot_button(0).held and hotbar.slot_button(0).get_item().id == "rod", "퀵슬롯 1번(낚싯대)이 손에 든 칸으로 표시")
 	await get_tree().create_timer(2.0).timeout
 	_check(controller.phase == FishingController.Phase.IDLE and not player.is_input_locked(), "잠시 뒤 IDLE로 돌아오고 다시 움직일 수 있음")
 	_check(player.rig._fishing_target == 0.0, "낚시 자세 해제")
 
 	# 놓아주기는 서버가 확정한다
-	var species: String = Net.inventory[0].id
-	Net.discard_item(species, 1)
-	_check(await _wait_until(func() -> bool: return Net.inventory.is_empty(), 2.0), "놓아주기 → 인벤토리 비워짐")
+	Net.discard_item(Net.quick_slot_count, 1)
+	_check(await _wait_until(func() -> bool: return _count_fish() == 0, 2.0), "놓아주기 → 가방에서 빠짐")
 
 	# 한 마리 더 잡고, 서버를 재시작해도 남는지 본다
 	hud.action_pressed.emit()
 	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 8.0)
 	await get_tree().create_timer(0.15).timeout
 	hud.action_pressed.emit()
-	await _wait_until(func() -> bool: return Net.inventory.size() == 1, 3.0)
-	var kept: String = Net.inventory[0].id
+	await _wait_until(func() -> bool: return _count_fish() == 1, 3.0)
+	var kept: String = Net.inventory[Net.quick_slot_count].id
 	var my_id: int = Net.my_id
 	var pos_before: Vector3 = player.global_position
 	_write("caught", "%s %s" % [code, kept])
@@ -108,7 +109,15 @@ func _run() -> void:
 	var back: bool = await _wait_until(func() -> bool: return Net.state == Net.State.ONLINE and Net.room_code == code, 20.0)
 	_check(back, "서버 재시작 뒤 자동 재입장")
 	_check(Net.my_id == my_id, "같은 자리(id=%d)로 복귀" % Net.my_id)
-	_check(Net.inventory.size() == 1 and Net.inventory[0].id == kept, "재시작 뒤에도 인벤토리 유지 (%s)" % kept)
+	_check(_count_fish() == 1 and Net.inventory[Net.quick_slot_count].id == kept, "재시작 뒤에도 인벤토리 유지 (%s)" % kept)
 	await get_tree().create_timer(0.3).timeout
 	_check(player.global_position.distance_to(pos_before) < 0.5, "저장된 위치로 복귀 (%.2fm 차이)" % player.global_position.distance_to(pos_before))
 	_check(controller.phase == FishingController.Phase.IDLE, "낚시 상태는 초기화됨")
+
+
+func _count_fish() -> int:
+	var n: int = 0
+	for item: InventoryItem in Net.inventory:
+		if item != null and GameData.fish.has(item.id):
+			n += item.count
+	return n

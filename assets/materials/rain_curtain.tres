@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/rain_curtain.gdshader" id="1_shader"]
+
+[resource]
+render_priority = 10
+shader = ExtResource("1_shader")
+shader_parameter/intensity = 0.0

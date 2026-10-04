@@ -25,7 +25,7 @@ for _ in $(seq 1 300); do [ -f "$DIR/caught" ] && break; sleep 0.1; done
 read -r CODE FISH < "$DIR/caught" 2>/dev/null || true
 kill -TERM "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null
 echo "[runner] saved file: $(ls "$DIR/saves")"
-node -e "const d=JSON.parse(require('fs').readFileSync('$DIR/saves/$CODE.json','utf8'));const p=Object.values(d.profiles)[0];console.log('[runner] saved inventory:',JSON.stringify(p.items),'catches:',p.catches,'world:',JSON.stringify(d.world))"
+node -e "const d=JSON.parse(require('fs').readFileSync('$DIR/saves/$CODE.json','utf8'));const p=Object.values(d.profiles)[0];console.log('[runner] saved inventory:',JSON.stringify(p.slots.filter(Boolean)),'catches:',p.catches,'world catches:',d.world.totalCatches)"
 sleep 1
 start_server
 sleep 1

@@ -1,0 +1,16 @@
+class_name TreeInfo
+extends RefCounted
+## data/world/trees.json 의 나무 한 그루 (서버가 거리 판정에 쓰는 위치와 같은 값).
+
+var id: String = ""
+## pine(뾰족한 소나무) / round(둥근 활엽수)
+var kind: String = "round"
+var position: Vector3 = Vector3.ZERO
+
+
+static func from_dict(data: Dictionary) -> TreeInfo:
+	var info: TreeInfo = TreeInfo.new()
+	info.id = str(data.get("id", ""))
+	info.kind = str(data.get("kind", "round"))
+	info.position = Vector3(float(data.get("x", 0.0)), 0.0, float(data.get("z", 0.0)))
+	return info

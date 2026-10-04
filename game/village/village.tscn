@@ -1,4 +1,4 @@
-[gd_scene load_steps=36 format=3]
+[gd_scene load_steps=62 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -20,7 +20,27 @@
 [ext_resource type="PackedScene" path="res://game/fishing/bobber.tscn" id="18_bobber"]
 [ext_resource type="Script" path="res://game/fishing/fishing_controller.gd" id="19_fishing"]
 [ext_resource type="PackedScene" path="res://ui/hud/fishing_hud.tscn" id="20_hud"]
-[ext_resource type="PackedScene" path="res://ui/panels/inventory_panel.tscn" id="21_inventory"]
+[ext_resource type="PackedScene" path="res://ui/inventory/inventory_window.tscn" id="21_inventory"]
+[ext_resource type="Script" path="res://game/trees/tree_field.gd" id="22_trees"]
+[ext_resource type="Material" path="res://assets/materials/foliage.tres" id="23_foliage"]
+[ext_resource type="Script" path="res://game/npc/npc_crowd.gd" id="24_crowd"]
+[ext_resource type="PackedScene" path="res://game/npc/npc_actor.tscn" id="25_actor"]
+[ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="26_wall"]
+[ext_resource type="Material" path="res://assets/materials/house_roof.tres" id="27_roof"]
+[ext_resource type="Material" path="res://assets/materials/window_glow.tres" id="28_window"]
+[ext_resource type="Script" path="res://game/environment/sky_controller.gd" id="29_sky"]
+[ext_resource type="Material" path="res://assets/materials/rain_curtain.tres" id="30_rain"]
+[ext_resource type="Material" path="res://assets/materials/lamp_glow.tres" id="31_lamp"]
+[ext_resource type="Script" path="res://game/fishing/lake_decor.gd" id="32_decor"]
+[ext_resource type="Material" path="res://assets/materials/lily_pad.tres" id="33_lily"]
+[ext_resource type="Script" path="res://game/interaction/interaction_controller.gd" id="34_interaction"]
+[ext_resource type="Script" path="res://game/dialogue/dialogue_controller.gd" id="35_dialogue"]
+[ext_resource type="PackedScene" path="res://ui/hud/action_hud.tscn" id="36_action"]
+[ext_resource type="PackedScene" path="res://ui/hud/hotbar.tscn" id="37_hotbar"]
+[ext_resource type="PackedScene" path="res://ui/dialogue/dialogue_box.tscn" id="38_dialogue_box"]
+[ext_resource type="PackedScene" path="res://ui/hud/top_bar.tscn" id="39_top_bar"]
+[ext_resource type="Material" path="res://assets/materials/axe_metal.tres" id="40_axe"]
+[ext_resource type="Material" path="res://assets/materials/eye_dark.tres" id="41_eye"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -60,7 +80,30 @@ size = Vector3(4, 0.4, 8)
 size = Vector3(4, 0.4, 8)
 
 [sub_resource type="PlaneMesh" id="Mesh_water"]
-size = Vector2(12, 10)
+size = Vector2(18, 14)
+
+[sub_resource type="BoxShape3D" id="Shape_lake"]
+size = Vector3(17, 2, 13)
+
+[sub_resource type="CylinderMesh" id="Mesh_lamp_post"]
+top_radius = 0.07
+bottom_radius = 0.1
+height = 2.4
+radial_segments = 8
+rings = 1
+
+[sub_resource type="SphereMesh" id="Mesh_lamp_bulb"]
+radius = 0.26
+height = 0.52
+radial_segments = 12
+rings = 6
+
+[sub_resource type="CylinderShape3D" id="Shape_lamp"]
+radius = 0.15
+height = 2.4
+
+[sub_resource type="QuadMesh" id="Mesh_rain"]
+size = Vector2(2.4, 2.4)
 
 [node name="Village" type="Node3D"]
 
@@ -82,7 +125,15 @@ world_environment = NodePath("../WorldEnvironment")
 focus = NodePath("../Player")
 toon_shader = ExtResource("5_toon")
 lit_shader = ExtResource("6_lit")
-materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose"), ExtResource("13_remote_body"), ExtResource("16_water"), ExtResource("17_rod")])
+materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose"), ExtResource("13_remote_body"), ExtResource("16_water"), ExtResource("17_rod"), ExtResource("23_foliage"), ExtResource("26_wall"), ExtResource("27_roof"), ExtResource("28_window"), ExtResource("31_lamp"), ExtResource("33_lily"), ExtResource("40_axe"), ExtResource("41_eye")])
+
+[node name="SkyController" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment", "world_style", "rain", "lamp_lights")]
+script = ExtResource("29_sky")
+sun = NodePath("../Sun")
+world_environment = NodePath("../WorldEnvironment")
+world_style = NodePath("../WorldStyle")
+rain = NodePath("../CameraRig/Camera3D/Rain")
+lamp_lights = [NodePath("../Lamps/LightA"), NodePath("../Lamps/LightB")]
 
 [node name="Terrain" type="Node3D" parent="."]
 
@@ -137,13 +188,105 @@ surface_material_override/0 = ExtResource("8_block")
 [node name="Shape" type="CollisionShape3D" parent="Terrain/Ramp"]
 shape = SubResource("Shape_ramp")
 
-[node name="Pond" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water")]
+[node name="Lake" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
+spot_id = "lake"
 water = NodePath("Water")
+blocker = NodePath("Blocker/Shape")
 
-[node name="Water" type="MeshInstance3D" parent="Terrain/Pond"]
+[node name="Water" type="MeshInstance3D" parent="Terrain/Lake"]
+cast_shadow = 0
 mesh = SubResource("Mesh_water")
 surface_material_override/0 = ExtResource("16_water")
+
+[node name="Blocker" type="StaticBody3D" parent="Terrain/Lake"]
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/Lake/Blocker"]
+shape = SubResource("Shape_lake")
+
+[node name="LilyPads" type="MultiMeshInstance3D" parent="Terrain"]
+material_override = ExtResource("33_lily")
+script = ExtResource("32_decor")
+
+[node name="Trees" type="Node3D" parent="."]
+script = ExtResource("22_trees")
+foliage_material = ExtResource("23_foliage")
+
+[node name="Npcs" type="Node3D" parent="."]
+script = ExtResource("24_crowd")
+actor_scene = ExtResource("25_actor")
+wall_material = ExtResource("26_wall")
+roof_material = ExtResource("27_roof")
+door_material = ExtResource("17_rod")
+window_material = ExtResource("28_window")
+
+[node name="Lamps" type="Node3D" parent="."]
+
+[node name="LampA" type="StaticBody3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 4)
+
+[node name="Post" type="MeshInstance3D" parent="Lamps/LampA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+mesh = SubResource("Mesh_lamp_post")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/LampA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_lamp_bulb")
+surface_material_override/0 = ExtResource("31_lamp")
+
+[node name="Shape" type="CollisionShape3D" parent="Lamps/LampA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+shape = SubResource("Shape_lamp")
+
+[node name="LampB" type="StaticBody3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -4)
+
+[node name="Post" type="MeshInstance3D" parent="Lamps/LampB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+mesh = SubResource("Mesh_lamp_post")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/LampB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_lamp_bulb")
+surface_material_override/0 = ExtResource("31_lamp")
+
+[node name="Shape" type="CollisionShape3D" parent="Lamps/LampB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+shape = SubResource("Shape_lamp")
+
+[node name="LampC" type="StaticBody3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 4)
+
+[node name="Post" type="MeshInstance3D" parent="Lamps/LampC"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+mesh = SubResource("Mesh_lamp_post")
+surface_material_override/0 = ExtResource("8_block")
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/LampC"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, 0)
+cast_shadow = 0
+mesh = SubResource("Mesh_lamp_bulb")
+surface_material_override/0 = ExtResource("31_lamp")
+
+[node name="Shape" type="CollisionShape3D" parent="Lamps/LampC"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+shape = SubResource("Shape_lamp")
+
+[node name="LightA" type="OmniLight3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 2.3, 4)
+visible = false
+light_color = Color(1, 0.8, 0.5, 1)
+omni_range = 7.0
+
+[node name="LightB" type="OmniLight3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 2.3, 4)
+visible = false
+light_color = Color(1, 0.8, 0.5, 1)
+omni_range = 7.0
 
 [node name="Player" parent="." instance=ExtResource("1_player") node_paths=PackedStringArray("joystick", "camera")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
@@ -158,12 +301,30 @@ remote_parent = NodePath("..")
 
 [node name="Bobber" parent="." instance=ExtResource("18_bobber")]
 
-[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud")]
+[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction")]
 script = ExtResource("19_fishing")
 player = NodePath("../Player")
-spot = NodePath("../Terrain/Pond")
+spot = NodePath("../Terrain/Lake")
 bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
+interaction = NodePath("../InteractionController")
+
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "dialogue", "fishing", "action_hud", "toast_hud")]
+script = ExtResource("34_interaction")
+player = NodePath("../Player")
+trees = NodePath("../Trees")
+npcs = NodePath("../Npcs")
+dialogue = NodePath("../DialogueController")
+fishing = NodePath("../FishingController")
+action_hud = NodePath("../HUD/ActionHud")
+toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud")]
+script = ExtResource("35_dialogue")
+player = NodePath("../Player")
+npcs = NodePath("../Npcs")
+box = NodePath("../HUD/DialogueBox")
+toast_hud = NodePath("../HUD/FishingHud")
 
 [node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "camera")]
 script = ExtResource("2_camera")
@@ -171,6 +332,13 @@ target = NodePath("../Player")
 camera = NodePath("Camera3D")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
+
+[node name="Rain" type="MeshInstance3D" parent="CameraRig/Camera3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.2)
+visible = false
+cast_shadow = 0
+mesh = SubResource("Mesh_rain")
+material_override = ExtResource("30_rain")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
@@ -183,9 +351,19 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_joystick")
 
+[node name="TopBar" parent="HUD" instance=ExtResource("39_top_bar")]
+
 [node name="RoomPanel" parent="HUD" instance=ExtResource("14_panel")]
 
 [node name="FishingHud" parent="HUD" instance=ExtResource("20_hud")]
 
-[node name="InventoryPanel" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
+[node name="ActionHud" parent="HUD" instance=ExtResource("36_action")]
+
+[node name="Hotbar" parent="HUD" instance=ExtResource("37_hotbar")]
+
+[node name="DialogueBox" parent="HUD" instance=ExtResource("38_dialogue_box")]
+
+[node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
 player = NodePath("../../Player")
+
+[connection signal="bag_pressed" from="HUD/Hotbar" to="HUD/InventoryWindow" method="toggle"]

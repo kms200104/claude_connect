@@ -50,3 +50,11 @@ toon_softness={
 "type": "float",
 "value": 0.35
 }
+world_wetness={
+"type": "float",
+"value": 0.0
+}
+night_light={
+"type": "float",
+"value": 0.0
+}

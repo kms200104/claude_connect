@@ -15,7 +15,26 @@ signal connection_lost
 signal session_lost(reason: String)
 signal error_received(code: String)
 signal latency_updated(rtt_ms: float)
-signal inventory_updated(items: Array[InventoryItem], capacity: int)
+## 내 인벤토리 전체. `slots`는 퀵슬롯(앞 quick_slot_count 칸) + 가방 칸, 빈 칸은 null. `held_slot`은 손에 든 퀵슬롯(-1 = 빈손).
+signal inventory_updated(slots: Array[InventoryItem], held_slot: int)
+## 솔(화폐)·부탁 목록·친밀도가 바뀜.
+signal profile_updated
+signal weather_changed(weather: String)
+## 번개 (뇌우일 때 서버가 방 전체에 같은 순간 보낸다). power 0.6~1.
+signal lightning_struck(power: float)
+signal tree_changed(tree_id: String, stage: String, chops: int)
+signal npcs_received(server_time_ms: float, states: Array[NetNpcState])
+## 내 도끼질 결과 (서버가 확정). 나무에서 얻은 아이템과 나무가 쓰러졌는지.
+signal chop_succeeded(tree_id: String, item_id: String, felled: bool)
+## 상대가 한 동작 (지금은 도끼질만). target = 나무 id.
+signal peer_action(id: int, kind: String, target: String)
+signal talk_opened(reply: TalkReply)
+## 서버가 대화를 끝냄 (멀어졌거나 시간 초과).
+signal talk_closed(npc_id: String)
+signal quest_accepted(quest: QuestInfo)
+signal quest_completed(quest_id: String, npc_id: String, reward: int)
+## 요청이 거부됨. kind = 요청 종류(chop, talk, quest_accept, quest_turnin, inv_move, inv_discard …), code = NetProtocol.ERR_*
+signal request_failed(kind: String, code: String)
 signal fish_started
 signal fish_nibble
 ## 진짜 입질. 이 순간부터 `window_ms` 안에 챔질해야 한다.
@@ -54,8 +73,22 @@ var rtt_ms: float = 0.0
 var uid: String = ""
 ## 같은 PC에서 여러 인스턴스를 띄울 때 서로 다른 저장 슬롯(1, 2, …)을 쓴다. 폰에서는 항상 1.
 var profile_slot: int = 1
+## 퀵슬롯 + 가방 칸. 빈 칸은 null.
 var inventory: Array[InventoryItem] = []
+var quick_slot_count: int = 5
+## 가방 칸 수 (퀵슬롯 제외).
 var inventory_capacity: int = 20
+## 손에 든 퀵슬롯 번호 (-1 = 빈손).
+var held_slot: int = -1
+var sol: int = 0
+var quests: Array[QuestInfo] = []
+## 주민 id → 친밀도
+var friends: Dictionary[String, int] = {}
+var weather: String = NetProtocol.WEATHER_CLEAR
+## 나무 id → 상태(NetProtocol.TREE_*)
+var tree_stages: Dictionary[String, String] = {}
+## 마지막으로 받은 주민 위치.
+var npc_states: Array[NetNpcState] = []
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -73,6 +106,10 @@ var _user_closed: bool = false
 var _join_fallback_tried: bool = false
 var _rid_counter: int = 0
 var _fishing_rid: String = ""
+var _pending: Dictionary[String, String] = {}  # rid → 요청 종류 (거부됐을 때 어떤 요청인지 알리려고)
+var _clock_game_ms: float = 0.0
+var _clock_scale: float = 1.0
+var _clock_server_ms: float = 0.0
 
 
 func _ready() -> void:
@@ -144,8 +181,72 @@ func cancel_fishing() -> void:
 	_send({"t": "fish_cancel"})
 
 
-func discard_item(fish_id: String, count: int = 1) -> void:
-	_send({"t": "inv_discard", "rid": _next_rid(), "id": fish_id, "n": count})
+## 칸에 든 아이템 버리기(물고기는 놓아주기). 도구는 서버가 거부한다.
+func discard_item(slot: int, count: int = 1) -> void:
+	_request("inv_discard", {"slot": slot, "n": count})
+
+
+## 손에 들 퀵슬롯 (-1 = 빈손). 서버가 확인하기 전에 화면에는 바로 반영한다.
+func equip(slot: int) -> void:
+	held_slot = slot
+	inventory_updated.emit(inventory, held_slot)
+	_send({"t": "equip", "slot": slot})
+
+
+## 칸 옮기기 (다른 아이템이면 맞바꾸고 같은 아이템이면 합친다).
+func move_item(from_slot: int, to_slot: int) -> void:
+	_request("inv_move", {"from": from_slot, "to": to_slot})
+
+
+func chop_tree(tree_id: String) -> void:
+	_request("chop", {"tree": tree_id})
+
+
+func talk_to(npc_id: String) -> void:
+	_request("talk", {"npc": npc_id})
+
+
+func end_talk() -> void:
+	_send({"t": "talk_end"})
+
+
+func accept_quest() -> void:
+	_request("quest_accept", {})
+
+
+func decline_quest() -> void:
+	_send({"t": "quest_decline"})
+
+
+func turn_in_quest(quest_id: String) -> void:
+	_request("quest_turnin", {"quest": quest_id})
+
+
+## 손에 든 아이템 id (빈손이면 빈 문자열).
+func held_item_id() -> String:
+	if held_slot < 0 or held_slot >= inventory.size() or inventory[held_slot] == null:
+		return ""
+	return inventory[held_slot].id
+
+
+## 마을 시계 (게임 시각 ms). 서버가 보낸 기준값에서 서버 시계 추정치로 흘려 쓴다.
+func game_ms() -> float:
+	return _clock_game_ms + (server_time_ms() - _clock_server_ms) * _clock_scale
+
+
+func game_hour() -> float:
+	return VillageClock.hour_of(game_ms())
+
+
+func game_day() -> int:
+	return VillageClock.day_index(game_ms())
+
+
+func quest_from(npc_id: String) -> QuestInfo:
+	for q: QuestInfo in quests:
+		if q.npc == npc_id:
+			return q
+	return null
 
 
 ## 서버 기준 현재 시각(ms). 원격 플레이어 보간의 시간축.
@@ -315,6 +416,39 @@ func _handle_text(text: String) -> void:
 			_on_pong(msg)
 		"inventory":
 			_apply_inventory(msg)
+		"profile":
+			_apply_profile(msg)
+		"weather":
+			weather = str(msg.get("w", weather))
+			weather_changed.emit(weather)
+		"lightning":
+			lightning_struck.emit(float(msg.get("power", 1.0)))
+		"tree":
+			var tree_id: String = str(msg.get("id", ""))
+			tree_stages[tree_id] = str(msg.get("s", NetProtocol.TREE_GROWN))
+			tree_changed.emit(tree_id, tree_stages[tree_id], int(msg.get("c", 0)))
+		"npcs":
+			npc_states = _parse_npcs(msg.get("n", []))
+			npcs_received.emit(float(msg.get("st", 0.0)), npc_states)
+		"act":
+			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", "")))
+		"chop_result":
+			_pending.erase(str(msg.get("rid", "")))
+			chop_succeeded.emit(str(msg.get("tree", "")), str(msg.get("item", "")), bool(msg.get("felled", false)))
+		"talk_open":
+			_pending.erase(str(msg.get("rid", "")))
+			talk_opened.emit(TalkReply.from_dict(msg))
+		"talk_closed":
+			talk_closed.emit(str(msg.get("npc", "")))
+		"quest_accepted":
+			_pending.erase(str(msg.get("rid", "")))
+			var accepted: Variant = msg.get("quest", {})
+			if accepted is Dictionary:
+				quest_accepted.emit(QuestInfo.from_dict(accepted))
+		"quest_done":
+			_pending.erase(str(msg.get("rid", "")))
+			sol = int(msg.get("sol", sol))
+			quest_completed.emit(str(msg.get("quest", "")), str(msg.get("npc", "")), int(msg.get("reward", 0)))
 		"fish_started":
 			fish_started.emit()
 		"fish_nibble":
@@ -346,11 +480,24 @@ func _on_welcome(msg: Dictionary) -> void:
 	partner_online = partner_present and others[0].online
 	_join_fallback_tried = false
 	_fishing_rid = ""
+	_pending.clear()
 	_apply_inventory(msg.get("inv", {}))
+	_apply_profile(msg.get("prof", {}))
+	_apply_clock(msg.get("clock", {}))
+	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
+	tree_stages.clear()
+	var tree_list: Variant = msg.get("trees", [])
+	if tree_list is Array:
+		for entry: Variant in tree_list:
+			if entry is Dictionary:
+				tree_stages[str(entry.get("id", ""))] = str(entry.get("s", NetProtocol.TREE_GROWN))
+	npc_states = _parse_npcs(msg.get("npcs", []))
 	_save_session()
 	_set_state(State.ONLINE)
 	if me != null:
 		welcomed.emit(me, others, resumed)
+	weather_changed.emit(weather)
+	npcs_received.emit(float(msg.get("st", 0.0)), npc_states)
 
 
 func _next_rid() -> String:
@@ -358,18 +505,69 @@ func _next_rid() -> String:
 	return "%s-%d" % [uid.left(6), _rid_counter]
 
 
+## 요청 ID를 붙여 보내고, 거부되면 어떤 요청이었는지 알 수 있게 기록해 둔다.
+func _request(kind: String, fields: Dictionary) -> void:
+	var rid: String = _next_rid()
+	if _pending.size() > 32:
+		_pending.clear()
+	_pending[rid] = kind
+	var message: Dictionary = {"t": kind, "rid": rid}
+	message.merge(fields)
+	_send(message)
+
+
 func _apply_inventory(data: Variant) -> void:
 	if not data is Dictionary:
 		return
 	var parsed: Array[InventoryItem] = []
-	var entries: Variant = data.get("items", [])
+	var entries: Variant = data.get("slots", [])
 	if entries is Array:
 		for entry: Variant in entries:
 			if entry is Dictionary:
 				parsed.append(InventoryItem.new(str(entry.get("id", "")), int(entry.get("n", 0))))
+			else:
+				parsed.append(null)
 	inventory = parsed
+	quick_slot_count = int(data.get("quick", quick_slot_count))
 	inventory_capacity = int(data.get("cap", inventory_capacity))
-	inventory_updated.emit(inventory, inventory_capacity)
+	held_slot = int(data.get("held", held_slot))
+	inventory_updated.emit(inventory, held_slot)
+
+
+func _apply_profile(data: Variant) -> void:
+	if not data is Dictionary:
+		return
+	sol = int(data.get("sol", sol))
+	var parsed: Array[QuestInfo] = []
+	var list: Variant = data.get("quests", [])
+	if list is Array:
+		for entry: Variant in list:
+			if entry is Dictionary:
+				parsed.append(QuestInfo.from_dict(entry))
+	quests = parsed
+	friends.clear()
+	var f: Variant = data.get("friends", {})
+	if f is Dictionary:
+		for npc_id: Variant in f:
+			friends[str(npc_id)] = int(f[npc_id])
+	profile_updated.emit()
+
+
+func _apply_clock(data: Variant) -> void:
+	if not data is Dictionary:
+		return
+	_clock_game_ms = float(data.get("g", 0.0))
+	_clock_scale = float(data.get("s", 1.0))
+	_clock_server_ms = float(data.get("st", 0.0))
+
+
+func _parse_npcs(entries: Variant) -> Array[NetNpcState]:
+	var states: Array[NetNpcState] = []
+	if entries is Array:
+		for entry: Variant in entries:
+			if entry is Dictionary:
+				states.append(NetNpcState.from_dict(entry))
+	return states
 
 
 func _load_or_create_uid() -> String:
@@ -424,8 +622,13 @@ func _on_server_error(code: String, msg: Dictionary = {}) -> void:
 		_give_up(code)
 		return
 	if state == State.ONLINE:
-		# 방에 들어온 뒤의 에러는 낚시·인벤토리 요청 거부다.
-		if msg.get("rid") != null or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM]:
+		# 방에 들어온 뒤의 에러는 낚시·인벤토리·나무·대화 요청 거부다.
+		var rid: String = str(msg.get("rid")) if msg.get("rid") != null else ""
+		var kind: String = _pending.get(rid, "")
+		_pending.erase(rid)
+		if not kind.is_empty():
+			request_failed.emit(kind, code)
+		if not rid.is_empty() or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL]:
 			action_rejected.emit(code)
 		return
 	_close_socket(1000, "error")

@@ -4,6 +4,10 @@ extends Node3D
 
 @export var spot_id: String = "pond"
 @export var water: MeshInstance3D
+## 물에 들어가지 못하게 막는 충돌체 (BoxShape3D). 크기는 데이터의 수역보다 가장자리만큼 작게 맞춘다.
+@export var blocker: CollisionShape3D
+## 물가에 설 수 있는 폭. 서버의 낚시 판정 거리(cast_range) 안쪽이어야 한다.
+@export_range(0.0, 2.0, 0.05, "suffix:m") var shore_margin: float = 0.5
 ## 수면 높이. 바닥(y=0)과 겹쳐 깜빡이지 않게 살짝 띄운다.
 @export_range(0.0, 0.2, 0.005, "suffix:m") var water_height: float = 0.03
 
@@ -23,6 +27,10 @@ func _ready() -> void:
 		plane.subdivide_width = maxi(int(plane.size.x), 1)
 		plane.subdivide_depth = maxi(int(plane.size.y), 1)
 		water.position = Vector3(0.0, water_height, 0.0)
+	if blocker != null and blocker.shape is BoxShape3D:
+		var box: BoxShape3D = blocker.shape
+		box.size = Vector3(maxf(info.half_extent.x * 2.0 - shore_margin * 2.0, 0.1), 2.0, maxf(info.half_extent.y * 2.0 - shore_margin * 2.0, 0.1))
+		blocker.position = Vector3(0.0, 1.0, 0.0)
 
 
 ## 서버 판정(cast_range)보다 약간 안쪽에서만 던질 수 있게 해서, 경계에서 서버에 거절당하지 않게 한다.

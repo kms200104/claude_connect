@@ -3,6 +3,8 @@ extends Node
 ## 월드의 룩(툰 셰이딩 · 따뜻한 조명 · 월드 커브 · 그림자)을 한 곳에서 켜고 끈다.
 ## 실행 중 인스펙터(원격 트리)에서 값을 바꾸면 즉시 반영된다.
 ## 월드 커브/툰 부드러움은 전역 셰이더 파라미터로 모든 머티리얼에 공유된다.
+## SkyController 가 있으면 해·주변광 색과 세기, 그림자 on/off 를 시각·날씨에 맞춰 매 프레임 다시 정한다
+## (따뜻한 조명 값은 한낮의 기준색, shadows_enabled 는 "그림자를 써도 되는지" 설정으로 쓰인다).
 
 @export_group("References")
 @export var sun: DirectionalLight3D

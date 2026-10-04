@@ -60,6 +60,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _in_activation_area(pos: Vector2) -> bool:
+	# 퀵슬롯·가방·대화 창·상황 버튼 위를 누른 건 조이스틱이 아니다 (그 컨트롤들은 "blocks_joystick" 그룹).
+	for node: Node in get_tree().get_nodes_in_group(&"blocks_joystick"):
+		var control: Control = node as Control
+		if control != null and control.is_visible_in_tree() and control.get_global_rect().has_point(pos):
+			return false
 	var size_px: Vector2 = get_viewport_rect().size
 	if not floating:
 		return pos.distance_to(_center) <= radius * 1.5

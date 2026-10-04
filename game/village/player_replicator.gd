@@ -31,6 +31,9 @@ func _ready() -> void:
 	Net.position_corrected.connect(_on_position_corrected)
 	Net.session_lost.connect(_on_session_lost)
 	Net.state_changed.connect(_on_state_changed)
+	Net.inventory_updated.connect(func(_slots: Array[InventoryItem], _held: int) -> void: _sync_held_item())
+	Net.peer_action.connect(_on_peer_action)
+	_sync_held_item()
 
 
 func _physics_process(delta: float) -> void:
@@ -111,7 +114,19 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 	for state: NetPlayerState in states:
 		if state.id == Net.my_id:
 			continue
-		_spawn_remote(state).push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing)
+		_spawn_remote(state).push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
+
+
+## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.
+func _sync_held_item() -> void:
+	if player != null and Net.state == Net.State.ONLINE:
+		player.set_held_item(Net.held_item_id())
+
+
+func _on_peer_action(id: int, kind: String, _target: String) -> void:
+	var remote: RemotePlayer = _remotes.get(id)
+	if remote != null:
+		remote.play_action(kind)
 
 
 func _on_position_corrected(position: Vector3) -> void:

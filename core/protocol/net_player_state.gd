@@ -5,6 +5,8 @@ extends RefCounted
 var id: int = 0
 var online: bool = true
 var fishing: bool = false
+## 손에 든 아이템 id (없으면 빈 문자열).
+var held: String = ""
 var position: Vector3 = Vector3.ZERO
 var yaw: float = 0.0
 var velocity: Vector3 = Vector3.ZERO
@@ -15,6 +17,7 @@ static func from_dict(data: Dictionary) -> NetPlayerState:
 	state.id = int(data.get("id", 0))
 	state.online = bool(data.get("online", true))
 	state.fishing = bool(data.get("fishing", false))
+	state.held = str(data.get("held", ""))
 	state.position = Vector3(float(data.get("x", 0.0)), float(data.get("y", 0.0)), float(data.get("z", 0.0)))
 	state.yaw = float(data.get("yaw", 0.0))
 	state.velocity = Vector3(float(data.get("vx", 0.0)), 0.0, float(data.get("vz", 0.0)))

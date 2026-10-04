@@ -28,6 +28,8 @@ extends Node3D
 var player_id: int = 0
 var online: bool = true
 var fishing: bool = false
+## 리그의 기본값(낚싯대)과 같게 시작해야 첫 상태가 빈손일 때도 반영된다.
+var held_item: String = "rod"
 
 var _samples: Array[Sample] = []
 var _shown_speed: float = 0.0
@@ -39,13 +41,15 @@ class Sample:
 	var yaw: float
 	var velocity: Vector3
 	var fishing: bool
+	var held: String
 
-	func _init(t: float, p: Vector3, y: float, v: Vector3, f: bool) -> void:
+	func _init(t: float, p: Vector3, y: float, v: Vector3, f: bool, h: String) -> void:
 		time_ms = t
 		position = p
 		yaw = y
 		velocity = v
 		fishing = f
+		held = h
 
 
 func setup(state: NetPlayerState) -> void:
@@ -54,6 +58,7 @@ func setup(state: NetPlayerState) -> void:
 	if body != null:
 		body.rotation.y = state.yaw
 	set_online(state.online)
+	_apply_held(state.held)
 
 
 func set_online(value: bool) -> void:
@@ -63,7 +68,13 @@ func set_online(value: bool) -> void:
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
-func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity: Vector3, is_fishing: bool = false) -> void:
+## 상대의 동작 이벤트 (지금은 도끼질만).
+func play_action(kind: String) -> void:
+	if kind == "chop" and rig != null:
+		rig.play_chop()
+
+
+func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity: Vector3, is_fishing: bool = false, held: String = "") -> void:
 	if not _samples.is_empty():
 		var last: Sample = _samples[-1]
 		if server_time_ms <= last.time_ms:
@@ -71,9 +82,19 @@ func push_sample(server_time_ms: float, position: Vector3, yaw: float, velocity:
 		if last.position.distance_to(position) > teleport_distance:
 			_samples.clear()
 			global_position = position
-	_samples.append(Sample.new(server_time_ms, position, yaw, velocity, is_fishing))
+	_samples.append(Sample.new(server_time_ms, position, yaw, velocity, is_fishing, held))
+	# 손에 든 도구는 보간할 값이 아니라서 받자마자 바꾼다.
+	_apply_held(held)
 	if _samples.size() > max_samples:
 		_samples.pop_front()
+
+
+func _apply_held(item_id: String) -> void:
+	if item_id == held_item:
+		return
+	held_item = item_id
+	if rig != null:
+		rig.set_held(item_id)
 
 
 func _process(delta: float) -> void:

@@ -173,8 +173,12 @@ export function createServer(overrides = {}) {
     switch (msg.t) {
       case 'equip': {
         const slot = msg.slot;
-        if (!Number.isInteger(slot) || slot < -1 || slot >= cfg.quickSlots) return fail(ErrorCode.badItem);
-        if (player.fishing) return fail(ErrorCode.alreadyFishing);
+        const invalid = !Number.isInteger(slot) || slot < -1 || slot >= cfg.quickSlots;
+        if (invalid || player.fishing) {
+          fail(invalid ? ErrorCode.badItem : ErrorCode.alreadyFishing);
+          // 클라이언트는 손에 든 칸을 먼저 바꿔 보여 주므로, 거절할 때는 서버 값을 다시 보낸다.
+          return sendInventory(player);
+        }
         player.profile.held = slot;
         sendInventory(player);
         room.dirty = true; // 손에 든 도구를 상대에게
@@ -271,8 +275,10 @@ export function createServer(overrides = {}) {
           reply.ready = questReady(player.slots, active, data);
         } else if (shouldOffer({ rules: data.quests, profile, npcId: npc.id, today, random, chance: cfg.questChance })) {
           const { hour, weather } = environment(room);
+          const only = data.quests.templates.filter((t) => t.id === cfg.questTemplate);
+          const rules = only.length > 0 ? { ...data.quests, templates: only } : data.quests;
           profile.questSeq += 1;
-          player.offer = makeQuest({ rules: data.quests, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq });
+          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq });
           rel.offerDay = today;
           profile.lastQuestDay = today;
           reply.offer = player.offer;

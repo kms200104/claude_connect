@@ -10,6 +10,8 @@ enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
 @export var spot: FishingSpot
 @export var bobber: Bobber
 @export var hud: FishingHud
+## 주민·나무가 가까이 있으면 그쪽 버튼이 우선이라 낚시 버튼을 숨긴다 (없어도 된다).
+@export var interaction: InteractionController
 
 @export_group("Feel")
 ## 캐릭터 앞쪽 몇 미터에 찌를 던질지 (수역 안쪽으로 잘라 쓴다).
@@ -38,8 +40,10 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if phase == Phase.IDLE:
+		# 낚싯대를 손에 들고 물가에 있어야 던질 수 있다.
 		var ready_to_cast: bool = Net.state == Net.State.ONLINE and spot.can_cast_from(player.global_position) \
-			and not player.is_input_locked()
+			and not player.is_input_locked() and player.held_item == "rod" \
+			and (interaction == null or not interaction.has_target())
 		hud.show_cast_available(ready_to_cast)
 
 
@@ -155,5 +159,7 @@ func _describe_error(code: String) -> String:
 			return "가방이 가득 찼어요"
 		NetProtocol.ERR_ALREADY_FISHING:
 			return "이미 낚시 중이에요"
+		NetProtocol.ERR_NO_TOOL:
+			return "낚싯대를 손에 들어야 해요"
 		_:
 			return "지금은 낚시할 수 없어요"
