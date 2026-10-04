@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "items": [
+    { "id": "rod",      "name": "낚싯대",        "kind": "tool",     "stack": 1,  "color": "#C08A4A", "desc": "대나무를 깎아 만든 가벼운 낚싯대. 퀵슬롯에서 골라 들고 물가에서 던진다." },
+    { "id": "axe",      "name": "도끼",          "kind": "tool",     "stack": 1,  "color": "#8FA3B0", "desc": "손에 꼭 맞는 작은 도끼. 다 자란 나무를 세 번 찍으면 쓰러진다." },
+    { "id": "wood",     "name": "목재",          "kind": "material", "stack": 30, "color": "#B07A45", "desc": "곧게 자란 나무에서 얻은 평범한 목재." },
+    { "id": "softwood", "name": "부드러운 목재", "kind": "material", "stack": 30, "color": "#D9B27C", "desc": "결이 고와서 깎기 쉬운 목재." },
+    { "id": "hardwood", "name": "단단한 목재",   "kind": "material", "stack": 30, "color": "#7A4B2A", "desc": "오래 버티는 묵직한 목재. 목수들이 좋아한다." }
+  ],
+  "chop_drops": [
+    { "id": "wood",     "weight": 60 },
+    { "id": "softwood", "weight": 25 },
+    { "id": "hardwood", "weight": 15 }
+  ]
+}

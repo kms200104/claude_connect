@@ -1,13 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "spots": [
     {
-      "id": "pond",
-      "name": "마을 연못",
-      "x": -14.0,
+      "id": "lake",
+      "name": "마을 호수",
+      "x": -20.0,
       "z": 2.0,
-      "half_x": 6.0,
-      "half_z": 5.0,
+      "half_x": 9.0,
+      "half_z": 7.0,
       "cast_range": 3.5,
       "fish": ["crucian", "loach", "minnow", "carp", "catfish", "mandarin", "goldfish", "sturgeon"]
     }

@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -16,6 +16,26 @@ export const ErrorCode = Object.freeze({
   notFishing: 'not_fishing',
   inventoryFull: 'inventory_full',
   badItem: 'bad_item',
+  cantDiscard: 'cant_discard', // 도구는 버릴 수 없다
+  // 도구 / 나무 베기
+  noTool: 'no_tool', // 알맞은 도구를 손에 들고 있지 않음
+  notNearTree: 'not_near_tree',
+  treeNotReady: 'tree_not_ready', // 그루터기·묘목
+  tooFast: 'too_fast',
+  // 주민 대화 / 부탁
+  notNearNpc: 'not_near_npc',
+  npcBusy: 'npc_busy', // 다른 사람과 이야기 중
+  notTalking: 'not_talking',
+  noOffer: 'no_offer',
+  badQuest: 'bad_quest',
+  questNotReady: 'quest_not_ready', // 아이템이 모자람
+});
+
+export const Weather = Object.freeze({
+  clear: 'clear',
+  cloudy: 'cloudy',
+  rain: 'rain',
+  thunder: 'thunder',
 });
 
 // fish_result.reason

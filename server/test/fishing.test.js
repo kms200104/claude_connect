@@ -46,7 +46,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
   it('낚시터에서 멀면 던질 수 없다', async () => {
     const a = await open();
     await enter(a);
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     assert.equal((await a.type('error')).code, 'not_at_spot');
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'nowhere' });
     assert.equal((await a.type('error')).code, 'not_at_spot');
@@ -55,10 +55,12 @@ describe('낚시 · 인벤토리 · 저장', () => {
   it('성공: 입질 후 제때 당기면 인벤토리에 들어오고 파일에 저장된다', async () => {
     const a = await open();
     const { welcome } = await enter(a);
-    assert.deepEqual(welcome.inv, { items: [], cap: 20 });
+    assert.equal(welcome.inv.slots.length, 25);
+    assert.deepEqual(welcome.inv.slots.slice(0, 3), [{ id: 'rod', n: 1 }, { id: 'axe', n: 1 }, null], '낚싯대·도끼를 들고 시작');
+    assert.deepEqual({ quick: welcome.inv.quick, cap: welcome.inv.cap, held: welcome.inv.held }, { quick: 5, cap: 20, held: 0 });
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     assert.equal((await a.type('fish_started')).rid, r);
     const bite = await a.type('fish_bite');
     assert.equal(bite.windowMs, 700);
@@ -68,12 +70,12 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const result = await a.type('fish_result');
     assert.deepEqual({ ok: result.ok, fish: result.fish }, { ok: true, fish: 'crucian' });
     const inv = await a.type('inventory');
-    assert.deepEqual(inv.items, [{ id: 'crucian', n: 1 }]);
+    assert.deepEqual(inv.slots[5], { id: 'crucian', n: 1 }, '가방 첫 칸에 들어간다');
 
     await server.rooms.flushAll();
     const saved = JSON.parse(readFileSync(path.join(saveDir, `${welcome.code}.json`), 'utf8'));
-    assert.equal(saved.schema, 1);
-    assert.deepEqual(saved.profiles[Object.keys(saved.profiles)[0]].items, [{ id: 'crucian', n: 1 }]);
+    assert.equal(saved.schema, 2);
+    assert.deepEqual(saved.profiles[Object.keys(saved.profiles)[0]].slots[5], { id: 'crucian', n: 1 });
     assert.equal(saved.world.totalCatches, 1);
     assert.equal(saved.world.species.crucian, 1);
   });
@@ -83,7 +85,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await enter(a);
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_started');
     a.send({ t: 'fish_hook', rid: r, reaction: 0 });
     const result = await a.type('fish_result');
@@ -95,7 +97,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await enter(a);
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     await sleep(760);
     a.send({ t: 'fish_hook', rid: r, reaction: 750 });
@@ -106,7 +108,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const a = await open();
     await enter(a);
     await goToPond(a);
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     await a.type('fish_bite');
     const result = await a.type('fish_result', 3000);
     assert.equal(result.reason, 'escaped');
@@ -117,14 +119,14 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await enter(a);
     await goToPond(a);
     let r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 5 }); // 5ms: 너무 빠름
     assert.equal((await a.type('fish_result')).ok, false);
 
     r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     a.send({ t: 'fish_hook', rid: r, reaction: 600 }); // 방금 입질이 왔는데 600ms 걸렸다는 건 거짓
     assert.equal((await a.type('fish_result')).ok, false);
@@ -135,9 +137,9 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await enter(a);
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' }); // 중복 → 무시
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' }); // 중복 → 무시
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     assert.equal((await a.type('error')).code, 'already_fishing');
     await a.type('fish_started');
     assert.equal(a.inbox.filter((m) => m.t === 'fish_started').length, 0);
@@ -147,12 +149,12 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const a = await open();
     await enter(a);
     await goToPond(a);
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     await a.type('fish_started');
     a.send({ t: 'move', x: -12, y: 0.1, z: 2, yaw: 0, vx: 0, vz: 0 });
     assert.equal((await a.type('fish_result')).reason, 'moved');
 
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     await a.type('fish_started');
     a.send({ t: 'fish_cancel' });
     assert.equal((await a.type('fish_result')).reason, 'cancelled');
@@ -164,29 +166,47 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const b = await open();
     await enter(b, { code: welcome.code });
     await goToPond(a);
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     const snap = await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.fishing === true);
     assert.ok(snap);
   });
 
-  it('인벤토리 버리기: 가진 만큼만, 모르는 아이템은 거부', async () => {
+  it('낚싯대를 손에 들고 있어야 던질 수 있다', async () => {
+    const a = await open();
+    await enter(a);
+    await goToPond(a);
+    a.send({ t: 'equip', slot: -1 });
+    assert.equal((await a.type('inventory')).held, -1);
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
+    assert.equal((await a.type('error')).code, 'no_tool');
+    a.send({ t: 'equip', slot: 1 }); // 도끼
+    await a.type('inventory');
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
+    assert.equal((await a.type('error')).code, 'no_tool');
+    a.send({ t: 'equip', slot: 9 });
+    assert.equal((await a.type('error')).code, 'bad_item');
+  });
+
+  it('인벤토리 버리기: 가진 만큼만, 도구·빈 칸은 거부', async () => {
     const a = await open();
     await enter(a);
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
     await a.type('fish_result');
     await a.type('inventory');
 
-    a.send({ t: 'inv_discard', rid: newRid(), id: 'crucian', n: 5 });
+    a.send({ t: 'inv_discard', rid: newRid(), slot: 5, n: 5 });
     assert.equal((await a.type('error')).code, 'bad_item');
-    a.send({ t: 'inv_discard', rid: newRid(), id: 'dragon', n: 1 });
+    a.send({ t: 'inv_discard', rid: newRid(), slot: 9, n: 1 });
     assert.equal((await a.type('error')).code, 'bad_item');
-    a.send({ t: 'inv_discard', rid: newRid(), id: 'crucian', n: 1 });
-    assert.deepEqual((await a.type('inventory')).items, []);
+    a.send({ t: 'inv_discard', rid: newRid(), slot: 0, n: 1 });
+    assert.equal((await a.type('error')).code, 'cant_discard', '낚싯대는 버릴 수 없다');
+    a.send({ t: 'inv_discard', rid: newRid(), slot: 5, n: 1 });
+    assert.equal((await a.type('inventory')).slots[5], null);
   });
 
   it('서버를 껐다 켜도 같은 uid는 같은 자리·인벤토리·위치를 되찾는다', async () => {
@@ -198,7 +218,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const { welcome } = await enter(a, { id: A });
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
@@ -215,7 +235,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const w2 = (await enter(a2, { code: welcome.code, id: A })).welcome;
     assert.equal(w2.id, 1);
     assert.equal(w2.resumed, false);
-    assert.deepEqual(w2.inv.items, [{ id: 'crucian', n: 1 }]);
+    assert.deepEqual(w2.inv.slots[5], { id: 'crucian', n: 1 });
     assert.equal(w2.players.find((p) => p.id === 1).x, AT_POND.x);
 
     const b2 = await open(s2);
@@ -253,17 +273,17 @@ describe('낚시 · 인벤토리 · 저장', () => {
 
   it('인벤토리가 가득 차면 던지기 전에 거절한다', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'solbaram-full-'));
-    const s = createServer({ port: 0, saveDir: dir, ...FAST, inventoryCapacity: 1, inventoryStackSize: 1 });
+    const s = createServer({ port: 0, saveDir: dir, ...FAST, quickSlots: 2, inventoryCapacity: 1, inventoryStackSize: 1 });
     const a = await open(s);
     await enter(a);
     await goToPond(a);
     const r = newRid();
-    a.send({ t: 'fish_cast', rid: r, spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
     assert.equal((await a.type('fish_result')).ok, true);
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'pond' });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     assert.equal((await a.type('error')).code, 'inventory_full');
     await s.close();
     rmSync(dir, { recursive: true, force: true });

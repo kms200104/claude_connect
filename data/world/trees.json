@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "chop_range": 2.2,
+  "chops_to_fell": 3,
+  "trees": [
+    { "id": "t01", "kind": "round", "x": 6,   "z": 18 },
+    { "id": "t02", "kind": "pine",  "x": 10,  "z": 22 },
+    { "id": "t03", "kind": "round", "x": 14,  "z": 17 },
+    { "id": "t04", "kind": "pine",  "x": -10, "z": 22 },
+    { "id": "t05", "kind": "round", "x": -14, "z": 26 },
+    { "id": "t06", "kind": "pine",  "x": 8,   "z": 28 },
+    { "id": "t07", "kind": "round", "x": 16,  "z": 24 },
+    { "id": "t08", "kind": "pine",  "x": 24,  "z": -4 },
+    { "id": "t09", "kind": "round", "x": 28,  "z": 2 },
+    { "id": "t10", "kind": "pine",  "x": 30,  "z": 12 },
+    { "id": "t11", "kind": "round", "x": 26,  "z": 18 },
+    { "id": "t12", "kind": "pine",  "x": 20,  "z": -24 },
+    { "id": "t13", "kind": "round", "x": 4,   "z": -18 },
+    { "id": "t14", "kind": "pine",  "x": -4,  "z": -22 },
+    { "id": "t15", "kind": "round", "x": 0,   "z": -28 },
+    { "id": "t16", "kind": "pine",  "x": 8,   "z": -26 },
+    { "id": "t17", "kind": "round", "x": -12, "z": -18 },
+    { "id": "t18", "kind": "pine",  "x": -16, "z": -24 },
+    { "id": "t19", "kind": "round", "x": -34, "z": 0 },
+    { "id": "t20", "kind": "pine",  "x": -33, "z": 10 },
+    { "id": "t21", "kind": "round", "x": -24, "z": -12 },
+    { "id": "t22", "kind": "pine",  "x": -30, "z": -8 },
+    { "id": "t23", "kind": "round", "x": 13,  "z": -1 },
+    { "id": "t24", "kind": "round", "x": 2,   "z": 12 }
+  ]
+}

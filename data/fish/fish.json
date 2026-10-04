@@ -1,13 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "fish": [
-    { "id": "crucian",   "name": "붕어",     "size": "M",  "rarity": "common",   "weight": 40, "hook_window_ms": 700 },
-    { "id": "loach",     "name": "미꾸라지", "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700 },
-    { "id": "minnow",    "name": "송사리",   "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700 },
-    { "id": "carp",      "name": "잉어",     "size": "L",  "rarity": "common",   "weight": 25, "hook_window_ms": 650 },
-    { "id": "catfish",   "name": "메기",     "size": "L",  "rarity": "uncommon", "weight": 12, "hook_window_ms": 550 },
-    { "id": "mandarin",  "name": "쏘가리",   "size": "M",  "rarity": "uncommon", "weight": 10, "hook_window_ms": 550 },
-    { "id": "goldfish",  "name": "금붕어",   "size": "S",  "rarity": "rare",     "weight": 4,  "hook_window_ms": 500 },
-    { "id": "sturgeon",  "name": "철갑상어", "size": "XL", "rarity": "rare",     "weight": 3,  "hook_window_ms": 450 }
+    { "id": "crucian",  "name": "붕어",     "size": "M",  "rarity": "common",   "weight": 40, "hook_window_ms": 700, "desc": "호수 어디서나 만나는 순한 물고기." },
+    { "id": "loach",    "name": "미꾸라지", "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700, "desc": "진흙 속을 미끄러지듯 헤엄친다." },
+    { "id": "minnow",   "name": "송사리",   "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700, "hours": [5, 20], "desc": "해가 떠 있을 때 얕은 물가에 모인다." },
+    { "id": "carp",     "name": "잉어",     "size": "L",  "rarity": "common",   "weight": 25, "hook_window_ms": 650, "desc": "느긋하게 호수 바닥을 누비는 큰 물고기." },
+    { "id": "catfish",  "name": "메기",     "size": "L",  "rarity": "uncommon", "weight": 12, "hook_window_ms": 550, "hours": [17, 5], "desc": "해 질 녘부터 바닥에서 슬그머니 올라온다." },
+    { "id": "mandarin", "name": "쏘가리",   "size": "M",  "rarity": "uncommon", "weight": 10, "hook_window_ms": 550, "hours": [9, 17], "desc": "얼룩무늬가 멋진 낮의 사냥꾼." },
+    { "id": "goldfish", "name": "금붕어",   "size": "S",  "rarity": "rare",     "weight": 4,  "hook_window_ms": 500, "weather": ["clear", "cloudy"], "desc": "누군가 놓아준 걸까? 맑은 날에만 반짝인다." },
+    { "id": "sturgeon", "name": "철갑상어", "size": "XL", "rarity": "rare",     "weight": 3,  "hook_window_ms": 450, "weather": ["rain", "thunder"], "desc": "비 오는 날 깊은 곳에서 모습을 드러내는 호수의 주인." }
   ]
 }

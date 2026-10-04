@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './protocol.js';
 
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 
 const CODE_RE = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
 

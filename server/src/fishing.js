@@ -9,9 +9,19 @@ import { addItem, canAdd, hasFreeSpace } from './inventory.js';
  * 흐름: fish_cast → fish_started → (가짜 fish_nibble × 0~3) → fish_bite{windowMs} → fish_hook{reaction}
  * 클라이언트는 "입질 연출이 화면에 뜬 뒤 버튼을 누르기까지 걸린 시간(reaction)"만 보낸다.
  * 서버는 reaction이 허용 창 안인지, 서버가 잰 경과 시간과 모순되지 않는지만 본다 → 네트워크 지연은 불리하게 작용하지 않는다.
- * 물고기 종류는 결과가 확정될 때에만 알려 준다.
+ * 물고기 종류는 결과가 확정될 때에만 알려 준다. 낚싯대를 손에 들고 있어야 하고, 시각·날씨에 따라 낚이는 물고기가 다르다.
  */
-export function createFishing({ cfg, data, random = Math.random, now = () => performance.now(), notify, onInventoryChanged, onFishingChanged }) {
+export function createFishing({
+  cfg,
+  data,
+  random = Math.random,
+  now = () => performance.now(),
+  notify,
+  onInventoryChanged,
+  onFishingChanged,
+  heldItem = () => 'rod',
+  environment = () => ({ hour: 12, weather: 'clear' }),
+}) {
   const scaled = (ms) => ms * cfg.fishTimeScale;
   const rand = (min, max) => min + random() * (max - min);
 
@@ -38,12 +48,14 @@ export function createFishing({ cfg, data, random = Math.random, now = () => per
   /** 에러 코드를 돌려주거나(실패), null(성공) */
   function cast(player, rid, spotId) {
     if (player.fishing) return ErrorCode.alreadyFishing;
+    if (heldItem(player) !== 'rod') return ErrorCode.noTool;
     const spot = typeof spotId === 'string' ? data.spots.get(spotId) : null;
     if (!spot) return ErrorCode.notAtSpot;
     if (distanceToSpot(spot, player.x, player.z) > spot.cast_range) return ErrorCode.notAtSpot;
-    if (!hasFreeSpace(player.items, cfg)) return ErrorCode.inventoryFull;
+    if (!hasFreeSpace(player.slots, data.isFish, data.limitOf)) return ErrorCode.inventoryFull;
 
-    const fish = pickFish(spot, data.fish, random);
+    const { hour, weather } = environment(player);
+    const fish = pickFish(spot, data.fish, random, hour, weather);
     const session = {
       rid,
       spot,
@@ -100,12 +112,12 @@ export function createFishing({ cfg, data, random = Math.random, now = () => per
       end(player, { ok: false, reason: FishFail.late });
       return null;
     }
-    if (!canAdd(player.items, session.fish.id, cfg)) {
+    if (!canAdd(player.slots, session.fish.id, 1, data.limitOf)) {
       end(player, { ok: false, reason: FishFail.inventoryFull });
       return null;
     }
     // 성공: 인벤토리 지급 + 통계 갱신을 한 번에 기록한다.
-    addItem(player.items, session.fish.id, cfg);
+    addItem(player.slots, session.fish.id, 1, cfg, data.limitOf);
     player.profile.catches += 1;
     onInventoryChanged(player, session.fish.id);
     end(player, { ok: true, fish: session.fish.id });

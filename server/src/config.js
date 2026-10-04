@@ -40,7 +40,8 @@ export const defaultConfig = {
   // 변경이 있는 방을 이 주기로 저장한다. 인벤토리 변경은 즉시 저장.
   saveIntervalMs: num('SAVE_INTERVAL_MS', 5000),
 
-  // 인벤토리: 물고기 종류 칸 수와 한 칸에 쌓을 수 있는 개수.
+  // 인벤토리: 퀵슬롯 칸 수 + 가방 칸 수. 물고기 한 칸에 쌓을 수 있는 개수(도구·목재는 items.json 의 stack).
+  quickSlots: num('QUICK_SLOTS', 5),
   inventoryCapacity: num('INVENTORY_CAPACITY', 20),
   inventoryStackSize: num('INVENTORY_STACK_SIZE', 99),
 
@@ -59,6 +60,29 @@ export const defaultConfig = {
   fishReactionSlackMs: num('FISH_REACTION_SLACK_MS', 100),
   // 낚시 중 캐스팅 지점에서 이 이상 움직이면 낚시가 취소된다.
   fishMaxMoveMeters: num('FISH_MAX_MOVE_M', 1.5),
+
+  // 마을 시계. 기본은 실제 시간(배율 1, 한국 시간). 테스트·시연은 배율을 키우거나 시각을 옮긴다.
+  clockScale: num('CLOCK_SCALE', 1),
+  utcOffsetMin: num('UTC_OFFSET_MIN', 540),
+  clockOffsetMin: num('CLOCK_OFFSET_MIN', 0),
+  // 날씨를 고정한다 (clear | cloudy | rain | thunder). 비우면 마을 시드로 정한다.
+  weatherForce: process.env.WEATHER_FORCE || '',
+  // 뇌우일 때 번개 간격(ms).
+  lightningMinMs: num('LIGHTNING_MIN_MS', 6000),
+  lightningMaxMs: num('LIGHTNING_MAX_MS', 18000),
+
+  // 나무 베기: 한 번 찍은 뒤 다음 도끼질까지 최소 간격(도끼 휘두르는 시간).
+  chopCooldownMs: num('CHOP_COOLDOWN_MS', 400),
+
+  // 주민 NPC: 이동 계산·방송 주기, 걷다 멈춰 서 있는 시간.
+  npcTickRate: num('NPC_TICK_RATE', 10),
+  npcIdleMinMs: num('NPC_IDLE_MIN_MS', 2500),
+  npcIdleMaxMs: num('NPC_IDLE_MAX_MS', 7000),
+  // 대화: 이 시간 동안 아무 요청이 없거나, 이만큼 멀어지면 대화를 끝낸다.
+  talkTimeoutMs: num('TALK_TIMEOUT_MS', 60000),
+  talkLeaveMeters: num('TALK_LEAVE_M', 6),
+  // 부탁(퀘스트) 확률. 비우면 data/quests/quests.json 의 값.
+  questChance: process.env.QUEST_CHANCE !== undefined && process.env.QUEST_CHANCE !== '' ? Number(process.env.QUEST_CHANCE) : null,
 };
 
 // 슬롯(1부터)별 스폰 위치.
