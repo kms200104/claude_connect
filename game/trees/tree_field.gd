@@ -4,6 +4,11 @@ extends Node3D
 ## 나무 한 그루 = 메시 1개(줄기·잎을 정점 색으로 칠해 머티리얼 1개) + 충돌체. 같은 모양은 메시를 공유한다.
 
 @export var foliage_material: Material
+## 쓰러지는 방향(찍은 사람 반대쪽)을 정할 때 쓴다.
+@export var player: Node3D
+@export var replicator: PlayerReplicator
+## 쓰러지는 데 걸리는 시간 (나무가 땅에 닿을 때 쿵 소리).
+@export_range(0.3, 3.0, 0.05, "suffix:s") var fall_time: float = 0.8
 ## 이 거리보다 먼 나무는 그리지 않는다 (카메라 높이 포함).
 @export_range(10.0, 200.0, 1.0, "suffix:m") var draw_distance: float = 55.0
 
@@ -20,8 +25,11 @@ const NO_FLOWERS: Array[Color] = []
 const FLOWER_COLORS: Array[Color] = [Color(0.98, 0.66, 0.74), Color(1.0, 0.86, 0.45), Color(0.62, 0.74, 0.98), Color(0.82, 0.66, 0.92)]
 
 static var _meshes: Dictionary[String, ArrayMesh] = {}
+static var _leaf_mesh: ArrayMesh = null
 
 var _trees: Dictionary[String, TreeNode] = {}
+## 내가 쓰러뜨린 나무 → 시각(ms). 곧이어 오는 서버의 'tree' 알림으로 한 번 더 넘어지지 않게.
+var _local_fells: Dictionary[String, int] = {}
 
 
 class TreeNode:
@@ -37,14 +45,104 @@ func _ready() -> void:
 	for info: TreeInfo in GameData.trees.values():
 		_trees[info.id] = _spawn(info)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void: _apply_all())
-	Net.tree_changed.connect(func(id: String, stage: String, _chops: int) -> void: _set_stage(id, stage, true))
-	Net.chop_succeeded.connect(func(id: String, _item: String, _felled: bool) -> void: shake(id))
+	Net.tree_changed.connect(_on_tree_changed)
+	Net.chop_succeeded.connect(_on_chop_succeeded)
 	Net.peer_action.connect(_on_peer_action)
 
 
 func _on_peer_action(_player_id: int, kind: String, target: String) -> void:
 	if kind == "chop":
 		shake(target)
+
+
+func _on_chop_succeeded(id: String, _item: String, felled: bool) -> void:
+	if felled and player != null:
+		_local_fells[id] = Time.get_ticks_msec()
+		fell(id, player.global_position)
+	else:
+		shake(id)
+
+
+func _on_tree_changed(id: String, stage: String, _chops: int) -> void:
+	var node: TreeNode = _trees.get(id)
+	var was_grown: bool = node != null and node.stage == NetProtocol.TREE_GROWN
+	_set_stage(id, stage, true)
+	# 상대가 쓰러뜨린 나무: 가장 가까이 있는 사람 반대쪽으로 넘어진다 (내가 쓰러뜨린 건 이미 넘어지는 중).
+	if stage == NetProtocol.TREE_STUMP and was_grown and Time.get_ticks_msec() - _local_fells.get(id, -100000) > 1500:
+		fell(id, _nearest_chopper(tree_position(id)))
+
+
+## 나무가 넘어지는 연출: 다 자란 나무 모양이 밑동을 축으로 from 반대쪽으로 점점 빠르게 넘어가 쿵 하고 튕긴 뒤,
+## 잎사귀가 흩어지며 사라진다. 그동안 제자리에는 그루터기가 남는다. 충돌체 없음 (보기만).
+func fell(id: String, from: Vector3) -> void:
+	var node: TreeNode = _trees.get(id)
+	if node == null:
+		return
+	var base: Vector3 = node.info.position
+	var dir: Vector3 = Vector3(base.x - from.x, 0.0, base.z - from.z)
+	if dir.length() < 0.01:
+		dir = Vector3.FORWARD
+	dir = dir.normalized()
+	var pivot: Node3D = Node3D.new()
+	pivot.name = "Falling_%s" % id
+	add_child(pivot)
+	pivot.global_position = base
+	var trunk: MeshInstance3D = MeshInstance3D.new()
+	trunk.mesh = _mesh(node.info.kind)
+	trunk.material_override = foliage_material
+	trunk.rotation.y = node.body.rotation.y
+	pivot.add_child(trunk)
+	var axis: Vector3 = Vector3.UP.cross(dir).normalized()
+	var state: Dictionary = {"angle": 0.0}
+	var apply: Callable = func(angle: float) -> void:
+		state["angle"] = angle
+		pivot.basis = Basis(axis, angle)
+	var tween: Tween = create_tween()
+	tween.tween_interval(0.12)
+	tween.tween_method(apply, 0.0, deg_to_rad(86.0), fall_time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		Audio.play_at("tree_land", base + dir * 2.0, 1.0, 1.0, 0.05)
+		_leaf_puff(base + dir * 2.3 + Vector3(0.0, 0.6, 0.0), node.info.kind))
+	tween.tween_method(apply, deg_to_rad(86.0), deg_to_rad(78.0), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_method(apply, deg_to_rad(78.0), deg_to_rad(88.0), 0.18).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(0.5)
+	tween.tween_property(pivot, "scale", Vector3(0.01, 0.01, 0.01), 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_callback(pivot.queue_free)
+	Audio.play_at("tree_creak", base + Vector3(0.0, 1.5, 0.0), -2.0)
+
+
+## 쓰러진 나무에서 잎 덩어리가 사방으로 튀었다가 사라진다.
+func _leaf_puff(center: Vector3, kind: String) -> void:
+	var color: Color = LEAF_PINE if kind == "pine" else (LEAF_BIRCH if kind == "birch" else LEAF_ROUND)
+	if _leaf_mesh == null:
+		var st: SurfaceTool = ClayMesh.begin()
+		ClayMesh.add_ellipsoid(st, Vector3.ZERO, Vector3(0.12, 0.05, 0.08), Color.WHITE, 6, 3)
+		_leaf_mesh = ClayMesh.commit(st)
+	var material: ShaderMaterial = (foliage_material as ShaderMaterial).duplicate() if foliage_material is ShaderMaterial else null
+	if material != null:
+		material.set_shader_parameter("albedo", color)
+	for i: int in 10:
+		var leaf: MeshInstance3D = MeshInstance3D.new()
+		leaf.mesh = _leaf_mesh
+		leaf.material_override = material
+		add_child(leaf)
+		leaf.global_position = center
+		leaf.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+		var out: Vector3 = Vector3(randf_range(-1.0, 1.0), randf_range(0.3, 1.2), randf_range(-1.0, 1.0)).normalized() * randf_range(0.8, 1.8)
+		var tween: Tween = create_tween().set_parallel(true)
+		tween.tween_property(leaf, "global_position", center + out, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(leaf, "rotation", leaf.rotation + Vector3(2.0, 3.0, 1.0), 0.9)
+		tween.tween_property(leaf, "scale", Vector3(0.01, 0.01, 0.01), 0.5).set_delay(0.5)
+		tween.chain().tween_callback(leaf.queue_free)
+
+
+func _nearest_chopper(tree: Vector3) -> Vector3:
+	var best: Vector3 = player.global_position if player != null else tree + Vector3.BACK
+	if replicator != null:
+		for p: Vector3 in replicator.remote_positions():
+			if p.distance_to(tree) < best.distance_to(tree):
+				best = p
+	return best
 
 
 ## 다 자란 나무 중 가장 가까운 것 (max_distance 안). 없으면 빈 문자열.

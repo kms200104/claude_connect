@@ -1,0 +1,140 @@
+class_name DropField
+extends Node3D
+## 바닥의 선물 풍선(선물 상자 + 풍선)과 별 조각(밤에 빛남). 위치는 서버가 정하고, 가까이 가서 "줍기"로 줍는다.
+## 선물은 풍선에 매달려 살랑살랑, 별 조각은 빙글빙글 돌며 반짝인다. 생길 때와 없어질 때 톡 튀는 연출.
+
+@export var clay_material: Material
+## 밤에 빛나는 별 조각 머티리얼.
+@export var glow_material: Material
+
+const GIFT_COLORS: Array[Color] = [Color("#F6A6B8"), Color("#9EC1F2"), Color("#FFD866"), Color("#A8D8A0")]
+
+static var _gift_meshes: Dictionary[int, ArrayMesh] = {}
+static var _star: ArrayMesh = null
+
+var _nodes: Dictionary[String, Node3D] = {}
+var _time: float = 0.0
+
+
+func _ready() -> void:
+	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void: _sync_all())
+	Net.drop_added.connect(func(d: DropInfo) -> void: _add(d, true))
+	Net.drop_removed.connect(_remove)
+	_sync_all()
+
+
+## 주울 수 있는 가장 가까운 것 (max_distance 안). 없으면 빈 문자열.
+func nearest(position: Vector3, max_distance: float) -> String:
+	var best: String = ""
+	var best_d: float = max_distance
+	for id: String in _nodes:
+		var n: Node3D = _nodes[id]
+		var d: float = Vector2(position.x - n.global_position.x, position.z - n.global_position.z).length()
+		if d <= best_d:
+			best_d = d
+			best = id
+	return best
+
+
+func has_drop(id: String) -> bool:
+	return _nodes.has(id)
+
+
+func drop_position(id: String) -> Vector3:
+	var n: Node3D = _nodes.get(id)
+	return n.global_position if n != null else Vector3.ZERO
+
+
+func _process(delta: float) -> void:
+	_time += delta
+	for id: String in _nodes:
+		var n: Node3D = _nodes[id]
+		var phase: float = float(id.hash() % 100) * 0.1
+		var visual: Node3D = n.get_child(0)
+		if n.get_meta("kind", "") == DropInfo.KIND_STAR:
+			visual.rotation.y = _time * 1.6 + phase
+			visual.position.y = 0.15 + sin(_time * 2.4 + phase) * 0.06
+		else:
+			visual.rotation.z = sin(_time * 1.3 + phase) * 0.08
+			visual.position.y = sin(_time * 1.7 + phase) * 0.05
+
+
+func _sync_all() -> void:
+	for id: String in _nodes.keys():
+		if not Net.drops.has(id):
+			_remove(id, 0)
+	for d: DropInfo in Net.drops.values():
+		if not _nodes.has(d.id):
+			_add(d, false)
+
+
+func _add(d: DropInfo, animate: bool) -> void:
+	if _nodes.has(d.id):
+		return
+	var root: Node3D = Node3D.new()
+	root.name = "Drop_%s" % d.id
+	root.set_meta("kind", d.kind)
+	add_child(root)
+	root.global_position = d.position
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	if d.kind == DropInfo.KIND_STAR:
+		mi.mesh = star_mesh()
+		mi.material_override = glow_material
+	else:
+		mi.mesh = gift_mesh(absi(d.id.hash()) % GIFT_COLORS.size())
+		mi.material_override = clay_material
+	root.add_child(mi)
+	_nodes[d.id] = root
+	if animate:
+		root.scale = Vector3(0.2, 0.2, 0.2)
+		var tween: Tween = create_tween()
+		if d.kind == DropInfo.KIND_GIFT:
+			# 풍선이 하늘에서 내려앉는다.
+			mi.position.y = 6.0
+			tween.set_parallel(true)
+			tween.tween_property(root, "scale", Vector3.ONE, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tween.tween_property(mi, "position:y", 0.0, 2.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		else:
+			tween.tween_property(root, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			Audio.play_at("twinkle", d.position, -4.0)
+
+
+func _remove(id: String, _by: int) -> void:
+	var n: Node3D = _nodes.get(id)
+	if n == null:
+		return
+	_nodes.erase(id)
+	var tween: Tween = create_tween()
+	tween.tween_property(n, "scale", Vector3(1.3, 1.3, 1.3), 0.08)
+	tween.tween_property(n, "scale", Vector3(0.01, 0.01, 0.01), 0.18)
+	tween.tween_callback(n.queue_free)
+
+
+## 선물 상자 + 리본 + 실에 매단 하트 풍선 (색 4가지).
+static func gift_mesh(color_index: int) -> ArrayMesh:
+	if _gift_meshes.has(color_index):
+		return _gift_meshes[color_index]
+	var st: SurfaceTool = ClayMesh.begin()
+	var box: Color = GIFT_COLORS[color_index]
+	var ribbon: Color = Color("#E05A4A") if color_index != 0 else Color("#FFFFFF")
+	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.22, 0.0), Vector3(0.44, 0.4, 0.44), 0.3, ClayMesh.vertical_gradient(box.darkened(0.15), box.lightened(0.1), 1.0), Basis(), 10, 6)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.44, 0.0), Vector3(0.5, 0.1, 0.5), 0.4, box.lightened(0.05), Basis(), 10, 4)
+	ClayMesh.add_box(st, Vector3(0.0, 0.25, 0.0), Vector3(0.1, 0.46, 0.46), ribbon)
+	ClayMesh.add_box(st, Vector3(0.0, 0.25, 0.0), Vector3(0.46, 0.46, 0.1), ribbon)
+	for side: float in [-1.0, 1.0]:
+		ClayMesh.add_ellipsoid(st, Vector3(side * 0.1, 0.53, 0.0), Vector3(0.1, 0.06, 0.05), ribbon, 8, 4, Basis(Vector3.BACK, side * 0.5))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.52, 0.0), Vector3(0.04, 0.04, 0.04), ribbon.darkened(0.1), 6, 3)
+	ClayMesh.add_capsule(st, Vector3(0.0, 0.55, 0.0), Vector3(0.05, 1.45, 0.02), 0.008, Color("#F4F1EA"), 4, 1)
+	var balloon: Color = GIFT_COLORS[(color_index + 1) % GIFT_COLORS.size()]
+	ClayMesh.add_ellipsoid(st, Vector3(0.05, 1.7, 0.02), Vector3(0.24, 0.28, 0.24), ClayMesh.vertical_gradient(balloon.darkened(0.1), balloon.lightened(0.25), 1.0), 12, 8)
+	ClayMesh.add_ellipsoid(st, Vector3(0.05, 1.42, 0.02), Vector3(0.04, 0.03, 0.04), balloon.darkened(0.15), 6, 3)
+	_gift_meshes[color_index] = ClayMesh.commit(st)
+	return _gift_meshes[color_index]
+
+
+## 별 조각: 별 아이템 모형을 그대로 쓴다.
+static func star_mesh() -> ArrayMesh:
+	if _star == null:
+		var info: ItemInfo = GameData.item("star_fragment")
+		_star = PartMesh.build(info.model if info != null else [])
+	return _star

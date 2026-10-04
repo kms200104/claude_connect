@@ -10,6 +10,14 @@ static func mesh(fish: FishInfo) -> ArrayMesh:
 	if _cache.has(fish.id):
 		return _cache[fish.id]
 	var st: SurfaceTool = ClayMesh.begin()
+	if fish.shape == "crayfish" or fish.shape == "turtle":
+		if fish.shape == "crayfish":
+			_add_crayfish(st, fish)
+		else:
+			_add_turtle(st, fish)
+		var special: ArrayMesh = ClayMesh.commit(st)
+		_cache[fish.id] = special
+		return special
 	var r: Vector3 = _radii(fish.shape)
 	var body: Callable = ClayMesh.vertical_gradient(fish.belly_color, fish.body_color, 0.7)
 	if fish.shape == "eel":
@@ -90,3 +98,47 @@ static func _add_pattern(st: SurfaceTool, fish: FishInfo, r: Vector3) -> void:
 				var side: float = 1.0 if i % 2 == 0 else -1.0
 				var k: float = sqrt(maxf(1.0 - u * u - v * v * 0.6, 0.05))
 				ClayMesh.add_ellipsoid(st, Vector3(u * r.x, v * r.y * 0.8, side * r.z * k), Vector3(0.022, 0.02, 0.012), fish.accent_color, 6, 3)
+
+
+## 가재: 마디진 몸 + 부채 꼬리 + 집게 두 개 + 더듬이. 머리는 -X.
+static func _add_crayfish(st: SurfaceTool, fish: FishInfo) -> void:
+	var shell: Callable = ClayMesh.vertical_gradient(fish.belly_color, fish.body_color, 0.6)
+	ClayMesh.add_ellipsoid(st, Vector3(-0.08, 0.0, 0.0), Vector3(0.14, 0.08, 0.09), shell, 12, 7)
+	for i: int in 4:
+		var x: float = 0.06 + 0.07 * float(i)
+		var k: float = 1.0 - 0.15 * float(i)
+		ClayMesh.add_ellipsoid(st, Vector3(x, -0.005 * float(i), 0.0), Vector3(0.045, 0.06 * k, 0.07 * k), shell, 10, 5)
+	for side: float in [-1.0, 0.0, 1.0]:
+		ClayMesh.add_ellipsoid(st, Vector3(0.37, -0.02, side * 0.04), Vector3(0.05, 0.012, 0.035), fish.fin_color, 6, 3, Basis(Vector3.UP, side * 0.5))
+	for side: float in [-1.0, 1.0]:
+		ClayMesh.add_capsule(st, Vector3(-0.15, -0.01, side * 0.07), Vector3(-0.27, 0.0, side * 0.17), 0.025, fish.body_color, 6, 1)
+		ClayMesh.add_ellipsoid(st, Vector3(-0.33, 0.0, side * 0.19), Vector3(0.07, 0.035, 0.045), shell, 8, 4, Basis(Vector3.UP, side * 0.3))
+		ClayMesh.add_ellipsoid(st, Vector3(-0.39, 0.0, side * 0.16), Vector3(0.04, 0.02, 0.025), fish.fin_color, 6, 3, Basis(Vector3.UP, side * 0.6))
+		ClayMesh.add_capsule(st, Vector3(-0.2, 0.02, side * 0.03), Vector3(-0.42, 0.06, side * 0.12), 0.006, fish.fin_color, 4, 1)
+		for leg: int in 3:
+			ClayMesh.add_capsule(st, Vector3(-0.04 + 0.05 * float(leg), -0.05, side * 0.06), Vector3(-0.02 + 0.05 * float(leg), -0.09, side * 0.14), 0.01, fish.fin_color, 4, 1)
+		var eye: Vector3 = Vector3(-0.2, 0.06, side * 0.045)
+		ClayMesh.add_ellipsoid(st, eye, Vector3(0.025, 0.028, 0.025), Color("#2B211E"), 8, 4)
+		ClayMesh.add_ellipsoid(st, eye + Vector3(-0.01, 0.012, side * 0.012), Vector3(0.008, 0.008, 0.006), Color.WHITE, 4, 2)
+
+
+## 자라: 납작한 등딱지 + 목을 내민 머리 + 지느러미발 넷. 머리는 -X.
+static func _add_turtle(st: SurfaceTool, fish: FishInfo) -> void:
+	ClayMesh.add_ellipsoid(st, Vector3(0.02, 0.02, 0.0), Vector3(0.24, 0.07, 0.2), ClayMesh.vertical_gradient(fish.belly_color, fish.body_color, 0.4), 16, 8)
+	ClayMesh.add_ellipsoid(st, Vector3(0.02, -0.01, 0.0), Vector3(0.25, 0.03, 0.21), fish.belly_color, 16, 4)
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = fish.id.hash()
+	for i: int in 7:
+		var a: float = rng.randf() * TAU
+		var rr: float = rng.randf_range(0.0, 0.6)
+		ClayMesh.add_ellipsoid(st, Vector3(0.02 + cos(a) * 0.24 * rr, 0.07 * sqrt(1.0 - rr * rr) + 0.02, sin(a) * 0.2 * rr), Vector3(0.03, 0.012, 0.03), fish.accent_color, 6, 2)
+	ClayMesh.add_capsule(st, Vector3(-0.2, 0.01, 0.0), Vector3(-0.3, 0.03, 0.0), 0.04, fish.fin_color, 8, 2)
+	ClayMesh.add_ellipsoid(st, Vector3(-0.34, 0.04, 0.0), Vector3(0.06, 0.05, 0.05), fish.fin_color, 10, 5)
+	ClayMesh.add_ellipsoid(st, Vector3(-0.4, 0.04, 0.0), Vector3(0.02, 0.015, 0.015), fish.fin_color.darkened(0.2), 6, 3)
+	for side: float in [-1.0, 1.0]:
+		ClayMesh.add_ellipsoid(st, Vector3(-0.12, -0.01, side * 0.2), Vector3(0.08, 0.015, 0.05), fish.fin_color, 8, 3, Basis(Vector3.UP, side * -0.6))
+		ClayMesh.add_ellipsoid(st, Vector3(0.16, -0.01, side * 0.17), Vector3(0.06, 0.015, 0.04), fish.fin_color, 8, 3, Basis(Vector3.UP, side * 0.6))
+		var eye: Vector3 = Vector3(-0.36, 0.065, side * 0.03)
+		ClayMesh.add_ellipsoid(st, eye, Vector3(0.016, 0.018, 0.014), Color("#2B211E"), 6, 3)
+		ClayMesh.add_ellipsoid(st, Vector3(-0.33, 0.035, side * 0.045), Vector3(0.014, 0.01, 0.008), Color("#F4A6A0"), 4, 2)
+	ClayMesh.add_ellipsoid(st, Vector3(0.27, 0.0, 0.0), Vector3(0.04, 0.015, 0.02), fish.fin_color, 6, 3)

@@ -1,6 +1,6 @@
 class_name SoundDirector
 extends Node
-## 마을의 사건 소리: 도끼질·나무 쓰러짐·아이템 얻기·상점 문 종·사고팔기·상점 성장·부탁 완료·천둥,
+## 마을의 사건 소리: 도끼질·아이템 얻기·선물·별 조각 줍기·상점 문 종·사고팔기·상점 성장·부탁 완료·천둥,
 ## 그리고 날씨와 시각에 맞춘 환경음(비·새·풀벌레)과 마을 배경음악. 발소리·낚시·대사 소리는 각자 낸다.
 
 @export var sky: SkyController
@@ -24,6 +24,10 @@ func _ready() -> void:
 	Net.furniture_placed.connect(func(info: PlacedInfo, _by: int) -> void: Audio.play_at("chop", info.position, -8.0, 0.8))
 	Net.furniture_removed.connect(func(_id: String) -> void: Audio.play_sfx("pickup", -4.0))
 	Net.lightning_struck.connect(_on_lightning)
+	Net.collected.connect(func(kind: String, _item: String) -> void:
+		Audio.play_sfx("twinkle" if kind == DropInfo.KIND_STAR else "pickup", -2.0)
+		if kind == DropInfo.KIND_GIFT:
+			Audio.play_sfx("quest_done", -6.0, 1.2, 0.0))
 	Net.state_changed.connect(func(state: int) -> void:
 		if state == Net.State.ONLINE:
 			Audio.play_music(Audio.MUSIC_VILLAGE))
@@ -39,10 +43,9 @@ func _process(delta: float) -> void:
 	Audio.set_loop(Audio.LOOP_CRICKETS, smoothstep(0.4, 0.05, sky.daylight) * (1.0 - sky.rain_amount) * (0.0 if sky.indoor else 0.7), delta)
 
 
-func _on_chop(tree_id: String, item_id: String, felled: bool) -> void:
+## 도끼질 소리 (쓰러질 때의 우지끈·쿵은 TreeField 가 넘어지는 연출에 맞춰 낸다).
+func _on_chop(_tree_id: String, item_id: String, _felled: bool) -> void:
 	Audio.play_sfx("chop", -2.0)
-	if felled and trees != null:
-		Audio.play_at("tree_fall", trees.tree_position(tree_id), 2.0, 1.0, 0.03)
 	if not item_id.is_empty():
 		await get_tree().create_timer(0.25).timeout
 		Audio.play_sfx("pickup", -5.0)

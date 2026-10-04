@@ -9,6 +9,7 @@ const NPCS_PATH: String = "res://data/npcs/npcs.json"
 const DIALOGUE_PATH: String = "res://data/npcs/dialogue.json"
 const SHOP_PATH: String = "res://data/shop/shop.json"
 const LAYOUT_PATH: String = "res://data/world/village_layout.json"
+const EVENTS_PATH: String = "res://data/events/events.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -29,6 +30,10 @@ var talk_range: float = 3.0
 var shop: ShopData = null
 ## 마을 꾸밈 배치 (길·바위·울타리·꽃밭·선착장).
 var layout: VillageLayout = null
+## 마을 이벤트 종류 (id → 정보). 언제 열리는지는 서버가 알려 준다 (Net.events).
+var events: Dictionary[String, EventInfo] = {}
+## 선물·별 조각을 주울 수 있는 거리 (서버 판정과 같은 값).
+var collect_range: float = 2.0
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
@@ -66,6 +71,13 @@ func _ready() -> void:
 	_choices = dialogue_file.get("choices", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
+	var events_file: Dictionary = _read_json(EVENTS_PATH)
+	collect_range = float(events_file.get("collect_range", collect_range))
+	for group: String in ["daily", "night"]:
+		for entry: Variant in events_file.get(group, []):
+			if entry is Dictionary:
+				var ev: EventInfo = EventInfo.from_dict(entry)
+				events[ev.id] = ev
 
 
 func fish_name(id: String) -> String:
@@ -85,6 +97,10 @@ func item_icon(id: String) -> Texture2D:
 	var icon: Texture2D = load(path) if ResourceLoader.exists(path) else null
 	_icons[id] = icon
 	return icon
+
+
+func event_info(id: String) -> EventInfo:
+	return events.get(id)
 
 
 func item_name(id: String) -> String:

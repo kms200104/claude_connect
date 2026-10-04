@@ -13,12 +13,16 @@ signal finished
 ## 상점 주인과 이야기하면 여는 창.
 @export var shop_window: ShopWindow
 @export var shop: ShopController
+## 떠돌이 상인 (이벤트 날에만 광장에 선다).
+@export var merchant: MerchantStall
 
 @export_group("Feel")
 ## 서버가 답하지 않으면 이 시간 뒤 대화를 접는다.
 @export_range(1.0, 15.0, 0.5, "suffix:s") var reply_timeout: float = 5.0
 ## 날씨 이야기를 꺼낼 확률 (맑은 날 제외).
 @export_range(0.0, 1.0, 0.05) var weather_talk_chance: float = 0.6
+## 이벤트가 열린 날 주민이 이벤트 이야기를 꺼낼 확률.
+@export_range(0.0, 1.0, 0.05) var event_talk_chance: float = 0.7
 
 var npc_id: String = ""
 ## 대화마다 하나씩 늘어난다. 기다리는 동안 대화가 끝나면 이전 흐름이 멈춘다.
@@ -46,6 +50,9 @@ func start(id: String) -> void:
 	player.set_input_lock(&"dialogue", true)
 	if GameData.shop.keeper != null and id == GameData.shop.keeper.id:
 		await _shopkeeper_flow()
+		return
+	if merchant != null and merchant.npc_id() == id:
+		await _merchant_flow()
 		return
 	var actor: NpcActor = npcs.actor(id)
 	if actor != null:
@@ -124,6 +131,11 @@ func _on_talk_opened(reply: TalkReply) -> void:
 	if Net.weather != NetProtocol.WEATHER_CLEAR and randf() < weather_talk_chance:
 		if not await _say(token, info, GameData.dialogue_line(p, "weather_" + Net.weather, values)):
 			return
+	if not Net.events.is_empty() and randf() < event_talk_chance:
+		var ev: ActiveEvent = Net.events[randi() % Net.events.size()]
+		values["wanted"] = wanted_names(ev)
+		if not await _say(token, info, GameData.dialogue_line(p, "event_" + ev.id, values)):
+			return
 
 	if reply.quest != null:
 		if reply.ready:
@@ -157,6 +169,11 @@ func _shopkeeper_flow() -> void:
 	var p: String = info.personality
 	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):
 		return
+	var bargain: ActiveEvent = Net.event_active(EventInfo.BARGAIN)
+	if bargain != null:
+		values["wanted"] = wanted_names(bargain)
+		if not await _say(token, info, GameData.dialogue_line(p, "bargain", values)):
+			return
 	while token == _session:
 		if not await _say(token, info, GameData.dialogue_line(p, "menu", values)):
 			return
@@ -180,6 +197,50 @@ func _shopkeeper_flow() -> void:
 		await _say(token, info, GameData.dialogue_line(p, "bye", values))
 	if token == _session:
 		stop()
+
+
+## 떠돌이 상인: 상점 주인처럼 서버에 말을 걸지 않고, 사고팔기만 서버에 요청한다 (상인 곁에서만 된다).
+func _merchant_flow() -> void:
+	var token: int = _session
+	var info: NpcInfo = merchant.info()
+	var actor: NpcActor = merchant.actor
+	if actor != null:
+		player.look_toward(actor.global_position - player.global_position)
+		actor.face_toward(player.global_position)
+	var ev: ActiveEvent = Net.event_active(EventInfo.MERCHANT)
+	var values: Dictionary = {"player": GameData.player_name(Net.my_id), "wanted": wanted_names(ev) if ev != null else ""}
+	var p: String = info.personality
+	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):
+		return
+	if not await _say(token, info, GameData.dialogue_line(p, "wanted", values)):
+		return
+	while token == _session:
+		if not await _say(token, info, GameData.dialogue_line(p, "menu", values)):
+			return
+		var pick: int = await _choose(token, [GameData.choice_text("merchant_buy"), GameData.choice_text("merchant_sell"), GameData.choice_text("merchant_talk"), GameData.choice_text("merchant_leave")])
+		if pick == 0 or pick == 1:
+			box.close_quietly()
+			shop_window.open(ShopWindow.MODE_BUY if pick == 0 else ShopWindow.MODE_SELL, ShopWindow.AT_MERCHANT)
+			await shop_window.closed
+			if token != _session:
+				return
+		elif pick == 2:
+			if not await _say(token, info, GameData.dialogue_line(p, "talk", values)):
+				return
+		else:
+			break
+	if token == _session:
+		await _say(token, info, GameData.dialogue_line(p, "bye", values))
+	if token == _session:
+		stop()
+
+
+## 이벤트가 오늘 고른 물건 이름들 ("붕어, 목재").
+static func wanted_names(ev: ActiveEvent) -> String:
+	var names: PackedStringArray = []
+	for id: String in ev.wanted:
+		names.append(GameData.item_name(id))
+	return ", ".join(names)
 
 
 func _offer_flow(token: int, info: NpcInfo, offer: QuestInfo, values: Dictionary) -> void:

@@ -119,8 +119,12 @@ static func interior_parts(level: int) -> Array:
 	var side: float = (w - 1.6) * 0.5
 	parts.append(_p("box", [side, 0.6, 0.2], Vector3(-(0.8 + side * 0.5), 0.3, 0.0), wall_color))
 	parts.append(_p("box", [side, 0.6, 0.2], Vector3(0.8 + side * 0.5, 0.3, 0.0), wall_color))
-	# 출구 매트
+	# 출구: 낮은 문(벽과 같은 높이) + 문기둥 + 매트. 문 쪽으로 걸어가면 밖으로 나간다 (ShopController).
 	parts.append(_p("box", [1.4, 0.03, 0.9], Vector3(0.0, 0.11, -0.6), "#8A5A36" if level < 3 else "#A3263A"))
+	parts.append(_r("rbox", [1.56, 0.5, 0.1], Vector3(0.0, 0.3, 0.06), ["#7A4E30", "#A87244"] if level < 3 else ["#253049", "#3A4A70"], 0.25))
+	parts.append(_p("sphere", [0.05], Vector3(0.45, 0.42, 0.0), "#D9B44A"))
+	for x: float in [-0.85, 0.85]:
+		parts.append(_r("rbox", [0.16, 0.9, 0.24], Vector3(x, 0.45, 0.0), "#6E4A2E" if level < 3 else "#D9B44A", 0.3))
 	# 계산대
 	var counter_z: float = -d + 2.0
 	var counter_color: String = ["", "#A0714A", "#8C5A3A", "#3A2A24"][level]
@@ -181,6 +185,8 @@ static func interior_colliders(level: int) -> Array[AABB]:
 		AABB(Vector3(w * 0.5 - 0.1, 0.0, -d), Vector3(0.2, WALL_HEIGHT, d)),
 		AABB(Vector3(-w * 0.5, 0.0, -0.1), Vector3(side, WALL_HEIGHT, 0.2)),
 		AABB(Vector3(0.8, 0.0, -0.1), Vector3(side, WALL_HEIGHT, 0.2)),
+		# 출구 자리도 막는다 (문 밖 허공으로 걸어 나가지 않게). 나가는 건 서버가 옮겨 준다.
+		AABB(Vector3(-0.8, 0.0, 0.0), Vector3(1.6, WALL_HEIGHT, 0.3)),
 		AABB(Vector3(-w * 0.225, 0.0, -d + 1.65), Vector3(w * 0.45, 1.1, 0.7)),
 	]
 	for side_sign: float in [-1.0, 1.0]:

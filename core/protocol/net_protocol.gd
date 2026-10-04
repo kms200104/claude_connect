@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 4
+const VERSION: int = 5
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -80,3 +80,8 @@ const CLOSE_REPLACED: int = 4000
 const CLOSE_RATE_LIMITED: int = 4008
 
 const ROOM_CODE_LENGTH: int = 6
+
+# 이벤트 (v5)
+const ERR_NO_DROP: String = "no_drop"
+const ERR_MERCHANT_AWAY: String = "merchant_away"
+const ERR_NOT_WANTED: String = "not_wanted"

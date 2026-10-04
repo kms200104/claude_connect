@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://game/fishing/bobber.gd" id="1_bobber"]
 [ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="2_mat"]
+[ext_resource type="Material" path="res://assets/materials/foliage.tres" id="3_ripple"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_bobber"]
 radius = 0.12
@@ -19,6 +20,7 @@ rings = 1
 [node name="Bobber" type="Node3D" node_paths=PackedStringArray("visual")]
 script = ExtResource("1_bobber")
 visual = NodePath("Visual")
+ripple_material = ExtResource("3_ripple")
 
 [node name="Visual" type="Node3D" parent="."]
 

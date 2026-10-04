@@ -59,6 +59,20 @@ func _physics_process(delta: float) -> void:
 	Net.send_move(player.global_position, yaw, player.velocity)
 
 
+## 상대 플레이어 위치 (없으면 Vector3.INF).
+func remote_position(id: int) -> Vector3:
+	var remote: RemotePlayer = _remotes.get(id)
+	return remote.global_position if remote != null else Vector3.INF
+
+
+## 상대 플레이어 위치 전부.
+func remote_positions() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for remote: RemotePlayer in _remotes.values():
+		out.append(remote.global_position)
+	return out
+
+
 func _teleport_player(position: Vector3) -> void:
 	player.global_position = position
 	player.velocity = Vector3.ZERO

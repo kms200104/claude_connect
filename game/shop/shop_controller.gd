@@ -21,6 +21,9 @@ var _exterior: StaticBody3D = null
 var _interior: StaticBody3D = null
 var _sign: Label3D = null
 var _chandelier_light: OmniLight3D = null
+## 문으로 걸어 들어가 드나들기를 요청했고 아직 답이 없다 (두 번 보내지 않게).
+var _door_pending: bool = false
+var _door_pending_since: int = 0
 
 
 func _ready() -> void:
@@ -31,6 +34,36 @@ func _ready() -> void:
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void: _on_welcomed())
 	Net.shop_updated.connect(_on_shop_updated)
 	Net.shop_door_passed.connect(_on_door_passed)
+	Net.request_failed.connect(func(kind: String, _code: String) -> void:
+		if kind == "shop_enter" or kind == "shop_exit":
+			_door_pending = false)
+
+
+## 문 쪽으로 걸어가면 저절로 드나든다 (상황 버튼도 그대로 쓸 수 있다).
+## 안: 출구 앞에서 남쪽(+Z)으로 밀면 나가기. 밖: 문 앞에서 북쪽(-Z, 건물 쪽)으로 밀면 들어가기.
+func _physics_process(_delta: float) -> void:
+	if player == null or Net.state != Net.State.ONLINE or player.is_input_locked():
+		return
+	if _door_pending:
+		if Time.get_ticks_msec() - _door_pending_since < 2000:
+			return
+		_door_pending = false
+	var pos: Vector3 = player.global_position
+	var vz: float = player.move_intent.z * player.max_speed
+	if is_inside(pos):
+		if vz > 0.5 and _flat_distance(pos, GameData.shop.exit) <= 0.8:
+			_walk_through_door(false)
+	elif vz < -0.5 and _flat_distance(pos, GameData.shop.door) <= 1.5 and absf(pos.x - GameData.shop.door.x) < 0.9:
+		_walk_through_door(true)
+
+
+func _walk_through_door(enter: bool) -> void:
+	_door_pending = true
+	_door_pending_since = Time.get_ticks_msec()
+	if enter:
+		Net.enter_shop()
+	else:
+		Net.exit_shop()
 
 
 func is_inside(position: Vector3) -> bool:
@@ -62,6 +95,7 @@ func _on_shop_updated(leveled_up: bool) -> void:
 
 
 func _on_door_passed(inside: bool, position: Vector3) -> void:
+	_door_pending = false
 	player.global_position = position
 	player.velocity = Vector3.ZERO
 	player.clear_look_direction()

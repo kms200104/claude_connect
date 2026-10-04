@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://4ilkrokubqdf"
-path="res://.godot/imported/tree_fall.wav-5a2ea66b6544fd09ee4f38408728b6ae.sample"
+uid="uid://bt1vnok5kih05"
+path="res://.godot/imported/line_zip.wav-790b7ab785031e899504a088c75e67a9.sample"
 
 [deps]
 
-source_file="res://assets/audio/sfx/tree_fall.wav"
-dest_files=["res://.godot/imported/tree_fall.wav-5a2ea66b6544fd09ee4f38408728b6ae.sample"]
+source_file="res://assets/audio/sfx/line_zip.wav"
+dest_files=["res://.godot/imported/line_zip.wav-790b7ab785031e899504a088c75e67a9.sample"]
 
 [params]
 

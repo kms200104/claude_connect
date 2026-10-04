@@ -39,6 +39,8 @@ extends CharacterBody3D
 var held_item: String = "rod"
 ## 달리는 중인지 (조이스틱을 끝까지 0.7초 이상 밀고 있음).
 var running: bool = false
+## 이번 프레임에 가려고 한 방향 × 입력 세기 (월드 XZ). 벽에 막혀 멈춰 있어도 미는 방향을 알 수 있다 (상점 문).
+var move_intent: Vector3 = Vector3.ZERO
 
 var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
@@ -51,6 +53,7 @@ func _physics_process(delta: float) -> void:
 	var input: Vector2 = _read_input()
 	_update_running(input.length(), delta)
 	var move_dir: Vector3 = _input_to_world(input)
+	move_intent = move_dir * minf(input.length(), 1.0)
 	var top_speed: float = run_speed if running else max_speed
 	var target_velocity: Vector3 = move_dir * top_speed * minf(input.length(), 1.0)
 
@@ -111,6 +114,18 @@ func set_held_item(item_id: String) -> void:
 	held_item = item_id
 	if rig != null:
 		rig.set_held(item_id)
+
+
+func play_cast() -> void:
+	if rig != null:
+		rig.play_cast()
+
+
+## 낚싯대 끝 (월드 좌표). 찌가 여기서 날아간다.
+func rod_tip() -> Vector3:
+	if rig != null and rig.rod != null:
+		return rig.rod.global_transform * Vector3(0.0, 1.5, 0.0)
+	return global_position + Vector3(0.0, 1.6, 0.0)
 
 
 func play_chop() -> void:

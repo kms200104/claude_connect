@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -40,6 +40,10 @@ export const ErrorCode = Object.freeze({
   placeLimit: 'place_limit',
   notOwner: 'not_owner',
   notWearable: 'not_wearable',
+  // 이벤트
+  noDrop: 'no_drop', // 주울 선물·별 조각이 없거나 너무 멂
+  merchantAway: 'merchant_away', // 떠돌이 상인이 없거나 너무 멂
+  notWanted: 'not_wanted', // 떠돌이 상인이 찾는 물건이 아님
 });
 
 export const Weather = Object.freeze({

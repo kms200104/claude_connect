@@ -1,17 +1,27 @@
 class_name Bobber
 extends Node3D
-## 찌. 물 위에서 살랑거리다가, 가짜 입질엔 살짝, 진짜 입질엔 크게 가라앉는다.
+## 찌. 낚싯대 끝에서 포물선을 그리며 날아가 물에 퐁당 떨어지고(물결 고리), 물 위에서 살랑거리다가,
+## 가짜 입질엔 살짝, 진짜 입질엔 크게 가라앉는다.
+
+## 찌가 물에 닿았다.
+signal landed(position: Vector3)
 
 @export var visual: Node3D
 @export_range(0.0, 0.1, 0.005, "suffix:m") var idle_bob_height: float = 0.025
 @export_range(0.5, 6.0, 0.1, "suffix:Hz") var idle_bob_speed: float = 1.6
 @export_range(0.0, 0.5, 0.01, "suffix:m") var nibble_dip: float = 0.08
 @export_range(0.0, 0.8, 0.01, "suffix:m") var bite_dip: float = 0.28
+## 날아가는 포물선의 꼭대기 높이 (시작·끝 사이 직선 위로).
+@export_range(0.0, 5.0, 0.1, "suffix:m") var arc_height: float = 1.6
+## 물결 고리를 칠할 정점 색 머티리얼 (없으면 고리를 안 그린다).
+@export var ripple_material: Material
 
 var _time: float = 0.0
 var _dip: float = 0.0
 var _tween: Tween = null
 var _biting: bool = false
+var _flight: Tween = null
+static var _ring: ArrayMesh = null
 
 
 func _ready() -> void:
@@ -25,7 +35,52 @@ func show_at(world_position: Vector3) -> void:
 	visible = true
 
 
+## start(낚싯대 끝)에서 target(수면)까지 포물선으로 날아간다. 닿으면 landed 신호 + 물결.
+func cast_to(start: Vector3, target: Vector3, duration: float = 0.55) -> void:
+	_stop_tween()
+	if _flight != null and _flight.is_valid():
+		_flight.kill()
+	_dip = 0.0
+	_biting = false
+	visible = true
+	global_position = start
+	_flight = create_tween()
+	_flight.tween_method(func(t: float) -> void:
+		global_position = start.lerp(target, t) + Vector3(0.0, sin(t * PI) * arc_height, 0.0), 0.0, 1.0, duration)
+	_flight.tween_callback(func() -> void:
+		global_position = target
+		ripple()
+		landed.emit(target))
+
+
+func is_flying() -> bool:
+	return _flight != null and _flight.is_valid() and _flight.is_running()
+
+
+## 수면에 퍼지는 동그란 물결 두 겹.
+func ripple() -> void:
+	if ripple_material == null:
+		return
+	if _ring == null:
+		var st: SurfaceTool = ClayMesh.begin()
+		ClayMesh.add_torus(st, Vector3.ZERO, 0.3, 0.025, Color(0.95, 0.99, 1.0), 20, 4)
+		_ring = ClayMesh.commit(st)
+	for i: int in 2:
+		var ring: MeshInstance3D = MeshInstance3D.new()
+		ring.mesh = _ring
+		ring.material_override = ripple_material
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		get_parent().add_child(ring)
+		ring.global_position = global_position + Vector3(0.0, 0.02, 0.0)
+		ring.scale = Vector3(0.3, 1.0, 0.3)
+		var tween: Tween = ring.create_tween().set_parallel(true)
+		tween.tween_property(ring, "scale", Vector3(2.6, 0.4, 2.6), 0.9).set_delay(i * 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.chain().tween_callback(ring.queue_free)
+
+
 func hide_bobber() -> void:
+	if _flight != null and _flight.is_valid():
+		_flight.kill()
 	_stop_tween()
 	_biting = false
 	visible = false

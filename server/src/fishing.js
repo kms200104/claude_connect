@@ -21,6 +21,8 @@ export function createFishing({
   onFishingChanged,
   heldItem = () => 'rod',
   environment = () => ({ hour: 12, weather: 'clear' }),
+  // 낚시 대회가 열려 있으면 그 이벤트 ({ def }) — 희귀한 물고기가 더 잘 잡히고, 낚을 때마다 상금.
+  derby = () => null,
 }) {
   const scaled = (ms) => ms * cfg.fishTimeScale;
   const rand = (min, max) => min + random() * (max - min);
@@ -55,7 +57,9 @@ export function createFishing({
     if (!hasFreeSpace(player.slots, data.isFish, data.limitOf)) return ErrorCode.inventoryFull;
 
     const { hour, weather } = environment(player);
-    const fish = pickFish(spot, data.fish, random, hour, weather);
+    const contest = derby(player);
+    const boost = contest ? contest.def.rare_boost ?? 1 : 1;
+    const fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.rarity === 'rare' ? boost : 1));
     const session = {
       rid,
       spot,
@@ -116,11 +120,14 @@ export function createFishing({
       end(player, { ok: false, reason: FishFail.inventoryFull });
       return null;
     }
-    // 성공: 인벤토리 지급 + 통계 갱신을 한 번에 기록한다.
+    // 성공: 인벤토리 지급 + 대회 상금 + 통계 갱신을 한 번에 기록한다.
     addItem(player.slots, session.fish.id, 1, cfg, data.limitOf);
     player.profile.catches += 1;
+    const contest = derby(player);
+    const bonus = contest ? contest.def.bonus?.[session.fish.rarity] ?? 0 : 0;
+    player.profile.sol += bonus;
     onInventoryChanged(player, session.fish.id);
-    end(player, { ok: true, fish: session.fish.id });
+    end(player, bonus > 0 ? { ok: true, fish: session.fish.id, bonus } : { ok: true, fish: session.fish.id });
     return null;
   }
 

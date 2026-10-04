@@ -149,18 +149,38 @@ def footsteps() -> None:
 
 
 def fishing() -> None:
-    # 던지기: 휙 (노이즈 대역이 올라갔다 내려온다).
-    n = int(0.42 * SR)
-    sweep = np.concatenate([np.linspace(700, 3200, n // 2), np.linspace(3200, 1200, n - n // 2)])
-    x = biquad_bp(noise(n), sweep, 3.0) * np.sin(np.linspace(0, np.pi, n)) ** 1.5
-    save_wav("fish_cast", fade(x), 0.6)
-    # 퐁당: 물방울 (음높이가 빠르게 오르는 사인) + 물보라.
-    n = int(0.35 * SR)
-    t = t_axis(0.35)
-    f = 500 + 1400 * (1 - np.exp(-t * 30))
-    drop = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.002, 0.06)
-    splash = biquad_bp(noise(n), 2500, 0.8) * env_ad(n, 0.002, 0.08)
-    save_wav("fish_plop", fade(drop + 0.5 * splash), 0.7)
+    # 던지기: 휘익! (노이즈 대역이 빠르게 올라갔다 내려오고, 낚싯대가 공기를 가르는 높은 쉭 소리를 겹친다).
+    n = int(0.38 * SR)
+    sweep = np.concatenate([np.linspace(600, 4200, n // 3), np.linspace(4200, 900, n - n // 3)])
+    whoosh = biquad_bp(noise(n), sweep, 2.2) * np.sin(np.linspace(0, np.pi, n)) ** 1.2
+    t = t_axis(0.38)
+    swish = np.sin(2 * np.pi * np.cumsum(1800 + 1600 * np.sin(np.pi * t / 0.38)) / SR) * np.sin(np.pi * t / 0.38) ** 3
+    save_wav("fish_cast", fade(whoosh + 0.25 * swish), 0.85)
+    # 줄 풀리는 소리: 릴이 촤르르 돌며 줄이 쭉 나간다 (찌가 날아가는 동안).
+    x = np.zeros(int(0.55 * SR))
+    pos = 0.0
+    k = 0
+    while pos < 0.5:
+        click = biquad_bp(noise(int(0.008 * SR)), 4200, 2.5) * env_ad(int(0.008 * SR), 0.0004, 0.003)
+        mix_at(x, click, int(pos * SR), 0.6 * (1 - pos / 0.6))
+        pos += 0.012 + 0.03 * pos
+        k += 1
+    t = t_axis(0.55)
+    whine = np.sin(2 * np.pi * np.cumsum(2200 - 900 * t) / SR) * np.exp(-t / 0.25) * 0.15
+    save_wav("line_zip", fade(x + whine, fout=0.05), 0.6)
+    # 퐁당: 물방울(음높이가 빠르게 오르는 사인) + 낮은 퐁 + 물보라 + 뒤따르는 작은 물방울.
+    n = int(0.55 * SR)
+    t = t_axis(0.55)
+    f = 380 + 1300 * (1 - np.exp(-t * 26))
+    drop = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.002, 0.07)
+    body = np.sin(2 * np.pi * (150 * t - 60 * t * t)) * env_ad(n, 0.002, 0.06)
+    splash = biquad_bp(noise(n), 2600, 0.8) * env_ad(n, 0.002, 0.09)
+    x = drop + 0.6 * body + 0.55 * splash
+    for k in range(4):
+        bt = t_axis(0.05)
+        bf = rng.uniform(900, 1700) * (1 + 3 * bt)
+        mix_at(x, np.sin(2 * np.pi * np.cumsum(bf) / SR) * env_ad(len(bt), 0.002, 0.015), int(rng.uniform(0.12, 0.35) * SR), 0.3)
+    save_wav("fish_plop", fade(x, fout=0.05), 0.85)
     # 입질: 작고 맑은 퐁.
     n = int(0.12 * SR)
     t = t_axis(0.12)
@@ -206,18 +226,6 @@ def chopping() -> None:
     knock = tone(420, 0.3, ((1, 1.0), (2.3, 0.5)), decay=0.03)
     crack = highpass(noise(n), 2000) * env_ad(n, 0.0005, 0.012)
     save_wav("chop", fade(body + 0.6 * knock + 0.5 * crack), 0.85)
-    # 쓰러짐: 우지끈 + 잎 흔들림 + 쿵.
-    n = int(1.3 * SR)
-    x = np.zeros(n)
-    for k in range(18):
-        start = int(rng.uniform(0.0, 0.45) * SR)
-        mix_at(x, highpass(noise(int(0.02 * SR)), 1500) * env_ad(int(0.02 * SR), 0.0005, 0.006), start, rng.uniform(0.3, 0.8))
-    leaves = biquad_bp(noise(n), 4000, 0.8) * np.exp(-((t_axis(1.3) - 0.5) ** 2) / 0.06)
-    x += 0.5 * leaves
-    thud_t = t_axis(0.6)
-    thud = np.sin(2 * np.pi * (70 * thud_t - 25 * thud_t ** 2)) * env_ad(len(thud_t), 0.003, 0.14)
-    mix_at(x, thud, int(0.62 * SR), 1.3)
-    save_wav("tree_fall", fade(x, fout=0.08), 0.85)
     # 아이템 얻음: 뽀옹.
     n = int(0.22 * SR)
     t = t_axis(0.22)
@@ -225,6 +233,40 @@ def chopping() -> None:
     x = np.sin(2 * np.pi * np.cumsum(f) / SR) * env_ad(n, 0.003, 0.07)
     x += 0.3 * np.sin(2 * np.pi * np.cumsum(f * 2) / SR) * env_ad(n, 0.003, 0.04)
     save_wav("pickup", fade(x), 0.6)
+
+
+def tree_fall_parts() -> None:
+    """나무 쓰러짐을 둘로: 처음 우지끈(넘어가기 시작) · 땅에 닿을 때 쿵 + 잎 흔들림."""
+    n = int(0.9 * SR)
+    x = np.zeros(n)
+    for k in range(22):
+        start = int(rng.uniform(0.0, 0.7) * SR)
+        mix_at(x, highpass(noise(int(0.02 * SR)), 1500) * env_ad(int(0.02 * SR), 0.0005, 0.006), start, rng.uniform(0.3, 0.9) * (1 - start / n))
+    t = t_axis(0.9)
+    creak = np.sin(2 * np.pi * np.cumsum(180 + 60 * np.sin(2 * np.pi * 3 * t)) / SR) * np.exp(-t / 0.4) * 0.35
+    save_wav("tree_creak", fade(x + creak, fout=0.08), 0.75)
+    n = int(1.0 * SR)
+    t = t_axis(1.0)
+    thud = np.sin(2 * np.pi * (65 * t - 22 * t * t)) * env_ad(n, 0.003, 0.16)
+    knock = tone(140, 1.0, ((1, 1.0), (2.3, 0.4)), decay=0.06)
+    leaves = biquad_bp(noise(n), 3800, 0.8) * env_ad(n, 0.02, 0.25)
+    save_wav("tree_land", fade(thud * 1.4 + 0.5 * knock + 0.5 * leaves, fout=0.1), 0.95)
+
+
+def event_sounds() -> None:
+    # 이벤트 시작: 통통 튀는 칼림바 팡파레.
+    x = np.zeros(int(1.6 * SR))
+    for i, semi in enumerate([0, 4, 7, 12, 7, 12, 16]):
+        mix_at(x, kalimba(659.3 * 2 ** (semi / 12) / 2, 0.6, SR), int(i * 0.085 * SR), 0.6)
+    for semi in [0, 4, 7, 12]:
+        mix_at(x, kalimba(329.6 * 2 ** (semi / 12), 1.0, SR), int(0.62 * SR), 0.35)
+    save_wav("event_start", fade(x, fout=0.15), 0.75)
+    # 반짝: 높은 종소리 여러 개가 흩뿌려진다 (별 조각·유성).
+    x = np.zeros(int(1.0 * SR))
+    for i in range(6):
+        f = rng.uniform(2400, 4200)
+        mix_at(x, tone(f, 0.5, ((1, 1.0), (2.76, 0.25)), decay=0.12), int(i * rng.uniform(0.04, 0.09) * SR), 0.5)
+    save_wav("twinkle", fade(x, fout=0.1), 0.5)
 
 
 def voices() -> None:
@@ -533,4 +575,6 @@ if __name__ == "__main__":
     voices()
     weather()
     ui()
+    tree_fall_parts()
+    event_sounds()
     music()

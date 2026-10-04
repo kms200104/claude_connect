@@ -51,6 +51,15 @@ signal fish_bite(window_ms: int)
 signal fish_result(success: bool, fish_id: String, reason: String)
 ## 낚시·인벤토리 요청이 거부됨 (NetProtocol.ERR_*).
 signal action_rejected(code: String)
+## 열린 이벤트 목록이 바뀌었다 (started: 새로 열린 이벤트 id 들).
+signal events_changed(started: PackedStringArray)
+## 바닥에 선물 풍선·별 조각이 생겼다 / 없어졌다 (by: 주운 사람 id, 0 = 이벤트가 끝나 사라짐).
+signal drop_added(drop: DropInfo)
+signal drop_removed(id: String, by: int)
+## 내가 선물·별 조각을 주웠다.
+signal collected(kind: String, item_id: String)
+## 낚시 대회 상금을 받았다.
+signal fish_bonus(amount: int)
 
 enum State { DISCONNECTED, CONNECTING, JOINING, ONLINE, RECONNECTING }
 
@@ -106,6 +115,12 @@ var placed: Dictionary[String, PlacedInfo] = {}
 ## 내가 입은 옷 (아이템 id).
 var outfit_hat: String = ""
 var outfit_top: String = ""
+## 지금 열려 있는 이벤트 (서버가 정한다).
+var events: Array[ActiveEvent] = []
+## 바닥에 떨어진 선물·별 조각 (id → 정보).
+var drops: Dictionary[String, DropInfo] = {}
+## 마지막 도끼질로 얻은 개수 (나무꾼의 날에는 2).
+var last_chop_count: int = 1
 
 var _ws: WebSocketPeer = null
 var _intent: Intent = Intent.NONE
@@ -262,12 +277,41 @@ func exit_shop() -> void:
 	_request("shop_exit", {})
 
 
-func sell_item(slot: int, count: int = 1) -> void:
-	_request("shop_sell", {"slot": slot, "n": count})
+## at = "merchant" 이면 떠돌이 상인과 거래한다 (상인 곁에서만).
+func sell_item(slot: int, count: int = 1, at: String = "") -> void:
+	var fields: Dictionary = {"slot": slot, "n": count}
+	if not at.is_empty():
+		fields["at"] = at
+	_request("shop_sell", fields)
 
 
-func buy_item(item_id: String, count: int = 1) -> void:
-	_request("shop_buy", {"item": item_id, "n": count})
+func buy_item(item_id: String, count: int = 1, at: String = "") -> void:
+	var fields: Dictionary = {"item": item_id, "n": count}
+	if not at.is_empty():
+		fields["at"] = at
+	_request("shop_buy", fields)
+
+
+## 바닥의 선물·별 조각 줍기.
+func collect(drop_id: String) -> void:
+	_request("collect", {"id": drop_id})
+
+
+## 지금 열린 이벤트 (없으면 null).
+func event_active(event_id: String) -> ActiveEvent:
+	for e: ActiveEvent in events:
+		if e.id == event_id:
+			return e
+	return null
+
+
+## 이 물건을 팔 때의 배율. 상점: 특가 매입이면 2, 아니면 1. 떠돌이 상인: 찾는 물건만 2, 그 밖은 0(안 산다).
+func sell_multiplier(item_id: String, at: String = "") -> float:
+	if at == "merchant":
+		var m: ActiveEvent = event_active(EventInfo.MERCHANT)
+		return m.multiplier if m != null and item_id in m.wanted else 0.0
+	var b: ActiveEvent = event_active(EventInfo.BARGAIN)
+	return b.multiplier if b != null and item_id in b.wanted else 1.0
 
 
 ## 가구 설치 (x, z 는 서버가 0.5m 격자로 맞춘다, rot 은 90° 단위).
@@ -501,6 +545,7 @@ func _handle_text(text: String) -> void:
 			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", "")))
 		"chop_result":
 			_pending.erase(str(msg.get("rid", "")))
+			last_chop_count = int(msg.get("n", 1))
 			chop_succeeded.emit(str(msg.get("tree", "")), str(msg.get("item", "")), bool(msg.get("felled", false)))
 		"talk_open":
 			_pending.erase(str(msg.get("rid", "")))
@@ -548,6 +593,23 @@ func _handle_text(text: String) -> void:
 		"fish_result":
 			_fishing_rid = ""
 			fish_result.emit(bool(msg.get("ok", false)), str(msg.get("fish", "")), str(msg.get("reason", "")))
+			if int(msg.get("bonus", 0)) > 0:
+				fish_bonus.emit(int(msg.get("bonus", 0)))
+		"ev":
+			_apply_events(msg)
+		"drop":
+			var dropped: Variant = msg.get("d", {})
+			if dropped is Dictionary:
+				var d: DropInfo = DropInfo.from_dict(dropped)
+				drops[d.id] = d
+				drop_added.emit(d)
+		"drop_gone":
+			var gone: String = str(msg.get("id", ""))
+			drops.erase(gone)
+			drop_removed.emit(gone, int(msg.get("by", 0)))
+		"collect_result":
+			_pending.erase(str(msg.get("rid", "")))
+			collected.emit(str(msg.get("kind", "")), str(msg.get("item", "")))
 		"error":
 			_on_server_error(str(msg.get("code", "")), msg)
 
@@ -591,12 +653,40 @@ func _on_welcome(msg: Dictionary) -> void:
 			if entry is Dictionary:
 				var p: PlacedInfo = PlacedInfo.from_dict(entry)
 				placed[p.id] = p
+	drops.clear()
+	var drop_list: Variant = msg.get("drops", [])
+	if drop_list is Array:
+		for entry: Variant in drop_list:
+			if entry is Dictionary:
+				var dd: DropInfo = DropInfo.from_dict(entry)
+				drops[dd.id] = dd
+	events.clear()
+	_apply_events(msg.get("ev", {}), false)
 	_save_session()
 	_set_state(State.ONLINE)
 	if me != null:
 		welcomed.emit(me, others, resumed)
 	weather_changed.emit(weather)
 	npcs_received.emit(float(msg.get("st", 0.0)), npc_states)
+
+
+## 이벤트 목록 받기. announce 면 새로 열린 이벤트를 알린다 (접속할 때는 이미 열려 있던 것도 한 번 알린다).
+func _apply_events(data: Variant, announce: bool = true) -> void:
+	if not data is Dictionary:
+		return
+	var before: PackedStringArray = []
+	for e: ActiveEvent in events:
+		before.append(e.id)
+	events.clear()
+	var started: PackedStringArray = []
+	for entry: Variant in (data as Dictionary).get("list", []):
+		if entry is Dictionary:
+			var e: ActiveEvent = ActiveEvent.from_dict(entry)
+			events.append(e)
+			if not e.id in before:
+				started.append(e.id)
+	if announce or not started.is_empty():
+		events_changed.emit(started)
 
 
 func _next_rid() -> String:

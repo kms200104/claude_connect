@@ -101,6 +101,12 @@ func play_chop() -> void:
 		tree.set("parameters/ChopShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 
 
+## 낚싯대를 휙 던지는 동작 (한 번).
+func play_cast() -> void:
+	if tree != null:
+		tree.set("parameters/CastShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
 func is_chopping() -> bool:
 	return tree != null and bool(tree.get("parameters/ChopShot/active"))
 

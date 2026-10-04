@@ -94,6 +94,12 @@ export const defaultConfig = {
   maxPlacedPerPlayer: num('MAX_PLACED_PER_PLAYER', 30),
   // 부탁 종류를 하나로 고정한다 (quests.json 의 템플릿 id, 시연·테스트용). 비우면 전부.
   questTemplate: process.env.QUEST_TEMPLATE || '',
+  // 이벤트를 고정한다 (쉼표 목록: bargain, merchant, fishing_derby, lumber_day, gift_day, meteor_shower). 비우면 마을 시드로.
+  eventForce: process.env.EVENT_FORCE || '',
+  // 특가 매입·떠돌이 상인이 찾는 물건을 고정한다 (쉼표 목록, 시연·테스트용).
+  eventWanted: process.env.EVENT_WANTED || '',
+  // 선물·별 조각이 떨어지는 간격 배율 (테스트는 작게).
+  eventSpawnScale: num('EVENT_SPAWN_SCALE', 1),
 };
 
 // 슬롯(1부터)별 스폰 위치.

@@ -20,13 +20,15 @@ const ICONS: Dictionary[String, String] = {
 	"들어가기": "res://assets/ui/icons/shop.png",
 	"나가기": "res://assets/ui/icons/shop.png",
 	"줍기": "res://assets/icons/items/log_stool.png",
+	"선물 줍기": "res://assets/ui/icons/gift.png",
+	"별 줍기": "res://assets/icons/items/star_fragment.png",
 }
 
 
 func show_action(text: String) -> void:
 	if _button.text != text or not _button.visible:
 		var path: String = ICONS.get(text, "")
-		_button.icon = load(path) if not path.is_empty() else null
+		_button.icon = load(path) if not path.is_empty() and ResourceLoader.exists(path) else null
 	_button.text = text
 	_button.visible = true
 

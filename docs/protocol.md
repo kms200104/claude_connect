@@ -1,10 +1,11 @@
-# 네트워크 프로토콜 v4
+# 네트워크 프로토콜 v5
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
 
 v2 → v3: 칸 인벤토리(퀵슬롯 + 가방)와 손에 든 도구, 나무 베기, 주민 대화·부탁, 마을 시계·날씨·번개.
 v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가구 설치·줍기, 옷 입기·벗기, 소지품 부탁, 달리기 속도(최대 7.2m/s 허용).
+v4 → v5: 마을 이벤트(`ev`), 바닥의 선물·별 조각(`drop` `drop_gone` `collect`), 떠돌이 상인과 거래(`shop_sell`/`shop_buy` 의 `at: "merchant"`), 낚시 대회 상금(`fish_result.bonus`), 나무꾼의 날(`chop_result.n`).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -34,6 +35,8 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 | `pickup` | `rid id` | 내가 놓은 가구를 2.5m 안에서 줍기 |
 | `wear` | `rid slot` | 칸의 옷 입기 (입던 옷은 그 칸으로) |
 | `unwear` | `rid part` | `hat` / `top` 벗기 (가방에 빈자리가 있어야) |
+| `collect` | `rid id` | 바닥의 선물 풍선·별 조각 줍기 (`collect_range` 2m 안, 가방에 빈자리) |
+| `shop_sell`/`shop_buy` + `at: "merchant"` | | 떠돌이 상인과 거래: 상인 곁(대화 거리 +1m)에서만. 상인이 찾는 물건만 2배 값에 사고(그 밖은 `not_wanted`), 보따리 물건(`stock`)을 판다. 상점 포인트는 쌓이지 않는다 |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -50,8 +53,8 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 | `fish_started` | `rid spot` | 던지기 수락 |
 | `fish_nibble` | `rid` | 가짜 입질 (0~3번). 아직 당기면 안 된다 |
 | `fish_bite` | `rid windowMs` | 진짜 입질. 물고기 종류는 알리지 않는다 |
-| `fish_result` | `rid ok fish? reason?` | 서버가 확정한 결과. 실패 사유: `early late escaped moved cancelled inventory_full` |
-| `chop_result` | `rid ok item tree felled` | 도끼질 성공. `item`이 인벤토리에 들어갔고, `felled`면 나무가 쓰러졌다 |
+| `fish_result` | `rid ok fish? reason? bonus?` | 서버가 확정한 결과. 실패 사유: `early late escaped moved cancelled inventory_full`. 낚시 대회 중이면 `bonus` 솔을 더 받았다 |
+| `chop_result` | `rid ok item n tree felled` | 도끼질 성공. `item` `n`개(나무꾼의 날 2개)가 인벤토리에 들어갔고, `felled`면 나무가 쓰러졌다 |
 | `tree` | `id s c` | 나무 상태 변화 (방 전체). `s` = `grown` / `stump` / `sapling`, `c` = 오늘 찍힌 횟수 |
 | `act` | `id kind tree` | 상대의 동작 (지금은 `kind: chop`). 도끼질 애니메이션 재생용 |
 | `npcs` | `st n[]` | 주민 위치 (방 전체, 움직일 때만 10Hz). `n[]`: `{id, x, z, yaw, talk}` (`talk` = 대화 중인 플레이어 id, 0 = 없음) |
@@ -66,6 +69,10 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 | `placed` | `rid by f` | 가구가 놓였다 (방 전체). `f` = `{id, item, x, z, rot, owner}` (`owner` = 놓은 사람 자리 번호) |
 | `unplaced` | `rid id` | 가구가 치워졌다 (방 전체) |
 | `lightning` | `st power` | 번개 (뇌우일 때, 방의 모두에게 같은 순간). `power` 0.6~1 |
+| `ev` | `day list[]` | 지금 열린 이벤트가 바뀌었다 (방 전체). `list[]`: `{id, wanted?, mult?, stock?}` — `wanted` 오늘 2배로 사 주는 물건, `stock` 떠돌이 상인의 보따리 |
+| `drop` | `d` | 바닥에 선물·별 조각이 떨어졌다 (방 전체). `d` = `{id, kind, x, z, item?}` (`kind` = `gift`/`star`, 선물 속 `item`은 주울 때까지 비밀) |
+| `drop_gone` | `id by` | 주웠거나(`by` = 주운 사람) 이벤트가 끝나 사라졌다(`by` = 0) |
+| `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
 `players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용).
@@ -73,12 +80,26 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted`
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
 - `clock` = `{g, s, st}`: 서버 시각 `st`(ms)일 때 마을 시각이 `g`(마을 시간대 벽시계를 epoch ms로 나타낸 값)이고 `s`배로 흐른다. 클라이언트는 `g + (서버시각 − st) × s` 로 지금 마을 시각을 계산한다. 하루는 **새벽 5시**에 바뀐다.
 - `w` = 지금 날씨, `trees[]` = `{id, s, c}` 전체, `npcs[]` = 주민 위치 전체, `shop` = `shop` 메시지와 같은 모양, `placed[]` = 설치된 가구 전체.
+- `ev` = `ev` 메시지와 같은 모양(지금 열린 이벤트), `drops[]` = 바닥의 선물·별 조각 전체.
+
+## 마을 이벤트 (서버 판정, `data/events/events.json`)
+- 날마다(새벽 5시 기준) 마을 시드와 날짜로 하루 이벤트를 뽑는다: 75% 확률로 아래 다섯 중 하나(가중치), 나머지는 이벤트 없는 날. 저장하지 않아도 언제 계산해도 같다(날씨와 같은 방식).
+  | id | 이름 | 시간 | 규칙 |
+  |---|---|---|---|
+  | `bargain` | 특가 매입의 날 | 하루 종일 | 상점이 고른 물건(물고기 2 + 재료 1)을 2배 값에 사 준다 |
+  | `merchant` | 떠돌이 상인 누리 | 9~21시 | 광장(`spot`)에 노점. 찾는 물건(물고기·소지품·재료 하나씩)을 2배 값에 사고, 보따리 물건 4가지를 판다 |
+  | `fishing_derby` | 호수 낚시 대회 | 9~18시 | 낚을 때마다 상금(흔한 40 · 조금 귀한 150 · 귀한 500솔), 귀한 물고기가 2.5배 잘 잡힌다 |
+  | `lumber_day` | 나무꾼의 날 | 하루 종일 | 도끼질 한 번에 2개 |
+  | `gift_day` | 선물 풍선의 날 | 8~19시 | 40초마다 선물 풍선이 마을에 내려앉는다(최대 4개). 주우면 클로버·꽃다발·바람개비 등 |
+- 밤 이벤트 `meteor_shower`(유성우)는 따로 35% 확률, 20~4시의 맑음·흐림에만. 30초마다 별 조각이 떨어진다(최대 5개).
+- 선물·별 조각 자리는 호수·상점·집·나무·바위를 피해 광장 둘레 28m 안에서 고른다. 메모리에만 두고, 이벤트가 끝나면 치운다.
+- 시연·테스트: `EVENT_FORCE=merchant,meteor_shower`(고정), `EVENT_WANTED=wood,crucian`(찾는 물건 고정), `EVENT_SPAWN_SCALE=0.02`(빨리 떨어뜨리기).
 
 ## 흐름
 - **입장**: `create`/`join` → `welcome`(+상대에게 `peer_joined`). 클라이언트는 `welcome`의 내 위치로 캐릭터를 맞춘다.
@@ -129,7 +150,7 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 ## 인벤토리
 퀵슬롯 5칸 + 가방 20칸. 새 아이템은 같은 아이템 칸 → 빈 가방 칸 → 빈 퀵슬롯 순으로 들어간다. 칸당 개수: 물고기 99, 목재 30, 도구 1.
 처음 들어오면 퀵슬롯 1번에 낚싯대, 2번에 도끼가 있고 1번을 손에 들고 있다(솔은 `START_SOL`, 기본 0). 도구는 버릴 수 없다.
-아이템 종류: 도구, 재료(목재 6종), 소지품(부탁·선물용 10종), 가구(11종), 옷(모자 4·상의 4), 물고기(20종). 나무 종류(둥근·소나무·자작나무)마다 나오는 목재·소지품이 다르다.
+아이템 종류: 도구, 재료(목재 6종), 소지품(부탁·선물용 19종), 가구(20종), 옷(모자 7·상의 7), 물고기(31종). 나무 종류(둥근·소나무·자작나무)마다 나오는 목재·소지품이 다르다.
 물고기 칸이 가득 차면 던지기 전에 `inventory_full`로 거절하고, 던진 뒤 칸이 찼다면 `fish_result(inventory_full)`로 놓친다.
 
 ## 저장

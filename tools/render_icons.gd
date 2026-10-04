@@ -34,6 +34,10 @@ func _ready() -> void:
 			continue
 		await _shoot(info.id, built[0], built[1])
 		count += 1
+	# 이벤트 그림: 선물 풍선 (assets/ui/icons/gift.png).
+	if only.is_empty() or "gift" in only:
+		await _shoot("gift", DropField.gift_mesh(0), Vector3(0.5, 0.35, 1.0), "res://assets/ui/icons")
+		count += 1
 	print("[icons] %d개 저장" % count)
 	get_tree().quit()
 
@@ -103,7 +107,7 @@ func _build_studio() -> void:
 	_viewport.add_child(_holder)
 
 
-func _shoot(id: String, mesh: ArrayMesh, view: Vector3) -> void:
+func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:
 	_holder.mesh = mesh
 	var box: AABB = mesh.get_aabb()
 	var radius: float = box.size.length() * 0.5
@@ -114,6 +118,6 @@ func _shoot(id: String, mesh: ArrayMesh, view: Vector3) -> void:
 		await RenderingServer.frame_post_draw
 	var image: Image = _viewport.get_texture().get_image()
 	image.resize(ICON_SIZE, ICON_SIZE, Image.INTERPOLATE_LANCZOS)
-	var path: String = ProjectSettings.globalize_path("%s/%s.png" % [OUT_DIR, id])
+	var path: String = ProjectSettings.globalize_path("%s/%s.png" % [dir, id])
 	image.save_png(path)
 	print("[icons] %s" % path)

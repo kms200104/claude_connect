@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "_comment": "마을 이벤트. 날마다(05시 기준) 마을 시드로 하루 이벤트 하나를 뽑고(daily_chance), 밤 이벤트는 따로 굴린다. 서버가 정하고 클라이언트는 이름·설명을 보여 준다.",
+  "daily_chance": 0.75,
+  "daily": [
+    {
+      "id": "bargain", "name": "특가 매입의 날", "weight": 3, "icon": "coin",
+      "desc": "상점 주인 달보가 오늘 고른 물건을 2배 값에 사 줘요!",
+      "multiplier": 2, "wanted": { "fish": 2, "material": 1 }
+    },
+    {
+      "id": "merchant", "name": "떠돌이 상인 누리", "weight": 2, "icon": "merchant", "hours": [9, 21],
+      "desc": "광장에 떠돌이 상인 누리가 왔어요. 귀한 물건을 팔고, 찾는 물건은 2배 값에 사 가요.",
+      "multiplier": 2, "wanted": { "fish": 1, "goods": 1, "material": 1 },
+      "stock": ["star_lamp", "toy_windmill", "music_box", "star_crown"],
+      "spot": { "x": -3.2, "z": -2.2, "yaw": -2.17 },
+      "npc": {
+        "id": "nuri", "name": "누리", "personality": "merchant", "color": "#C890E0", "voice": 1.15,
+        "look": { "hair": "#5A3A6A", "style": "bun", "top": "#C890E0", "bottom": "#3A4A70", "shoes": "#6E4A3A" },
+        "about": "온 세상을 떠도는 상인. 반짝이는 물건과 이야기를 모은다."
+      }
+    },
+    {
+      "id": "fishing_derby", "name": "호수 낚시 대회", "weight": 2, "icon": "fishing", "hours": [9, 18],
+      "desc": "물고기를 낚을 때마다 대회 상금을 받아요. 희귀한 물고기가 더 잘 잡혀요!",
+      "bonus": { "common": 40, "uncommon": 150, "rare": 500 }, "rare_boost": 2.5
+    },
+    {
+      "id": "lumber_day", "name": "나무꾼의 날", "weight": 2, "icon": "axe",
+      "desc": "나무를 찍으면 목재가 두 개씩 나와요.",
+      "drop_multiplier": 2
+    },
+    {
+      "id": "gift_day", "name": "선물 풍선의 날", "weight": 2, "icon": "gift", "hours": [8, 19],
+      "desc": "마을 여기저기에 풍선 선물이 내려앉아요. 다가가서 주워 보세요!",
+      "max": 4, "spawn_every_s": 40,
+      "pool": [
+        { "id": "four_leaf_clover", "weight": 5 },
+        { "id": "bouquet", "weight": 4 },
+        { "id": "honey_jar", "weight": 4 },
+        { "id": "pressed_flower", "weight": 4 },
+        { "id": "spiral_shell", "weight": 3 },
+        { "id": "sprout_pin", "weight": 2 },
+        { "id": "picnic_basket", "weight": 2 },
+        { "id": "toy_windmill", "weight": 2 }
+      ]
+    }
+  ],
+  "night": [
+    {
+      "id": "meteor_shower", "name": "유성우", "chance": 0.35, "icon": "star", "hours": [20, 4],
+      "weather": ["clear", "cloudy"],
+      "desc": "밤하늘에 별똥별이 쏟아져요. 땅에 떨어진 별 조각을 주워 보세요!",
+      "max": 5, "spawn_every_s": 30, "item": "star_fragment"
+    }
+  ],
+  "collect_range": 2.0
+}

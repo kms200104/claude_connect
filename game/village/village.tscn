@@ -41,6 +41,11 @@
 [ext_resource type="Script" path="res://game/village/village_decor.gd" id="45_decor"]
 [ext_resource type="Script" path="res://game/audio/sound_director.gd" id="46_sound"]
 [ext_resource type="Script" path="res://game/props/lamp_posts.gd" id="47_lamps"]
+[ext_resource type="Script" path="res://game/events/drop_field.gd" id="48_drops"]
+[ext_resource type="Script" path="res://game/events/merchant_stall.gd" id="49_merchant"]
+[ext_resource type="Material" path="res://assets/materials/star_glow.tres" id="50_star_glow"]
+[ext_resource type="Script" path="res://ui/hud/event_hud.gd" id="51_event_hud"]
+[ext_resource type="Script" path="res://ui/hud/meteor_overlay.gd" id="52_meteor"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -160,15 +165,27 @@ script = ExtResource("32_decor")
 script = ExtResource("45_decor")
 clay_material = ExtResource("23_foliage")
 
-[node name="Trees" type="Node3D" parent="."]
+[node name="Trees" type="Node3D" parent="." node_paths=PackedStringArray("player", "replicator")]
 script = ExtResource("22_trees")
 foliage_material = ExtResource("23_foliage")
+player = NodePath("../Player")
+replicator = NodePath("../PlayerReplicator")
 
 [node name="Npcs" type="Node3D" parent="."]
 script = ExtResource("24_crowd")
 actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
+
+[node name="Drops" type="Node3D" parent="."]
+script = ExtResource("48_drops")
+clay_material = ExtResource("23_foliage")
+glow_material = ExtResource("50_star_glow")
+
+[node name="Merchant" type="Node3D" parent="."]
+script = ExtResource("49_merchant")
+actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
 
 [node name="Furniture" type="Node3D" parent="."]
 script = ExtResource("42_furniture")
@@ -275,8 +292,10 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "dialogue", "fishing", "action_hud", "toast_hud")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "dialogue", "fishing", "action_hud", "toast_hud")]
 script = ExtResource("34_interaction")
+drops = NodePath("../Drops")
+merchant = NodePath("../Merchant")
 player = NodePath("../Player")
 trees = NodePath("../Trees")
 npcs = NodePath("../Npcs")
@@ -287,8 +306,9 @@ fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop")]
+[node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop", "merchant")]
 script = ExtResource("35_dialogue")
+merchant = NodePath("../Merchant")
 player = NodePath("../Player")
 npcs = NodePath("../Npcs")
 box = NodePath("../HUD/DialogueBox")
@@ -319,6 +339,17 @@ material_override = ExtResource("30_rain")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
+[node name="MeteorOverlay" type="Control" parent="HUD" node_paths=PackedStringArray("sky")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("52_meteor")
+sky = NodePath("../../SkyController")
+
 [node name="Joystick" type="Control" parent="HUD"]
 layout_mode = 3
 anchors_preset = 15
@@ -329,6 +360,16 @@ grow_vertical = 2
 script = ExtResource("3_joystick")
 
 [node name="TopBar" parent="HUD" instance=ExtResource("39_top_bar")]
+
+[node name="EventHud" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("51_event_hud")
 
 [node name="RoomPanel" parent="HUD" instance=ExtResource("14_panel")]
 

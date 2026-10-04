@@ -33,6 +33,19 @@ export function loadGameData(dataDir, cfg) {
   const npcsFile = read('npcs/npcs.json');
   const npcs = new Map(npcsFile.npcs.map((n) => [n.id, n]));
 
+  const events = read('events/events.json');
+  for (const ev of [...events.daily, ...events.night]) {
+    for (const id of ev.stock ?? []) if (!items.get(id)?.buy) throw new Error(`event ${ev.id}: ${id} 에 buy 가격이 없음`);
+    for (const p of ev.pool ?? []) if (!items.has(p.id)) throw new Error(`event ${ev.id}: unknown item ${p.id}`);
+    if (ev.item && !items.has(ev.item)) throw new Error(`event ${ev.id}: unknown item ${ev.item}`);
+  }
+  let layout = null;
+  try {
+    layout = read('world/village_layout.json');
+  } catch {
+    layout = null; // 꾸밈 배치는 없어도 된다 (선물이 바위 위에 떨어질 수 있을 뿐)
+  }
+
   const quests = read('quests/quests.json');
   for (const t of quests.templates) if (t.item && !items.has(t.item)) throw new Error(`quest ${t.id}: unknown item ${t.item}`);
 
@@ -55,6 +68,8 @@ export function loadGameData(dataDir, cfg) {
     npcRules: { talkRange: npcsFile.talk_range, walkSpeed: npcsFile.walk_speed },
     quests,
     shop,
+    events,
+    layout,
     kindOf,
     priceOf,
     isFish,
@@ -79,10 +94,10 @@ export function availableFish(spot, fishById, hour, weather) {
 }
 
 /** 가중치 뽑기. 시각·날씨 조건에 맞는 물고기가 없으면 낚시터 전체에서 뽑는다. */
-export function pickFish(spot, fishById, random, hour = 12, weather = 'clear') {
+export function pickFish(spot, fishById, random, hour = 12, weather = 'clear', weightOf = (f) => f.weight) {
   let pool = availableFish(spot, fishById, hour, weather);
   if (pool.length === 0) pool = spot.fish.map((id) => fishById.get(id));
-  return pickWeighted(pool, (f) => f.weight, random);
+  return pickWeighted(pool, weightOf, random);
 }
 
 export function pickWeighted(list, weightOf, random) {
