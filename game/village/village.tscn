@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
-[ext_resource type="Script" path="res://ui/hud/virtual_joystick.gd" id="3_joystick"]
+[ext_resource type="Script" path="res://ui/hud/touch_joystick.gd" id="3_joystick"]
 [ext_resource type="Script" path="res://game/lighting/world_style.gd" id="4_style"]
 [ext_resource type="Shader" path="res://assets/shaders/toon_world.gdshader" id="5_toon"]
 [ext_resource type="Shader" path="res://assets/shaders/lit_world.gdshader" id="6_lit"]

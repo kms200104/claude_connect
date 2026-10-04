@@ -4,7 +4,7 @@ extends CharacterBody3D
 ## 입력 방향으로 가속하고, 입력이 없으면 감속한다. 모델(Body)만 부드럽게 회전한다.
 
 @export_group("References")
-@export var joystick: VirtualJoystick
+@export var joystick: TouchJoystick
 @export var camera: Camera3D
 ## 회전시킬 시각용 노드 (충돌체는 회전하지 않는다).
 @export var body: Node3D

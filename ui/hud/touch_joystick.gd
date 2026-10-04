@@ -1,4 +1,4 @@
-class_name VirtualJoystick
+class_name TouchJoystick
 extends Control
 ## 터치 조이스틱. 화면 왼쪽 아래 영역을 누르면 반응하고, `output`에 방향(0~1)을 담는다.
 ## x: 오른쪽 +, y: 아래 + (위로 밀면 y < 0). 마우스는 emulate_touch_from_mouse로 터치처럼 동작한다.
