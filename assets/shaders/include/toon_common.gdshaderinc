@@ -16,6 +16,8 @@ uniform float emission_energy = 0.0;
 
 void vertex() {
 	VERTEX += world_curve_local_offset(MODEL_MATRIX, VERTEX);
+	// 정점 색(메시·MultiMesh 인스턴스 색)은 sRGB 로 칠해 두었다. 조명 계산은 선형 공간이라 여기서 바꾼다 (정점마다 한 번).
+	COLOR.rgb = mix(COLOR.rgb / 12.92, pow((COLOR.rgb + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), COLOR.rgb));
 }
 
 void fragment() {

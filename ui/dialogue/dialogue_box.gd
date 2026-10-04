@@ -16,8 +16,12 @@ signal chosen(index: int)
 @onready var _next_mark: Label = %NextMark
 @onready var _choices: VBoxContainer = %Choices
 
+## 말하는 사람의 목소리 높이 (1 = 보통, 0 = 말소리 없음). 글자가 나올 때마다 '웅앵' 음절을 낸다.
+var voice: float = 0.0
+
 var _typing_tween: Tween = null
 var _waiting_choice: bool = false
+var _spoken: int = 0
 
 
 func _ready() -> void:
@@ -43,12 +47,24 @@ func show_line(speaker: String, text: String, color: Color = Color.WHITE) -> voi
 	_name_tag.add_theme_color_override("font_color", color)
 	_text.text = text
 	_text.visible_ratio = 0.0
+	_spoken = 0
 	_next_mark.visible = false
 	if _typing_tween != null and _typing_tween.is_valid():
 		_typing_tween.kill()
 	_typing_tween = create_tween()
 	_typing_tween.tween_property(_text, "visible_ratio", 1.0, maxf(text.length() / chars_per_second, 0.05))
 	_typing_tween.finished.connect(func() -> void: _next_mark.visible = not _waiting_choice)
+
+
+func _process(_delta: float) -> void:
+	if voice <= 0.0 or not is_typing():
+		return
+	# 새로 보인 글자 중 두 글자마다 한 음절 (너무 수다스럽지 않게).
+	var shown: int = int(_text.visible_ratio * _text.text.length())
+	while _spoken < shown:
+		if _spoken % 2 == 0:
+			Audio.babble(_text.text[_spoken], voice)
+		_spoken += 1
 
 
 func show_choices(options: PackedStringArray) -> void:
@@ -70,6 +86,7 @@ func show_choices(options: PackedStringArray) -> void:
 func press() -> void:
 	if not _panel.visible or _waiting_choice:
 		return
+	Audio.play_ui(Audio.SFX_CLICK)
 	if is_typing():
 		_finish_typing()
 		return
@@ -108,6 +125,7 @@ func _finish_typing() -> void:
 
 
 func _on_choice(index: int) -> void:
+	Audio.play_ui(Audio.SFX_CONFIRM)
 	_clear_choices()
 	chosen.emit(index)
 

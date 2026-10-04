@@ -8,8 +8,6 @@ extends Node3D
 @export var rig: CharacterRig
 @export var name_label: Label3D
 @export var mark: Label3D
-## 주민마다 색만 바꿔 복제할 몸 머티리얼.
-@export var base_material: ShaderMaterial
 
 @export_group("Motion")
 ## 클수록 서버 위치에 딱 붙는다 (지수 감쇠 계수).
@@ -38,10 +36,7 @@ func setup(npc: NpcInfo) -> void:
 		name_label.text = npc.display_name
 	if rig != null:
 		rig.set_held("")
-		if base_material != null:
-			var material: ShaderMaterial = base_material.duplicate()
-			material.set_shader_parameter("albedo", npc.color)
-			rig.set_body_material(material)
+		rig.set_look(npc.look)
 	global_position = npc.home
 	_target_position = npc.home
 	set_mark("")

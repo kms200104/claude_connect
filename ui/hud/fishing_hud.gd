@@ -41,12 +41,16 @@ func reset() -> void:
 	_window_ms = 0.0
 
 
+const FISHING_ICON: Texture2D = preload("res://assets/ui/icons/fishing.png")
+
+
 func show_cast_available(available: bool) -> void:
 	if _cancel.visible or _status.visible:
 		return
 	_action.visible = available
 	_action.disabled = false
 	_action.text = "낚시"
+	_action.icon = FISHING_ICON
 
 
 func show_casting() -> void:

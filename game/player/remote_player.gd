@@ -35,6 +35,7 @@ var held_item: String = "rod"
 
 var _samples: Array[Sample] = []
 var _shown_speed: float = 0.0
+var _footsteps: Footsteps = Footsteps.new()
 
 
 class Sample:
@@ -62,6 +63,8 @@ func set_outfit(hat: String, top: String) -> void:
 
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
+	if rig != null:
+		rig.set_look(CharacterLook.for_player(state.id))
 	global_position = state.position
 	if body != null:
 		body.rotation.y = state.yaw
@@ -145,5 +148,7 @@ func _process(delta: float) -> void:
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-speed_smoothing * delta))
 		rig.set_move_speed(0.0 if target_fishing else CharacterRig.speed_to_blend(_shown_speed, walk_speed_reference, run_speed_reference))
 		rig.set_fishing(target_fishing)
+		if not target_fishing:
+			_footsteps.advance(moved * delta, _shown_speed > walk_speed_reference * 1.25, global_position, true)
 	if body != null:
 		body.rotation.y = lerp_angle(body.rotation.y, target_yaw, weight)

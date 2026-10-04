@@ -44,6 +44,7 @@ var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
+var _footsteps: Footsteps = Footsteps.new()
 
 
 func _physics_process(delta: float) -> void:
@@ -64,7 +65,9 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= gravity * delta
 
+	var before: Vector3 = global_position
 	move_and_slide()
+	_footsteps.advance(Vector2(global_position.x - before.x, global_position.z - before.z).length(), running, global_position, false)
 	_turn_body(move_dir, input.length(), delta)
 	if rig != null:
 		var reference: float = walk_speed_reference if walk_speed_reference > 0.0 else max_speed

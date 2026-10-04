@@ -48,4 +48,5 @@ func _refresh() -> void:
 
 
 func _on_slot_pressed(index: int) -> void:
+	Audio.play_ui(Audio.SFX_CLICK)
 	Net.equip(-1 if Net.held_slot == index else index)

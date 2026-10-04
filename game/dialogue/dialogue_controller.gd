@@ -224,6 +224,7 @@ func _say(token: int, info: NpcInfo, line: String) -> bool:
 		return false
 	if line.is_empty():
 		return true
+	box.voice = info.voice
 	box.show_line(info.display_name, line, info.color.lightened(0.2))
 	await box.advanced
 	return token == _session

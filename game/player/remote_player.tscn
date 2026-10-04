@@ -1,8 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://game/player/remote_player.gd" id="1_remote"]
 [ext_resource type="PackedScene" path="res://game/player/character_rig.tscn" id="2_rig"]
-[ext_resource type="Material" path="res://assets/materials/remote_body.tres" id="3_body"]
 
 [node name="RemotePlayer" type="Node3D" node_paths=PackedStringArray("body", "rig", "name_label")]
 script = ExtResource("1_remote")
@@ -12,7 +11,6 @@ name_label = NodePath("NameLabel")
 
 [node name="Body" parent="." instance=ExtResource("2_rig")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-body_material = ExtResource("3_body")
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)

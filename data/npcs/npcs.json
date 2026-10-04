@@ -5,6 +5,7 @@
   "npcs": [
     {
       "id": "morak", "name": "모락", "personality": "kind", "color": "#E8A6B8",
+      "look": { "hair": "#E4DED6", "style": "bun", "top": "#E8A6B8", "bottom": "#8C6A8E", "shoes": "#7A5A4A" },
       "about": "찻집을 하는 다정한 할머니. 따뜻한 차와 수다를 좋아한다.",
       "house": { "x": 14, "z": -20, "yaw": 0 },
       "waypoints": [[14, -16], [18, -12], [12, -10], [9, -15]],
@@ -12,6 +13,7 @@
     },
     {
       "id": "tongtong", "name": "통통", "personality": "lively", "color": "#F2C14E",
+      "look": { "hair": "#D9733A", "style": "short", "top": "#F2C14E", "bottom": "#4F81BD", "shoes": "#D9574A" },
       "about": "하루 종일 뛰어다니는 기운찬 친구. 운동과 내기를 좋아한다.",
       "house": { "x": -2, "z": 24, "yaw": 3.14159 },
       "waypoints": [[-2, 20], [4, 16], [-6, 15], [2, 21]],
@@ -19,6 +21,7 @@
     },
     {
       "id": "haerang", "name": "해랑", "personality": "lazy", "color": "#8EC5E8",
+      "look": { "hair": "#34405F", "style": "bob", "top": "#8EC5E8", "bottom": "#EFE6D2", "shoes": "#8A6A4A" },
       "about": "호숫가에서 그림을 그리는 느긋한 화가. 낮잠이 취미다.",
       "house": { "x": -20, "z": 20, "yaw": 3.14159 },
       "waypoints": [[-20, 16], [-14, 13], [-25, 13], [-18, 12]],
@@ -26,6 +29,7 @@
     },
     {
       "id": "mujin", "name": "무진", "personality": "gruff", "color": "#9C8BD1",
+      "look": { "hair": "#3A2A22", "style": "short", "top": "#9C8BD1", "bottom": "#6A5A48", "shoes": "#4A3A30", "skin": "#EDC3A2" },
       "about": "말수 적은 목수. 무뚝뚝하지만 부탁을 들어주면 몰래 기뻐한다.",
       "house": { "x": 26, "z": 6, "yaw": -1.5708 },
       "waypoints": [[22, 6], [18, 0], [22, -2], [20, 12]],

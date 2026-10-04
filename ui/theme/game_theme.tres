@@ -1,0 +1,133 @@
+[gd_resource type="Theme" load_steps=12 format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/jua_regular.ttf" id="1_jua"]
+[ext_resource type="FontFile" path="res://assets/fonts/gowun_dodum_symbols.ttf" id="2_symbols"]
+
+[sub_resource type="FontVariation" id="FontVariation_ui"]
+fallbacks = Array[Font]([ExtResource("2_symbols")])
+base_font = ExtResource("1_jua")
+
+[sub_resource type="StyleBoxFlat" id="Button_normal"]
+content_margin_left = 22.0
+content_margin_top = 10.0
+content_margin_right = 22.0
+content_margin_bottom = 14.0
+bg_color = Color(0.988, 0.949, 0.867, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 9
+border_color = Color(0.725, 0.533, 0.333, 1)
+corner_radius_top_left = 30
+corner_radius_top_right = 30
+corner_radius_bottom_right = 30
+corner_radius_bottom_left = 30
+
+[sub_resource type="StyleBoxFlat" id="Button_pressed"]
+content_margin_left = 22.0
+content_margin_top = 14.0
+content_margin_right = 22.0
+content_margin_bottom = 10.0
+bg_color = Color(0.94, 0.87, 0.73, 1)
+border_width_left = 4
+border_width_top = 7
+border_width_right = 4
+border_width_bottom = 5
+border_color = Color(0.725, 0.533, 0.333, 1)
+corner_radius_top_left = 30
+corner_radius_top_right = 30
+corner_radius_bottom_right = 30
+corner_radius_bottom_left = 30
+
+[sub_resource type="StyleBoxFlat" id="Button_disabled"]
+content_margin_left = 22.0
+content_margin_top = 10.0
+content_margin_right = 22.0
+content_margin_bottom = 14.0
+bg_color = Color(0.9, 0.88, 0.83, 0.85)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 9
+border_color = Color(0.75, 0.7, 0.62, 1)
+corner_radius_top_left = 30
+corner_radius_top_right = 30
+corner_radius_bottom_right = 30
+corner_radius_bottom_left = 30
+
+[sub_resource type="StyleBoxEmpty" id="Button_focus"]
+
+[sub_resource type="StyleBoxFlat" id="Action_normal"]
+bg_color = Color(0.5, 0.79, 0.56, 1)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 14
+border_color = Color(0.3, 0.57, 0.36, 1)
+corner_radius_top_left = 999
+corner_radius_top_right = 999
+corner_radius_bottom_right = 999
+corner_radius_bottom_left = 999
+shadow_color = Color(0.2, 0.15, 0.05, 0.25)
+shadow_size = 10
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="Action_pressed"]
+bg_color = Color(0.44, 0.72, 0.5, 1)
+border_width_left = 6
+border_width_top = 12
+border_width_right = 6
+border_width_bottom = 8
+border_color = Color(0.3, 0.57, 0.36, 1)
+corner_radius_top_left = 999
+corner_radius_top_right = 999
+corner_radius_bottom_right = 999
+corner_radius_bottom_left = 999
+
+[sub_resource type="StyleBoxFlat" id="Edit_normal"]
+content_margin_left = 20.0
+content_margin_right = 20.0
+bg_color = Color(1, 1, 1, 0.92)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.8, 0.67, 0.5, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+
+[resource]
+default_font = SubResource("FontVariation_ui")
+ActionButton/base_type = &"Button"
+ActionButton/colors/font_color = Color(1, 1, 1, 1)
+ActionButton/colors/font_focus_color = Color(1, 1, 1, 1)
+ActionButton/colors/font_hover_color = Color(1, 1, 1, 1)
+ActionButton/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+ActionButton/colors/font_outline_color = Color(0.25, 0.48, 0.3, 1)
+ActionButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+ActionButton/constants/outline_size = 10
+ActionButton/constants/icon_max_width = 110
+ActionButton/styles/disabled = SubResource("Action_normal")
+ActionButton/styles/focus = SubResource("Button_focus")
+ActionButton/styles/hover = SubResource("Action_normal")
+ActionButton/styles/hover_pressed = SubResource("Action_pressed")
+ActionButton/styles/normal = SubResource("Action_normal")
+ActionButton/styles/pressed = SubResource("Action_pressed")
+Button/colors/font_color = Color(0.42, 0.27, 0.15, 1)
+Button/colors/font_disabled_color = Color(0.55, 0.5, 0.45, 0.8)
+Button/colors/font_focus_color = Color(0.42, 0.27, 0.15, 1)
+Button/colors/font_hover_color = Color(0.42, 0.27, 0.15, 1)
+Button/colors/font_hover_pressed_color = Color(0.42, 0.27, 0.15, 1)
+Button/colors/font_pressed_color = Color(0.42, 0.27, 0.15, 1)
+Button/styles/disabled = SubResource("Button_disabled")
+Button/styles/focus = SubResource("Button_focus")
+Button/styles/hover = SubResource("Button_normal")
+Button/styles/hover_pressed = SubResource("Button_pressed")
+Button/styles/normal = SubResource("Button_normal")
+Button/styles/pressed = SubResource("Button_pressed")
+LineEdit/colors/font_color = Color(0.35, 0.24, 0.14, 1)
+LineEdit/colors/font_placeholder_color = Color(0.6, 0.5, 0.4, 0.6)
+LineEdit/styles/focus = SubResource("Edit_normal")
+LineEdit/styles/normal = SubResource("Edit_normal")

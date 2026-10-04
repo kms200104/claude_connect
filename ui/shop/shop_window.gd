@@ -42,6 +42,7 @@ func is_open() -> bool:
 
 
 func open(start_mode: String = MODE_BUY) -> void:
+	Audio.play_ui(Audio.SFX_OPEN)
 	visible = true
 	_message.text = ""
 	if player != null:
@@ -52,6 +53,7 @@ func open(start_mode: String = MODE_BUY) -> void:
 func close() -> void:
 	if not visible:
 		return
+	Audio.play_ui(Audio.SFX_CLOSE)
 	visible = false
 	if player != null:
 		player.set_input_lock(&"shop", false)

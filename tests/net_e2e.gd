@@ -116,7 +116,9 @@ func _run_guest(village: Node) -> void:
 			moving_frames += 1
 	var final_x: float = samples[-1].x if not samples.is_empty() else 0.0
 	_check(final_x > 5.0, "원격 캐릭터가 호스트 위치로 도달 (x=%.2f)" % final_x)
-	_check(max_step < 8.0, "프레임 간 최대 속도 %.2fm/s (호스트 최대 4.5, 튐 없음, %d프레임)" % [max_step, frames])
+	# 방향키를 끝까지 누르고 있으면 0.7초 뒤 달리기(7m/s)가 된다. 걷기→달리기로 넘어갈 때 따라잡는 몫까지 1.3배 여유.
+	var run_limit: float = (village.get_node("Player") as Player).run_speed * 1.3
+	_check(max_step < run_limit, "프레임 간 최대 속도 %.2fm/s (호스트 달리기 7, 튐 없음, %d프레임)" % [max_step, frames])
 	_check(max_back < 0.02, "되돌아감 없음 (%.4f)" % max_back)
 	_check(max_walk > 0.5, "원격 캐릭터가 걷는 동안 walk 애니메이션 가중치가 올라감 (%.2f)" % max_walk)
 	_check(remote != null and remote.rig._move_target < 0.2, "멈추면 idle로 돌아감 (%.2f)" % remote.rig._move_target)

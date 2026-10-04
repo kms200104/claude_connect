@@ -129,6 +129,7 @@ func _sync_held_item() -> void:
 ## 내 옷을 서버가 알려 준 대로 입힌다.
 func _sync_outfit() -> void:
 	if player != null and player.rig != null:
+		player.rig.set_look(CharacterLook.for_player(Net.my_id))
 		player.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 

@@ -4,7 +4,7 @@ config_version=5
 [application]
 
 config/name="솔바람 마을"
-run/main_scene="res://game/village/village.tscn"
+run/main_scene="res://ui/title/title_screen.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 run/max_fps=30
 
@@ -12,6 +12,7 @@ run/max_fps=30
 
 Net="*res://autoload/net/net.gd"
 GameData="*res://autoload/game_data/game_data.gd"
+Audio="*res://autoload/audio/audio.gd"
 
 [debug]
 
@@ -26,6 +27,11 @@ window/size/window_height_override=960
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
+
+[gui]
+
+theme/custom="res://ui/theme/game_theme.tres"
+theme/custom_font="res://assets/fonts/jua_regular.ttf"
 
 [input_devices]
 

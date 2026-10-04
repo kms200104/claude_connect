@@ -1,6 +1,6 @@
 class_name ItemSlot
 extends Button
-## 인벤토리 한 칸. 아이콘 그림 대신 아이템 색 동그라미 + 이름 앞 두 글자 + 개수를 그린다.
+## 인벤토리 한 칸. 아이템 아이콘(없으면 색 동그라미 + 짧은 이름) + 개수를 그린다.
 ## 퀵슬롯(화면 아래)과 가방 창이 같은 칸을 쓴다. 누르면 pressed 신호 (Button).
 
 ## 인벤토리 칸 번호 (Net.inventory 의 인덱스).
@@ -59,14 +59,20 @@ func _draw() -> void:
 		draw_string(font, r.position + Vector2(14, 30), str(hotkey), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BORDER)
 	if _item == null:
 		return
-	var center: Vector2 = r.get_center() - Vector2(0, 6)
-	var radius: float = r.size.x * 0.3
-	var color: Color = _info.color if _info != null else Color.GRAY
-	draw_circle(center, radius, color)
-	draw_arc(center, radius, 0.0, TAU, 32, color.darkened(0.35), 3.0, true)
-	var label: String = _info.short_name if _info != null else _item.id.left(2)
-	var font_size: int = int(r.size.x * 0.24)
-	draw_string(font, center + Vector2(-radius, font_size * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, Color.WHITE)
+	var icon: Texture2D = GameData.item_icon(_item.id)
+	if icon != null:
+		var side: float = r.size.x * 0.78
+		draw_texture_rect(icon, Rect2(r.get_center() - Vector2(side, side) * 0.5 - Vector2(0, 2), Vector2(side, side)), false)
+	else:
+		var center: Vector2 = r.get_center() - Vector2(0, 6)
+		var radius: float = r.size.x * 0.3
+		var color: Color = _info.color if _info != null else Color.GRAY
+		draw_circle(center, radius, color)
+		draw_arc(center, radius, 0.0, TAU, 32, color.darkened(0.35), 3.0, true)
+		var label: String = _info.short_name if _info != null else _item.id.left(2)
+		var font_size: int = int(r.size.x * 0.24)
+		draw_string(font, center + Vector2(-radius, font_size * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, Color.WHITE)
 	if _item.count > 1:
 		var count_size: int = int(r.size.x * 0.2)
+		draw_string_outline(font, r.end - Vector2(r.size.x * 0.5 + 8, 10), str(_item.count), HORIZONTAL_ALIGNMENT_RIGHT, r.size.x * 0.5, count_size, 8, BG)
 		draw_string(font, r.end - Vector2(r.size.x * 0.5 + 8, 10), str(_item.count), HORIZONTAL_ALIGNMENT_RIGHT, r.size.x * 0.5, count_size, TEXT)

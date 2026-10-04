@@ -11,8 +11,24 @@ const INTERIOR_SIZE: Dictionary = {1: Vector2(8.0, 7.0), 2: Vector2(10.0, 8.0), 
 const WALL_HEIGHT: float = 3.0
 
 
-static func _p(shape: String, size: Array, at: Vector3, color: String) -> Dictionary:
+static func _p(shape: String, size: Array, at: Vector3, color: Variant) -> Dictionary:
 	return {"s": shape, "size": size, "at": [at.x, at.y, at.z], "c": color}
+
+
+static func _r(shape: String, size: Array, at: Vector3, color: Variant, roundness: float = 0.3, rot: Vector3 = Vector3.ZERO) -> Dictionary:
+	var part: Dictionary = {"s": shape, "size": size, "at": [at.x, at.y, at.z], "c": color, "r": roundness}
+	if rot != Vector3.ZERO:
+		part["rot"] = [rot.x, rot.y, rot.z]
+	return part
+
+
+## 줄무늬 차양: 앞으로 기울어진 판 + 끝에 동글동글한 물결 장식.
+static func _awning(parts: Array, width: float, y: float, depth: float, stripes: int, a: String, b: String) -> void:
+	for i: int in stripes:
+		var x: float = -width * 0.5 + width / stripes * (i + 0.5)
+		var color: String = a if i % 2 == 0 else b
+		parts.append(_r("rbox", [width / stripes + 0.01, 0.1, depth], Vector3(x, y, depth * 0.45), color, 0.2, Vector3(22.0, 0.0, 0.0)))
+		parts.append(_r("sphere", [width / stripes * 0.5, 0.16, 0.08], Vector3(x, y - depth * 0.42 - 0.06, depth * 0.9), color, 0.0))
 
 
 ## 바깥 건물 (원점 = 앞면 가운데 바닥, 앞면이 +Z).
@@ -22,39 +38,55 @@ static func exterior_parts(level: int) -> Array:
 	var parts: Array = []
 	match level:
 		1:
-			parts.append(_p("box", [size.x, size.y, size.z], c, "#C99A6B"))
-			# 줄무늬 차양
-			for i: int in 6:
-				var x: float = -size.x * 0.5 + size.x / 6.0 * (i + 0.5)
-				parts.append(_p("box", [size.x / 6.0, 0.12, 1.4], Vector3(x, size.y - 0.35, 0.55), "#4E9C6E" if i % 2 == 0 else "#F4F1EA"))
-			parts.append(_p("box", [size.x + 0.3, 0.25, size.z + 0.3], Vector3(0.0, size.y + 0.12, c.z), "#8A5A36"))
-			parts.append(_p("box", [1.6, 0.9, 0.5], Vector3(-1.2, 0.45, 0.35), "#B07A45"))
-			parts.append(_p("box", [1.4, 0.12, 0.45], Vector3(-1.2, 0.95, 0.35), "#E8C872"))
-		2:
-			parts.append(_p("box", [size.x, size.y, size.z], c, "#F1E3C6"))
-			parts.append(_p("box", [size.x + 0.4, 0.3, size.z + 0.4], Vector3(0.0, size.y + 0.15, c.z), "#4E9C8F"))
-			parts.append(_p("box", [size.x * 0.75, 0.9, size.z * 0.75], Vector3(0.0, size.y + 0.75, c.z), "#3F857A"))
+			# 나무 노점: 판자 벽 · 폭신한 지붕 · 빨강/흰 줄무늬 차양 · 과일 상자 · 종.
+			parts.append(_r("rbox", [size.x, size.y, size.z], c, ["#A8703F", "#D9A673"], 0.12))
+			for y: float in [0.7, 1.4, 2.1]:
+				parts.append(_p("box", [size.x + 0.02, 0.04, size.z + 0.02], Vector3(0.0, y, c.z), "#9A6236"))
+			parts.append(_r("rbox", [size.x + 0.6, 0.5, size.z + 0.6], Vector3(0.0, size.y + 0.2, c.z), ["#B8503E", "#D96A52"], 0.5))
+			parts.append(_r("rbox", [size.x * 0.55, 0.5, size.z * 0.6], Vector3(0.0, size.y + 0.6, c.z), ["#B8503E", "#E07A60"], 0.6))
+			_awning(parts, size.x + 0.2, size.y - 0.45, 1.3, 7, "#E05A4A", "#FFF4E8")
+			parts.append(_r("rbox", [1.5, 0.85, 0.6], Vector3(-1.35, 0.43, 0.42), ["#9A6236", "#C98A55"], 0.25))
 			for i: int in 5:
-				var x: float = -size.x * 0.5 + size.x / 5.0 * (i + 0.5)
-				parts.append(_p("box", [size.x / 5.0, 0.12, 1.2], Vector3(x, size.y - 0.5, 0.5), "#E87A5D" if i % 2 == 0 else "#FFF4E0"))
-			parts.append(_p("box", [size.x + 0.1, 0.35, 0.1], Vector3(0.0, 0.18, 0.02), "#B07A45"))
-			parts.append(_p("sphere", [0.35], Vector3(-size.x * 0.5 + 0.5, 0.35, 0.6), "#5FA052"))
-			parts.append(_p("sphere", [0.35], Vector3(size.x * 0.5 - 0.5, 0.35, 0.6), "#5FA052"))
+				var fruit: String = ["#E0453A", "#F29A2E", "#E0453A", "#9CC44A", "#F29A2E"][i]
+				parts.append(_p("sphere", [0.13], Vector3(-1.85 + 0.25 * i, 0.95, 0.42 + (0.08 if i % 2 == 0 else -0.08)), fruit))
+			parts.append(_r("rbox", [0.75, 0.55, 0.5], Vector3(1.6, 0.28, 0.45), ["#9A6236", "#C98A55"], 0.25))
+			for i: int in 3:
+				parts.append(_p("sphere", [0.12], Vector3(1.42 + 0.18 * i, 0.62, 0.45), "#F2C14E"))
+			parts.append(_p("cone", [0.14, 0.2], Vector3(0.75, size.y - 0.75, 0.25), "#E8B84A"))
+			parts.append(_p("sphere", [0.04], Vector3(0.75, size.y - 0.87, 0.25), "#B8862E"))
+			parts.append(_r("rbox", [0.5, 0.22, 0.04], Vector3(0.0, 1.55, 0.09), "#7FB86A", 0.3))
+		2:
+			# 잡화점: 크림색 벽 · 청록 지붕 두 단 · 산호색 차양 · 꽃 상자 · 둥근 덤불.
+			parts.append(_r("rbox", [size.x, size.y, size.z], c, ["#E6D2AE", "#F6EBD5"], 0.1))
+			parts.append(_r("rbox", [size.x + 0.5, 0.4, size.z + 0.5], Vector3(0.0, size.y + 0.15, c.z), ["#3F857A", "#5AA898"], 0.4))
+			parts.append(_r("rbox", [size.x * 0.75, 0.9, size.z * 0.75], Vector3(0.0, size.y + 0.75, c.z), ["#3F857A", "#64B4A2"], 0.45))
+			_awning(parts, size.x, size.y - 0.55, 1.2, 9, "#E87A5D", "#FFF4E0")
+			parts.append(_r("rbox", [size.x + 0.1, 0.35, 0.12], Vector3(0.0, 0.18, 0.02), "#B07A45", 0.3))
+			for side: float in [-1.0, 1.0]:
+				parts.append(_p("blob", [0.45, 0.38, 0.4], Vector3(side * (size.x * 0.5 - 0.4), 0.35, 0.6), ["#4E8A3E", "#7FB86A"]))
+				parts.append(_r("rbox", [1.1, 0.22, 0.3], Vector3(side * 1.9, size.y * 0.55 - 0.65, 0.16), "#B07A45", 0.3))
+				for k: int in 4:
+					parts.append(_p("sphere", [0.07], Vector3(side * 1.9 - 0.36 + 0.24 * k, size.y * 0.55 - 0.48, 0.2), ["#F6A6B8", "#FFD866", "#F4F1EA", "#E87A90"][k]))
 		_:
-			parts.append(_p("box", [size.x, size.y, size.z], c, "#F4F1EA"))
-			parts.append(_p("box", [size.x + 0.6, 0.45, size.z + 0.6], Vector3(0.0, size.y + 0.22, c.z), "#E9E3D6"))
-			parts.append(_p("box", [size.x + 0.65, 0.12, size.z + 0.65], Vector3(0.0, size.y + 0.02, c.z), "#D9B44A"))
-			parts.append(_p("box", [size.x * 0.6, 1.0, size.z * 0.6], Vector3(0.0, size.y + 0.95, c.z), "#F4F1EA"))
-			parts.append(_p("cone", [0.5, 0.8], Vector3(0.0, size.y + 1.85, c.z), "#D9B44A"))
+			# 백화점: 대리석 · 금빛 띠 · 둥근 기둥 · 계단 · 붉은 카펫 · 작은 금 첨탑.
+			parts.append(_r("rbox", [size.x, size.y, size.z], c, ["#E2DCD0", "#FBF8F2"], 0.06))
+			parts.append(_r("rbox", [size.x + 0.6, 0.45, size.z + 0.6], Vector3(0.0, size.y + 0.22, c.z), ["#DCD5C6", "#F2EDE3"], 0.3))
+			parts.append(_r("rbox", [size.x + 0.65, 0.12, size.z + 0.65], Vector3(0.0, size.y + 0.02, c.z), "#D9B44A", 0.4))
+			parts.append(_r("rbox", [size.x * 0.6, 1.0, size.z * 0.6], Vector3(0.0, size.y + 0.95, c.z), ["#E2DCD0", "#FBF8F2"], 0.25))
+			parts.append(_p("sphere", [1.0, 0.7, 1.0], Vector3(0.0, size.y + 1.45, c.z), ["#C9A23A", "#F0D27A"]))
+			parts.append(_p("cone", [0.2, 0.7], Vector3(0.0, size.y + 2.45, c.z), "#D9B44A"))
 			for x: float in [-3.4, -1.6, 1.6, 3.4]:
-				parts.append(_p("cyl", [0.28, size.y], Vector3(x, size.y * 0.5, 0.75), "#FFFFFF"))
-				parts.append(_p("box", [0.7, 0.18, 0.7], Vector3(x, size.y - 0.09, 0.75), "#D9B44A"))
-			parts.append(_p("box", [size.x + 0.6, 0.25, 2.2], Vector3(0.0, 0.12, 0.6), "#E0D8C8"))
-			parts.append(_p("box", [2.6, 0.04, 2.0], Vector3(0.0, 0.26, 0.7), "#A3263A"))
-	# 문 (앞면에 붙인다)
+				parts.append(_r("cyl", [0.28, size.y], Vector3(x, size.y * 0.5, 0.75), ["#E8E2D6", "#FFFFFF"], 0.05))
+				parts.append(_r("rbox", [0.75, 0.2, 0.75], Vector3(x, size.y - 0.1, 0.75), "#D9B44A", 0.3))
+				parts.append(_r("rbox", [0.7, 0.18, 0.7], Vector3(x, 0.09, 0.75), "#D9D2C4", 0.3))
+			parts.append(_r("rbox", [size.x + 0.6, 0.25, 2.2], Vector3(0.0, 0.12, 0.6), "#E0D8C8", 0.15))
+			parts.append(_r("rbox", [2.6, 0.04, 2.0], Vector3(0.0, 0.26, 0.7), "#A3263A", 0.2))
+	# 문 (앞면에 붙인다): 문틀 + 문 + 손잡이.
 	var door_w: float = 1.0 if level < 3 else 1.8
-	parts.append(_p("box", [door_w, 1.9, 0.08], Vector3(0.0, 0.95 + (0.25 if level == 3 else 0.0), 0.03), "#6E4A2E" if level < 3 else "#2E3A59"))
-	parts.append(_p("sphere", [0.06], Vector3(door_w * 0.35, 1.0 + (0.25 if level == 3 else 0.0), 0.09), "#D9B44A"))
+	var lift: float = 0.25 if level == 3 else 0.0
+	parts.append(_r("rbox", [door_w + 0.2, 2.05, 0.1], Vector3(0.0, 1.0 + lift, 0.02), "#FFF6E6" if level < 3 else "#D9B44A", 0.25))
+	parts.append(_r("rbox", [door_w, 1.9, 0.1], Vector3(0.0, 0.95 + lift, 0.06), ["#5E3E26", "#8A5A36"] if level < 3 else ["#253049", "#3A4A70"], 0.2))
+	parts.append(_p("sphere", [0.06], Vector3(door_w * 0.35, 1.0 + lift, 0.13), "#D9B44A"))
 	return parts
 
 

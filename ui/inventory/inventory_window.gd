@@ -56,6 +56,7 @@ func open() -> void:
 		return
 	if freeze_world:
 		_freeze(true)
+	Audio.play_ui(Audio.SFX_OPEN)
 	visible = true
 	if player != null:
 		player.set_input_lock(&"inventory", true)
@@ -69,6 +70,7 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
+	Audio.play_ui(Audio.SFX_CLOSE)
 	visible = false
 	selected_slot = -1
 	_preview.set_open(false)
@@ -87,6 +89,7 @@ func toggle() -> void:
 
 ## 칸 누르기 (테스트·키보드에서도 같은 길로 들어온다).
 func press_slot(index: int) -> void:
+	Audio.play_ui(Audio.SFX_CLICK)
 	var item: InventoryItem = _item_at(index)
 	if selected_slot == -1:
 		if item != null:
@@ -205,6 +208,7 @@ func _refresh_outfit() -> void:
 			_outfit_slots[part] = slot
 	_outfit_slots["hat"].set_item(InventoryItem.new(Net.outfit_hat, 1) if not Net.outfit_hat.is_empty() else null)
 	_outfit_slots["top"].set_item(InventoryItem.new(Net.outfit_top, 1) if not Net.outfit_top.is_empty() else null)
+	_preview.rig.set_look(CharacterLook.for_player(Net.my_id))
 	_preview.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 

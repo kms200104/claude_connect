@@ -104,6 +104,9 @@ func _run() -> void:
 	var morak: NpcActor = npcs.actor("morak")
 	player.global_position = morak.global_position + Vector3(1.6, 0.1, 0.6)
 	await _wait(1.5)
+	# 주민이 걸어가 버렸을 수 있으니 누르기 직전에 다시 곁으로.
+	player.global_position = morak.global_position + Vector3(1.2, 0.1, 0.5)
+	await _wait(0.3)
 	interaction.action_hud.action_pressed.emit()
 	var choices: VBoxContainer = box.get_node("%Choices")
 	for i: int in 60:

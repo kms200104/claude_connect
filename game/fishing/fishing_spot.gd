@@ -27,10 +27,50 @@ func _ready() -> void:
 		plane.subdivide_width = maxi(int(plane.size.x), 1)
 		plane.subdivide_depth = maxi(int(plane.size.y), 1)
 		water.position = Vector3(0.0, water_height, 0.0)
+		if water.material_override is ShaderMaterial:
+			(water.material_override as ShaderMaterial).set_shader_parameter("half_extent", info.half_extent)
+		elif water.get_surface_override_material(0) is ShaderMaterial:
+			(water.get_surface_override_material(0) as ShaderMaterial).set_shader_parameter("half_extent", info.half_extent)
 	if blocker != null and blocker.shape is BoxShape3D:
-		var box: BoxShape3D = blocker.shape
-		box.size = Vector3(maxf(info.half_extent.x * 2.0 - shore_margin * 2.0, 0.1), 2.0, maxf(info.half_extent.y * 2.0 - shore_margin * 2.0, 0.1))
-		blocker.position = Vector3(0.0, 1.0, 0.0)
+		_build_blocker()
+
+
+## 물 막이: 수역보다 물가 폭만큼 작은 상자. 선착장이 물 위로 나와 있으면 그 자리만 비워 걸어 들어갈 수 있게 한다.
+func _build_blocker() -> void:
+	var half: Vector2 = Vector2(maxf(info.half_extent.x - shore_margin, 0.05), maxf(info.half_extent.y - shore_margin, 0.05))
+	var whole: Rect2 = Rect2(info.center - half, half * 2.0)
+	var pieces: Array[Rect2] = [whole]
+	var layout: VillageLayout = GameData.layout
+	if layout != null and layout.dock_size.x > 0.0:
+		var gap: Rect2 = layout.dock_rect()
+		if whole.intersects(gap):
+			pieces = _subtract(whole, gap.intersection(whole))
+	var box: BoxShape3D = blocker.shape
+	for i: int in pieces.size():
+		var shape: CollisionShape3D = blocker
+		if i > 0:
+			shape = CollisionShape3D.new()
+			shape.shape = BoxShape3D.new()
+			blocker.get_parent().add_child(shape)
+		var r: Rect2 = pieces[i]
+		(shape.shape as BoxShape3D).size = Vector3(r.size.x, 2.0, r.size.y)
+		shape.global_position = Vector3(r.get_center().x, 1.0, r.get_center().y)
+	if pieces.is_empty():
+		box.size = Vector3(0.01, 0.01, 0.01)
+
+
+## 사각형 a 에서 b(a 안쪽)를 빼고 남은 조각들 (왼쪽·오른쪽 전체 높이, 가운데 위·아래).
+static func _subtract(a: Rect2, b: Rect2) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	if b.position.x > a.position.x:
+		out.append(Rect2(a.position, Vector2(b.position.x - a.position.x, a.size.y)))
+	if b.end.x < a.end.x:
+		out.append(Rect2(Vector2(b.end.x, a.position.y), Vector2(a.end.x - b.end.x, a.size.y)))
+	if b.position.y > a.position.y:
+		out.append(Rect2(Vector2(b.position.x, a.position.y), Vector2(b.size.x, b.position.y - a.position.y)))
+	if b.end.y < a.end.y:
+		out.append(Rect2(Vector2(b.position.x, b.end.y), Vector2(b.size.x, a.end.y - b.end.y)))
+	return out
 
 
 ## 서버 판정(cast_range)보다 약간 안쪽에서만 던질 수 있게 해서, 경계에서 서버에 거절당하지 않게 한다.

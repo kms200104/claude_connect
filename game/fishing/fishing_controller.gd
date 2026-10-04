@@ -52,6 +52,7 @@ func _on_action_pressed() -> void:
 		Phase.IDLE:
 			phase = Phase.CASTING
 			hud.show_casting()
+			Audio.play_sfx("fish_cast")
 			Net.cast_fishing(spot.spot_id)
 		Phase.WAITING:
 			# 입질 전에 당기면 서버가 early 로 실패 처리한다.
@@ -62,6 +63,7 @@ func _on_action_pressed() -> void:
 				# 입질 연출이 보인 시점부터 누른 시점까지 — 네트워크 지연이 섞이지 않는 값.
 				Net.hook_fishing(Time.get_ticks_msec() - _bite_shown_ms)
 				hud.show_hooked()
+				Audio.play_sfx("fish_reel", -3.0)
 
 
 func _on_started() -> void:
@@ -73,6 +75,7 @@ func _on_started() -> void:
 	var target: Vector3 = spot.info.clamp_inside(player.global_position + forward.normalized() * cast_distance)
 	target.y = spot.water_height + 0.02
 	bobber.show_at(target)
+	Audio.play_at("fish_plop", target, -2.0)
 	player.look_toward(target - player.global_position)
 	player.set_fishing_pose(true)
 	hud.show_waiting()
@@ -82,6 +85,7 @@ func _on_nibble() -> void:
 	if phase != Phase.WAITING:
 		return
 	bobber.nibble()
+	Audio.play_at("fish_nibble", bobber.global_position, -4.0, 1.0, 0.15)
 	hud.show_nibble()
 	if vibrate_on_bite:
 		Input.vibrate_handheld(30)
@@ -93,6 +97,7 @@ func _on_bite(window_ms: int) -> void:
 	phase = Phase.BITE
 	_bite_shown_ms = Time.get_ticks_msec()
 	bobber.bite()
+	Audio.play_at("fish_bite", bobber.global_position, 1.0)
 	hud.show_bite(window_ms)
 	if vibrate_on_bite:
 		Input.vibrate_handheld(120)
@@ -105,6 +110,7 @@ func _on_result(success: bool, fish_id: String, reason: String) -> void:
 	bobber.hide_bobber()
 	player.set_fishing_pose(false)
 	hud.show_result(_describe(success, fish_id, reason), success)
+	Audio.play_sfx("fish_catch" if success else "fish_escape", -2.0, 1.0, 0.0)
 	await get_tree().create_timer(result_hold).timeout
 	if phase == Phase.RESULT:
 		_reset()

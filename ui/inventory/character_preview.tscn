@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://ui/inventory/character_preview.gd" id="1_preview"]
 [ext_resource type="PackedScene" path="res://game/player/character_rig.tscn" id="2_rig"]
-[ext_resource type="Material" path="res://assets/materials/player_body.tres" id="3_body"]
 [ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="4_pedestal"]
 
 [sub_resource type="Environment" id="Env_preview"]
@@ -66,7 +65,6 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
 [node name="Rig" parent="Viewport/Stage/Pivot" instance=ExtResource("2_rig")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-body_material = ExtResource("3_body")
 
 [node name="Bubble" type="Label3D" parent="Viewport/Stage"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.95, 0)

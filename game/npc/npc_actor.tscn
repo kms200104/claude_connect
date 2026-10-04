@@ -1,8 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://game/npc/npc_actor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://game/player/character_rig.tscn" id="2_rig"]
-[ext_resource type="Material" path="res://assets/materials/player_body.tres" id="3_body"]
 
 [node name="NpcActor" type="Node3D" node_paths=PackedStringArray("body", "rig", "name_label", "mark")]
 script = ExtResource("1_actor")
@@ -10,7 +9,6 @@ body = NodePath("Body")
 rig = NodePath("Body")
 name_label = NodePath("NameLabel")
 mark = NodePath("Mark")
-base_material = ExtResource("3_body")
 
 [node name="Body" parent="." instance=ExtResource("2_rig")]
 transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, 0, 0.72, 0)

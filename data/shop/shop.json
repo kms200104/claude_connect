@@ -5,6 +5,7 @@
     "name": "달보",
     "personality": "shopkeeper",
     "color": "#7EC8A8",
+    "look": { "hair": "#6B4630", "style": "bun", "top": "#7EC8A8", "bottom": "#E9D8B4", "shoes": "#7A4A30" },
     "about": "솔바람 상점의 주인. 손님이 늘어 가게가 커지는 날을 꿈꾼다."
   },
   "door": {
@@ -38,50 +39,21 @@
       "name": "솔바람 구멍가게",
       "points": 0,
       "sell_bonus": 0,
-      "stock": [
-        "tea_leaves",
-        "letter_set",
-        "honey_jar",
-        "log_stool",
-        "flower_pot",
-        "wood_chair",
-        "straw_hat",
-        "striped_tee"
-      ]
+      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "straw_hat", "striped_tee", "wooden_bucket"]
     },
     {
       "level": 2,
       "name": "솔바람 잡화점",
       "points": 1500,
       "sell_bonus": 0.05,
-      "stock": [
-        "yarn",
-        "bouquet",
-        "round_table",
-        "bench",
-        "floor_lamp",
-        "bookshelf",
-        "knit_cap",
-        "apron",
-        "raincoat"
-      ]
+      "stock": ["yarn", "bouquet", "round_table", "bench", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell"]
     },
     {
       "level": 3,
       "name": "솔바람 백화점",
       "points": 6000,
       "sell_bonus": 0.1,
-      "stock": [
-        "scented_candle",
-        "silver_teapot",
-        "rocking_chair",
-        "sofa",
-        "fountain",
-        "grand_piano",
-        "flower_hat",
-        "velvet_beret",
-        "formal_vest"
-      ]
+      "stock": ["scented_candle", "silver_teapot", "rocking_chair", "sofa", "fountain", "grand_piano", "flower_hat", "velvet_beret", "formal_vest", "quilt_bed"]
     }
   ],
   "room_origin": {

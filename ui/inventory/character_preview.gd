@@ -168,7 +168,7 @@ func _eye_goal() -> Vector2:
 	if rig == null or rig.visual == null:
 		return Vector2.ZERO
 	var local: Vector3 = rig.visual.global_transform.affine_inverse() * (_stage.global_position + look_target)
-	var eye: Vector3 = rig.eye_center
+	var eye: Vector3 = CharacterModel.EYE_CENTER
 	return Vector2((local.x - eye.x) * 2.0, (local.y - eye.y) * 2.0)
 
 

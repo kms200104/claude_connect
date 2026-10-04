@@ -1,7 +1,8 @@
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
-[ext_resource type="Shader" path="res://assets/shaders/toon_world.gdshader" id="1_shader"]
+[ext_resource type="Shader" path="res://assets/shaders/water.gdshader" id="1_shader"]
 
 [resource]
 shader = ExtResource("1_shader")
-shader_parameter/albedo = Color(0.2, 0.42, 0.6, 1)
+shader_parameter/half_extent = Vector2(9, 7)
+shader_parameter/shape_power = 4.0

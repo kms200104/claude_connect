@@ -8,6 +8,8 @@ const TREES_PATH: String = "res://data/world/trees.json"
 const NPCS_PATH: String = "res://data/npcs/npcs.json"
 const DIALOGUE_PATH: String = "res://data/npcs/dialogue.json"
 const SHOP_PATH: String = "res://data/shop/shop.json"
+const LAYOUT_PATH: String = "res://data/world/village_layout.json"
+const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
 const PLAYER_NAMES: PackedStringArray = ["보리", "새미"]
@@ -25,7 +27,10 @@ var talk_range: float = 3.0
 
 ## 상점 데이터 (data/shop/shop.json): 문·실내 위치, 단계별 이름·포인트·진열품.
 var shop: ShopData = null
+## 마을 꾸밈 배치 (길·바위·울타리·꽃밭·선착장).
+var layout: VillageLayout = null
 
+var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
 var _choices: Dictionary = {}
 
@@ -60,6 +65,7 @@ func _ready() -> void:
 	_dialogue = dialogue_file.get("personalities", {})
 	_choices = dialogue_file.get("choices", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
+	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
 
 
 func fish_name(id: String) -> String:
@@ -69,6 +75,16 @@ func fish_name(id: String) -> String:
 
 func item(id: String) -> ItemInfo:
 	return items.get(id)
+
+
+## 아이템 아이콘 (assets/icons/items/<id>.png). 없으면 null — 칸은 색 동그라미로 대신 그린다.
+func item_icon(id: String) -> Texture2D:
+	if _icons.has(id):
+		return _icons[id]
+	var path: String = "%s/%s.png" % [ICON_DIR, id]
+	var icon: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_icons[id] = icon
+	return icon
 
 
 func item_name(id: String) -> String:

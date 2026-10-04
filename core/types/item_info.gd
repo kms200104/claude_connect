@@ -27,6 +27,8 @@ var buy_price: int = 0
 var wear_slot: String = ""
 ## 가구·옷 모양: 도형 목록 ({s, size, at, c}). PartMesh 가 메시로 만든다.
 var model: Array = []
+## 윗옷을 입으면 스웨터를 이 색으로 바꾼다 (알파 0 = 그대로 두고 모양만 덧붙임).
+var tint: Color = Color(0.0, 0.0, 0.0, 0.0)
 
 
 static func from_item_dict(data: Dictionary) -> ItemInfo:
@@ -40,6 +42,8 @@ static func from_item_dict(data: Dictionary) -> ItemInfo:
 	info.price = int(data.get("price", 0))
 	info.buy_price = int(data.get("buy", 0))
 	info.wear_slot = str(data.get("wear", ""))
+	if data.has("tint"):
+		info.tint = Color.html(str(data["tint"]))
 	var parts: Variant = data.get("model", [])
 	if parts is Array:
 		info.model = parts

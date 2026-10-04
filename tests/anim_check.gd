@@ -8,23 +8,25 @@ func _ready() -> void:
 	var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
 	add_child(rig)
 	var visual: Node3D = rig.get_node("Visual")
-	var rod: Node3D = rig.get_node("Visual/Rod")
+	var rod: Node3D = rig.rod
 	await _settle(rig, 0.0, false)
 	var idle_lean: float = visual.rotation.x
 	var idle_rod: float = rod.rotation.x
+	var idle_rod_up: float = rod.global_basis.y.normalized().y
 	await _settle(rig, 1.0, false)
 	var walk_lean: float = visual.rotation.x
 	await _settle(rig, 0.0, true)
 	var fish_rod: float = rod.rotation.x
+	var fish_rod_dir: Vector3 = rod.global_basis.y.normalized()
 	var fish_lean: float = visual.rotation.x
 	await _settle(rig, 0.5, false)
 	var half_lean: float = visual.rotation.x
-	_check(is_equal_approx(idle_rod, 0.3) or absf(idle_rod - 0.32) < 0.06, "idle: 낚싯대를 세워 둠 (rod.x=%.2f)" % idle_rod)
+	_check(idle_rod_up > 0.6, "idle: 낚싯대를 세워 둠 (위쪽 성분 %.2f)" % idle_rod_up)
 	_check(walk_lean < -0.1, "walk: 앞으로 기울어짐 (lean=%.2f)" % walk_lean)
-	_check(fish_rod < -0.9, "fishing: 낚싯대를 앞으로 내밈 (rod.x=%.2f)" % fish_rod)
+	_check(fish_rod_dir.z < -0.5, "fishing: 낚싯대를 앞(-Z)으로 내밈 (방향 %s)" % str(fish_rod_dir))
 	_check(absf(idle_lean) < 0.05, "idle: 기울기 없음 (%.2f)" % idle_lean)
 	_check(half_lean < idle_lean - 0.03 and half_lean > walk_lean + 0.01, "walk 가중치 0.5에서 idle과 walk 사이로 블렌드 (%.3f)" % half_lean)
-	# 낚시 가중치 0.5: 낚싯대 각도가 stowed(0.3)와 fishing(-1.1) 사이
+	# 낚시 가중치 0.5: 낚싯대 각도가 들고 다닐 때와 낚시 자세 사이
 	await _settle(rig, 0.0, false)
 	rig.fishing_blend_speed = 1.0
 	rig.set_fishing(true)
@@ -35,15 +37,24 @@ func _ready() -> void:
 	rig.set_held("axe")
 	_check(rig.axe.visible and not rig.rod.visible, "도끼를 들면 도끼만 보임")
 	await _settle(rig, 0.0, false)
-	var axe: Node3D = rig.get_node("Visual/Axe")
+	var arm: Node3D = rig.arm_right
+	var axe: Node3D = rig.axe
+	var rest_arm: float = arm.rotation.x
 	var rest_axe: float = axe.rotation.x
 	rig.play_chop()
 	await get_tree().create_timer(0.17).timeout
-	_check(rig.is_chopping() and axe.rotation.x > rest_axe + 0.5, "도끼질: 도끼를 들어 올림 (%.2f → %.2f)" % [rest_axe, axe.rotation.x])
+	_check(rig.is_chopping() and arm.rotation.x > rest_arm + 1.5, "도끼질: 팔을 머리 위로 들어 올림 (%.2f → %.2f)" % [rest_arm, arm.rotation.x])
 	var visual_scale: Vector3 = rig.get_node("Visual").scale
 	_check(visual_scale.y > 0.9 and visual_scale.x > 0.9, "도끼질 중에도 몸 크기가 그대로 (%s)" % str(visual_scale))
 	await get_tree().create_timer(0.6).timeout
-	_check(not rig.is_chopping() and absf(axe.rotation.x - rest_axe) < 0.15, "도끼질이 끝나면 원래 자세 (%.2f)" % axe.rotation.x)
+	_check(not rig.is_chopping() and absf(axe.rotation.x - rest_axe) < 0.15 and absf(arm.rotation.x - rest_arm) < 0.15, "도끼질이 끝나면 원래 자세 (도끼 %.2f, 팔 %.2f)" % [axe.rotation.x, arm.rotation.x])
+	# 걸을 때 팔다리가 앞뒤로 엇갈려 흔들린다.
+	await _settle(rig, 1.0, false)
+	var swing: float = 0.0
+	for i: int in 12:
+		await get_tree().create_timer(0.05).timeout
+		swing = maxf(swing, absf(rig.leg_left.rotation.x - rig.leg_right.rotation.x))
+	_check(swing > 0.6, "walk: 두 다리가 엇갈려 움직임 (%.2f)" % swing)
 	rig.set_eye_offset(Vector2(1.0, 0.0))
 	_check(rig.get_eye_offset().is_equal_approx(Vector2(1.0, 0.0)), "눈동자 위치를 옮길 수 있음")
 	print("ANIM %s (fishing lean %.2f)" % ["PASS" if _failures == 0 else "FAIL", fish_lean])

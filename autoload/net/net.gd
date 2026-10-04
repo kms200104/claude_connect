@@ -170,6 +170,21 @@ func last_server_url() -> String:
 	return str(_load_settings().get_value("settings", "server_url", default_server_url))
 
 
+## 마지막으로 들어갔던 방 코드 (나가기를 눌러도 기억한다). 없으면 빈 문자열.
+func last_room_code() -> String:
+	return str(_load_settings().get_value("settings", "room_code", ""))
+
+
+## 저장된 세션의 방 코드 (이어하기로 돌아갈 방).
+func saved_session_code() -> String:
+	return str(_load_settings().get_value("session", "code", ""))
+
+
+## 저장된 세션의 서버 주소.
+func saved_session_url() -> String:
+	return str(_load_settings().get_value("session", "url", ""))
+
+
 func send_move(position: Vector3, yaw: float, velocity: Vector3) -> void:
 	if state != State.ONLINE:
 		return
@@ -542,6 +557,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	my_id = int(msg.get("id", 0))
 	_token = str(msg.get("token", ""))
 	room_code = str(msg.get("code", room_code))
+	_save_last_room(room_code)
 	_intent = Intent.NONE
 	_attempt = 0
 	var me: NetPlayerState = null
@@ -771,6 +787,14 @@ func _load_settings() -> ConfigFile:
 func _save_server_url(url: String) -> void:
 	var cfg: ConfigFile = _load_settings()
 	cfg.set_value("settings", "server_url", url)
+	cfg.save(_settings_path())
+
+
+func _save_last_room(code: String) -> void:
+	if code.is_empty():
+		return
+	var cfg: ConfigFile = _load_settings()
+	cfg.set_value("settings", "room_code", code)
 	cfg.save(_settings_path())
 
 

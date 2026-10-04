@@ -14,7 +14,19 @@ func _ready() -> void:
 	hide_action()
 
 
+## 버튼 글자 위에 그릴 그림 (없으면 글자만).
+const ICONS: Dictionary[String, String] = {
+	"베기": "res://assets/icons/items/axe.png",
+	"들어가기": "res://assets/ui/icons/shop.png",
+	"나가기": "res://assets/ui/icons/shop.png",
+	"줍기": "res://assets/icons/items/log_stool.png",
+}
+
+
 func show_action(text: String) -> void:
+	if _button.text != text or not _button.visible:
+		var path: String = ICONS.get(text, "")
+		_button.icon = load(path) if not path.is_empty() else null
 	_button.text = text
 	_button.visible = true
 

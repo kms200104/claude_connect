@@ -4,14 +4,12 @@ extends Node3D
 
 @export var actor_scene: PackedScene
 @export_group("House Materials")
-@export var wall_material: Material
-## 주민 색으로 지붕을 칠할 때 복제할 머티리얼.
-@export var roof_material: ShaderMaterial
-@export var door_material: Material
-## 밤에 켜지는 창문.
+## 정점 색을 쓰는 흰 툰 머티리얼 (벽·지붕·문·화분 모두).
+@export var clay_material: Material
+## 밤에 켜지는 창문 유리.
 @export var window_material: Material
 
-const HOUSE_SIZE: Vector3 = Vector3(4.0, 2.6, 3.0)
+const HOUSE_SIZE: Vector3 = Vector3(4.0, 2.4, 3.0)
 
 var _actors: Dictionary[String, NpcActor] = {}
 
@@ -64,7 +62,8 @@ func _refresh_marks() -> void:
 		_actors[id].set_mark(text)
 
 
-## 주민 집: 벽·지붕·문·창문 4개 메시 + 충돌 상자. 문은 집의 +Z 쪽(데이터의 yaw로 돌린다).
+## 주민 집: 돌 기초 · 파스텔 벽 · 기와 지붕(주민 색) · 굴뚝 · 문 · 창문과 꽃 상자. 메시 2개(집 + 밤에 빛나는 유리) + 충돌 상자.
+## 문은 집의 +Z 쪽 (데이터의 yaw로 돌린다). 같은 주민 색은 메시를 공유한다.
 func _build_house(npc: NpcInfo) -> void:
 	var house: StaticBody3D = StaticBody3D.new()
 	house.name = "House_%s" % npc.id
@@ -79,26 +78,84 @@ func _build_house(npc: NpcInfo) -> void:
 	shape.position.y = HOUSE_SIZE.y * 0.5
 	house.add_child(shape)
 
-	var walls: BoxMesh = BoxMesh.new()
-	walls.size = HOUSE_SIZE
-	_add_mesh(house, walls, Vector3(0.0, HOUSE_SIZE.y * 0.5, 0.0), wall_material)
+	var key: String = npc.color.to_html(false)
+	if not _house_meshes.has(key):
+		_house_meshes[key] = _house_mesh(npc.color)
+	_add_mesh(house, _house_meshes[key], Vector3.ZERO, clay_material)
+	_add_mesh(house, _glass_mesh(), Vector3.ZERO, window_material)
 
-	var roof: PrismMesh = PrismMesh.new()
-	roof.size = Vector3(HOUSE_SIZE.x + 0.6, 1.3, HOUSE_SIZE.z + 0.4)
-	var roof_mat: Material = roof_material
-	if roof_material != null:
-		var tinted: ShaderMaterial = roof_material.duplicate()
-		tinted.set_shader_parameter("albedo", npc.color.darkened(0.15))
-		roof_mat = tinted
-	_add_mesh(house, roof, Vector3(0.0, HOUSE_SIZE.y + 0.65, 0.0), roof_mat)
 
-	var door: BoxMesh = BoxMesh.new()
-	door.size = Vector3(0.9, 1.6, 0.08)
-	_add_mesh(house, door, Vector3(-0.8, 0.8, HOUSE_SIZE.z * 0.5 + 0.02), door_material)
+static var _house_meshes: Dictionary[String, ArrayMesh] = {}
+static var _glass: ArrayMesh = null
 
-	var window: BoxMesh = BoxMesh.new()
-	window.size = Vector3(0.8, 0.6, 0.06)
-	_add_mesh(house, window, Vector3(0.9, 1.45, HOUSE_SIZE.z * 0.5 + 0.02), window_material)
+
+static func _house_mesh(accent: Color) -> ArrayMesh:
+	var st: SurfaceTool = ClayMesh.begin()
+	var w: float = HOUSE_SIZE.x
+	var h: float = HOUSE_SIZE.y
+	var d: float = HOUSE_SIZE.z
+	var front: float = d * 0.5
+	var wall: Color = Color("#F6EEDF").lerp(accent, 0.18)
+	var trim: Color = Color("#FFF9EF")
+	var wood: Color = Color("#9B6A45")
+	# 돌 기초와 벽 (아래쪽이 살짝 어둡다).
+	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.12, 0.0), Vector3(w + 0.3, 0.3, d + 0.3), 0.25, Color("#B9B3A8"), Basis(), 12, 6)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, h * 0.5 + 0.1, 0.0), Vector3(w, h, d), 0.12, ClayMesh.vertical_gradient(wall.darkened(0.12), wall, 0.6), Basis(), 16, 10)
+	# 박공 (지붕 아래 세모 벽) 양쪽.
+	var gable: PrismMesh = PrismMesh.new()
+	gable.size = Vector3(d, 1.15, w - 0.1)
+	ClayMesh.add_primitive(st, gable, Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(0.0, h + 0.1 + 0.575, 0.0)), wall)
+	# 지붕: 앞뒤 두 장, 줄마다 어두운 기와 줄무늬. 용마루는 둥근 막대.
+	var roof_color: Color = accent.darkened(0.12)
+	var ridge: Vector3 = Vector3(0.0, h + 1.35, 0.0)
+	for side: float in [1.0, -1.0]:
+		var eave: Vector3 = Vector3(0.0, h - 0.05, side * (front + 0.45))
+		var dir: Vector3 = (eave - ridge).normalized()
+		var tiles: Callable = func(local: Vector3, normal: Vector3) -> Color:
+			var along: float = (local - ridge).dot(dir)
+			var row: float = fposmod(along * 3.2, 1.0)
+			var shade: float = 0.0 if normal.y > 0.2 else 0.15
+			return roof_color.darkened(shade + (0.12 if row > 0.82 else 0.0)).lightened(0.05 * clampf(1.0 - along * 0.3, 0.0, 1.0))
+		ClayMesh.add_rounded_box(st, (ridge + eave) * 0.5, Vector3(w + 0.7, 0.2, ridge.distance_to(eave) + 0.1), 0.2, tiles, Basis.looking_at(dir, Vector3.UP), 12, 6)
+	ClayMesh.add_capsule(st, ridge + Vector3(-(w + 0.7) * 0.5, 0.05, 0.0), ridge + Vector3((w + 0.7) * 0.5, 0.05, 0.0), 0.12, roof_color.darkened(0.2), 8, 2)
+	# 굴뚝.
+	ClayMesh.add_rounded_box(st, Vector3(w * 0.28, h + 1.25, -0.45), Vector3(0.45, 1.0, 0.45), 0.2, ClayMesh.vertical_gradient(Color("#A9614C"), Color("#C98A6E"), 1.0), Basis(), 8, 6)
+	ClayMesh.add_rounded_box(st, Vector3(w * 0.28, h + 1.78, -0.45), Vector3(0.55, 0.12, 0.55), 0.3, Color("#8E5240"), Basis(), 8, 4)
+	# 문: 흰 문틀 + 나무 문 + 금색 손잡이 + 둥근 창 + 디딤돌.
+	var door_x: float = -0.8
+	ClayMesh.add_rounded_box(st, Vector3(door_x, 0.98, front + 0.02), Vector3(1.1, 1.85, 0.12), 0.25, trim, Basis(), 10, 6)
+	ClayMesh.add_rounded_box(st, Vector3(door_x, 0.93, front + 0.07), Vector3(0.88, 1.66, 0.1), 0.2, ClayMesh.vertical_gradient(wood.darkened(0.15), wood.lightened(0.08), 1.0), Basis(), 10, 6)
+	ClayMesh.add_ellipsoid(st, Vector3(door_x + 0.3, 0.9, front + 0.14), Vector3(0.05, 0.05, 0.04), Color("#E8B84A"), 8, 4)
+	ClayMesh.add_ellipsoid(st, Vector3(door_x, 1.95, front + 0.1), Vector3(0.66, 0.22, 0.08), accent.lightened(0.15), 12, 4)
+	ClayMesh.add_rounded_box(st, Vector3(door_x, 0.06, front + 0.55), Vector3(1.0, 0.12, 0.55), 0.4, Color("#C8C1B5"), Basis(), 10, 4)
+	# 창문: 흰 창틀 + 십자 창살 + 아래 꽃 상자.
+	var win: Vector3 = Vector3(0.95, 1.5, front + 0.03)
+	ClayMesh.add_rounded_box(st, win, Vector3(1.0, 0.85, 0.12), 0.25, trim, Basis(), 10, 6)
+	ClayMesh.add_box(st, win + Vector3(0.0, 0.0, 0.09), Vector3(0.06, 0.62, 0.04), trim)
+	ClayMesh.add_box(st, win + Vector3(0.0, 0.0, 0.09), Vector3(0.78, 0.06, 0.04), trim)
+	ClayMesh.add_rounded_box(st, win + Vector3(0.0, -0.55, 0.12), Vector3(1.05, 0.22, 0.28), 0.3, wood, Basis(), 10, 4)
+	var petals: Array[Color] = [Color("#F6A6B8"), Color("#FFD866"), accent.lightened(0.2), Color("#F6A6B8")]
+	for i: int in 4:
+		var at: Vector3 = win + Vector3(-0.36 + 0.24 * float(i), -0.38, 0.14)
+		ClayMesh.add_ellipsoid(st, at, Vector3(0.1, 0.08, 0.1), Color("#6FA35A"), 8, 4)
+		ClayMesh.add_ellipsoid(st, at + Vector3(0.0, 0.07, 0.03), Vector3(0.06, 0.04, 0.06), petals[i], 6, 3)
+	# 옆벽 둥근 창 (밤에 빛나는 유리는 따로).
+	for side: float in [-1.0, 1.0]:
+		ClayMesh.add_torus(st, Vector3(side * (w * 0.5 + 0.03), 1.5, 0.0), 0.33, 0.06, trim, 14, 4, Basis(Vector3.FORWARD, PI * 0.5))
+	return ClayMesh.commit(st)
+
+
+## 창 유리 (밤에 빛난다): 앞 창 + 옆 둥근 창 둘.
+static func _glass_mesh() -> ArrayMesh:
+	if _glass != null:
+		return _glass
+	var st: SurfaceTool = ClayMesh.begin()
+	var front: float = HOUSE_SIZE.z * 0.5
+	ClayMesh.add_box(st, Vector3(0.95, 1.5, front + 0.07), Vector3(0.8, 0.66, 0.04), Color.WHITE)
+	for side: float in [-1.0, 1.0]:
+		ClayMesh.add_ellipsoid(st, Vector3(side * (HOUSE_SIZE.x * 0.5 + 0.02), 1.5, 0.0), Vector3(0.03, 0.3, 0.3), Color.WHITE, 12, 4)
+	_glass = ClayMesh.commit(st)
+	return _glass
 
 
 func _add_mesh(parent: Node3D, mesh: Mesh, offset: Vector3, material: Material) -> void:

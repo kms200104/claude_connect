@@ -6,4 +6,4 @@
 shader = ExtResource("1_shader")
 shader_parameter/albedo = Color(1, 0.95, 0.8, 1)
 shader_parameter/emission = Color(1, 0.8, 0.45, 1)
-shader_parameter/emission_energy = 2.5
+shader_parameter/emission_energy = 1.4

@@ -26,8 +26,16 @@ npm test                  # 서버 단위·통합 테스트
 - `tests/run_fishing_e2e.sh` — 낚시 → 인벤토리 → 서버 재시작 후 복구
 - `tests/run_village_e2e.sh` — 비 · 퀵슬롯으로 도끼 들기 · 나무 베기 → 인벤토리 · 가방 창(캐릭터가 고른 칸을 바라봄) · 주민 대화 → 부탁 → 완료
 - `tests/run_shop_e2e.sh` — 달리기 · 상점 들어가기 · 주인과 대화 → 팔기 → 상점 성장 → 사기 · 나가기 · 옷 입기 · 가구 설치·줍기
-- `godot --headless --path . res://tests/anim_check.tscn` — AnimationTree 블렌딩 (걷기·낚시·도끼질)
+- `tests/run_title_e2e.sh` — 첫 화면: 새 마을 만들기 → 다시 켜면 서버 주소·마지막 방이 채워져 있고 "시작하기"로 같은 방에 들어감
+- `godot --headless --path . res://tests/anim_check.tscn` — AnimationTree 블렌딩 (걷기·달리기 팔다리·낚시·도끼질)
 
 화면 확인(테스트 아님, 실제 렌더러 필요): 서버를 `WEATHER_FORCE=clear QUEST_CHANCE=1 MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0` 으로 띄우고
 `godot --path . res://tools/capture_screens.tscn -- --server=ws://127.0.0.1:8080 --out=/tmp/shots` — 아침·도끼질·비·뇌우·노을·밤·대화·부탁 목록·가방 창을 PNG로 찍는다.
 상점·옷·가구는 서버를 `WEATHER_FORCE=clear START_SOL=40000 MOVE_SLACK_M=200 DOOR_GRACE_MS=0` 으로 띄우고 `res://tools/capture_shop.tscn` (구멍가게 → 잡화점 → 백화점, 옷·가구).
+
+아트·소리 도구 (DESIGN.md 11.4, 3.17):
+- `python3 tools/art/extract_reference.py` — 참고 이미지(`art_source/reference/`)에서 로고·아이콘을 투명 PNG로 오림
+- `python3 tools/art/gen_ground.py` — `data/world/village_layout.json` 으로 바닥 텍스처를 만듦
+- `python3 tools/audio/gen_audio.py` — 효과음·배경음악 합성 (numpy, scipy, ffmpeg)
+- `godot --path . res://tools/render_icons.tscn` — 아이템 모형을 찍어 아이콘 PNG 로 (실제 렌더러 필요)
+- `godot --path . res://tools/art_preview.tscn -- --what=characters --out=/tmp/p.png` — 모형 확인 (trees / characters / outfits / furniture / shop / village)
