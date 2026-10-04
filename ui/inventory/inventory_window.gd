@@ -169,7 +169,7 @@ func _refresh_detail() -> void:
 	_name.text = info.display_name
 	_name.add_theme_color_override("font_color", info.color.darkened(0.25))
 	_desc.text = info.description
-	var price: String = " · 상점에서 %s솔" % _format_number(info.price) if info.price > 0 else ""
+	var price: String = " · 상점에서 %s" % Money.sol(info.price) if info.price > 0 else ""
 	_meta.text = "%s · %d개%s%s" % [info.kind_label(), item.count, " · 손에 듦" if selected_slot == Net.held_slot else "", price]
 	_discard.text = "놓아주기" if info.is_fish() else "버리기"
 	_use.text = "설치하기" if info.is_furniture() else "입기"
@@ -177,7 +177,7 @@ func _refresh_detail() -> void:
 
 
 func _refresh_sol() -> void:
-	_sol.text = "%s솔" % _format_number(Net.sol)
+	_sol.text = Money.short(Net.sol)
 
 
 ## 가구: 캐릭터 앞 1.5m 에 캐릭터를 바라보게 놓는다. 옷: 입는다 (입던 옷은 이 칸으로).
@@ -241,10 +241,4 @@ func _freeze(on: bool) -> void:
 
 
 static func _format_number(n: int) -> String:
-	var s: String = str(n)
-	var out: String = ""
-	for i: int in s.length():
-		if i > 0 and (s.length() - i) % 3 == 0:
-			out += ","
-		out += s[i]
-	return out
+	return Money.digits(n)

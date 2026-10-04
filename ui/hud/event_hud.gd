@@ -104,7 +104,7 @@ func _fill_card() -> void:
 			_card_list.add_child(_label("오늘 찾는 물건 (×%s)" % _format_mult(e.multiplier), 28, ACCENT))
 			_card_list.add_child(_item_row(e.wanted))
 		if info.id == EventInfo.FISHING_DERBY and not info.bonus.is_empty():
-			_card_list.add_child(_label("상금: 흔한 물고기 %d솔 · 조금 귀한 %d솔 · 귀한 %d솔" % [info.bonus.get("common", 0), info.bonus.get("uncommon", 0), info.bonus.get("rare", 0)], 28, ACCENT))
+			_card_list.add_child(_label("상금: 흔한 물고기 %s · 조금 귀한 %s · 귀한 %s" % [Money.sol(int(info.bonus.get("common", 0))), Money.sol(int(info.bonus.get("uncommon", 0))), Money.sol(int(info.bonus.get("rare", 0)))], 28, ACCENT))
 		if not e.stock.is_empty():
 			_card_list.add_child(_label("파는 물건", 28, ACCENT))
 			_card_list.add_child(_item_row(e.stock))

@@ -14,6 +14,7 @@ Net="*res://autoload/net/net.gd"
 GameData="*res://autoload/game_data/game_data.gd"
 Audio="*res://autoload/audio/audio.gd"
 Quality="*res://autoload/quality/quality.gd"
+Economy="*res://autoload/economy/economy.gd"
 
 [debug]
 

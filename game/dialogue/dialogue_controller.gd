@@ -142,7 +142,7 @@ func _on_talk_opened(reply: TalkReply) -> void:
 		"npc": info.display_name,
 		"item": _quest_item_name(quest),
 		"n": quest.count if quest != null else 0,
-		"reward": quest.reward if quest != null else 0,
+		"reward": Money.digits(quest.reward if quest != null else 0),
 	}
 	var p: String = info.personality
 	mood = reply.mood
@@ -199,7 +199,7 @@ func _on_talk_opened(reply: TalkReply) -> void:
 func _topics_flow(token: int, info: NpcInfo, values: Dictionary) -> void:
 	var talked: int = 0
 	while token == _session and talked < max_topics:
-		var topics: PackedStringArray = pick_topics(3)
+		var topics: PackedStringArray = pick_topics(3, info)
 		var labels: PackedStringArray = []
 		for t: String in topics:
 			labels.append(GameData.choice_text("topic_" + t))
@@ -223,11 +223,18 @@ func _topics_flow(token: int, info: NpcInfo, values: Dictionary) -> void:
 		await _say(token, info, GameData.dialogue_line(info.personality, "bye", values))
 
 
-## 이번에 보여 줄 대화 주제 (무작위로 count 개).
-func pick_topics(count: int) -> PackedStringArray:
-	var pool: Array = Array(NetProtocol.TOPICS)
+## 이번에 보여 줄 대화 주제 (무작위로 count 개). MBTI 의 S 는 음식·취미·물고기, N 은 꿈·옛날·MBTI 이야기를 더 자주 꺼낸다.
+## "고민 상담" 은 늘 한 칸 (T/F 차이가 가장 잘 드러난다).
+func pick_topics(count: int, info: NpcInfo = null) -> PackedStringArray:
+	var pool: Array = Array(NetProtocol.TOPICS).filter(func(t: String) -> bool: return t != "worry")
 	pool.shuffle()
-	return PackedStringArray(pool.slice(0, count))
+	if info != null and randf() < 0.7:
+		var liked: Array = (GameData.mbti.get("topic_bias", {}) as Dictionary).get(info.mbti_letter(1), [])
+		var first: Array = pool.filter(func(t: String) -> bool: return t in liked)
+		pool = first + pool.filter(func(t: String) -> bool: return not t in liked)
+	var picked: Array = pool.slice(0, count - 1)
+	picked.insert(randi() % count, "worry")
+	return PackedStringArray(picked)
 
 
 ## 주제별 대사 (기분은 _say 에서 입힌다).
@@ -256,6 +263,20 @@ func topic_lines(info: NpcInfo, topic: String, values: Dictionary) -> PackedStri
 				lines.append(GameData.dialogue_line(p, "topic_fish", values))
 				if Net.museum_fish.has(fish.id):
 					lines.append(GameData.dialogue_line(p, "topic_fish_museum", values))
+		"worry":
+			# 고민 상담: F 는 같이 속상해하며 위로, T 는 원인·해결책부터 (그러다 어색하게 위로를 시도).
+			var tf: String = "F" if info.is_feeler() else "T"
+			lines.append(GameData.mbti_line("worry_open", values))
+			lines.append(GameData.mbti_line("worry_" + tf, values))
+			lines.append(GameData.mbti_line("worry_%s_after" % tf, values))
+		"mbti":
+			if info.mbti_self.is_empty():
+				lines.append(GameData.dialogue_line(p, "chat", values))
+			else:
+				lines.append(info.mbti_self)
+				var nick: String = GameData.mbti_nick(info.mbti)
+				if not nick.is_empty():
+					lines.append("(%s — %s. %s)" % [info.mbti, nick, "마음이 먼저 움직이는 F" if info.is_feeler() else "머리가 먼저 움직이는 T"])
 		"you":
 			var stage: int = mini(int(values.get("friend", 0)) / 20, 4)
 			lines.append(GameData.dialogue_line(p, "topic_you_%d" % stage, values))
@@ -411,7 +432,7 @@ func _curator_flow() -> void:
 				var fish: FishInfo = GameData.fish.get(str(entry[0]))
 				values["fish"] = fish.display_name if fish != null else str(entry[0])
 				values["desc"] = fish.description if fish != null else ""
-				values["reward"] = int(entry[1])
+				values["reward"] = Money.digits(int(entry[1]))
 				values["count"] = int(entry[2])
 				if not await _say(token, info, GameData.dialogue_line(p, "donate_thanks", values)):
 					return
@@ -523,9 +544,9 @@ func _turn_in_flow(token: int, info: NpcInfo, quest: QuestInfo, values: Dictiona
 	var done: Array = await Net.quest_completed
 	if token != _session:
 		return
-	values["reward"] = int(done[2])
+	values["reward"] = Money.digits(int(done[2]))
 	await _say(token, info, GameData.dialogue_line(info.personality, "done", values))
-	toast_hud.show_toast("+%d솔" % int(done[2]), true)
+	toast_hud.show_toast(Money.delta(int(done[2])), true)
 
 
 ## 한 줄 보여 주고 넘길 때까지 기다린다. 그 사이 대화가 끝났으면 false.
@@ -539,7 +560,7 @@ func _say(token: int, info: NpcInfo, line: String) -> bool:
 	var title: String = info.display_name
 	if not mood.is_empty() and GameData.npcs.has(info.id):
 		shown = MoodSpeech.apply(line, mood, info)
-		title = "%s · %s" % [info.display_name, MoodSpeech.label(mood)]
+		title = "%s · %s" % [info.display_name, MoodSpeech.label(mood)] if info.mbti.is_empty() else "%s (%s) · %s" % [info.display_name, info.mbti, MoodSpeech.label(mood)]
 	box.voice = info.voice
 	box.show_line(title, shown, info.color.lightened(0.2))
 	await box.advanced

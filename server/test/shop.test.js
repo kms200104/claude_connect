@@ -62,12 +62,12 @@ describe('상점 · 가구 설치 · 옷', () => {
   it('단계 계산: 포인트로 단계가 정해지고, 오른 단계는 이전 물건도 계속 판다', () => {
     const levels = server.data.shop.levels;
     assert.equal(levelFor(0, levels).level, 1);
-    assert.equal(levelFor(1500, levels).level, 2);
+    assert.equal(levelFor(150000, levels).level, 2);
     assert.equal(levelFor(999999, levels).level, 3);
     assert.ok(!stockFor(0, levels).includes('sofa'));
-    assert.ok(stockFor(6000, levels).includes('sofa') && stockFor(6000, levels).includes('tea_leaves'));
+    assert.ok(stockFor(600000, levels).includes('sofa') && stockFor(600000, levels).includes('tea_leaves'));
     assert.equal(sellValue(100, 3, 0, levels), 300);
-    assert.equal(sellValue(100, 3, 6000, levels), 330, '백화점은 10% 더 쳐준다');
+    assert.equal(sellValue(100, 3, 600000, levels), 330, '백화점은 10% 더 쳐준다');
   });
 
   it('문 앞에서만 들어가고, 상점 안에서만 사고팔 수 있다', async () => {
@@ -104,9 +104,9 @@ describe('상점 · 가구 설치 · 옷', () => {
     assert.equal((await a.type('error')).code, 'bad_item', '가진 것보다 많이는 못 판다');
     a.send({ t: 'shop_sell', rid: newRid(), slot: 5, n: 6 });
     const sold = await a.type('shop_result');
-    assert.deepEqual({ kind: sold.kind, item: sold.item, n: sold.n, amount: sold.amount, sol: sold.sol }, { kind: 'sell', item: 'wood', n: 6, amount: 360, sol: 360 });
+    assert.deepEqual({ kind: sold.kind, item: sold.item, n: sold.n, amount: sold.amount, sol: sold.sol }, { kind: 'sell', item: 'wood', n: 6, amount: 36000, sol: 36000 });
     const shop = await b.type('shop');
-    assert.deepEqual({ level: shop.level, points: shop.points, up: shop.up }, { level: 2, points: 3600, up: true }, '상대도 상점이 커진 걸 안다');
+    assert.deepEqual({ level: shop.level, points: shop.points, up: shop.up }, { level: 2, points: 360000, up: true }, '상대도 상점이 커진 걸 안다');
     assert.ok(await a.next((m) => m.t === 'inventory' && m.slots[5] === null), '판 목재가 빠진다');
   });
 
@@ -133,7 +133,7 @@ describe('상점 · 가구 설치 · 옷', () => {
       const b = await open(s);
       await enter(b, { code: w.code });
       // 솔 마련: 프로필에 직접 넣는다 (사고파는 흐름만 본다)
-      s.rooms.getRoom(w.code).profiles.get(A).sol = 5000;
+      s.rooms.getRoom(w.code).profiles.get(A).sol = 500000;
       const door = s.data.shop.door;
       a.send({ t: 'move', x: door.x, y: 0.1, z: door.z + 1, yaw: 0, vx: 0, vz: 0 });
       await a.next((m) => m.t === 'snap');
@@ -148,7 +148,7 @@ describe('상점 · 가구 설치 · 옷', () => {
       const chairSlot = inv.slots.findIndex((x) => x?.id === 'wood_chair');
       const hatSlot = inv.slots.findIndex((x) => x?.id === 'straw_hat');
       const teeSlot = inv.slots.findIndex((x) => x?.id === 'striped_tee');
-      assert.equal((await a.next((m) => m.t === 'profile' && m.sol === 5000 - 600 - 500 - 450)).sol, 3450);
+      assert.equal((await a.next((m) => m.t === 'profile' && m.sol === 500000 - 60000 - 50000 - 45000)).sol, 345000);
 
       // 옷
       a.send({ t: 'wear', rid: newRid(), slot: chairSlot });
@@ -190,13 +190,13 @@ describe('상점 · 가구 설치 · 옷', () => {
         const w2 = await enter(a2, { code: w.code, id: A });
         assert.deepEqual(w2.placed.map((f) => f.item), ['wood_chair']);
         assert.equal(w2.prof.outfit.top, 'striped_tee');
-        assert.equal(w2.prof.sol, 3450);
+        assert.equal(w2.prof.sol, 345000);
         a2.send({ t: 'pickup', rid: newRid(), id: placed.f.id });
         assert.equal((await a2.type('unplaced')).id, placed.f.id);
         const back = await a2.next((m) => m.t === 'inventory' && m.slots.some((x) => x?.id === 'wood_chair'));
         assert.ok(back);
         const saved = JSON.parse(readFileSync(path.join(dir, `${w.code}.json`), 'utf8'));
-        assert.equal(saved.schema, 4);
+        assert.equal(saved.schema, 5);
       } finally {
         await s2.close();
       }

@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 7
+const VERSION: int = 8
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -108,7 +108,23 @@ const ERR_ALREADY_DONATED: String = "already_donated"
 const ERR_NOT_FISH: String = "not_fish"
 const ERR_BAD_TOPIC: String = "bad_topic"
 
+# 경제 (v8): 증권 · 아파트 · 은행 · 식당
+const ERR_MARKET_CLOSED: String = "market_closed"
+const ERR_BAD_ORDER: String = "bad_order"
+const ERR_NOT_ENOUGH_SHARES: String = "not_enough_shares"
+const ERR_BAD_UNIT: String = "bad_unit"
+const ERR_UNIT_TAKEN: String = "unit_taken"
+const ERR_NOT_YOUR_UNIT: String = "not_your_unit"
+const ERR_LOAN_LIMIT: String = "loan_limit"
+const ERR_BAD_LOAN: String = "bad_loan"
+const ERR_REST_CLOSED: String = "rest_closed"
+const ERR_REST_BUSY: String = "rest_busy"
+const ERR_NOT_AT_RESTAURANT: String = "not_at_restaurant"
+const ERR_ORDER_GONE: String = "order_gone"
+const ERR_MISSING_INGREDIENT: String = "missing_ingredient"
+const ERR_COOK_TOO_FAST: String = "cook_too_fast"
+
 ## 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
 const MOTION_BRAKE: String = "brake"
 ## 대화 주제 (talk_topic.topic).
-const TOPICS: PackedStringArray = ["mood", "hobby", "gossip", "fish", "past", "dream", "food", "you"]
+const TOPICS: PackedStringArray = ["mood", "hobby", "gossip", "fish", "past", "dream", "food", "you", "worry", "mbti"]

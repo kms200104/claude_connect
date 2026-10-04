@@ -1,0 +1,205 @@
+class_name EconomyController
+extends Node
+## 마을 경제 연결 (v0.8): HUD 의 휴대폰 단추와 휴대폰 창, 식당 주방 창, 상황 버튼(식당 열기 · 주방 · 부동산),
+## 그리고 거래·주간 정산·식당 소식 알림. 판정은 서버(Economy)가 하고 여기서는 화면과 연출만 맡는다.
+
+@export var player: Player
+@export var apartments: ApartmentSite
+@export var restaurant: RestaurantSite
+## 휴대폰 단추와 창을 붙일 곳.
+@export var hud: CanvasLayer
+## 결과 문구 (낚시 HUD 의 토스트).
+@export var toast_hud: FishingHud
+
+@export_group("Layout")
+@export var phone_button_size: float = 118.0
+@export var phone_button_y: float = 1010.0
+
+const TARGET_OPEN: String = "rest_open"
+const TARGET_KITCHEN: String = "kitchen"
+const TARGET_ESTATE: String = "estate"
+
+var phone: PhoneWindow = null
+var kitchen: KitchenWindow = null
+var _phone_button: Button = null
+## 이번 영업에 주방 창을 저절로 한 번 열었는지.
+var _kitchen_opened_for_shift: bool = false
+
+
+func _ready() -> void:
+	phone = PhoneWindow.new()
+	phone.name = "PhoneWindow"
+	kitchen = KitchenWindow.new()
+	kitchen.name = "KitchenWindow"
+	kitchen.player = player
+	kitchen.site = restaurant
+	_phone_button = Button.new()
+	_phone_button.name = "PhoneButton"
+	_phone_button.tooltip_text = "휴대폰"
+	_phone_button.focus_mode = Control.FOCUS_NONE
+	_phone_button.add_theme_stylebox_override("normal", EventHud._box(Color(0.98, 0.95, 0.88, 0.96), Color(0.36, 0.3, 0.28), 59, 5, 8))
+	_phone_button.add_theme_stylebox_override("hover", EventHud._box(Color(1.0, 0.98, 0.92), Color(0.36, 0.3, 0.28), 59, 5, 8))
+	_phone_button.add_theme_stylebox_override("pressed", EventHud._box(Color(0.98, 0.84, 0.55), Color(0.36, 0.3, 0.28), 59, 5, 8))
+	_phone_button.add_to_group(&"blocks_joystick")
+	_phone_button.pressed.connect(func() -> void: phone.open())
+	_phone_button.draw.connect(_draw_phone_icon)
+	_phone_button.text = ""
+	HudLayout.right_top(_phone_button, Vector2(phone_button_size, phone_button_size), 24.0, phone_button_y)
+	if hud != null:
+		hud.add_child.call_deferred(_phone_button)
+		hud.add_child.call_deferred(kitchen)
+		hud.add_child.call_deferred(phone)
+	Economy.trade_done.connect(_on_trade)
+	Economy.apt_done.connect(_on_apt)
+	Economy.loan_done.connect(_on_loan)
+	Economy.week_passed.connect(_on_week)
+	Economy.failed.connect(_on_failed)
+	Economy.shift_closed.connect(_on_shift_closed)
+	Economy.restaurant_changed.connect(_on_restaurant_changed)
+	Economy.served.connect(func(info: Dictionary) -> void:
+		if bool(info.get("became", false)):
+			toast_hud.show_toast("%s 님이 %s 단골이 됐어요! (그 메뉴만 시켜요)" % [_customer_name(str(info.get("customer", ""))), _dish_name(str(info.get("dish", "")))], true)
+		elif bool(info.get("lost", false)):
+			toast_hud.show_toast("%s 님이 더는 단골이 아니에요…" % _customer_name(str(info.get("customer", ""))), false))
+	Economy.customer_left.connect(func(info: Dictionary) -> void:
+		if Economy.is_rest_owner() or int(Economy.rest.get("owner", 0)) == Net.my_id:
+			toast_hud.show_toast("%s 님이 기다리다 떠났어요 (★1)" % _customer_name(str(info.get("customer", ""))), false))
+
+
+## 휴대폰·주방 창이 열려 있는지 (열려 있으면 다른 상황 버튼을 숨긴다).
+func is_busy() -> bool:
+	return (phone != null and phone.is_open()) or (kitchen != null and kitchen.is_open())
+
+
+## 지금 position 에서 할 수 있는 경제 행동 (InteractionController 가 묻는다). 없으면 빈 문자열.
+func pick_target(position: Vector3, max_distance: float) -> String:
+	if restaurant != null and restaurant.near_counter(position, max_distance):
+		if not bool(Economy.rest.get("open", false)):
+			return TARGET_OPEN
+		if Economy.is_rest_owner():
+			return TARGET_KITCHEN
+	if apartments != null and apartments.near_office(position, max_distance):
+		return TARGET_ESTATE
+	return ""
+
+
+func target_label(target: String) -> String:
+	match target:
+		TARGET_OPEN:
+			return "식당 열기"
+		TARGET_KITCHEN:
+			return "주방"
+		TARGET_ESTATE:
+			return "부동산"
+	return ""
+
+
+func activate(target: String) -> void:
+	match target:
+		TARGET_OPEN:
+			Economy.open_restaurant()
+		TARGET_KITCHEN:
+			kitchen.open()
+		TARGET_ESTATE:
+			phone.open(PhoneWindow.Tab.HOMES)
+
+
+func _on_restaurant_changed() -> void:
+	# 내가 문을 열었으면 주방 창을 바로 연다.
+	if Economy.is_rest_owner() and not kitchen.is_open() and restaurant != null and player != null and restaurant.near_counter(player.global_position, 4.0) and not _kitchen_opened_for_shift:
+		_kitchen_opened_for_shift = true
+		kitchen.open()
+		toast_hud.show_toast("식당 문을 열었어요! 가방 재료로 만들 수 있는 요리만 주문이 들어와요.", true)
+	if not bool(Economy.rest.get("open", false)):
+		_kitchen_opened_for_shift = false
+
+
+
+func _on_shift_closed(reason: String) -> void:
+	if int(Economy.rest.get("owner", 0)) != Net.my_id and not kitchen.is_open():
+		return
+	var text: String = {"closed": "식당 문을 닫았어요.", "owner_left": "주인이 떠나 식당 문을 닫았어요.", "idle": "손님이 없어 식당 문을 닫았어요.", "no_ingredients": "재료가 다 떨어져 문을 닫았어요."}.get(reason, "식당 문을 닫았어요.")
+	toast_hud.show_toast(text, reason == "closed")
+
+
+func _on_trade(r: Dictionary) -> void:
+	var s: StockQuote = Economy.stock(str(r.get("id", "")))
+	var buy: bool = str(r.get("side", "")) == "buy"
+	Audio.play_sfx("cash_in" if not buy else "coin", -4.0)
+	toast_hud.show_toast("%s %d주 %s 체결 · %s" % [s.display_name if s != null else str(r.get("id", "")), int(r.get("qty", 0)), "매수" if buy else "매도", Money.short(int(r.get("amount", 0)))], true)
+
+
+func _on_apt(r: Dictionary) -> void:
+	Audio.play_sfx("fanfare_small" if str(r.get("kind", "")) == "buy" else "cash_in", -4.0)
+	if str(r.get("kind", "")) == "buy":
+		toast_hud.show_toast("%s 를 샀어요! 세를 놓아 매주 월세가 들어와요." % str(r.get("unit", "")), true)
+	else:
+		toast_hud.show_toast("%s 를 팔았어요 (대출 상환 %s)" % [str(r.get("unit", "")), Money.short(int(r.get("repaid", 0)))], true)
+
+
+func _on_loan(r: Dictionary) -> void:
+	Audio.play_sfx("coin", -4.0)
+	if str(r.get("kind", "")) == "take":
+		var loan: Dictionary = r.get("loan", {})
+		toast_hud.show_toast("%s 빌렸어요 · 연 %s · 주 이자 %s" % [Money.short(int(loan.get("principal", 0))), Money.percent(float(loan.get("rate", 0.0))), Money.short(int(loan.get("weekly", 0)))], true)
+	else:
+		toast_hud.show_toast("%s 갚았어요 · 남은 빚 %s" % [Money.short(int(r.get("paid", 0))), Money.short(int(r.get("left", 0)))], true)
+
+
+func _on_week(r: Dictionary) -> void:
+	var parts: PackedStringArray = []
+	if int(r.get("rent", 0)) > 0:
+		parts.append("월세 +%s" % Money.short(int(r.get("rent", 0))))
+	if int(r.get("interest", 0)) > 0:
+		parts.append("이자 -%s" % Money.short(int(r.get("interest", 0))))
+	if bool(r.get("missed", false)):
+		parts.append("연체! 남은 이자 %s 가 원금에 붙었어요" % Money.short(int(r.get("capitalized", 0))))
+	parts.append("기준금리 %s" % Money.percent(float(r.get("base", 0.0))))
+	toast_hud.show_toast("한 주 정산 · " + " · ".join(parts), not bool(r.get("missed", false)))
+
+
+func _on_failed(kind: String, code: String) -> void:
+	var text: String = {
+		NetProtocol.ERR_NOT_ENOUGH_SOL: "솔이 모자라요.",
+		NetProtocol.ERR_MARKET_CLOSED: "장이 닫혔어요 (평일 9:00~15:30).",
+		NetProtocol.ERR_NOT_ENOUGH_SHARES: "가진 주식보다 많이 팔 수 없어요.",
+		NetProtocol.ERR_BAD_ORDER: "주문이 이상해요.",
+		NetProtocol.ERR_UNIT_TAKEN: "이미 누가 산 집이에요.",
+		NetProtocol.ERR_NOT_YOUR_UNIT: "내 집이 아니에요.",
+		NetProtocol.ERR_LOAN_LIMIT: "대출 한도를 넘어요 (LTV·DSR·신용 한도).",
+		NetProtocol.ERR_BAD_LOAN: "대출 금액이 이상해요.",
+		NetProtocol.ERR_REST_BUSY: "다른 사람이 식당을 열었어요.",
+		NetProtocol.ERR_NOT_AT_RESTAURANT: "식당 카운터에서 열 수 있어요.",
+		NetProtocol.ERR_REST_CLOSED: "식당이 닫혀 있어요.",
+	}.get(code, "")
+	if kind == "rest_serve" or text.is_empty():
+		return
+	toast_hud.show_toast(text, false)
+
+
+func _customer_name(id: String) -> String:
+	var c: EconData.Customer = GameData.econ.customers.get(id)
+	return c.display_name if c != null else id
+
+
+func _dish_name(id: String) -> String:
+	var r: RecipeInfo = GameData.econ.recipes.get(id)
+	return r.display_name if r != null else id
+
+
+## 휴대폰 그림 (그림 파일 없이): 둥근 몸체 + 화면 + 작은 그래프.
+func _draw_phone_icon() -> void:
+	var s: Vector2 = _phone_button.size
+	var body: Rect2 = Rect2(s * Vector2(0.3, 0.16), s * Vector2(0.4, 0.68))
+	var box: StyleBoxFlat = StyleBoxFlat.new()
+	box.bg_color = Color("#3E4650")
+	box.set_corner_radius_all(int(s.x * 0.08))
+	_phone_button.draw_style_box(box, body)
+	var screen: Rect2 = body.grow(-s.x * 0.04)
+	screen.size.y -= s.y * 0.06
+	_phone_button.draw_rect(screen, Color("#BFE6F2"))
+	var pts: PackedVector2Array = []
+	for i: int in 5:
+		pts.append(screen.position + Vector2(screen.size.x * (0.1 + 0.2 * i), screen.size.y * [0.75, 0.55, 0.62, 0.35, 0.25][i]))
+	_phone_button.draw_polyline(pts, Color("#E0483A"), 3.0, true)
+	_phone_button.draw_circle(Vector2(body.get_center().x, body.end.y - s.y * 0.045), s.x * 0.025, Color("#8A96A2"))

@@ -13,7 +13,7 @@ trap cleanup EXIT
 NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
 (cd "$ROOT/server" && exec env CLOCK_OFFSET_MIN="$OFFSET" WEATHER_FORCE=clear MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 \
-  QUEST_CHANCE=0 EVENT_FORCE=lumber_day GROWTH_SCALE=0.003 START_FRIENDSHIP=30 START_SOL=2000 \
+  QUEST_CHANCE=0 EVENT_FORCE=lumber_day GROWTH_SCALE=0.003 START_FRIENDSHIP=30 START_SOL=200000 \
   START_ITEMS=acorn:2,seed_tulip:2,crucian:1,loach:1 PORT="$PORT" SAVE_DIR="$DIR/saves" node src/index.js >"$DIR/server.log" 2>&1) &
 PID=$!
 sleep 1

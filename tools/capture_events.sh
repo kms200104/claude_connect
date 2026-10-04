@@ -26,7 +26,7 @@ run_mode() { # mode port hour env...
 }
 
 WANT=wood,hardwood,branch,acorn,wild_mushroom
-run_mode merchant 18191 12 WEATHER_FORCE=clear EVENT_FORCE=merchant EVENT_WANTED=$WANT START_SOL=3000
+run_mode merchant 18191 12 WEATHER_FORCE=clear EVENT_FORCE=merchant EVENT_WANTED=$WANT START_SOL=300000
 run_mode bargain 18192 12 WEATHER_FORCE=clear EVENT_FORCE=bargain EVENT_WANTED=$WANT
 run_mode gift 18193 12 WEATHER_FORCE=clear EVENT_FORCE=gift_day EVENT_SPAWN_SCALE=0.02 FISH_TIME_SCALE=4
 run_mode meteor 18194 22 WEATHER_FORCE=clear EVENT_FORCE=meteor_shower EVENT_SPAWN_SCALE=0.02

@@ -6,7 +6,7 @@
   "pilot": {
     "id": "pilot",
     "name": "제비",
-    "personality": "pilot",
+    "personality": "pilot", "mbti": "ESTP",
     "color": "#3A4A70",
     "voice": 1.05,
     "look": { "hair": "#2A1E18", "style": "short", "top": "#3A4A70", "bottom": "#E9E4D8", "shoes": "#2A2A30", "eyes": "almond", "nose": "button", "mouth": "smile" },

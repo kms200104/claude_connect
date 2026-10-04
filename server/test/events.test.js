@@ -87,11 +87,11 @@ describe('마을 이벤트', () => {
     await c.type('shop_door');
     c.send({ t: 'shop_sell', rid: newRid(), slot: 5, n: 1 });
     const sold = await c.type('shop_result');
-    assert.equal(sold.amount, 120, '목재 60솔 × 2');
+    assert.equal(sold.amount, 12000, '목재 6,000솔 × 2');
   });
 
   it('떠돌이 상인: 곁에서만, 찾는 물건만 2배로 사고, 귀한 물건을 판다', async () => {
-    const { server, c, welcome } = await start({ eventForce: 'merchant', eventWanted: 'wood', startSol: 5000 });
+    const { server, c, welcome } = await start({ eventForce: 'merchant', eventWanted: 'wood', startSol: 500000 });
     const merchant = welcome.ev.list.find((e) => e.id === 'merchant');
     assert.deepEqual(merchant.wanted, ['wood']);
     assert.ok(merchant.stock.includes('star_lamp'));
@@ -104,10 +104,10 @@ describe('마을 이벤트', () => {
     assert.equal((await c.type('error')).code, 'not_wanted', '도끼는 안 산다');
     c.send({ t: 'shop_sell', rid: newRid(), slot: 5, n: 1, at: 'merchant' });
     const sold = await c.type('shop_result');
-    assert.deepEqual({ amount: sold.amount, at: sold.at }, { amount: 120, at: 'merchant' });
+    assert.deepEqual({ amount: sold.amount, at: sold.at }, { amount: 12000, at: 'merchant' });
     c.send({ t: 'shop_buy', rid: newRid(), item: 'star_lamp', n: 1, at: 'merchant' });
     const bought = await c.type('shop_result');
-    assert.deepEqual({ item: bought.item, sol: bought.sol }, { item: 'star_lamp', sol: 5000 + 120 - 3000 });
+    assert.deepEqual({ item: bought.item, sol: bought.sol }, { item: 'star_lamp', sol: 500000 + 12000 - 300000 });
     c.send({ t: 'shop_buy', rid: newRid(), item: 'sofa', n: 1, at: 'merchant' });
     assert.equal((await c.type('error')).code, 'not_for_sale');
   });
@@ -130,9 +130,9 @@ describe('마을 이벤트', () => {
     await sleep(120);
     c.send({ t: 'fish_hook', rid: r, reaction: 110 });
     const result = await c.type('fish_result');
-    assert.deepEqual({ ok: result.ok, fish: result.fish, bonus: result.bonus }, { ok: true, fish: 'crucian', bonus: 40 });
+    assert.deepEqual({ ok: result.ok, fish: result.fish, bonus: result.bonus }, { ok: true, fish: 'crucian', bonus: 4000 });
     const prof = await c.type('profile');
-    assert.equal(prof.sol, 40);
+    assert.equal(prof.sol, 4000);
   });
 
   it('선물 풍선의 날: 선물이 떨어지고, 가까이 가야 주울 수 있다', async () => {

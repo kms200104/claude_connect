@@ -7,6 +7,10 @@ import { addItem, emptySlots, hasItem, sanitize } from './inventory.js';
 import { sanitizePlanted, sanitizeTrees } from './trees.js';
 import { sanitizeFlowers } from './plants.js';
 import { defaultFace, sanitizeFace } from './face.js';
+import { sanitizeHoldings } from './market.js';
+import { sanitizeHomes } from './realestate.js';
+import { newCredit, sanitizeLoans } from './bank.js';
+import { sanitizeRestaurant } from './restaurant.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
@@ -31,6 +35,9 @@ function ensureStarterTools(slots, cfg) {
   return slots;
 }
 
+/** schema 4 → 5 화폐 단위 배율. */
+export const MONEY_SCALE_V5 = 100;
+
 /** 한 사람(uid)의 저장되는 상태. 접속이 끊겨도 방 파일에 남는다. */
 function newProfile(uid, slot, cfg, data) {
   const spawn = spawnPoints[(slot - 1) % spawnPoints.length];
@@ -52,6 +59,12 @@ function newProfile(uid, slot, cfg, data) {
     outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
     emotes: { known: ['hello'], quick: ['hello'] }, // 배운 감정표현과 감정표현 퀵슬롯
     face: data ? defaultFace(data.face, slot) : {}, // 거울에서 고른 얼굴 (눈·코·입·피부·머리)
+    stocks: {}, // 가진 주식 { 종목: { q, cost } }
+    trades: [], // 최근 거래 (보기용)
+    loans: [], // 대출 [{ id, kind, principal, rate, unit, since }]
+    loanSeq: 0,
+    credit: { paid: 0, missed: 0, weeks: 0 }, // 이자 낸 기록 (신용점수)
+    income: { amount: 0, history: [] }, // 이번 주 번 돈과 지난 주들 (대출 한도·신용)
   };
 }
 
@@ -189,7 +202,15 @@ export class Room {
     this.eventSig = '';
     this.drops = new Map();
     this.dropSeq = 0;
-    this.nextDropAt = { gift: 0, star: 0 };
+    this.nextDropAt = { gift: 0, star: 0, forage: 0 };
+    // 경제 (마을 공용): 아파트 소유 · 집값 지수 · 기준금리 · 마지막으로 이자를 매긴 주
+    this.homes = {}; // 호수 → { owner: uid, price, day }
+    this.aptIndex = data.realestate?.index?.start ?? 1;
+    this.baseRate = data.bank?.base_rate ?? 0.03;
+    this.week = null;
+    // 식당: 별점 기록 · 단골 (저장) / 지금 영업 (저장 안 함)
+    this.restaurant = sanitizeRestaurant(null, data.recipes ?? []);
+    this.shift = null;
     this.dirty = false; // 위치 스냅샷 방송 필요
     this.saveDirty = false; // 파일 저장 필요
   }
@@ -197,6 +218,8 @@ export class Room {
   static fromSave(saved, maxPlayers, cfg, data) {
     const room = new Room(saved.code, maxPlayers, data, finite(saved.createdAt, Date.now()));
     const world = saved.world ?? {};
+    // schema 5: 화폐를 현실 단위로 (모든 값 ×100). 그 전 저장은 솔·상점 포인트·부탁 보상을 100배로 옮긴다.
+    const money = Number.isInteger(saved.schema) && saved.schema < 5 ? MONEY_SCALE_V5 : 1;
     room.stats.totalCatches = Math.max(0, Math.trunc(finite(world.totalCatches, 0)));
     for (const [id, n] of Object.entries(world.species ?? {})) {
       if (Number.isInteger(n) && n > 0) room.stats.species[id] = n;
@@ -210,9 +233,14 @@ export class Room {
     room.flowers = sanitizeFlowers(world.flowers, data);
     room.flowerSeq = Math.max(0, intOr(world.flowerSeq, 0));
     room.museum = sanitizeMuseum(world.museum, data);
-    room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0)));
+    room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0) * money));
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
+    room.homes = sanitizeHomes(world.homes, data.units);
+    if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
+    if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
+    room.week = intOr(world.week, null);
+    room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes);
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
@@ -224,19 +252,25 @@ export class Room {
         ...base,
         slots,
         held: held >= -1 && held < cfg.quickSlots ? held : base.held,
-        sol: Math.max(0, Math.trunc(finite(p.sol, 0))),
+        sol: Math.max(0, Math.trunc(finite(p.sol, 0) * money)),
         catches: Math.max(0, Math.trunc(finite(p.catches, 0))),
         x: finite(p.x, base.x),
         y: finite(p.y, base.y),
         z: finite(p.z, base.z),
         yaw: finite(p.yaw, 0),
         npcs: sanitizeRelations(p.npcs, data),
-        quests: sanitizeQuests(p.quests, data),
+        quests: sanitizeQuests(p.quests, data).map((q) => ({ ...q, reward: q.reward * money })),
         questSeq: Math.max(0, intOr(p.questSeq, 0)),
         lastQuestDay: intOr(p.lastQuestDay, null),
         outfit: sanitizeOutfit(p.outfit, data),
         emotes: sanitizeEmotes(p.emotes, data, cfg),
         face: sanitizeFace(p.face, data.face, base.slot),
+        stocks: sanitizeHoldings(p.stocks, data.market),
+        trades: Array.isArray(p.trades) ? p.trades.slice(-20) : [],
+        loans: sanitizeLoans(p.loans),
+        loanSeq: Math.max(0, intOr(p.loanSeq, 0)),
+        credit: { ...newCredit(data.bank), ...(p.credit && typeof p.credit === 'object' ? { paid: intOr(p.credit.paid, 0), missed: intOr(p.credit.missed, 0), weeks: intOr(p.credit.weeks, 0) } : {}) },
+        income: { amount: Math.max(0, Math.trunc(finite(p.income?.amount, 0))), history: Array.isArray(p.income?.history) ? p.income.history.filter(Number.isFinite).slice(-8) : [] },
       });
     }
     return room;
@@ -270,6 +304,11 @@ export class Room {
         flowers: [...this.flowers.values()].map((f) => ({ ...f })),
         flowerSeq: this.flowerSeq,
         museum: structuredClone(this.museum),
+        homes: structuredClone(this.homes),
+        aptIndex: this.aptIndex,
+        baseRate: this.baseRate,
+        week: this.week,
+        restaurant: structuredClone(this.restaurant),
       },
       profiles,
     };

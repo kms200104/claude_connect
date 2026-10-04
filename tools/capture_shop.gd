@@ -1,6 +1,6 @@
 extends Node
 ## 상점·옷·가구 화면을 PNG로 찍는다 (아트·연출 확인용, 테스트 아님). 실제 렌더러가 필요하다.
-## 사용: 서버를 WEATHER_FORCE=clear START_SOL=40000 MOVE_SLACK_M=200 DOOR_GRACE_MS=0 으로 띄운 뒤
+## 사용: 서버를 WEATHER_FORCE=clear START_SOL=4000000 MOVE_SLACK_M=200 DOOR_GRACE_MS=0 으로 띄운 뒤
 ##   godot --path . res://tools/capture_shop.tscn -- --server=ws://127.0.0.1:8080 --out=/tmp/shots
 
 var _server: String = "ws://127.0.0.1:8080"

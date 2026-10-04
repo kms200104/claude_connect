@@ -21,6 +21,8 @@ extends Node
 @export var dialogue: DialogueController
 @export var fishing: FishingController
 @export var action_hud: ActionHud
+## 식당 열기 · 주방 · 부동산 (v0.8, 없어도 된다).
+@export var economy: EconomyController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -35,7 +37,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY }
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -56,7 +58,7 @@ func _ready() -> void:
 	Net.request_failed.connect(_on_request_failed)
 	Net.furniture_placed.connect(_on_furniture_placed)
 	Net.collected.connect(_on_collected)
-	Net.fish_bonus.connect(func(amount: int) -> void: toast_hud.show_toast("낚시 대회 상금 +%d솔!" % amount, true))
+	Net.fish_bonus.connect(func(amount: int) -> void: toast_hud.show_toast("낚시 대회 상금 %s!" % Money.delta(amount), true))
 	Net.planted.connect(_on_planted)
 	Net.flower_picked.connect(func(item_id: String) -> void: toast_hud.show_toast("%s을(를) 땄어요" % GameData.item_name(item_id), true))
 	_build_plant_marker()
@@ -81,13 +83,15 @@ func _process(_delta: float) -> void:
 		Target.PICKUP:
 			action_hud.show_action("줍기")
 		Target.COLLECT:
-			action_hud.show_action("선물 줍기" if Net.drops.has(target_id) and Net.drops[target_id].kind == DropInfo.KIND_GIFT else "별 줍기")
+			action_hud.show_action(_collect_label(target_id))
 		Target.PICK:
 			action_hud.show_action("꽃 따기")
 		Target.PLANT:
 			action_hud.show_action("심기")
 		Target.MIRROR:
 			action_hud.show_action("거울 보기")
+		Target.ECONOMY:
+			action_hud.show_action(economy.target_label(target_id))
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
@@ -97,6 +101,8 @@ func _pick_target() -> void:
 	target = Target.NONE
 	target_id = ""
 	if Net.state != Net.State.ONLINE or player.is_input_locked() or dialogue.is_active() or (mirror_window != null and mirror_window.is_open()):
+		return
+	if economy != null and economy.is_busy():
 		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
@@ -114,6 +120,12 @@ func _pick_target() -> void:
 		if site != null and site.near(pos, GameData.talk_range - safety_margin):
 			target = Target.TALK
 			target_id = site.npc_id()
+			return
+	if economy != null:
+		var econ_target: String = economy.pick_target(pos, GameData.talk_range - safety_margin)
+		if not econ_target.is_empty():
+			target = Target.ECONOMY
+			target_id = econ_target
 			return
 	if shop != null:
 		if shop.is_inside(pos):
@@ -189,10 +201,24 @@ func _on_action_pressed() -> void:
 			Net.pick_flower(target_id)
 		Target.PLANT:
 			_plant(plant_spot)
+		Target.ECONOMY:
+			economy.activate(target_id)
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))
 				mirror_window.open(target_id, at)
+
+
+func _collect_label(drop_id: String) -> String:
+	var d: DropInfo = Net.drops.get(drop_id)
+	if d == null:
+		return "줍기"
+	match d.kind:
+		DropInfo.KIND_GIFT:
+			return "선물 줍기"
+		DropInfo.KIND_FORAGE:
+			return "채집"
+	return "별 줍기"
 
 
 ## 캐릭터 앞 땅, 0.5m 격자 (서버가 맞추는 자리와 같다).
@@ -300,6 +326,8 @@ func _on_collected(kind: String, item_id: String) -> void:
 	player.clear_look_direction()
 	if kind == DropInfo.KIND_GIFT:
 		toast_hud.show_toast("선물 상자 속에 %s!" % GameData.item_name(item_id), true)
+	elif kind == DropInfo.KIND_FORAGE:
+		toast_hud.show_toast("%s을(를) 채집했어요 (식당 재료)" % GameData.item_name(item_id), true)
 	else:
 		toast_hud.show_toast("반짝! %s을(를) 주웠어요" % GameData.item_name(item_id), true)
 

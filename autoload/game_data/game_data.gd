@@ -15,6 +15,7 @@ const EMOTES_PATH: String = "res://data/emotes/emotes.json"
 const MUSEUM_PATH: String = "res://data/places/museum.json"
 const AIRPORT_PATH: String = "res://data/places/airport.json"
 const FACE_PATH: String = "res://data/looks/face_parts.json"
+const MBTI_PATH: String = "res://data/npcs/mbti.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -52,7 +53,11 @@ var emote_quick_slots: int = 4
 var museum: KeeperPlace = null
 ## 얼굴 꾸미기 목록 (눈·코·입·피부·머리 모양·머리 색).
 var face: FaceCatalog = null
+## 주민 MBTI 표 (types 별명, empathy 반응, topic_bias, lines 대사).
+var mbti: Dictionary = {}
 var airport: KeeperPlace = null
+## 경제 (v8): 증권 종목 · 아파트 · 은행 · 식당 요리와 손님.
+var econ: EconData = null
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
@@ -108,7 +113,10 @@ func _ready() -> void:
 			emotes.append(EmoteInfo.from_dict(entry))
 	museum = KeeperPlace.from_dict(_read_json(MUSEUM_PATH), "curator", "donate_range")
 	face = FaceCatalog.from_dict(_read_json(FACE_PATH))
+	mbti = _read_json(MBTI_PATH)
 	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
+	econ = EconData.load_all()
+	econ.build_customers(npcs)
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
 	for group: String in ["daily", "night"]:
@@ -195,6 +203,22 @@ func dialogue_line(personality: String, key: String, values: Dictionary = {}) ->
 	for token: String in values:
 		line = line.replace("{%s}" % token, str(values[token]))
 	return line
+
+
+## MBTI 대사 묶음에서 한 줄 (data/npcs/mbti.json 의 lines). 없으면 빈 문자열.
+func mbti_line(key: String, values: Dictionary = {}) -> String:
+	var pool: Variant = (mbti.get("lines", {}) as Dictionary).get(key, [])
+	if not pool is Array or pool.is_empty():
+		return ""
+	var line: String = str(pool[randi() % pool.size()])
+	for token: String in values:
+		line = line.replace("{%s}" % token, str(values[token]))
+	return line
+
+
+## MBTI 별명 ("사교적인 외교관").
+func mbti_nick(type: String) -> String:
+	return str((mbti.get("types", {}) as Dictionary).get(type, ""))
 
 
 ## 희귀도별 낚시 외침 ("와---!! 대어를 낚았어!"). {fish} 를 채운다.

@@ -100,7 +100,7 @@ func _run() -> void:
 	var tong: NpcActor = npcs.actor("tongtong")
 	await _teleport(tong.global_position + Vector3(2.0, 0.1, 0.5))
 	var reacted: Array = []
-	Net.npc_emoted.connect(func(npc_id: String, e: String, to: int, _m: String) -> void: reacted.append([npc_id, e, to]))
+	Net.npc_emoted.connect(func(npc_id: String, e: String, to: int, _m: String, _from: String) -> void: reacted.append([npc_id, e, to]))
 	_check(emote_bar.visible and not emote_bar.is_open(), "감정표현 칸은 접혀 있다")
 	emote_bar.toggle()
 	_check(emote_bar.is_open() and emote_bar.slot_button(0) != null, "펼치면 '안녕' 칸")

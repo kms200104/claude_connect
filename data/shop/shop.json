@@ -4,6 +4,7 @@
     "id": "shopkeeper",
     "name": "달보",
     "personality": "shopkeeper",
+    "mbti": "ESFJ",
     "color": "#7EC8A8",
     "look": { "hair": "#6B4630", "style": "bun", "top": "#7EC8A8", "bottom": "#E9D8B4", "shoes": "#7A4A30" },
     "about": "솔바람 상점의 주인. 손님이 늘어 가게가 커지는 날을 꿈꾼다."
@@ -39,19 +40,19 @@
       "name": "솔바람 구멍가게",
       "points": 0,
       "sell_bonus": 0,
-      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "standing_mirror", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos"]
+      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "standing_mirror", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos", "rice", "flour", "egg", "scallion", "radish", "chili", "soy_sauce", "doenjang", "tofu", "laver", "garlic", "sesame_oil", "sugar"]
     },
     {
       "level": 2,
       "name": "솔바람 잡화점",
-      "points": 1500,
+      "points": 150000,
       "sell_bonus": 0.05,
-      "stock": ["yarn", "bouquet", "round_table", "bench", "vanity_mirror", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls"]
+      "stock": ["yarn", "bouquet", "round_table", "bench", "vanity_mirror", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls", "potato", "butter", "lemon"]
     },
     {
       "level": 3,
       "name": "솔바람 백화점",
-      "points": 6000,
+      "points": 600000,
       "sell_bonus": 0.1,
       "stock": ["scented_candle", "silver_teapot", "rocking_chair", "sofa", "fountain", "grand_piano", "flower_hat", "velvet_beret", "formal_vest", "quilt_bed", "garden_swing", "jeogori"]
     }

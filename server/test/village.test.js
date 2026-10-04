@@ -14,7 +14,7 @@ function fakeClock(hour = 12, day = 100) {
 }
 
 // random=0: 나무에서는 항상 '목재', 부탁은 항상 첫 템플릿(목재 3개). 비가 오면 주민이 집 앞에 머물러서 찾아가기 쉽다.
-const BASE = { moveSlackMeters: 200, random: () => 0, reconnectGraceMs: 300, saveIntervalMs: 60000, chopCooldownMs: 0, weatherForce: 'rain', questChance: 1 };
+const BASE = { moveSlackMeters: 200, random: () => 0, reconnectGraceMs: 300, saveIntervalMs: 60000, chopCooldownMs: 0, weatherForce: 'rain', questChance: 1, eventForce: 'none' };
 
 describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
   let saveDir;
@@ -69,10 +69,16 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.ok(w.trees.every((t) => t.s === 'grown'));
     assert.deepEqual(w.npcs.map((n) => n.id).sort(), ['danchu', 'haerang', 'morak', 'mujin', 'rara', 'tongtong']);
     assert.ok(w.npcs.every((n) => typeof n.m === 'string'), '주민 기분이 함께 온다');
-    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' } });
+    const { stocks, trades, loans, credit, income, worth, ...prof } = w.prof;
+    assert.deepEqual(prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' } });
+    assert.deepEqual({ stocks, trades, loans, income, worth }, { stocks: {}, trades: [], loans: [], income: { week: 0, year: 0 }, worth: { assets: 0, debt: 0, net: 0 } }, '처음엔 주식·대출·소득이 없다');
+    assert.ok(credit.score > 0 && credit.grade >= 1 && credit.grade <= 10);
+    assert.equal(w.market.stocks.length, server.data.market.stocks.length, '입장하면 증권 시세를 받는다');
+    assert.equal(w.homes.index, 1);
+    assert.equal(w.rest.open, false);
     assert.deepEqual(w.flowers, []);
     assert.deepEqual(w.museum, { fish: {} });
-    assert.deepEqual(w.shop, { level: 1, points: 0, next: 1500 });
+    assert.deepEqual(w.shop, { level: 1, points: 0, next: 150000 });
     assert.deepEqual(w.placed, []);
     assert.equal(typeof w.clock.g, 'number');
     assert.equal(w.players[0].held, 'rod');
@@ -160,7 +166,7 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal(open1.teach, 'angry');
     assert.equal(typeof open1.m, 'string');
     assert.equal(open1.f, 2, '오늘 처음 말 걸면 친밀도 +2');
-    assert.deepEqual({ kind: open1.offer.kind, item: open1.offer.item, n: open1.offer.n, reward: open1.offer.reward }, { kind: 'deliver', item: 'wood', n: 3, reward: 220 });
+    assert.deepEqual({ kind: open1.offer.kind, item: open1.offer.item, n: open1.offer.n, reward: open1.offer.reward }, { kind: 'deliver', item: 'wood', n: 3, reward: 22000 });
     const talking = await a.next((m) => m.t === 'npcs' && m.n.find((n) => n.id === 'mujin')?.talk === 1);
     assert.ok(talking, '대화 중인 주민은 상대가 누구인지 방송된다');
 
@@ -195,10 +201,10 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal(open2.offer, undefined);
     a.send({ t: 'quest_turnin', rid: newRid(), quest: accepted.quest.id });
     const done = await a.type('quest_done');
-    assert.deepEqual({ reward: done.reward, sol: done.sol }, { reward: 220, sol: 220 });
+    assert.deepEqual({ reward: done.reward, sol: done.sol }, { reward: 22000, sol: 22000 });
     const inv = await a.next((m) => m.t === 'inventory' && !m.slots.some((s) => s?.id === 'wood'));
     assert.ok(inv, '목재 3개가 빠진다');
-    const final = await a.next((m) => m.t === 'profile' && m.quests.length === 0 && m.sol === 220);
+    const final = await a.next((m) => m.t === 'profile' && m.quests.length === 0 && m.sol === 22000);
     assert.equal(final.friends.mujin, 8, '처음 대화 +2, 같은 날 두 번째 대화 +1, 부탁 완료 +5');
     a.send({ t: 'talk', rid: newRid(), npc: 'mujin' });
     assert.equal((await a.type('talk_open')).offer, undefined, '같은 날 같은 주민은 부탁을 한 번만 한다');
@@ -259,6 +265,22 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.deepEqual(w.inv.slots.slice(0, 2), [{ id: 'rod', n: 1 }, { id: 'axe', n: 1 }]);
     assert.deepEqual(w.inv.slots[5], { id: 'carp', n: 2 });
     assert.equal(w.inv.held, 0);
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('schema 4 저장은 솔·상점 포인트를 현실 단위(×100)로 옮겨 읽는다', async () => {
+    const A = uid();
+    const dir = mkdtempSync(path.join(tmpdir(), 'solbaram-money-'));
+    writeFileSync(
+      path.join(dir, 'MNYRSV.json'),
+      JSON.stringify({ schema: 4, code: 'MNYRSV', createdAt: 1, world: { shopPoints: 1600 }, profiles: { [A]: { slot: 1, slots: [], sol: 345, x: 1, y: 0.1, z: 2, yaw: 0 } } }),
+    );
+    const s = createServer({ port: 0, saveDir: dir, ...BASE, clock: fakeClock() });
+    const a = await open(s);
+    const w = await enter(a, { code: 'MNYRSV', id: A });
+    assert.equal(w.prof.sol, 34500);
+    assert.deepEqual({ level: w.shop.level, points: w.shop.points }, { level: 2, points: 160000 });
     await s.close();
     rmSync(dir, { recursive: true, force: true });
   });

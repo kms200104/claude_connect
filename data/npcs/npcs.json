@@ -7,6 +7,8 @@
       "id": "morak",
       "name": "모락",
       "personality": "kind",
+      "mbti": "ESFJ",
+      "mbti_self": "나는 ESFJ래. 사교적인 외교관이라나? 누가 밥은 먹었는지, 아픈 데는 없는지 늘 신경이 쓰인단다. 호호.",
       "color": "#E8A6B8",
       "look": {
         "hair": "#E4DED6",
@@ -115,6 +117,8 @@
       "id": "tongtong",
       "name": "통통",
       "personality": "lively",
+      "mbti": "ENFP",
+      "mbti_self": "난 ENFP! 재기발랄한 활동가! 하고 싶은 게 너무 많아서 하루가 모자라! 얍!",
       "color": "#F2C14E",
       "look": {
         "hair": "#D9733A",
@@ -224,6 +228,8 @@
       "id": "haerang",
       "name": "해랑",
       "personality": "lazy",
+      "mbti": "INTP",
+      "mbti_self": "INTP래… 논리적인 사색가. 생각은 많이 하는데 움직이는 건 귀찮아~ 느긋~",
       "color": "#8EC5E8",
       "look": {
         "hair": "#34405F",
@@ -332,6 +338,8 @@
       "id": "mujin",
       "name": "무진",
       "personality": "gruff",
+      "mbti": "ISTJ",
+      "mbti_self": "ISTJ다. 정해진 건 정해진 대로. 감정보다 사실이 먼저지. 흠.",
       "color": "#9C8BD1",
       "look": {
         "hair": "#3A2A22",
@@ -440,6 +448,8 @@
       "id": "rara",
       "name": "라라",
       "personality": "snooty",
+      "mbti": "ENTJ",
+      "mbti_self": "어머, 난 ENTJ야. 대담한 통솔자. 목표를 정하면 끝까지 해내는 타입이지.",
       "color": "#E9A8D0",
       "look": {
         "hair": "#B88AD4",
@@ -545,6 +555,8 @@
       "id": "danchu",
       "name": "단추",
       "personality": "dreamy",
+      "mbti": "INFP",
+      "mbti_self": "난 INFP… 열정적인 중재자래. 마음속에 작은 우주가 하나 있는 느낌이야, 몽글.",
       "color": "#A8C8F0",
       "look": {
         "hair": "#F2D27A",

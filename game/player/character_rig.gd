@@ -3,7 +3,8 @@ extends Node3D
 ## 캐릭터 시각 부분. AnimationTree 가 idle ↔ walk ↔ run (속도로 블렌드), 낚시 자세(가중치로 블렌드), 도끼질(원샷)을 섞는다.
 ## 로컬 플레이어·원격 플레이어·주민·가방 창 미리보기가 같은 리그를 쓰고,
 ## 게임 로직은 set_look / set_move_speed / set_fishing / set_held / play_chop / set_eye_offset / set_outfit,
-## 그리고 set_braking(미끄러지며 멈춤) / play_emote(감정표현) / play_plant(심기) / show_off(잡은 물고기 자랑) 만 호출한다.
+## 그리고 set_braking(미끄러지며 멈춤) / play_emote(감정표현) / play_plant(심기) / show_off(잡은 물고기 자랑),
+## set_cooking(요리 동작 + 칼·팬·국자) / set_sitting(식당 의자에 앉기) 만 호출한다.
 ## 몸·팔·다리 메시는 CharacterModel 이 겉모습(CharacterLook)마다 한 번 만들어 공유한다.
 
 @export_group("References")
@@ -18,6 +19,8 @@ extends Node3D
 ## 오른손에 쥐는 도구 (ArmR 아래).
 @export var rod: Node3D
 @export var axe: Node3D
+## 요리 도구(칼·팬·국자)를 쥐는 자리 (ArmR 아래). 메시는 set_cooking 이 바꿔 끼운다.
+@export var tool: Node3D
 ## 정점 색을 쓰는 흰 툰 머티리얼 (몸·옷·도구 모두).
 @export var clay_material: Material
 
@@ -37,6 +40,8 @@ extends Node3D
 const EMOTES: PackedStringArray = ["hello", "happy", "laugh", "surprise", "love", "sad", "angry", "think", "clap", "bow", "sleepy"]
 ## 자랑할 때 손에 든 물건의 자리 (몸통 기준, 턱 아래 앞으로 내민 두 손 위). 머리가 커서 머리 위로 들면 팔이 닿지 않는다.
 const SHOW_HOLD_POSITION: Vector3 = Vector3(0.0, 0.0, -0.44)
+## set_cooking 으로 할 수 있는 요리 동작 (data/restaurant/recipes.json 의 steps.*.anim).
+const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
 
 var held_item: String = "rod"
 var look: CharacterLook = CharacterLook.for_player(1)
@@ -49,6 +54,11 @@ var _brake_target: float = 0.0
 var _brake_value: float = 0.0
 var _show_target: float = 0.0
 var _show_value: float = 0.0
+var _cook_target: float = 0.0
+var _cook_value: float = 0.0
+var _sit_target: float = 0.0
+var _sit_value: float = 0.0
+var _tool_id: String = ""
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
 var _hold: Node3D = null
 var _held_before_show: String = ""
@@ -112,9 +122,9 @@ func set_held(item_id: String) -> void:
 		_held_before_show = item_id
 		return
 	if rod != null:
-		rod.visible = item_id == "rod"
+		rod.visible = item_id == "rod" and _cook_target < 0.5
 	if axe != null:
-		axe.visible = item_id == "axe"
+		axe.visible = item_id == "axe" and _cook_target < 0.5
 
 
 func play_chop() -> void:
@@ -153,6 +163,51 @@ func set_braking(active: bool) -> void:
 
 func is_braking() -> bool:
 	return _brake_target > 0.5
+
+
+## 요리 동작 (COOK_ANIMS 중 하나, 빈 문자열 = 그만). tool_id = "knife" | "pan" | "ladle" | "" (빈손).
+## 요리하는 동안 낚싯대·도끼는 숨긴다.
+func set_cooking(anim: String, tool_id: String = "") -> void:
+	var active: bool = anim in COOK_ANIMS
+	_cook_target = 1.0 if active else 0.0
+	if active and tree != null:
+		tree.set("parameters/CookSwitch/transition_request", anim)
+	_set_tool(tool_id if active else "")
+	if rod != null:
+		rod.visible = not active and held_item == "rod" and _show_target < 0.5
+	if axe != null:
+		axe.visible = not active and held_item == "axe" and _show_target < 0.5
+
+
+func is_cooking() -> bool:
+	return _cook_target > 0.5
+
+
+## 식당 의자에 앉기 (다리를 앞으로 뻗고 몸을 살짝 흔든다).
+func set_sitting(active: bool) -> void:
+	_sit_target = 1.0 if active else 0.0
+
+
+func _set_tool(tool_id: String) -> void:
+	if tool == null or tool_id == _tool_id:
+		return
+	_tool_id = tool_id
+	var mi: MeshInstance3D = tool.get_node_or_null("Mesh")
+	if mi == null:
+		mi = MeshInstance3D.new()
+		mi.name = "Mesh"
+		mi.material_override = clay_material
+		tool.add_child(mi)
+	var mesh: ArrayMesh = null
+	match tool_id:
+		"knife":
+			mesh = CharacterModel.knife()
+		"pan":
+			mesh = CharacterModel.pan()
+		"ladle":
+			mesh = CharacterModel.ladle()
+	mi.mesh = mesh
+	tool.visible = mesh != null
 
 
 ## 잡은 물건을 두 손으로 앞으로 쭉 내밀어 들고 자랑한다. mesh 가 null 이면 내려놓는다. 드는 동안 도구는 숨긴다.
@@ -223,6 +278,10 @@ func _process(delta: float) -> void:
 	tree.set("parameters/BrakeBlend/blend_amount", _brake_value)
 	_show_value = lerpf(_show_value, _show_target, 1.0 - exp(-10.0 * delta))
 	tree.set("parameters/ShowBlend/blend_amount", _show_value)
+	_cook_value = move_toward(_cook_value, _cook_target, 8.0 * delta)
+	tree.set("parameters/CookBlend/blend_amount", _cook_value)
+	_sit_value = move_toward(_sit_value, _sit_target, 6.0 * delta)
+	tree.set("parameters/SitBlend/blend_amount", _sit_value)
 
 
 ## 겉모습과 상관없는 부분: 눈, 도구, 팔다리 메시 자리.

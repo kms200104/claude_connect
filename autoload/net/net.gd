@@ -73,13 +73,16 @@ signal peer_emoted(player_id: int, emote_id: String)
 ## 누군가(나 포함) 거울에서 얼굴을 바꿨다.
 signal face_changed(player_id: int, face: Dictionary)
 ## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
-signal npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String)
+## from = 그 사람이 한 감정표현 (주민 반응은 그에 대한 것).
+signal npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String, from: String)
 ## 대화 주제로 수다를 떨었다 (gain: 오른 친밀도).
 signal topic_answered(npc_id: String, topic: String, gain: int)
 ## 박물관에 기증된 물고기가 늘었다 (마을 공용).
 signal museum_changed(fish_id: String, by: int)
 ## 내가 기증했다 (reward: 감사 솔, gifts: 기념품 아이템).
 signal donated(fish_id: String, reward: int, count: int, gifts: PackedStringArray)
+## 받은 메시지 전부 (Net 이 따로 다루지 않는 경제 메시지는 Economy 가 여기서 받는다).
+signal message_received(msg: Dictionary)
 
 enum State { DISCONNECTED, CONNECTING, JOINING, ONLINE, RECONNECTING }
 
@@ -576,6 +579,8 @@ func _handle_text(text: String) -> void:
 	if not parsed is Dictionary:
 		return
 	var msg: Dictionary = parsed
+	# 경제 상태(Economy)가 먼저 바뀌어야 welcomed · profile_updated 를 받은 화면이 새 값을 본다.
+	message_received.emit(msg)
 	match str(msg.get("t", "")):
 		"welcome":
 			_on_welcome(msg)
@@ -641,7 +646,7 @@ func _handle_text(text: String) -> void:
 		"npc_emote":
 			var npc_id: String = str(msg.get("npc", ""))
 			npc_moods[npc_id] = str(msg.get("m", npc_moods.get(npc_id, "calm")))
-			npc_emoted.emit(npc_id, str(msg.get("e", "")), int(msg.get("to", 0)), npc_moods[npc_id])
+			npc_emoted.emit(npc_id, str(msg.get("e", "")), int(msg.get("to", 0)), npc_moods[npc_id], str(msg.get("from", "")))
 		"talk_topic":
 			var talked: String = str(msg.get("npc", ""))
 			npc_moods[talked] = str(msg.get("m", npc_moods.get(talked, "calm")))
@@ -732,6 +737,8 @@ func _handle_text(text: String) -> void:
 			collected.emit(str(msg.get("kind", "")), str(msg.get("item", "")))
 		"error":
 			_on_server_error(str(msg.get("code", "")), msg)
+	if msg.get("t") != "error" and msg.get("rid") != null:
+		_pending.erase(str(msg.get("rid")))
 
 
 func _on_welcome(msg: Dictionary) -> void:
@@ -827,6 +834,17 @@ func _apply_events(data: Variant, announce: bool = true) -> void:
 func _next_rid() -> String:
 	_rid_counter += 1
 	return "%s-%d" % [uid.left(6), _rid_counter]
+
+
+## 다른 오토로드(Economy)가 쓰는 요청 (rid 를 붙이고, 거부되면 request_failed 로 알린다).
+func request(kind: String, fields: Dictionary = {}) -> void:
+	_request(kind, fields)
+
+
+## rid 없이 보내는 메시지 (bank_quote · rest_cook 처럼 중복돼도 괜찮은 것).
+func send_message(message: Dictionary) -> void:
+	if state == State.ONLINE:
+		_send(message)
 
 
 ## 요청 ID를 붙여 보내고, 거부되면 어떤 요청이었는지 알 수 있게 기록해 둔다.

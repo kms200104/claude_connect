@@ -1,6 +1,6 @@
 extends Node
 ## 상점·달리기·옷·가구 종단 테스트(클라이언트 1개). tests/run_shop_e2e.sh 가 서버를
-## WEATHER_FORCE=rain SHOP_POINTS_SCALE=20 START_SOL=2000 MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 으로 띄운다.
+## WEATHER_FORCE=rain SHOP_POINTS_SCALE=20 START_SOL=200000 MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 으로 띄운다.
 ## 인자: -- --server=ws://127.0.0.1:PORT
 
 var _server: String = ""
@@ -57,7 +57,7 @@ func _run() -> void:
 
 	Net.create_room(_server)
 	await Net.welcomed
-	_check(Net.sol == 2000 and Net.shop_level == 1, "솔 2000, 상점 1단계(구멍가게)로 시작")
+	_check(Net.sol == 200000 and Net.shop_level == 1, "솔 200,000, 상점 1단계(구멍가게)로 시작")
 	_check(shop.level == 1 and shop.level_name() == "솔바람 구멍가게", "광장에 구멍가게")
 
 	# ---- 달리기: 조이스틱을 끝까지 0.7초 ----

@@ -1,7 +1,8 @@
 class_name DropField
 extends Node3D
-## 바닥의 선물 풍선(선물 상자 + 풍선)과 별 조각(밤에 빛남). 위치는 서버가 정하고, 가까이 가서 "줍기"로 줍는다.
-## 선물은 풍선에 매달려 살랑살랑, 별 조각은 빙글빙글 돌며 반짝인다. 생길 때와 없어질 때 톡 튀는 연출.
+## 바닥의 선물 풍선(선물 상자 + 풍선)과 별 조각(밤에 빛남), 들판의 먹거리(나물·버섯·산딸기 덤불). 위치는 서버가 정하고,
+## 가까이 가서 "줍기"·"채집"으로 줍는다. 선물은 풍선에 매달려 살랑살랑, 별 조각은 빙글빙글 돌며 반짝이고,
+## 먹거리는 풀숲 위로 아이템 모형이 살짝 흔들린다. 생길 때와 없어질 때 톡 튀는 연출.
 
 @export var clay_material: Material
 ## 밤에 빛나는 별 조각 머티리얼.
@@ -11,6 +12,7 @@ const GIFT_COLORS: Array[Color] = [Color("#F6A6B8"), Color("#9EC1F2"), Color("#F
 
 static var _gift_meshes: Dictionary[int, ArrayMesh] = {}
 static var _star: ArrayMesh = null
+static var _forage: Dictionary[String, ArrayMesh] = {}
 
 var _nodes: Dictionary[String, Node3D] = {}
 var _time: float = 0.0
@@ -51,9 +53,12 @@ func _process(delta: float) -> void:
 		var n: Node3D = _nodes[id]
 		var phase: float = float(id.hash() % 100) * 0.1
 		var visual: Node3D = n.get_child(0)
-		if n.get_meta("kind", "") == DropInfo.KIND_STAR:
+		var kind: String = n.get_meta("kind", "")
+		if kind == DropInfo.KIND_STAR:
 			visual.rotation.y = _time * 1.6 + phase
 			visual.position.y = 0.15 + sin(_time * 2.4 + phase) * 0.06
+		elif kind == DropInfo.KIND_FORAGE:
+			visual.rotation.z = sin(_time * 1.1 + phase) * 0.05
 		else:
 			visual.rotation.z = sin(_time * 1.3 + phase) * 0.08
 			visual.position.y = sin(_time * 1.7 + phase) * 0.05
@@ -80,6 +85,17 @@ func _add(d: DropInfo, animate: bool) -> void:
 	if d.kind == DropInfo.KIND_STAR:
 		mi.mesh = star_mesh()
 		mi.material_override = glow_material
+	elif d.kind == DropInfo.KIND_FORAGE:
+		mi.mesh = forage_mesh()
+		mi.material_override = clay_material
+		var info: ItemInfo = GameData.item(d.item)
+		if info != null and not info.model.is_empty():
+			var crop: MeshInstance3D = MeshInstance3D.new()
+			crop.mesh = PartMesh.get_mesh(info.id, info.model)
+			crop.material_override = clay_material
+			crop.scale = Vector3(1.8, 1.8, 1.8)
+			crop.position = Vector3(0.0, 0.14, 0.0)
+			mi.add_child(crop)
 	else:
 		mi.mesh = gift_mesh(absi(d.id.hash()) % GIFT_COLORS.size())
 		mi.material_override = clay_material
@@ -130,6 +146,21 @@ static func gift_mesh(color_index: int) -> ArrayMesh:
 	ClayMesh.add_ellipsoid(st, Vector3(0.05, 1.42, 0.02), Vector3(0.04, 0.03, 0.04), balloon.darkened(0.15), 6, 3)
 	_gift_meshes[color_index] = ClayMesh.commit(st)
 	return _gift_meshes[color_index]
+
+
+## 들판의 먹거리 덤불: 둥글게 펼친 잎 (위에 아이템 모형을 따로 얹는다).
+static func forage_mesh() -> ArrayMesh:
+	if _forage.has("bush"):
+		return _forage["bush"]
+	var st: SurfaceTool = ClayMesh.begin()
+	var leaf: Callable = ClayMesh.vertical_gradient(Color("#4F8A3C"), Color("#8CC66A"), 1.0)
+	for i: int in 7:
+		var a: float = TAU * float(i) / 7.0
+		var out: Vector3 = Vector3(cos(a), 0.0, sin(a))
+		ClayMesh.add_ellipsoid(st, out * 0.16 + Vector3(0.0, 0.1 + 0.03 * float(i % 3), 0.0), Vector3(0.06, 0.13, 0.035), leaf, 6, 4, Basis(Vector3.UP, -a) * Basis(Vector3.FORWARD, 0.55))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.04, 0.0), Vector3(0.2, 0.06, 0.2), Color("#5E8E44"), 10, 4)
+	_forage["bush"] = ClayMesh.commit(st)
+	return _forage["bush"]
 
 
 ## 별 조각: 별 아이템 모형을 그대로 쓴다.

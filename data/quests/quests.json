@@ -15,8 +15,8 @@
       "item": "wood",
       "min": 3,
       "max": 6,
-      "reward_base": 100,
-      "reward_per": 40,
+      "reward_base": 10000,
+      "reward_per": 4000,
       "weight": 3
     },
     {
@@ -25,8 +25,8 @@
       "item": "softwood",
       "min": 2,
       "max": 3,
-      "reward_base": 120,
-      "reward_per": 80,
+      "reward_base": 12000,
+      "reward_per": 8000,
       "weight": 1
     },
     {
@@ -35,8 +35,8 @@
       "item": "hardwood",
       "min": 2,
       "max": 3,
-      "reward_base": 120,
-      "reward_per": 90,
+      "reward_base": 12000,
+      "reward_per": 9000,
       "weight": 1
     },
     {
@@ -45,8 +45,8 @@
       "item": "birchwood",
       "min": 2,
       "max": 4,
-      "reward_base": 120,
-      "reward_per": 100,
+      "reward_base": 12000,
+      "reward_per": 10000,
       "weight": 1
     },
     {
@@ -55,7 +55,7 @@
       "pool": "goods",
       "min": 1,
       "max": 2,
-      "reward_base": 150,
+      "reward_base": 15000,
       "reward_per": 0,
       "weight": 2
     },
@@ -68,9 +68,9 @@
       "reward_per": 0,
       "weight": 2,
       "reward_by_rarity": {
-        "common": 200,
-        "uncommon": 450,
-        "rare": 900
+        "common": 20000,
+        "uncommon": 45000,
+        "rare": 90000
       }
     },
     {
@@ -78,8 +78,8 @@
       "kind": "any_fish",
       "min": 2,
       "max": 3,
-      "reward_base": 80,
-      "reward_per": 120,
+      "reward_base": 8000,
+      "reward_per": 12000,
       "weight": 2
     }
   ]

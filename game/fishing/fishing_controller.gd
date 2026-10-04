@@ -7,6 +7,7 @@ enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
 
 @export_group("References")
 @export var player: Player
+## 기본 낚시터. 마을에 낚시터가 여럿이면(FishingSpot 이 "fishing_spots" 무리에 든다) 가장 가까운 곳에서 던진다.
 @export var spot: FishingSpot
 @export var bobber: Bobber
 @export var hud: FishingHud
@@ -52,10 +53,26 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if phase == Phase.IDLE:
 		# 낚싯대를 손에 들고 물가에 있어야 던질 수 있다.
-		var ready_to_cast: bool = Net.state == Net.State.ONLINE and spot.can_cast_from(player.global_position) \
+		spot = _nearest_spot(player.global_position)
+		var ready_to_cast: bool = Net.state == Net.State.ONLINE and spot != null and spot.can_cast_from(player.global_position) \
 			and not player.is_input_locked() and player.held_item == "rod" \
 			and (interaction == null or not interaction.has_target())
 		hud.show_cast_available(ready_to_cast)
+
+
+## 가장 가까운 낚시터 (마을 호수 · 성성호수 …).
+func _nearest_spot(position: Vector3) -> FishingSpot:
+	var best: FishingSpot = spot
+	var best_d: float = INF if spot == null or spot.info == null else spot.info.distance_to(position)
+	for node: Node in get_tree().get_nodes_in_group(&"fishing_spots"):
+		var s: FishingSpot = node as FishingSpot
+		if s == null or s.info == null:
+			continue
+		var d: float = s.info.distance_to(position)
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
 
 
 func _on_action_pressed() -> void:

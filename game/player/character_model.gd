@@ -149,6 +149,45 @@ static func axe() -> ArrayMesh:
 	return mesh
 
 
+## 식칼: 나무 손잡이 + 넓적한 은빛 날. 손에서 +Y 로 뻗는다.
+static func knife() -> ArrayMesh:
+	if _cache.has("knife"):
+		return _cache["knife"]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_rod(st, Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.07, 0.0), 0.022, 0.02, Color("#6E452C"), 8)
+	var blade: Callable = ClayMesh.vertical_gradient(Color("#9AA6AF"), Color("#E3EAEE"), 1.0)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.17, -0.025), Vector3(0.012, 0.2, 0.075), 0.3, blade, Basis(), 6, 4)
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["knife"] = mesh
+	return mesh
+
+
+## 프라이팬: 손잡이 끝에 둥근 팬 (팬 바닥은 손잡이와 직각).
+static func pan() -> ArrayMesh:
+	if _cache.has("pan"):
+		return _cache["pan"]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_rod(st, Vector3(0.0, -0.06, 0.0), Vector3(0.0, 0.16, 0.0), 0.022, 0.02, Color("#3A2E28"), 8)
+	var dish: PackedVector2Array = PackedVector2Array([Vector2(0.0, -0.02), Vector2(0.15, -0.02), Vector2(0.17, 0.03), Vector2(0.155, 0.035), Vector2(0.14, -0.005), Vector2(0.0, -0.005)])
+	ClayMesh.add_lathe(st, dish, 14, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0.0, 0.32, 0.0)), Color("#4A4E56"))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["pan"] = mesh
+	return mesh
+
+
+## 국자: 긴 자루 끝에 오목한 그릇.
+static func ladle() -> ArrayMesh:
+	if _cache.has("ladle"):
+		return _cache["ladle"]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_rod(st, Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.3, 0.0), 0.016, 0.013, Color("#C9CED3"), 7)
+	var cup: PackedVector2Array = PackedVector2Array([Vector2(0.0, -0.05), Vector2(0.05, -0.04), Vector2(0.07, 0.0), Vector2(0.06, 0.01), Vector2(0.0, -0.035)])
+	ClayMesh.add_lathe(st, cup, 10, Transform3D(Basis(), Vector3(0.0, 0.33, -0.04)), Color("#B7BEC5"))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["ladle"] = mesh
+	return mesh
+
+
 ## 얼굴: 볼터치, 코, 입 (눈은 따로 움직이는 메시). 모두 머리 겉면에 붙인 얇은 판이라 머리 속으로 파묻히지 않는다.
 static func _add_face(st: SurfaceTool, look: CharacterLook) -> void:
 	var catalog: FaceCatalog = _catalog()

@@ -15,12 +15,20 @@ var info: SpotInfo = null
 
 
 func _ready() -> void:
+	add_to_group(&"fishing_spots")
 	info = GameData.spots.get(spot_id)
 	if info == null:
 		push_error("FishingSpot: spots.json 에 '%s' 가 없음" % spot_id)
 		return
 	global_position = Vector3(info.center.x, 0.0, info.center.y)
 	if water != null:
+		# 같은 씬 자원을 여러 낚시터가 나눠 쓰므로 크기를 바꾸기 전에 제 것으로 만든다.
+		water.mesh = water.mesh.duplicate()
+		if water.material_override != null:
+			water.material_override = water.material_override.duplicate()
+		var surface: Material = water.get_surface_override_material(0)
+		if surface != null:
+			water.set_surface_override_material(0, surface.duplicate())
 		var plane: PlaneMesh = water.mesh
 		plane.size = info.half_extent * 2.0
 		# 월드 커브는 정점 단위로 휘므로, 수면도 1m 격자로 쪼개야 지면과 같이 휜다.
@@ -32,6 +40,7 @@ func _ready() -> void:
 		elif water.get_surface_override_material(0) is ShaderMaterial:
 			(water.get_surface_override_material(0) as ShaderMaterial).set_shader_parameter("half_extent", info.half_extent)
 	if blocker != null and blocker.shape is BoxShape3D:
+		blocker.shape = blocker.shape.duplicate()
 		_build_blocker()
 
 

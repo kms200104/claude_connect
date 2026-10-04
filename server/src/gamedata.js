@@ -3,6 +3,7 @@ import path from 'node:path';
 import { inHours } from './clock.js';
 import { blockedAreas } from './world.js';
 import { loadFace } from './face.js';
+import { listUnits } from './realestate.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -68,6 +69,9 @@ export function loadGameData(dataDir, cfg) {
 
   // 감정표현
   const emotes = read('emotes/emotes.json');
+  // 주민 MBTI (T/F 공감 방식, E/I 반응 거리)
+  const mbti = read('npcs/mbti.json');
+  for (const n of npcs.values()) if (n.mbti && !mbti.types[n.mbti]) throw new Error(`npc ${n.id}: unknown mbti ${n.mbti}`);
   const emoteIds = new Set(emotes.emotes.map((e) => e.id));
   for (const n of npcs.values()) {
     for (const [e] of n.teaches ?? []) if (!emoteIds.has(e)) throw new Error(`npc ${n.id}: unknown emote ${e}`);
@@ -86,6 +90,31 @@ export function loadGameData(dataDir, cfg) {
   // 얼굴 꾸미기 · 거울
   const face = loadFace(read('looks/face_parts.json'));
   const mirrors = (layout?.mirrors ?? []).filter((m) => Number.isFinite(m.x) && Number.isFinite(m.z));
+
+  // 경제: 증권시장 · 아파트 · 은행
+  const market = read('market/stocks.json');
+  const realestate = read('realestate/apartments.json');
+  const units = listUnits(realestate);
+  for (const u of units) if (!realestate.types[u.type]) throw new Error(`apartment ${u.id}: unknown type ${u.type}`);
+  const bank = read('bank/bank.json');
+
+  // 식당: 요리 · 동작 · 손님
+  const recipesFile = read('restaurant/recipes.json');
+  const restaurant = read('restaurant/restaurant.json');
+  const recipes = recipesFile.recipes;
+  const cookSteps = recipesFile.steps;
+  for (const r of recipes) {
+    for (const s of r.steps) if (!cookSteps[s]) throw new Error(`recipe ${r.id}: unknown step ${s}`);
+    for (const ing of r.ingredients) {
+      if (ing.item && !items.has(ing.item)) throw new Error(`recipe ${r.id}: unknown item ${ing.item}`);
+      for (const id of ing.item_any ?? []) if (!fish.has(id) && !items.has(id)) throw new Error(`recipe ${r.id}: unknown ${id}`);
+    }
+  }
+  for (const f of restaurant.forage.items) if (!items.has(f.id)) throw new Error(`forage: unknown item ${f.id}`);
+  // 손님: 주민(취향은 restaurant.json 의 tastes) + 지나가는 손님(visitors).
+  const customers = new Map();
+  for (const n of npcs.values()) customers.set(n.id, { id: n.id, name: n.name, mbti: n.mbti ?? '', villager: true, ...(restaurant.tastes[n.id] ?? { likes: [], dislikes: [] }) });
+  for (const v of restaurant.visitors) customers.set(v.id, { ...v, villager: false });
 
   const isFish = (id) => fish.has(id);
   const isKnown = (id) => fish.has(id) || items.has(id);
@@ -120,10 +149,20 @@ export function loadGameData(dataDir, cfg) {
     seedOf,
     emotes,
     emoteIds,
+    mbti,
     museum,
     airport,
     face,
     mirrors,
+    market,
+    realestate,
+    units,
+    bank,
+    recipes,
+    recipeById: new Map(recipes.map((r) => [r.id, r])),
+    cookSteps,
+    restaurant,
+    customers,
     kindOf,
     priceOf,
     isFish,

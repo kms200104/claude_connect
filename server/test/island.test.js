@@ -204,7 +204,7 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     }
     assert.deepEqual(results.map((r) => r.count), [1, 2, 3, 4, 5]);
     assert.deepEqual(results[4].gifts, ['fish_tank']);
-    assert.equal(results[4].sol, 250, '기증할 때마다 50솔');
+    assert.equal(results[4].sol, 25000, '기증할 때마다 5,000솔');
     a.c.send({ t: 'donate', rid: newRid(), slot: slots.findIndex((s) => s?.id === 'crucian') });
     assert.equal((await a.c.type('error')).code, 'already_donated');
     const shared = await b.c.next((m) => m.t === 'museum' && Object.keys(m.fish).length === 5);
@@ -212,7 +212,7 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
   });
 
   it('공항 기념품 가게: 조종사 곁에서 공항 물건만 산다', async () => {
-    const { server } = await start({ startSol: 1000 });
+    const { server } = await start({ startSol: 100000 });
     const { c } = await join(server);
     c.send({ t: 'shop_buy', rid: newRid(), item: 'seed_sunflower', n: 1, at: 'airport' });
     assert.equal((await c.type('error')).code, 'not_near_keeper');
@@ -222,7 +222,7 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     assert.equal((await c.type('error')).code, 'not_for_sale');
     c.send({ t: 'shop_buy', rid: newRid(), item: 'seed_sunflower', n: 2, at: 'airport' });
     const bought = await c.type('shop_result');
-    assert.deepEqual({ item: bought.item, sol: bought.sol, at: bought.at }, { item: 'seed_sunflower', sol: 760, at: 'airport' });
+    assert.deepEqual({ item: bought.item, sol: bought.sol, at: bought.at }, { item: 'seed_sunflower', sol: 76000, at: 'airport' });
   });
 
   it('주민 마음: 같은 시각이면 같은 기분, 밤엔 졸리고, 성격대로 반응하고, 친해지면 가르쳐 주고 선물한다', () => {

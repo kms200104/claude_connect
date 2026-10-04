@@ -42,16 +42,27 @@ export function setMood(npc, mood, now, ms = MOOD_OVERRIDE_MS) {
   npc.moodOverride = { m: mood, until: now + ms };
 }
 
-/** 플레이어의 감정표현에 이 주민이 보일 반응 (감정표현 id). 기분이 반응을 바꾸기도 한다. */
-export function chooseReaction({ emotes, personality, mood, emote, random }) {
+/** MBTI 의 한 축 글자 (axis 0 = E/I, 1 = S/N, 2 = T/F, 3 = J/P). 모르면 ''. */
+export function mbtiLetter(type, axis) {
+  return typeof type === 'string' && type.length === 4 ? type[axis] : '';
+}
+
+/** 플레이어의 감정표현에 이 주민이 보일 반응 (감정표현 id). F 는 슬픔·기쁨에 같이 공감하고 T 는 덤덤하게(생각·박수),
+ *  그 밖엔 기분과 성격대로. */
+export function chooseReaction({ emotes, personality, mood, emote, random, mbti = null, type = '' }) {
+  const empathy = mbti?.empathy?.[mbtiLetter(type, 2)]?.react?.[emote];
+  if (empathy?.length && random() < (mbti.empathy_chance ?? 0.8)) return empathy[Math.floor(random() * empathy.length)];
   const byMood = emotes.mood_reactions?.[mood];
   if (byMood && random() < 0.35) return byMood[Math.floor(random() * byMood.length)];
   const options = emotes.reactions?.[personality]?.[emote] ?? emotes.reactions?.kind?.[emote] ?? ['hello'];
   return options[Math.floor(random() * options.length)];
 }
 
-/** 감정표현을 받은 뒤의 기분 ('' 이면 그대로). */
-export function moodAfterEmote(emotes, personality, emote) {
+/** 감정표현을 받은 뒤의 기분 ('' 이면 그대로). F 는 상대 감정을 따라가고 (슬퍼하면 같이 시무룩, 기뻐하면 같이 기분 좋음),
+ *  T 는 남의 감정에 잘 휩쓸리지 않는다 (mbti.json 에서 '' = 그대로). */
+export function moodAfterEmote(emotes, personality, emote, mbti = null, type = '') {
+  const table = mbti?.empathy?.[mbtiLetter(type, 2)]?.mood;
+  if (table && Object.hasOwn(table, emote)) return table[emote];
   const special = EMOTE_MOOD[personality]?.[emote];
   if (special) return special;
   return emotes.emotes.find((e) => e.id === emote)?.mood ?? '';

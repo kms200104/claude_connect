@@ -6,7 +6,7 @@
   "curator": {
     "id": "curator",
     "name": "부엉",
-    "personality": "curator",
+    "personality": "curator", "mbti": "INTJ",
     "color": "#9A7A5A",
     "voice": 0.82,
     "look": { "hair": "#5A4A3A", "style": "bun", "top": "#8A6A4A", "bottom": "#4A3A2A", "shoes": "#3A2A20", "eyes": "bright", "nose": "long", "mouth": "tiny" },
@@ -15,7 +15,7 @@
   },
   "aquarium": { "x": 57.5, "z": -9.5, "width": 6.0, "depth": 3.4 },
   "donate_range": 3.2,
-  "reward_sol": 50,
+  "reward_sol": 5000,
   "milestones": [
     { "count": 5, "item": "fish_tank" },
     { "count": 15, "item": "fish_trophy" },

@@ -97,7 +97,7 @@ func _refresh() -> void:
 	else:
 		var lv: ShopData.Level = shop.level_info(Net.shop_level)
 		_title.text = "%s  Lv.%d" % [lv.display_name, lv.level]
-	_sol.text = "%s솔" % InventoryWindow._format_number(Net.sol)
+	_sol.text = Money.short(Net.sol)
 	_points_bar.visible = at == ""
 	_points_label.visible = at == ""
 	_refresh_points()

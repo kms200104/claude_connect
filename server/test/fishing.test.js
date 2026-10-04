@@ -74,7 +74,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
 
     await server.rooms.flushAll();
     const saved = JSON.parse(readFileSync(path.join(saveDir, `${welcome.code}.json`), 'utf8'));
-    assert.equal(saved.schema, 4);
+    assert.equal(saved.schema, 5);
     assert.deepEqual(saved.profiles[Object.keys(saved.profiles)[0]].slots[5], { id: 'crucian', n: 1 });
     assert.equal(saved.world.totalCatches, 1);
     assert.equal(saved.world.species.crucian, 1);

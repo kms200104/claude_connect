@@ -166,6 +166,27 @@ anim('sleepy', 1.8, [
  (1.8, REST)])
 EMOTES=['hello','happy','laugh','surprise','love','sad','angry','think','clap','bow','sleepy']
 
+# ---- 식당 (v0.8): 요리 동작 다섯 가지와 의자에 앉기 ----
+# cook_chop: 왼손으로 재료를 누르고 오른손 칼로 탁탁 (썰기 박자 0.48초에 맞춘다)
+CC = lambda up: pose((0,-0.03,0),(-0.14,0,0),(1,1,1),(0.75,0,0.3),(1.3 if up else 0.82,0,-0.12))
+anim('cook_chop', 0.48, [(0, CC(True)), (0.16, CC(False)), (0.24, CC(False)), (0.48, CC(True))], loop=True)
+# cook_stir: 왼손으로 팬(냄비) 손잡이를 잡고 오른손으로 휘휘 젓는다
+ST = lambda z, y: pose((0,y,0),(-0.08,0,0),(1,1,1),(0.85,0,0.2),(1.0,0.25*z,-0.1+0.3*z))
+anim('cook_stir', 0.8, [(0, ST(-1,0)), (0.2, ST(0,0.01)), (0.4, ST(1,0)), (0.6, ST(0,0.01)), (0.8, ST(-1,0))], loop=True)
+# cook_flip: 두 손으로 팬을 들어 휙 뒤집는다
+FL = lambda up, y: pose((0,y,0),(-0.05 if up else -0.12,0,0),(1,1,1),(1.35 if up else 0.85,0,0.18),(1.35 if up else 0.85,0,-0.18))
+anim('cook_flip', 0.7, [(0, FL(False,0)), (0.18, FL(True,0.05)), (0.32, FL(True,0.06)), (0.5, FL(False,0)), (0.7, FL(False,0))], loop=True)
+# cook_mix: 왼팔로 그릇을 안고 오른손으로 빠르게 섞는다
+MX = lambda z: pose((0,0,0),(-0.1,0,0.03*z),(1,1,1),(0.95,0,0.42),(1.05,0,-0.2+0.28*z))
+anim('cook_mix', 0.3, [(0, MX(-1)), (0.15, MX(1)), (0.3, MX(-1))], loop=True)
+# cook_plate: 두 손으로 접시를 받쳐 살며시 내려놓는다
+PL = lambda x, y: pose((0,y,0),(-0.1,0,0),(1,1,1),(x,0,0.22),(x,0,-0.22))
+anim('cook_plate', 1.0, [(0, PL(1.25,0)), (0.5, PL(0.95,-0.02)), (1.0, PL(1.25,0))], loop=True)
+COOKS=['cook_chop','cook_stir','cook_flip','cook_mix','cook_plate']
+# sit: 의자에 앉아 두 다리를 앞으로 쭉 (작은 몸이라 발이 바닥에 안 닿는다), 가끔 몸을 흔든다
+SI = lambda rz, y: pose((0,y,0),(0.04,0,rz),(1,1,1),(0.5,0,0.08),(0.5,0,-0.08),(1.5,0,0.05),(1.5,0,-0.05))
+anim('sit', 2.4, [(0, SI(0,0)), (0.6, SI(0.04,0.008)), (1.2, SI(0,0)), (1.8, SI(-0.04,0.008)), (2.4, SI(0,0))], loop=True)
+
 def fmt(v):
     def f(x):
         s=('%.4f'%x).rstrip('0').rstrip('.')
@@ -206,7 +227,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit']) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -255,6 +276,13 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit']) + '''[sub_resource type="AnimationNodeTransition" id="Transition_cook"]
+xfade_time = 0.12
+''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(COOKS)) + '''
+[sub_resource type="AnimationNodeBlend2" id="Blend2_cook"]
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_sit"]
+
 [sub_resource type="AnimationNodeOneShot" id="OneShot_emote"]
 fadein_time = 0.1
 fadeout_time = 0.2
@@ -283,6 +311,14 @@ nodes/Fishing/node = SubResource("AN_fishing")
 nodes/Fishing/position = Vector2(-100, 160)
 nodes/FishBlend/node = SubResource("Blend2_fishing")
 nodes/FishBlend/position = Vector2(120, 40)
+''' + ''.join('nodes/K_%s/node = SubResource("AN_%s")\nnodes/K_%s/position = Vector2(-100, %d)\n'%(e,e,e,320+i*60) for i,e in enumerate(COOKS)) + '''nodes/CookSwitch/node = SubResource("Transition_cook")
+nodes/CookSwitch/position = Vector2(120, 320)
+nodes/CookBlend/node = SubResource("Blend2_cook")
+nodes/CookBlend/position = Vector2(220, 40)
+nodes/Sit/node = SubResource("AN_sit")
+nodes/Sit/position = Vector2(220, 200)
+nodes/SitBlend/node = SubResource("Blend2_sit")
+nodes/SitBlend/position = Vector2(270, 40)
 nodes/Chop/node = SubResource("AN_chop")
 nodes/Chop/position = Vector2(120, 200)
 nodes/ChopShot/node = SubResource("OneShot_chop")
@@ -304,9 +340,9 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", &"ChopShot", 0, &"FishBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"EmoteShot", 0, &"PlantShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"ChopShot", 0, &"SitBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"EmoteShot", 0, &"PlantShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
-[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe")]
+[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
 tree = NodePath("AnimationTree")
 visual = NodePath("Visual")
@@ -317,6 +353,7 @@ leg_left = NodePath("Visual/LegL")
 leg_right = NodePath("Visual/LegR")
 rod = NodePath("Visual/ArmR/Rod")
 axe = NodePath("Visual/ArmR/Axe")
+tool = NodePath("Visual/ArmR/Tool")
 clay_material = ExtResource("2_clay")
 
 [node name="Visual" type="Node3D" parent="."]
@@ -335,6 +372,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 [node name="Axe" type="Node3D" parent="Visual/ArmR"]
 visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+
+[node name="Tool" type="Node3D" parent="Visual/ArmR"]
+visible = false
+transform = Transform3D(1, 0, 0, 0, -0.5885011, -0.8084964, 0, 0.8084964, -0.5885011, 0, -0.3, 0)
 
 [node name="LegL" type="Node3D" parent="Visual"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.42, 0)
@@ -370,6 +411,11 @@ parameters/EmoteShot/request = 0
 parameters/EmoteSwitch/current_state = "hello"
 parameters/EmoteSwitch/transition_request = ""
 parameters/EmoteSwitch/current_index = 0
+parameters/CookBlend/blend_amount = 0.0
+parameters/CookSwitch/current_state = "cook_chop"
+parameters/CookSwitch/transition_request = ""
+parameters/CookSwitch/current_index = 0
+parameters/SitBlend/blend_amount = 0.0
 ''')
 open(OUT,'w').write('\n'.join(out))
 print('ok')

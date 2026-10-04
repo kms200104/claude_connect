@@ -1,4 +1,4 @@
-[gd_scene load_steps=64 format=3]
+[gd_scene load_steps=67 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -57,6 +57,9 @@
 [ext_resource type="Script" path="res://ui/hud/catch_card.gd" id="61_catch_card"]
 [ext_resource type="Script" path="res://game/places/mirror_site.gd" id="62_mirror_site"]
 [ext_resource type="Script" path="res://ui/mirror/mirror_window.gd" id="63_mirror_window"]
+[ext_resource type="Script" path="res://game/places/apartment_site.gd" id="64_apartments"]
+[ext_resource type="Script" path="res://game/places/restaurant_site.gd" id="65_restaurant"]
+[ext_resource type="Script" path="res://game/economy/economy_controller.gd" id="66_economy"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -177,6 +180,29 @@ shape = SubResource("Shape_lake")
 material_override = ExtResource("33_lily")
 script = ExtResource("32_decor")
 
+[node name="Seongseong" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
+script = ExtResource("15_spot")
+spot_id = "seongseong"
+water = NodePath("Water")
+blocker = NodePath("Blocker/Shape")
+
+[node name="Water" type="MeshInstance3D" parent="Terrain/Seongseong"]
+cast_shadow = 0
+mesh = SubResource("Mesh_water")
+surface_material_override/0 = ExtResource("16_water")
+
+[node name="Blocker" type="StaticBody3D" parent="Terrain/Seongseong"]
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/Seongseong/Blocker"]
+shape = SubResource("Shape_lake")
+
+[node name="SeongseongLilies" type="MultiMeshInstance3D" parent="Terrain"]
+material_override = ExtResource("33_lily")
+script = ExtResource("32_decor")
+spot_id = "seongseong"
+count = 14
+seed_value = 31
+
 [node name="Decor" type="Node3D" parent="."]
 script = ExtResource("45_decor")
 clay_material = ExtResource("23_foliage")
@@ -214,6 +240,18 @@ script = ExtResource("55_airport")
 actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
+
+[node name="Apartments" type="Node3D" parent="."]
+script = ExtResource("64_apartments")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
+
+[node name="Restaurant" type="Node3D" parent="." node_paths=PackedStringArray("npcs")]
+script = ExtResource("65_restaurant")
+actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
+npcs = NodePath("../Npcs")
 
 [node name="Mirrors" type="Node3D" parent="."]
 script = ExtResource("62_mirror_site")
@@ -330,8 +368,9 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy")]
 script = ExtResource("34_interaction")
+economy = NodePath("../EconomyController")
 mirrors = NodePath("../Mirrors")
 mirror_window = NodePath("../HUD/MirrorWindow")
 museum = NodePath("../Museum")
@@ -347,6 +386,14 @@ furniture = NodePath("../Furniture")
 dialogue = NodePath("../DialogueController")
 fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
+toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "hud", "toast_hud")]
+script = ExtResource("66_economy")
+player = NodePath("../Player")
+apartments = NodePath("../Apartments")
+restaurant = NodePath("../Restaurant")
+hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 
 [node name="DialogueController" type="Node" parent="." node_paths=PackedStringArray("player", "npcs", "box", "toast_hud", "shop_window", "shop", "merchant", "museum", "airport", "museum_window")]

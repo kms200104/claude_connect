@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -55,6 +55,20 @@ export const ErrorCode = Object.freeze({
   notNearKeeper: 'not_near_keeper', // 관장·조종사 곁이 아님
   notNearMirror: 'not_near_mirror', // 거울 앞이 아님
   badFace: 'bad_face', // 모르는 얼굴 항목·모양
+  marketClosed: 'market_closed', // 장이 닫혔다 (MARKET_HOURS=krx)
+  badOrder: 'bad_order', // 모르는 종목·수량
+  notEnoughShares: 'not_enough_shares', // 가진 주식보다 많이 팔려고 함
+  badUnit: 'bad_unit', // 모르는 호수
+  unitTaken: 'unit_taken', // 이미 누가 가진 집
+  notYourUnit: 'not_your_unit', // 내 집이 아님
+  loanLimit: 'loan_limit', // 대출 한도 · DSR 초과
+  badLoan: 'bad_loan', // 모르는 대출 · 이상한 금액
+  restClosed: 'rest_closed', // 식당이 닫혀 있다
+  restBusy: 'rest_busy', // 다른 사람이 식당을 열었다
+  notAtRestaurant: 'not_at_restaurant', // 식당 카운터에서 멀다
+  orderGone: 'order_gone', // 손님이 떠났거나 없는 주문
+  missingIngredient: 'missing_ingredient', // 떼어 둔 재료가 가방에 없다
+  cookTooFast: 'cook_too_fast', // 요리를 너무 빨리 냈다
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
   // 대화 주제
@@ -64,7 +78,7 @@ export const ErrorCode = Object.freeze({
 // 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
 export const MOTIONS = Object.freeze(['brake']);
 // 대화 주제 (talk_topic.topic).
-export const TOPICS = Object.freeze(['mood', 'hobby', 'gossip', 'fish', 'past', 'dream', 'food', 'you']);
+export const TOPICS = Object.freeze(['mood', 'hobby', 'gossip', 'fish', 'past', 'dream', 'food', 'you', 'worry', 'mbti']);
 
 export const Weather = Object.freeze({
   clear: 'clear',

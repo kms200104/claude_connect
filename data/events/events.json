@@ -15,7 +15,7 @@
       "stock": ["star_lamp", "toy_windmill", "music_box", "star_crown"],
       "spot": { "x": -3.2, "z": -2.2, "yaw": -2.17 },
       "npc": {
-        "id": "nuri", "name": "누리", "personality": "merchant", "color": "#C890E0", "voice": 1.15,
+        "id": "nuri", "name": "누리", "personality": "merchant", "mbti": "ENTP", "color": "#C890E0", "voice": 1.15,
         "look": { "hair": "#5A3A6A", "style": "bun", "top": "#C890E0", "bottom": "#3A4A70", "shoes": "#6E4A3A" },
         "about": "온 세상을 떠도는 상인. 반짝이는 물건과 이야기를 모은다."
       }
@@ -23,7 +23,7 @@
     {
       "id": "fishing_derby", "name": "호수 낚시 대회", "weight": 2, "icon": "fishing", "hours": [9, 18],
       "desc": "물고기를 낚을 때마다 대회 상금을 받아요. 희귀한 물고기가 더 잘 잡혀요!",
-      "bonus": { "common": 40, "uncommon": 150, "rare": 500 }, "rare_boost": 2.5
+      "bonus": { "common": 4000, "uncommon": 15000, "rare": 50000 }, "rare_boost": 2.5
     },
     {
       "id": "lumber_day", "name": "나무꾼의 날", "weight": 2, "icon": "axe",

@@ -15,7 +15,7 @@ NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
 COMMON="CLOCK_OFFSET_MIN=$OFFSET WEATHER_FORCE=clear MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0"
 
-(cd "$ROOT/server" && exec env $COMMON PORT="$PORT_A" SAVE_DIR="$DIR/a" EVENT_FORCE=merchant EVENT_WANTED=wood,hardwood,branch,acorn,wild_mushroom START_SOL=2000 node src/index.js >"$DIR/server_a.log" 2>&1) &
+(cd "$ROOT/server" && exec env $COMMON PORT="$PORT_A" SAVE_DIR="$DIR/a" EVENT_FORCE=merchant EVENT_WANTED=wood,hardwood,branch,acorn,wild_mushroom START_SOL=200000 node src/index.js >"$DIR/server_a.log" 2>&1) &
 PID_A=$!
 (cd "$ROOT/server" && exec env $COMMON PORT="$PORT_B" SAVE_DIR="$DIR/b" EVENT_FORCE=gift_day EVENT_SPAWN_SCALE=0.02 node src/index.js >"$DIR/server_b.log" 2>&1) &
 PID_B=$!

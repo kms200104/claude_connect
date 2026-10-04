@@ -12,11 +12,13 @@ import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './tree
 import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs } from './npcs.js';
 import { addChatFriendship, addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
 import { flowerWire, pickFlower, plantProblem, refreshFlower, snapPlant } from './plants.js';
-import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, moodAfterEmote, setMood } from './social.js';
+import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, mbtiLetter, moodAfterEmote, setMood } from './social.js';
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
 import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
 import { applyFaceRequest, nearMirror } from './face.js';
+import { createMarket } from './market.js';
+import { createEconomy, earn } from './economy.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const UID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -57,10 +59,15 @@ export function createServer(overrides = {}) {
       outfit: { ...player.profile.outfit },
       emotes: { known: [...player.profile.emotes.known], quick: [...player.profile.emotes.quick] },
       face: { ...player.profile.face },
+      ...economy.profileWire(roomOf(player), player.profile),
     };
   };
   const sendProfile = (player) => sendTo(player, { t: 'profile', ...profileWire(player) });
   const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now() });
+
+  // ---- 경제: 증권 · 아파트 · 은행 · 식당 (economy.js) ----
+  const market = overrides.market ?? createMarket(data.market, { saveDir: cfg.saveDir, feedUrl: cfg.marketFeedUrl, random, gameMs: clock.gameMs, day: clock.day, forceHours: cfg.marketHours === 'krx' });
+  const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
@@ -126,7 +133,7 @@ export function createServer(overrides = {}) {
   function tickDrops(room, active, t) {
     const kinds = { gift: findEvent(active, 'gift_day'), star: findEvent(active, 'meteor_shower') };
     for (const d of [...room.drops.values()]) {
-      if (kinds[d.kind]) continue;
+      if (kinds[d.kind] || d.kind === 'forage') continue;
       room.drops.delete(d.id);
       room.broadcast({ t: 'drop_gone', id: d.id, by: 0 });
     }
@@ -146,6 +153,45 @@ export function createServer(overrides = {}) {
       room.drops.set(d.id, d);
       room.broadcast({ t: 'drop', d: dropWire(d) });
     }
+    tickForage(room, t);
+  }
+
+  /** 들판의 먹거리(나물·버섯·산딸기)는 이벤트와 상관없이 늘 조금씩 돋아난다 — 식당 재료를 채집으로 모을 수 있다. */
+  function tickForage(room, t) {
+    const rules = data.restaurant.forage;
+    const count = [...room.drops.values()].filter((d) => d.kind === 'forage').length;
+    if (count >= rules.max || t < room.nextDropAt.forage) return;
+    // 처음엔 한꺼번에 반쯤 채워 두고, 그다음부터 천천히.
+    room.nextDropAt.forage = count < rules.max / 2 ? t : t + rules.spawn_every_s * 1000 * cfg.eventSpawnScale;
+    const at = forageSpot();
+    if (!at) return;
+    room.dropSeq += 1;
+    const d = { id: `d${room.dropSeq}`, kind: 'forage', item: pickWeighted(rules.items, (p) => p.weight, random).id, x: at.x, z: at.z };
+    room.drops.set(d.id, d);
+    room.broadcast({ t: 'drop', d: dropWire(d) });
+  }
+
+  /** 채집물 자리: 섬 안쪽의 빈 풀밭 (건물·아파트·식당·물가는 피한다). */
+  function forageSpot() {
+    const rules = data.restaurant.forage;
+    const avoid = [
+      { x: data.restaurant.building.x, z: data.restaurant.building.z + 4, r: 12 },
+      { x: data.museum.building.x, z: data.museum.building.z, r: 11 },
+      { x: data.airport.building.x, z: data.airport.building.z, r: 11 },
+      ...data.realestate.buildings.map((b) => ({ x: b.x, z: b.z, r: 9 })),
+      { x: data.realestate.office.x, z: data.realestate.office.z, r: 4 },
+      { x: 0, z: 0, r: 8 },
+    ];
+    for (let i = 0; i < 10; i++) {
+      const at = dropPosition({ random, data, layout: data.layout, near: { x: 0, z: 0 }, radius: rules.radius });
+      if (!at) continue;
+      const half = data.layout?.island?.half ?? 100;
+      const beach = data.layout?.island?.beach ?? 9;
+      if (Math.abs(at.x) > half - beach - 6 || Math.abs(at.z) > half - beach - 6) continue;
+      if (avoid.some((a) => Math.hypot(at.x - a.x, at.z - a.z) < a.r)) continue;
+      return at;
+    }
+    return null;
   }
 
   /** 선물·별 조각 줍기. */
@@ -228,6 +274,8 @@ export function createServer(overrides = {}) {
     player.ws = ctx.ws;
     player.lastMoveAt = now();
     advanceDay(room);
+    economy.seedRestaurant(room);
+    economy.tickWeek(room);
     // 들어오자마자 주민 기분이 보이도록 (worldTick 을 기다리지 않는다).
     tickMoods(room, weatherOf(room), activeOf(room).length > 0, now());
     send(ctx.ws, {
@@ -251,6 +299,9 @@ export function createServer(overrides = {}) {
       placed: [...room.placed.values()].map((f) => placedWire(f, (uid) => room.slotOfUid(uid))),
       ev: eventsWire(activeOf(room), clock.day()),
       drops: [...room.drops.values()].map(dropWire),
+      market: market.wire(),
+      homes: economy.homesWire(room),
+      rest: economy.restWire(room),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
     room.dirty = true;
@@ -438,7 +489,9 @@ export function createServer(overrides = {}) {
         if (!npc || npc.talkingWith !== player.id) return fail(ErrorCode.notTalking);
         if (!TOPICS.includes(msg.topic)) return fail(ErrorCode.badTopic);
         const rel = relationOf(player.profile, npc.id);
-        const gain = addChatFriendship(rel, clock.day(), 1, data.npcRules.topicFriendPerDay);
+        // 고민 상담: 공감을 잘하는 F 주민과는 더 가까워진다.
+        const bonus = msg.topic === 'worry' ? (data.mbti.worry_friend_bonus?.[mbtiLetter(npc.def.mbti, 2)] ?? 0) : 0;
+        const gain = addChatFriendship(rel, clock.day(), 1 + bonus, data.npcRules.topicFriendPerDay);
         const t = now();
         const mood = currentMood(npc, t);
         if (gain > 0 && (mood === 'sad' || mood === 'grumpy') && random() < 0.5) {
@@ -482,6 +535,7 @@ export function createServer(overrides = {}) {
         // 아이템 차감 · 보상 · 친밀도를 한 번에 반영하고 바로 저장한다.
         removeWhere(player.slots, questAccepts(quest, data), quest.n);
         player.profile.sol += quest.reward;
+        earn(player.profile, quest.reward);
         addFriendship(relationOf(player.profile, npc.id), data.quests.friend_per_quest);
         setMood(npc, 'happy', now());
         npc.mood = 'happy';
@@ -548,6 +602,7 @@ export function createServer(overrides = {}) {
           amount = Math.floor(sellValue(base, n, room.shopPoints, shopLevels) * sellMultiplier(activeOf(room), item, 'shop'));
           if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
           player.profile.sol += amount;
+          earn(player.profile, amount);
         } else {
           item = msg.item;
           if (typeof item !== 'string' || !stockFor(room.shopPoints, shopLevels).includes(item)) return fail(ErrorCode.notForSale);
@@ -588,6 +643,7 @@ export function createServer(overrides = {}) {
       amount = Math.floor(data.priceOf(item) * n * mult);
       if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
       player.profile.sol += amount;
+      earn(player.profile, amount);
     } else {
       item = msg.item;
       if (typeof item !== 'string' || !merchant.def.stock.includes(item)) return fail(ErrorCode.notForSale);
@@ -681,12 +737,15 @@ export function createServer(overrides = {}) {
     const today = clock.day();
     for (const npc of room.npcs.values()) {
       if (npc.talkingWith !== null && npc.talkingWith !== player.id) continue;
-      if (Math.hypot(player.x - npc.x, player.z - npc.z) > data.emotes.react_range) continue;
-      if (t - npc.reactAt < data.emotes.npc_react_cooldown_ms) continue;
-      npc.reactAt = t;
+      // E 는 멀리서도 늘 반응하고, I 는 가까이에서만 가끔 반응한다.
       const def = npc.def;
-      const reaction = chooseReaction({ emotes: data.emotes, personality: def.personality, mood: currentMood(npc, t), emote: e, random });
-      const after = moodAfterEmote(data.emotes, def.personality, e);
+      const ei = mbtiLetter(def.mbti, 0);
+      if (Math.hypot(player.x - npc.x, player.z - npc.z) > (data.mbti.react_range?.[ei] ?? data.emotes.react_range)) continue;
+      if (t - npc.reactAt < data.emotes.npc_react_cooldown_ms) continue;
+      if (random() >= (data.mbti.react_chance?.[ei] ?? 1)) continue;
+      npc.reactAt = t;
+      const reaction = chooseReaction({ emotes: data.emotes, personality: def.personality, mood: currentMood(npc, t), emote: e, random, mbti: data.mbti, type: def.mbti });
+      const after = moodAfterEmote(data.emotes, def.personality, e, data.mbti, def.mbti);
       if (after) setMood(npc, after, t);
       npc.mood = currentMood(npc, t);
       pauseFor(npc, player.x, player.z, t, 2600);
@@ -722,6 +781,7 @@ export function createServer(overrides = {}) {
     removeAt(player.slots, msg.slot, 1);
     room.museum.fish[slot.id] = player.id;
     player.profile.sol += data.museum.reward_sol;
+    earn(player.profile, data.museum.reward_sol);
     // 기증 수가 문턱을 넘으면 기념품 (가방이 차 있으면 다음 기증 때 다시 준다).
     const count = Object.keys(room.museum.fish).length;
     const gifts = [];
@@ -885,6 +945,20 @@ export function createServer(overrides = {}) {
         return handleDonate(ctx, msg, fail);
       case 'set_face':
         return handleFace(ctx, msg, fail);
+      case 'stock_order':
+        return economy.handleStock(ctx, msg, fail);
+      case 'apt_buy':
+      case 'apt_sell':
+        return economy.handleHome(ctx, msg, fail);
+      case 'bank_quote':
+      case 'loan_take':
+      case 'loan_repay':
+        return economy.handleBank(ctx, msg, fail);
+      case 'rest_open':
+      case 'rest_close':
+      case 'rest_cook':
+      case 'rest_serve':
+        return economy.handleRestaurant(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -1000,6 +1074,16 @@ export function createServer(overrides = {}) {
       case 'donate':
       case 'set_face':
       case 'talk_topic':
+      case 'stock_order':
+      case 'apt_buy':
+      case 'apt_sell':
+      case 'bank_quote':
+      case 'loan_take':
+      case 'loan_repay':
+      case 'rest_open':
+      case 'rest_close':
+      case 'rest_cook':
+      case 'rest_serve':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -1121,6 +1205,8 @@ export function createServer(overrides = {}) {
       tickDrops(room, active, t);
       tickGrowth(room);
       tickMoods(room, weather, active.length > 0, t);
+      economy.tickWeek(room);
+      economy.tickRestaurant(room);
       if (weather === 'thunder' && t >= room.nextLightningAt) {
         if (room.nextLightningAt > 0) room.broadcast({ t: 'lightning', st: t, power: Math.round((0.6 + random() * 0.4) * 100) / 100 });
         room.nextLightningAt = t + cfg.lightningMinMs + random() * (cfg.lightningMaxMs - cfg.lightningMinMs);
@@ -1143,12 +1229,27 @@ export function createServer(overrides = {}) {
   const autosave = setInterval(() => rooms.saveDirtyRooms(), cfg.saveIntervalMs);
   autosave.unref?.();
 
+  // 증권시장: 1분마다 시세가 움직이고 모든 방에 알린다.
+  let marketBusy = false;
+  const marketTick = setInterval(async () => {
+    if (marketBusy) return;
+    marketBusy = true;
+    try {
+      const changed = await market.tick();
+      if (changed) economy.broadcastMarket(changed);
+    } finally {
+      marketBusy = false;
+    }
+  }, cfg.marketTickMs);
+
   return {
     wss,
     rooms,
     store,
     data,
     clock,
+    market,
+    economy,
     config: cfg,
     get port() {
       return wss.address().port;
@@ -1160,6 +1261,8 @@ export function createServer(overrides = {}) {
       clearInterval(worldTick);
       clearInterval(heartbeat);
       clearInterval(autosave);
+      clearInterval(marketTick);
+      market.save();
       for (const room of rooms.rooms.values()) {
         for (const p of room.players.values()) {
           clearTimeout(p.graceTimer);

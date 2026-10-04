@@ -42,6 +42,33 @@
         "paradise_fish",
         "lamprey"
       ]
+    },
+    {
+      "id": "seongseong",
+      "name": "성성호수",
+      "_comment": "천안 성성호수공원을 옮겨 온 첫 단계: 아파트 단지 남쪽 물가의 둥근 호수. 붕어·잉어·배스 같은 공원 호수 물고기.",
+      "x": 64.0,
+      "z": 48.0,
+      "half_x": 8.0,
+      "half_z": 5.5,
+      "cast_range": 3.5,
+      "fish": [
+        "crucian",
+        "carp",
+        "korean_minnow",
+        "pale_chub",
+        "loach",
+        "bluegill",
+        "bass",
+        "catfish",
+        "snakehead",
+        "mandarin",
+        "goldfish",
+        "golden_carp",
+        "eel",
+        "crayfish",
+        "softshell_turtle"
+      ]
     }
   ]
 }

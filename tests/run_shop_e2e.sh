@@ -10,7 +10,7 @@ cleanup() { kill "${SERVER_PID:-0}" 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
 
 (cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=200 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 \
-  WEATHER_FORCE=rain SHOP_POINTS_SCALE=20 START_SOL=2000 exec node src/index.js >"$DIR/server.log" 2>&1) &
+  WEATHER_FORCE=rain SHOP_POINTS_SCALE=20 START_SOL=200000 exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1
 

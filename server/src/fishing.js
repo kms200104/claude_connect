@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { ErrorCode, FishFail } from './protocol.js';
 import { distanceToSpot, pickFish } from './gamedata.js';
 import { addItem, canAdd, hasFreeSpace } from './inventory.js';
+import { earn } from './economy.js';
 
 /**
  * 낚시 판정(서버 권위).
@@ -126,6 +127,7 @@ export function createFishing({
     const contest = derby(player);
     const bonus = contest ? contest.def.bonus?.[session.fish.rarity] ?? 0 : 0;
     player.profile.sol += bonus;
+    earn(player.profile, bonus);
     onInventoryChanged(player, session.fish.id);
     end(player, bonus > 0 ? { ok: true, fish: session.fish.id, bonus } : { ok: true, fish: session.fish.id });
     return null;

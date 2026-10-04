@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "_comment": "솔바람 식당. 문을 연 사람의 가방 속 재료로 만들 수 있는 요리만 손님이 주문한다 (주문이 들어오면 그 재료를 미리 떼어 둔다). 별점 = 최근 손님 별점 평균 (처음 2.0). 별점이 오르면 까다롭지만 남는 게 많은 요리가 메뉴에 생긴다. 같은 요리에 4점 이상을 세 번 연속 주면 그 손님은 그 요리의 단골이 되어 그것만 시킨다.",
+  "name": "솔바람 식당",
+  "building": { "x": 36.0, "z": 24.0, "yaw": 0.0, "width": 10.0, "depth": 7.0 },
+  "counter": { "x": 36.0, "z": 28.4 },
+  "open_range": 2.6,
+  "seats": [
+    { "x": 32.2, "z": 31.2, "yaw": 3.14159 }, { "x": 34.2, "z": 31.2, "yaw": 3.14159 },
+    { "x": 38.0, "z": 31.2, "yaw": 3.14159 }, { "x": 40.0, "z": 31.2, "yaw": 3.14159 },
+    { "x": 32.2, "z": 34.4, "yaw": 0.0 }, { "x": 34.2, "z": 34.4, "yaw": 0.0 },
+    { "x": 38.0, "z": 34.4, "yaw": 0.0 }, { "x": 40.0, "z": 34.4, "yaw": 0.0 }
+  ],
+  "tables": [ { "x": 33.2, "z": 32.8 }, { "x": 39.0, "z": 32.8 } ],
+  "max_customers": 4,
+  "spawn_every_s": [7, 13],
+  "first_customer_s": 3,
+  "patience_s": [0, 70, 85, 100, 120, 140],
+  "idle_close_s": 180,
+  "tier_stars": [0, 0, 2.5, 3.3, 4.0, 4.6],
+  "rating": { "prior": 2.0, "prior_weight": 3, "window": 20 },
+  "regular": { "streak": 3, "min_stars": 4, "break_below": 3, "bonus": 0.1 },
+  "pay_by_stars": [0, 0.0, 0.8, 0.95, 1.05, 1.2],
+  "score_weights": { "quality": 0.6, "taste": 0.25, "time": 0.15 },
+  "mbti_style": { "F": { "time_floor": 0.5, "quality_power": 1.0 }, "T": { "time_floor": 0.0, "quality_power": 1.25 } },
+  "tastes": {
+    "morak": { "likes": ["light", "hearty", "fresh"], "dislikes": ["spicy"] },
+    "tongtong": { "likes": ["spicy", "hearty", "savory"], "dislikes": ["light"] },
+    "haerang": { "likes": ["fishy", "light"], "dislikes": ["fancy"] },
+    "mujin": { "likes": ["hearty", "savory", "spicy"], "dislikes": ["sweet"] },
+    "rara": { "likes": ["fancy", "fresh", "sweet"], "dislikes": ["hearty"] },
+    "danchu": { "likes": ["sweet", "fresh", "light"], "dislikes": ["fishy"] }
+  },
+  "visitors": [
+    { "id": "v_hiker", "name": "하늘", "about": "주말마다 섬 둘레길을 걷는 등산객", "mbti": "ESTP", "likes": ["hearty", "spicy"], "dislikes": ["fancy"], "look": { "hair": "#2A2222", "style": "short", "top": "#E06A3A", "bottom": "#3A4A5A", "shoes": "#5A4030", "eyes": "dot", "mouth": "open" } },
+    { "id": "v_student", "name": "콩이", "about": "시험 기간에 간식을 찾아오는 학생", "mbti": "ENFP", "likes": ["sweet", "savory"], "dislikes": ["spicy"], "look": { "hair": "#5A3A2A", "style": "pigtails", "top": "#F2C6DE", "bottom": "#3A3A5A", "shoes": "#E8E2D8", "eyes": "sparkle", "mouth": "tiny" } },
+    { "id": "v_office", "name": "박대리", "about": "점심시간에 들르는 회사원", "mbti": "ISTJ", "likes": ["savory", "hearty"], "dislikes": ["fishy"], "look": { "hair": "#1E1A1A", "style": "side", "top": "#F2F2F2", "bottom": "#2A2A3A", "shoes": "#1A1A1A", "eyes": "line", "mouth": "flat" } },
+    { "id": "v_angler", "name": "강태공", "about": "호숫가에 사는 낚시광 할아버지", "mbti": "ISFP", "likes": ["fishy", "spicy"], "dislikes": ["sweet"], "look": { "hair": "#D8D2C8", "style": "buzz", "top": "#6A8A5A", "bottom": "#5A4A3A", "shoes": "#4A3A2A", "eyes": "droopy", "nose": "big", "mouth": "smile" } },
+    { "id": "v_gourmet", "name": "미식가 쉐린", "about": "별점을 매기러 다니는 깐깐한 미식가", "mbti": "INTJ", "likes": ["fancy", "light"], "dislikes": ["hearty"], "look": { "hair": "#B9B7BD", "style": "bun", "top": "#2A2A2A", "bottom": "#2A2A2A", "shoes": "#8A1A2A", "eyes": "sharp", "nose": "long", "mouth": "smirk" } },
+    { "id": "v_tourist", "name": "루나", "about": "비행기를 타고 온 여행객", "mbti": "ENFJ", "likes": ["fresh", "sweet", "fancy"], "dislikes": ["spicy"], "look": { "hair": "#E2B860", "style": "long", "top": "#9EC1F2", "bottom": "#F4F1EA", "shoes": "#C8A060", "eyes": "bright", "eye_color": "#4F8FD6", "mouth": "smile" } }
+  ],
+  "forage": {
+    "items": [ { "id": "wild_greens", "weight": 4 }, { "id": "mugwort", "weight": 3 }, { "id": "shiitake", "weight": 3 }, { "id": "raspberry", "weight": 2 }, { "id": "wild_chive", "weight": 2 } ],
+    "max": 14,
+    "spawn_every_s": 75,
+    "radius": 80
+  }
+}

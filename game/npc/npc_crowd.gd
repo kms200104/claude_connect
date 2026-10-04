@@ -63,7 +63,8 @@ func nearest_talkable(position: Vector3, max_distance: float) -> String:
 	var best_d: float = max_distance
 	for id: String in _actors:
 		var a: NpcActor = _actors[id]
-		if a.talking_with != 0 and a.talking_with != Net.my_id:
+		# 식당 의자에 앉아 있는 동안(돌아다니는 모습을 숨긴 동안)은 말을 걸 수 없다.
+		if not a.visible or (a.talking_with != 0 and a.talking_with != Net.my_id):
 			continue
 		var d: float = Vector2(position.x - a.global_position.x, position.z - a.global_position.z).length()
 		if d <= best_d:

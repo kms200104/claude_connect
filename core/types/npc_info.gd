@@ -26,6 +26,10 @@ var topics: Dictionary[String, PackedStringArray] = {}
 var opinions: Dictionary[String, String] = {}
 ## 친해지면 가르쳐 주는 감정표현 (순서대로).
 var teaches: PackedStringArray = []
+## MBTI 네 글자 (data/npcs/mbti.json). T/F 가 공감 방식을 정한다 — F 는 감정적이고 잘 공감, T 는 해결책부터.
+var mbti: String = ""
+## "너는 어떤 사람이야?" 에 하는 자기소개.
+var mbti_self: String = ""
 
 
 static func from_dict(data: Dictionary) -> NpcInfo:
@@ -39,6 +43,8 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 	var by_personality: Dictionary = {"kind": 0.9, "lively": 1.3, "lazy": 0.95, "gruff": 0.72, "shopkeeper": 1.1, "snooty": 1.18, "dreamy": 1.08}
 	info.voice = float(data.get("voice", by_personality.get(info.personality, 1.0)))
 	info.catchphrase = str(data.get("catchphrase", ""))
+	info.mbti = str(data.get("mbti", ""))
+	info.mbti_self = str(data.get("mbti_self", ""))
 	info.hobby = str(data.get("hobby", ""))
 	for t: Variant in data.get("traits", []):
 		info.traits.append(str(t))
@@ -64,3 +70,13 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 	if waypoints is Array and not waypoints.is_empty() and waypoints[0] is Array:
 		info.home = Vector3(float(waypoints[0][0]), 0.0, float(waypoints[0][1]))
 	return info
+
+
+## MBTI 한 축 글자 (0 = E/I, 1 = S/N, 2 = T/F, 3 = J/P). 없으면 빈 문자열.
+func mbti_letter(axis: int) -> String:
+	return mbti[axis] if mbti.length() == 4 else ""
+
+
+## 공감을 잘하는 F 인지.
+func is_feeler() -> bool:
+	return mbti_letter(2) == "F"

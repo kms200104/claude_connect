@@ -55,7 +55,7 @@ func perform(emote_id: String) -> void:
 
 
 ## 주민이 누군가의 감정표현에 반응했다: 그 사람을 돌아보고 몸짓 + 성격·기분에 맞는 한마디.
-func _on_npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String) -> void:
+func _on_npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String, from: String = "") -> void:
 	var actor: NpcActor = npcs.actor(npc_id) if npcs != null else null
 	if actor == null:
 		return
@@ -63,5 +63,13 @@ func _on_npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: Stri
 	if to_player == Net.my_id and player != null:
 		actor.face_toward(player.global_position)
 	var values: Dictionary = {"player": GameData.player_name(to_player)}
-	var line: String = MoodSpeech.apply(GameData.dialogue_line(actor.info.personality, "react_" + emote_id, values), mood, actor.info)
+	# MBTI: 내 감정표현에 공감(F)하거나 덤덤하게(T) 반응한 거면 그 대사, 아니면 성격 대사.
+	var line: String = ""
+	var tf: String = actor.info.mbti_letter(2)
+	var empathy: Array = ((GameData.mbti.get("empathy", {}) as Dictionary).get(tf, {}) as Dictionary).get("react", {}).get(from, [])
+	if emote_id in empathy:
+		line = GameData.mbti_line("react_%s_%s" % [tf, from], values)
+	if line.is_empty():
+		line = GameData.dialogue_line(actor.info.personality, "react_" + emote_id, values)
+	line = MoodSpeech.apply(line, mood, actor.info)
 	actor.play_emote(emote_id, line)

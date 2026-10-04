@@ -107,6 +107,15 @@ export const defaultConfig = {
   startFriendship: num('START_FRIENDSHIP', 0),
   // 처음 들어온 사람에게 줄 물건 (시연·테스트용, "seed_tulip:5,acorn:2").
   startItems: process.env.START_ITEMS || '',
+  // 증권시장: 가격이 움직이는 간격(ms, 기본 1분), 외부 시세 서버 주소(비우면 내장 모의 거래소),
+  // 'krx' 면 장 시간(평일 9:00~15:30, 마을 시계)에만 거래.
+  marketTickMs: num('MARKET_TICK_MS', 60000),
+  marketFeedUrl: process.env.MARKET_FEED_URL || '',
+  marketHours: process.env.MARKET_HOURS || '',
+  // 식당 손님이 오는 간격 배율 (테스트·시연은 작게).
+  restSpawnScale: num('REST_SPAWN_SCALE', 1),
+  // 식당 처음 별점 기록 (시연용, 쉼표 목록 "5,5,5").
+  restStartHistory: process.env.REST_START_HISTORY || '',
 };
 
 // 슬롯(1부터)별 스폰 위치.

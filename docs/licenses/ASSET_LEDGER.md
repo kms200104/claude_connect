@@ -16,3 +16,6 @@
 | 효과음 (발소리 제외) · 첫 화면 음악 | `assets/audio/sfx/`, `assets/audio/music/title_theme.ogg` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |
 | 발소리 18개 (풀·흙·달리기·나무·돌·금속·물) | `assets/audio/sfx/step_*.wav` | Freesound (swuing · Ali_6868 · Eelke · EminYILDIRIM), 자세한 출처는 `assets/audio/CREDITS.md` | CC BY 3.0 (일부 CC0) — **출처 표시 필요** | 발소리 |
 | 마을 음악 4곡 (낮·밤·비·이벤트) | `assets/audio/music/{village,night,rain,event}_theme.ogg` | 받은 파일 (`game_audio.zip`) | **미기재 — 공개 전 확인 필요** | 배경음악 |
+| 식재료·요리 아이콘 38장 (v0.8) | `assets/icons/items/` (식재료 21) · `assets/icons/dishes/` (요리 17) | 게임 모형(`items.json` · `recipes.json` 의 model)을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 · 주문 말풍선 · 주방 창 |
+| 식당 효과음 6개 (v0.8) | `assets/audio/sfx/{cook_chop,cook_sizzle,cook_bubble,cook_plate,order_bell,cash_in}.wav` | `tools/audio/gen_cook_sfx.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 요리·주문·계산 |
+| 아파트·식당·부동산 부스 모형 (v0.8) | `game/places/apartment_site.gd` · `restaurant_site.gd` | 코드로 빚음 (`PartMesh`) | 프로젝트 | 마을 건물 |

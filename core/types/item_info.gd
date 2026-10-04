@@ -8,6 +8,8 @@ const KIND_FISH: String = "fish"
 const KIND_GOODS: String = "goods"
 const KIND_FURNITURE: String = "furniture"
 const KIND_CLOTHING: String = "clothing"
+## 식당 요리 재료 (상점에서 사거나 들판에서 캔다).
+const KIND_INGREDIENT: String = "ingredient"
 
 var id: String = ""
 var display_name: String = ""
@@ -91,6 +93,10 @@ func is_furniture() -> bool:
 	return kind == KIND_FURNITURE
 
 
+func is_ingredient() -> bool:
+	return kind == KIND_INGREDIENT
+
+
 func is_clothing() -> bool:
 	return kind == KIND_CLOTHING
 
@@ -108,6 +114,8 @@ func kind_label() -> String:
 			return "가구"
 		KIND_CLOTHING:
 			return "옷 · 모자" if wear_slot == "hat" else "옷 · 상의"
+		KIND_INGREDIENT:
+			return "식재료"
 		_:
 			return "재료"
 

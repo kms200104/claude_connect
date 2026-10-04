@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v7
+# 네트워크 프로토콜 v8
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -8,6 +8,7 @@ v3 → v4: 상점(드나들기·사고팔기·상점 포인트와 단계), 가�
 v4 → v5: 마을 이벤트(`ev`), 바닥의 선물·별 조각(`drop` `drop_gone` `collect`), 떠돌이 상인과 거래(`shop_sell`/`shop_buy` 의 `at: "merchant"`), 낚시 대회 상금(`fish_result.bonus`), 나무꾼의 날(`chop_result.n`).
 v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x z`)·꽃(`flower`, `pick`), 나무가 게임 시간으로 자람(`sprout`·`young` 단계), 감정표현(`emote` `emote_quick`, `act` 의 `kind: emote`)과 주민 반응(`npc_emote`), 주민 기분(`npcs` 의 `m`, `talk_open.m`), 대화 주제(`talk_topic`), 감정표현 배우기·주민 선물(`talk_open.teach` `gift`), 박물관 기증(`donate`, `museum`), 공항 기념품(`shop_buy` 의 `at: "airport"`). 저장 파일 schema 4.
 v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` → `face`), 프로필·플레이어 정보의 `face`, 에러 `not_near_mirror` `bad_face`. 저장 파일은 schema 4 그대로 (프로필에 `face` 가 없으면 자리 기본 얼굴).
+v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 값 ×100), 증권(`stock_order`, `market_tick`), 아파트(`apt_buy` `apt_sell`, `homes`), 은행(`bank_quote` `loan_take` `loan_repay`, `bank`, 주간 정산 `week`), 식당(`rest_open` `rest_close` `rest_cook` `rest_serve`, `rest` `rest_order` `rest_served` `rest_left` `rest_closed` `rest_result`), 들판 채집물(`drop.kind: "forage"`), 성성호수 낚시터(`fish_cast.spot: "seongseong"`), 대화 주제 `worry` `mbti`. `profile` 에 `stocks trades loans credit income worth`, `welcome` 에 `market homes rest`. 저장 파일 schema 5 (schema 4 이하의 솔·상점 포인트·부탁 보상은 읽을 때 ×100).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -44,8 +45,18 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 | `pick` | `rid id` | 활짝 핀 꽃 따기 (v6, `plant_range` 안). 꽃 아이템 1개, 꽃은 봉오리로 돌아간다 |
 | `emote` | `e` | 감정표현·몸짓 (v6). 배운 감정표현만(`unknown_emote`), 몸짓 `brake` 는 언제나. 0.7초 간격(몸짓은 0.2초). 결과 메시지 없음 — 상대에게 `act`, 근처 주민 반응은 `npc_emote` |
 | `emote_quick` | `quick[]` | 감정표현 퀵슬롯 순서 저장 (v6, 배운 것만, 4칸까지) → `profile` |
-| `talk_topic` | `topic` | 대화 중인 주민과 주제 수다 (v6): `mood hobby gossip fish past dream food you`. 하루 3번까지 친밀도 +1 → `talk_topic` |
+| `talk_topic` | `topic` | 대화 중인 주민과 주제 수다 (v6): `mood hobby gossip fish past dream food you` + v8 `worry`(고민 상담 — F 주민은 공감해 주고 친밀도 +1 더) `mbti`. 하루 3번까지 친밀도 +1 → `talk_topic` |
 | `donate` | `rid slot` | 박물관 관장 곁(`donate_range`)에서 칸의 물고기 기증 (v6). 한 종에 한 마리(`already_donated`), 물고기만(`not_fish`) |
+| `stock_order` | `rid id side qty` | 주식 시장가 주문 (v8). `side` = `buy`/`sell`, `qty` 1~`max_order_qty`. 지금 가격으로 바로 체결, 수수료 0.015%, 매도는 증권거래세 0.18%. 모르는 종목·수량은 `bad_order`, 장이 닫히면(`MARKET_HOURS=krx`) `market_closed`, 보유보다 많이 팔면 `not_enough_shares` → `stock_result` |
+| `apt_buy` | `rid unit loan` | 아파트 사기 (v8). `unit` = `"101-803"`(동-층호). 시세 + 취득세 1.1% + 중개보수 0.4% 를 솔 + 주택담보대출(`loan`, 시세 × LTV 70% 이하, DSR 40% 이하, 대출 6건까지)로 낸다. 이미 누가 가졌으면 `unit_taken`, 한도 초과 `loan_limit` → `apt_result`, 방 전체에 `homes` |
+| `apt_sell` | `rid unit` | 내 집 팔기 (v8). 시세 − 중개보수, 그 집 담보대출부터 갚고(모자라면 남은 빚은 신용대출로) 나머지가 솔로 → `apt_result`, `homes` |
+| `bank_quote` | | 은행 창구 정보 요청 (v8) → `bank` |
+| `loan_take` | `rid amount` | 신용대출 (v8). 10만 솔 이상(`bad_loan`), 남은 신용 한도·DSR·건수(`loan_limit`) 안에서 → `loan_result`, `bank` |
+| `loan_repay` | `rid id amount` | 대출 갚기 (v8, 원금에서 빠진다. 다 갚으면 목록에서 사라짐) → `loan_result`, `bank` |
+| `rest_open` | `rid` | 식당 문 열기 (v8). 카운터(`restaurant.json` 의 `counter`) `open_range` 2.6m(+0.5) 안(`not_at_restaurant`), 다른 사람이 열었으면 `rest_busy`. 문을 연 사람 가방의 재료로 장사한다 → `rest_opened`, `rest` |
+| `rest_close` | `rid` | 문 닫기 (연 사람만) → `rest_closed{reason: "closed"}` |
+| `rest_cook` | `order` | 이 주문 요리 시작 (v8). 서버가 시작 시각을 잰다 (결과 메시지 없음, `rest` 의 `cooking`) |
+| `rest_serve` | `rid order taps[][]` | 요리 내기 (v8). `taps[i]` = i번째 요리 동작을 시작하고 누른 시각들(ms). 요리 시작부터 가장 짧은 시간의 90% 보다 빠르면 `cook_too_fast`, 떠난 손님은 `order_gone`, 떼어 둔 재료가 가방에 없으면 `missing_ingredient`(손님이 떠난다) → `rest_result`, 방 전체에 `rest_served` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
 
 ## 서버 → 클라이언트
@@ -58,6 +69,19 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 | `snap` | `st p[]` | 위치 스냅샷 (방 단위, 변화가 있을 때만, 기본 20Hz) |
 | `correct` | `x y z` | 요청한 이동이 거부됨 → 이 위치로 되돌리기 |
 | `pong` | `c s` | `s` = 서버 시각(ms) |
+| `market_tick` | `minute open source q{id: 가격}` | 1분마다 바뀐 시세 (v8, 모든 방에 같은 값). `source` = `sim`(내장 모의 거래소) / `feed`(외부 시세 서버) |
+| `stock_result` | `rid id side qty price amount fee tax sol holding{q, cost}` | 주문 체결 (v8) |
+| `homes` | `index owners{unit: 자리} bought{unit: 산 값}` | 아파트 주인 목록과 집값 지수 (v8) |
+| `apt_result` | `rid kind unit price tax? fee loan? repaid? sol` | 아파트 사기(`kind: buy`)·팔기(`sell`) 결과 (v8) |
+| `bank` | `base score grade rate_credit rate_mortgage credit_limit ltv dsr income_year income_week week loans[]` | 은행 창구 정보 (v8) |
+| `loan_result` | `rid kind(take/repay) loan? id? paid? left? sol` | 대출·상환 결과 (v8) |
+| `week` | `week rent interest capitalized missed base index sol` | 한 주 정산 (v8): 월세 수입, 낸 이자, 못 내서 원금에 붙은 이자, 연체 여부, 새 기준금리·집값 지수 |
+| `rest` | `open owner rating tier served revenue regulars{손님: 요리} capacity shift{served, revenue} orders[]` | 식당 상태 (v8). `orders[]` = `{id, customer, dish, seat, left(ms), patience(ms), cooking, regular}`, `capacity` = 남은 재료로 더 만들 수 있는 그릇 수(예상) |
+| `rest_opened` / `rest_closed` | `rid` / `reason` | 문 열림 / 닫힘 (`closed` `owner_left` `idle` `no_ingredients`) |
+| `rest_order` | `order customer dish seat regular` | 손님이 앉아 주문 (v8) |
+| `rest_result` | `rid order stars pay quality taste sol` | 내가 낸 요리의 판정 (v8) |
+| `rest_served` | `order customer dish stars pay regular became lost by` | 누가 요리를 냈다 — 단골이 됐는지(`became`)·풀렸는지(`lost`) |
+| `rest_left` | `order customer dish reason lost` | 손님이 떠났다 (`late` 기다리다 지침 / `missing` 재료가 사라짐) — 별 1개 |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
 | `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
 | `fish_started` | `rid spot` | 던지기 수락 |
@@ -98,13 +122,15 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast`
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
 - `clock` = `{g, s, st}`: 서버 시각 `st`(ms)일 때 마을 시각이 `g`(마을 시간대 벽시계를 epoch ms로 나타낸 값)이고 `s`배로 흐른다. 클라이언트는 `g + (서버시각 − st) × s` 로 지금 마을 시각을 계산한다. 하루는 **새벽 5시**에 바뀐다.
 - `w` = 지금 날씨, `trees[]` = `{id, s, c}` 전체, `npcs[]` = 주민 위치 전체, `shop` = `shop` 메시지와 같은 모양, `placed[]` = 설치된 가구 전체.
-- `ev` = `ev` 메시지와 같은 모양(지금 열린 이벤트), `drops[]` = 바닥의 선물·별 조각 전체.
+- `ev` = `ev` 메시지와 같은 모양(지금 열린 이벤트), `drops[]` = 바닥의 선물·별 조각·채집물 전체.
+- `market` (v8) = `{minute, open, source, fee, tax, stocks[{id, name, sector, about, price, ref, hist[]}]}` — `ref` 는 오늘 기준가(어제 마지막 가격), `hist` 는 최근 120분 가격. `homes` = `homes` 메시지, `rest` = `rest` 메시지와 같은 모양.
+- `prof` 의 경제 정보 (v8): `stocks{id: {q, cost}}`, `trades[]`(최근 10건), `loans[{id, kind, principal, rate, unit, since, weekly}]`, `credit{score, grade}`, `income{week, year}`, `worth{assets, debt, net}`.
 
 ## 마을 이벤트 (서버 판정, `data/events/events.json`)
 - 날마다(새벽 5시 기준) 마을 시드와 날짜로 하루 이벤트를 뽑는다: 75% 확률로 아래 다섯 중 하나(가중치), 나머지는 이벤트 없는 날. 저장하지 않아도 언제 계산해도 같다(날씨와 같은 방식).
@@ -112,7 +138,7 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
   |---|---|---|---|
   | `bargain` | 특가 매입의 날 | 하루 종일 | 상점이 고른 물건(물고기 2 + 재료 1)을 2배 값에 사 준다 |
   | `merchant` | 떠돌이 상인 누리 | 9~21시 | 광장(`spot`)에 노점. 찾는 물건(물고기·소지품·재료 하나씩)을 2배 값에 사고, 보따리 물건 4가지를 판다 |
-  | `fishing_derby` | 호수 낚시 대회 | 9~18시 | 낚을 때마다 상금(흔한 40 · 조금 귀한 150 · 귀한 500솔), 귀한 물고기가 2.5배 잘 잡힌다 |
+  | `fishing_derby` | 호수 낚시 대회 | 9~18시 | 낚을 때마다 상금(흔한 4,000 · 조금 귀한 15,000 · 귀한 50,000솔), 귀한 물고기가 2.5배 잘 잡힌다 |
   | `lumber_day` | 나무꾼의 날 | 하루 종일 | 도끼질 한 번에 2개 |
   | `gift_day` | 선물 풍선의 날 | 8~19시 | 40초마다 선물 풍선이 마을에 내려앉는다(최대 4개). 주우면 클로버·꽃다발·바람개비 등 |
 - 밤 이벤트 `meteor_shower`(유성우)는 따로 35% 확률, 20~4시의 맑음·흐림에만. 30초마다 별 조각이 떨어진다(최대 5개).
@@ -172,8 +198,30 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 ## 심기 · 꽃 · 박물관 · 공항 (서버 판정, v6)
 - 심기: 손에 든 씨앗(`items.json` 의 `plant.tree` / `plant.flower`)을 하나 써서 심는다. 나무는 마을에 40그루, 꽃은 160송이까지(`plant_limit`). 자리 규칙은 `plant` 메시지 설명과 같다 (`badPlant`). 심은 나무는 다 자라면 데이터 나무처럼 베고 다시 자란다.
 - 꽃: 새싹 → 봉오리 → 활짝(`plants.json` 의 `minutes`, 수국은 비 오면 `rain_bonus` 배 빨리). 따면 꽃 아이템 1개, 봉오리로 돌아가 `rebloom_minutes` 뒤 다시 핀다.
-- 박물관: 관장 곁에서 한 종에 한 마리 기증, 마을 공용(`museum.fish`). 기증마다 `reward_sol`(50솔). 기증 수가 `milestones`(5·15·31)를 넘으면 그 기증을 한 사람에게 기념품 (가방이 차 있으면 다음 기증 때).
+- 박물관: 관장 곁에서 한 종에 한 마리 기증, 마을 공용(`museum.fish`). 기증마다 `reward_sol`(5,000솔). 기증 수가 `milestones`(5·15·31)를 넘으면 그 기증을 한 사람에게 기념품 (가방이 차 있으면 다음 기증 때).
 - 공항: 조종사 곁에서 `stock` 의 기념품만 산다. 비행기 이착륙은 서버 메시지 없이 마을 시계(`flight.cycle_minutes`)로 클라이언트가 계산한다.
+
+## 증권 (서버 판정, v8)
+- 종목 10개 (`data/market/stocks.json`), 서버 전체에 시장 하나 — 모든 방이 같은 시세를 본다. `MARKET_TICK_MS`(기본 60000)마다 한 번 움직인다.
+- 시세 출처: 내장 모의 거래소(종목마다 변동성 `vol`·추세 `drift`·평균 회귀·가끔 뉴스 급등락) 또는 외부 시세 서버 `MARKET_FEED_URL` — 1분마다 `GET` 해서 `{"quotes": {"SBE": 71200, …}}`(또는 `[{id, price}]`)를 받는다. 읽지 못하면 그 분은 모의 거래소로 움직이고 게임은 멈추지 않는다. 같은 형식의 연습용 서버: `node server/tools/market_server.js`.
+- 호가 단위(KRX), 하루 ±30% 가격 제한(어제 마지막 가격 기준), 시장가 즉시 체결. 장 시간은 기본 언제나 열림, `MARKET_HOURS=krx` 면 평일 9:00~15:30(마을 시계).
+- 시세는 `<SAVE_DIR>/market.json` 에 저장해 서버를 다시 켜도 이어진다.
+
+## 아파트 · 은행 (서버 판정, v8)
+- 솔바람 성성호수 푸르지오 (`data/realestate/apartments.json`): 3개 동 × 10층 × 2호 = 60호. 1~9층은 59㎡ / 84㎡, 꼭대기 층은 114㎡. 시세 = 평형 기준가 × (1 + 층 할증 + 동 할증) × 마을 집값 지수 (만 원 단위). 한 집은 한 사람만, 마을(방) 단위로 저장.
+- 한 주 = 마을 날짜 7일 (`floor(day / 7)`). 주가 바뀌면 방마다: 집마다 월세(시세 × 3.5% / 52)가 들어오고, 대출마다 이자(원금 × 금리 / 52, 올림)가 솔에서 빠진다. 솔이 모자라면 낸 만큼 내고 나머지는 원금에 붙고 연체 1회. 그 뒤 기준금리(12% 확률로 ±0.25%p, 1.5~4.5%)와 집값 지수(로그 정규, 주 +0.15% 추세 · 0.6% 변동)가 한 걸음 움직인다. 오래 비운 마을은 4주까지만 몰아서 계산한다.
+- 신용점수 0~1000 (`data/bank/bank.json`): 720 에서 시작, 꼬박꼬박 낸 주 +6, 연체 −45, 연 소득 1천만 솔마다 +12(최대 90), 거래 주 +4(최대 40), 빚/자산이 50% 를 넘은 만큼 × 220 감점. 점수 → 1~10등급(KCB 식 구간). 금리 = 기준금리 + 등급 가산금리(신용 / 주택담보), 최대 19.9%. 매주 새 점수로 다시 매긴다(변동금리).
+- 소득 = 번 돈(팔기·부탁 보상·박물관·낚시 대회·월세·식당) 기록, 연 소득 = 최근 4주 평균 × 52. 신용대출 한도 = max(300만, 연 소득 × 1.5) × 등급 배수 (최대 1.5억) − 이미 빌린 신용대출. DSR: (원금 × 금리 + 원금/30) 합 / 연 소득 ≤ 40%. 소득이 없으면 300만 솔까지 신용대출만.
+
+## 식당 (서버 판정, v8)
+- 솔바람 식당 (`data/restaurant/restaurant.json`, 요리는 `recipes.json`). 한 마을에 한 사람이 문을 연다 — 손님은 **문을 연 사람 가방의 재료로 만들 수 있는 요리만** 주문하고, 주문이 들어오는 순간 그 재료를 떼어 둔다(다른 주문이 같은 재료를 겹쳐 쓰지 않는다). 그래서 재료가 모자란 주문은 들어오지 않는다. 시킬 게 없고 앉은 손님도 없으면 `no_ingredients` 로 닫는다.
+- 재료: 상점 식재료(1단계 13종, 2단계 감자·버터·레몬), 들판 채집물(산나물·쑥·표고·산딸기·달래, 75초마다 섬 곳곳에 돋아남, 최대 14개), 물고기. `fish: common` 은 그 희귀도 이하 아무 물고기(싼 것부터), `item_any` 는 목록 중 하나.
+- 별점 = 최근 20명의 별점 평균(처음엔 2.0 으로 기운다, 가중치 3). 별점이 2.5 · 3.3 · 4.0 · 4.6 을 넘으면 2~5단계 요리가 열린다 — 높은 단계일수록 비싸지만 동작이 많고 판정 창이 좁다. 1단계는 물고기 한 마리 구이처럼 쉽고 마진이 적다.
+- 요리 동작: `beats`(박자마다 가장 가까운 누름과의 차이), `timing`(한 번 누른 시각과 딱 좋은 때의 차이), `mash`(시간 안에 누른 횟수, 50ms 보다 촘촘한 누름은 세지 않음). 솜씨 = 동작 평균.
+- 손님 별점(1~5) = 1 + 4 × (0.6 × 솜씨 + 0.25 × 입맛 + 0.15 × 시간). 입맛 = 좋아하는 맛 태그 +0.25, 싫어하는 맛 −0.4. MBTI: F 손님은 늦어도 시간 점수가 0.5 아래로 안 떨어지고, T 손님은 솜씨를 1.25 제곱해서 본다. 받는 돈 = 값 × (0.8 · 0.95 · 1.05 · 1.2, 별 2~5) (+단골 10%).
+- 단골: 같은 요리에 4점 이상을 3번 연속 주면 단골 — 그 손님은 그 요리만 시킨다(재료가 없으면 시키지 않는다). 3점 아래를 주면 풀린다. 기다리다 떠나면 별 1개.
+- 손님 = 주민 6명(각자 입맛) + 섬 밖 손님 6명(등산객·학생·직장인·낚시꾼·미식가·여행객). 기다림은 단계마다 70~140초. 주인이 접속을 끊으면 닫는다, 3분 동안 손님이 없어도 닫는다.
+- 시연·테스트: `REST_SPAWN_SCALE=0.05`(손님 빨리), `REST_START_HISTORY=5,5,4`(처음 별점 기록).
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).
@@ -188,8 +236,9 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 
 ## 저장
 방(마을) 하나 = JSON 파일 하나: `<SAVE_DIR>/<방코드>.json`
-(`schema: 4`, `createdAt`, `world{totalCatches, species, weatherSeed, trees{<id>: {s, c, d, t}}, shopPoints, placed[], placedSeq, planted[{id, kind, x, z, by, st}], plantSeq, flowers[{id, sp, c, x, z, s, t, by}], flowerSeq, museum{fish{}, claimed[]}}`,
+(`schema: 5`, `createdAt`, `world{totalCatches, species, weatherSeed, trees{<id>: {s, c, d, t}}, shopPoints, placed[], placedSeq, planted[{id, kind, x, z, by, st}], plantSeq, flowers[{id, sp, c, x, z, s, t, by}], flowerSeq, museum{fish{}, claimed[]}}`,
 `profiles{<uid>: {slot, slots, held, sol, catches, x, y, z, yaw, npcs{<id>: {f, talkDay, offerDay, giftDay, emoteDay, chatDay, chatCount}}, quests[], questSeq, lastQuestDay, outfit{hat, top}, emotes{known[], quick[]}}}`).
+- v8 (schema 5): `world` 에 `homes{unit: {owner, price, day}}`, `aptIndex`, `baseRate`, `week`, `restaurant{history[], regulars{}, served, revenue}`, 프로필에 `stocks{} trades[] loans[] loanSeq credit{paid, missed, weeks} income{amount, history[]}`. schema 4 이하는 읽을 때 솔·상점 포인트·부탁 보상을 ×100 (현실 화폐 단위).
 - schema 3 파일도 그대로 읽는다: 나무 상태의 `t`(단계 시작 게임 시각)가 없으면 0 으로 보고 다음 틱에 다 자란다, 감정표현은 '안녕'부터.
 - 사람은 `uid`로 구분한다. 서버가 재시작되어 `token`이 사라져도, 클라이언트가 방 코드 + `uid`로 `join`하면 같은 자리·인벤토리·위치로 돌아온다(클라이언트가 `resume_failed` 뒤 자동으로 시도).
 - 아이템 수가 바뀌는 일(낚시·도끼질·버리기·부탁 완료·사고팔기·가구 설치/줍기·옷 입기/벗기)과 부탁·친밀도·상점 포인트 변화, 입퇴장은 즉시 저장한다. 칸 옮기기·손에 든 칸·위치는 5초 주기로 저장한다. 쓰기는 임시 파일 → rename 으로 원자적이다. 종료 시에는 메모리의 방을 전부 저장한다.

@@ -60,7 +60,7 @@ func _refresh_weather() -> void:
 
 
 func _refresh_profile() -> void:
-	_sol.text = "%s솔" % InventoryWindow._format_number(Net.sol)
+	_sol.text = Money.short(Net.sol)
 	_quest_button.text = "부탁 %d" % Net.quests.size()
 	for child: Node in _list.get_children():
 		child.queue_free()
@@ -71,7 +71,7 @@ func _refresh_profile() -> void:
 	for q: QuestInfo in Net.quests:
 		var due: String = "오늘까지" if q.expires_day <= today else "내일까지"
 		var state: String = "완료 가능!" if q.is_ready() else "%d/%d" % [mini(q.have, q.count), q.count]
-		var text: String = "%s · %s (%s) · %d솔 · %s" % [GameData.npc_name(q.npc), DialogueController.describe_quest(q), state, q.reward, due]
+		var text: String = "%s · %s (%s) · %s · %s" % [GameData.npc_name(q.npc), DialogueController.describe_quest(q), state, Money.sol(q.reward), due]
 		_list.add_child(_line(text, Color(0.2, 0.55, 0.3) if q.is_ready() else Color(0.3, 0.24, 0.18)))
 
 

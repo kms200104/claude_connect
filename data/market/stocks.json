@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "_comment": "모의 증권시장. 가격은 1분마다 움직인다 (서버 market.js). 수수료·세금·호가 단위·하루 가격 제한은 한국 주식시장(KRX)을 따랐다. feed_symbol 은 외부 시세 서버와 연동할 때 쓰는 실제 종목 코드 (MARKET_FEED_URL, docs/protocol.md 참고).",
+  "fee_rate": 0.00015,
+  "sell_tax_rate": 0.0018,
+  "daily_limit": 0.30,
+  "tick_minutes": 1,
+  "history_minutes": 240,
+  "always_open": true,
+  "hours": { "open": 9.0, "close": 15.5, "weekdays": [1, 2, 3, 4, 5] },
+  "max_order_qty": 100000,
+  "news_chance": 0.004,
+  "news_size": [0.02, 0.07],
+  "reversion": 0.002,
+  "stocks": [
+    { "id": "SBE", "name": "솔바람전자", "sector": "반도체", "price": 72000, "vol": 0.0016, "drift": 0.00001, "feed_symbol": "005930.KS", "about": "마을 이름을 딴 반도체 회사. 시가총액 1위." },
+    { "id": "HSB", "name": "호수바이오", "sector": "바이오", "price": 18500, "vol": 0.0035, "drift": 0.0, "feed_symbol": "207940.KS", "about": "성성호수 미생물로 신약을 만든다는 바이오 회사. 오르내림이 크다." },
+    { "id": "CAM", "name": "천안모빌리티", "sector": "자동차", "price": 215000, "vol": 0.0018, "drift": 0.00001, "feed_symbol": "005380.KS", "about": "전기 자전거부터 자동차까지." },
+    { "id": "SSC", "name": "성성건설", "sector": "건설", "price": 9800, "vol": 0.0022, "drift": 0.0, "feed_symbol": "000720.KS", "about": "호숫가 아파트를 짓는 건설사. 부동산 경기를 탄다." },
+    { "id": "GRT", "name": "구름통신", "sector": "통신", "price": 38000, "vol": 0.0009, "drift": 0.000005, "feed_symbol": "017670.KS", "about": "잔잔한 통신주. 크게 오르지도 내리지도 않는다." },
+    { "id": "BYE", "name": "별빛엔터", "sector": "엔터", "price": 54000, "vol": 0.0030, "drift": 0.0, "feed_symbol": "352820.KS", "about": "마을 출신 아이돌 기획사. 소식 하나에 출렁인다." },
+    { "id": "DBF", "name": "달보식품", "sector": "식품", "price": 126000, "vol": 0.0011, "drift": 0.000008, "feed_symbol": "097950.KS", "about": "상점 주인 달보의 집안이 세운 식품 회사." },
+    { "id": "SBB", "name": "솔바람은행", "sector": "금융", "price": 61000, "vol": 0.0012, "drift": 0.000006, "feed_symbol": "105560.KS", "about": "마을 대출을 맡고 있는 은행." },
+    { "id": "NRA", "name": "누리항공", "sector": "항공", "price": 23400, "vol": 0.0024, "drift": 0.0, "feed_symbol": "003490.KS", "about": "떠돌이 상인 누리가 세웠다는 항공사. 공항의 빨간 비행기." },
+    { "id": "HDS", "name": "한들소프트", "sector": "게임", "price": 165000, "vol": 0.0028, "drift": 0.0, "feed_symbol": "036570.KS", "about": "모바일 게임 회사. 신작 소식에 크게 움직인다." }
+  ]
+}

@@ -75,7 +75,7 @@ export function makeQuest({ rules, data, npcDef, random, hour, weather, today, s
   if (t.kind === QuestKind.deliverFish) {
     const fish = pickWeighted(fishNow, (f) => f.weight, random);
     quest.item = fish.id;
-    quest.reward = t.reward_by_rarity[fish.rarity] ?? 200;
+    quest.reward = t.reward_by_rarity[fish.rarity] ?? 20000;
   }
   return quest;
 }

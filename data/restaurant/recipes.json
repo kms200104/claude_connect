@@ -1,0 +1,2066 @@
+{
+ "version": 1,
+ "_comment": "식당 요리. tier = 문을 연 식당의 별점으로 열리는 단계 (restaurant.json 의 tier_stars). ingredients: item(그 아이템), item_any(이 중 하나), fish(그 희귀도 이하 아무 물고기: common < uncommon < rare). steps = restaurant.json 의 요리 동작. price 는 손님이 내는 값 (별점에 따라 더하고 뺀다).",
+ "steps": {
+  "chop": {
+   "label": "썰기",
+   "kind": "beats",
+   "beats": 4,
+   "interval_ms": 480,
+   "window_ms": 170,
+   "anim": "cook_chop",
+   "tool": "knife"
+  },
+  "chop_fine": {
+   "label": "곱게 다지기",
+   "kind": "beats",
+   "beats": 6,
+   "interval_ms": 340,
+   "window_ms": 110,
+   "anim": "cook_chop",
+   "tool": "knife"
+  },
+  "grill": {
+   "label": "굽기",
+   "kind": "timing",
+   "ideal_ms": 2600,
+   "window_ms": 430,
+   "anim": "cook_stir",
+   "tool": "pan"
+  },
+  "grill_hard": {
+   "label": "센 불 굽기",
+   "kind": "timing",
+   "ideal_ms": 1900,
+   "window_ms": 220,
+   "anim": "cook_stir",
+   "tool": "pan"
+  },
+  "fry_flip": {
+   "label": "뒤집기",
+   "kind": "timing",
+   "ideal_ms": 1700,
+   "window_ms": 300,
+   "anim": "cook_flip",
+   "tool": "pan"
+  },
+  "boil": {
+   "label": "끓이기",
+   "kind": "timing",
+   "ideal_ms": 3000,
+   "window_ms": 470,
+   "anim": "cook_stir",
+   "tool": "ladle"
+  },
+  "simmer": {
+   "label": "졸이기",
+   "kind": "timing",
+   "ideal_ms": 3400,
+   "window_ms": 380,
+   "anim": "cook_stir",
+   "tool": "ladle"
+  },
+  "simmer_hard": {
+   "label": "딱 맞게 졸이기",
+   "kind": "timing",
+   "ideal_ms": 3800,
+   "window_ms": 240,
+   "anim": "cook_stir",
+   "tool": "ladle"
+  },
+  "mix": {
+   "label": "무치기",
+   "kind": "mash",
+   "taps": 10,
+   "duration_ms": 2600,
+   "anim": "cook_mix",
+   "tool": ""
+  },
+  "mix_hard": {
+   "label": "힘껏 비비기",
+   "kind": "mash",
+   "taps": 16,
+   "duration_ms": 2600,
+   "anim": "cook_mix",
+   "tool": ""
+  },
+  "plate": {
+   "label": "담기",
+   "kind": "timing",
+   "ideal_ms": 1300,
+   "window_ms": 280,
+   "anim": "cook_plate",
+   "tool": ""
+  },
+  "plate_hard": {
+   "label": "예쁘게 담기",
+   "kind": "timing",
+   "ideal_ms": 950,
+   "window_ms": 150,
+   "anim": "cook_plate",
+   "tool": ""
+  }
+ },
+ "recipes": [
+  {
+   "id": "grilled_fish",
+   "name": "생선 소금구이",
+   "tier": 1,
+   "price": 9000,
+   "tags": [
+    "fishy",
+    "savory",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "fish": "common",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "grill",
+    "plate"
+   ],
+   "desc": "흔한 물고기 한 마리를 소금만 뿌려 구웠다. 가장 쉽고 마진은 적다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.16,
+      0.045,
+      0.06
+     ],
+     "at": [
+      0,
+      0.06,
+      0
+     ],
+     "c": [
+      "#B8763A",
+      "#E0A860"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.04,
+      0.05
+     ],
+     "at": [
+      0.15,
+      0.06,
+      0
+     ],
+     "c": "#C08848"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.012,
+      0.012,
+      0.012
+     ],
+     "at": [
+      -0.12,
+      0.08,
+      0.03
+     ],
+     "c": "#2A1A12"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.03,
+      0.02,
+      0.03
+     ],
+     "at": [
+      0.06,
+      0.05,
+      0.09
+     ],
+     "c": "#F5D63A"
+    }
+   ]
+  },
+  {
+   "id": "rice_ball",
+   "name": "김 주먹밥",
+   "tier": 1,
+   "price": 2800,
+   "tags": [
+    "light",
+    "savory"
+   ],
+   "ingredients": [
+    {
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "item": "laver",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "mix",
+    "plate"
+   ],
+   "desc": "밥을 꼭꼭 뭉쳐 김을 둘렀다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.09,
+      0.08,
+      0.07
+     ],
+     "at": [
+      0,
+      0.08,
+      0
+     ],
+     "c": [
+      "#E8E2D0",
+      "#FFFFFF"
+     ]
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.12,
+      0.06,
+      0.075
+     ],
+     "at": [
+      0,
+      0.06,
+      0
+     ],
+     "c": "#24302A",
+     "r": 0.2
+    }
+   ]
+  },
+  {
+   "id": "herb_salad",
+   "name": "산나물 무침",
+   "tier": 1,
+   "price": 4500,
+   "tags": [
+    "fresh",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "item": "wild_greens",
+     "n": 1
+    },
+    {
+     "item": "sesame_oil",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "mix",
+    "plate"
+   ],
+   "desc": "들에서 뜯은 나물을 참기름에 조물조물.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.13,
+      0.05,
+      0.11
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#4E8A3A",
+      "#8ACB64"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.02,
+      0.01,
+      0.02
+     ],
+     "at": [
+      0.04,
+      0.09,
+      0.02
+     ],
+     "c": "#F2E6C8"
+    }
+   ]
+  },
+  {
+   "id": "mushroom_skewer",
+   "name": "표고 꼬치구이",
+   "tier": 1,
+   "price": 5200,
+   "tags": [
+    "savory",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "item": "shiitake",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "grill",
+    "plate"
+   ],
+   "desc": "표고버섯을 꼬치에 꿰어 구웠다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "rod",
+     "size": [
+      0.01,
+      0.01
+     ],
+     "at": [
+      -0.17,
+      0.06,
+      0
+     ],
+     "to": [
+      0.17,
+      0.06,
+      0
+     ],
+     "c": "#C8A06A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.06,
+      0.03,
+      0.06
+     ],
+     "at": [
+      -0.08,
+      0.07,
+      0
+     ],
+     "c": "#7A4A2E"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.06,
+      0.03,
+      0.06
+     ],
+     "at": [
+      0.0,
+      0.07,
+      0
+     ],
+     "c": "#6A4028"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.06,
+      0.03,
+      0.06
+     ],
+     "at": [
+      0.08,
+      0.07,
+      0
+     ],
+     "c": "#7A4A2E"
+    }
+   ]
+  },
+  {
+   "id": "egg_rice",
+   "name": "간장 계란밥",
+   "tier": 2,
+   "price": 7000,
+   "tags": [
+    "savory",
+    "hearty"
+   ],
+   "ingredients": [
+    {
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "item": "egg",
+     "n": 2
+    },
+    {
+     "item": "soy_sauce",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "fry_flip",
+    "mix",
+    "plate"
+   ],
+   "desc": "반숙 계란 두 개에 간장 한 숟갈. 누구나 좋아하는 맛.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#F2EEE6"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#F2EEE6",
+     "r": 0.005
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.12,
+      0.03,
+      0.12
+     ],
+     "at": [
+      0,
+      0.1,
+      0
+     ],
+     "c": "#FFFFFF"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.02,
+      0.04
+     ],
+     "at": [
+      0.02,
+      0.12,
+      0.01
+     ],
+     "c": "#F5B82A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.035,
+      0.018,
+      0.035
+     ],
+     "at": [
+      -0.04,
+      0.12,
+      -0.03
+     ],
+     "c": "#F5B82A"
+    }
+   ]
+  },
+  {
+   "id": "loach_soup",
+   "name": "추어탕",
+   "tier": 2,
+   "price": 18000,
+   "tags": [
+    "hearty",
+    "savory",
+    "fishy"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "loach"
+     ],
+     "n": 2
+    },
+    {
+     "item": "doenjang",
+     "n": 1
+    },
+    {
+     "item": "scallion",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "boil",
+    "plate"
+   ],
+   "desc": "미꾸라지를 곱게 갈아 된장에 푹 끓였다. 기운 나는 한 그릇.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#E8DCC6"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#8A5A28",
+     "r": 0.005
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.01,
+      0.03
+     ],
+     "at": [
+      0.03,
+      0.105,
+      0.02
+     ],
+     "c": "#6FB04A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.03,
+      0.01,
+      0.02
+     ],
+     "at": [
+      -0.04,
+      0.105,
+      -0.01
+     ],
+     "c": "#6FB04A"
+    }
+   ]
+  },
+  {
+   "id": "braised_fish",
+   "name": "무 생선조림",
+   "tier": 2,
+   "price": 22000,
+   "tags": [
+    "savory",
+    "spicy",
+    "fishy"
+   ],
+   "ingredients": [
+    {
+     "fish": "common",
+     "n": 1
+    },
+    {
+     "item": "radish",
+     "n": 1
+    },
+    {
+     "item": "soy_sauce",
+     "n": 1
+    },
+    {
+     "item": "chili",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "simmer",
+    "plate"
+   ],
+   "desc": "무를 깔고 생선을 올려 간장·고춧가루로 자작하게.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#F2EEE6"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.17,
+      0.04,
+      0.12
+     ],
+     "at": [
+      0,
+      0.04,
+      0
+     ],
+     "c": "#A8402A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.15,
+      0.04,
+      0.055
+     ],
+     "at": [
+      0,
+      0.075,
+      0
+     ],
+     "c": [
+      "#9A5A2A",
+      "#C0783A"
+     ]
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.06,
+      0.03,
+      0.06
+     ],
+     "at": [
+      0.1,
+      0.06,
+      0.06
+     ],
+     "c": "#F2E6D0",
+     "r": 0.3
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.06,
+      0.03,
+      0.06
+     ],
+     "at": [
+      -0.1,
+      0.06,
+      -0.05
+     ],
+     "c": "#F2E6D0",
+     "r": 0.3
+    }
+   ]
+  },
+  {
+   "id": "mushroom_jeon",
+   "name": "표고버섯전",
+   "tier": 2,
+   "price": 13000,
+   "tags": [
+    "savory",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "item": "shiitake",
+     "n": 2
+    },
+    {
+     "item": "flour",
+     "n": 1
+    },
+    {
+     "item": "egg",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "fry_flip",
+    "plate"
+   ],
+   "desc": "표고에 밀가루·달걀 옷을 입혀 노릇하게 부쳤다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.07,
+      0.02,
+      0.07
+     ],
+     "at": [
+      -0.07,
+      0.04,
+      0
+     ],
+     "c": [
+      "#D8A040",
+      "#F2C860"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.07,
+      0.02,
+      0.07
+     ],
+     "at": [
+      0.07,
+      0.04,
+      0.02
+     ],
+     "c": [
+      "#D8A040",
+      "#F2C860"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.07,
+      0.02,
+      0.07
+     ],
+     "at": [
+      0,
+      0.05,
+      -0.08
+     ],
+     "c": [
+      "#D8A040",
+      "#F2C860"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "spicy_fish_stew",
+   "name": "민물 매운탕",
+   "tier": 3,
+   "price": 42000,
+   "tags": [
+    "spicy",
+    "hearty",
+    "fishy"
+   ],
+   "ingredients": [
+    {
+     "fish": "common",
+     "n": 2
+    },
+    {
+     "item": "radish",
+     "n": 1
+    },
+    {
+     "item": "chili",
+     "n": 2
+    },
+    {
+     "item": "scallion",
+     "n": 1
+    },
+    {
+     "item": "tofu",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "boil",
+    "simmer",
+    "plate"
+   ],
+   "desc": "물고기 두 마리에 무·두부·고추를 넣고 칼칼하게.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#3A3A3A"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#C8402A",
+     "r": 0.005
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.04,
+      0.03,
+      0.04
+     ],
+     "at": [
+      0.04,
+      0.11,
+      0.02
+     ],
+     "c": "#FFFFFF",
+     "r": 0.2
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.04,
+      0.03,
+      0.04
+     ],
+     "at": [
+      -0.03,
+      0.11,
+      -0.04
+     ],
+     "c": "#FFFFFF",
+     "r": 0.2
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.03,
+      0.01,
+      0.02
+     ],
+     "at": [
+      0,
+      0.11,
+      0.05
+     ],
+     "c": "#6FB04A"
+    }
+   ]
+  },
+  {
+   "id": "catfish_stew",
+   "name": "메기 매운탕",
+   "tier": 3,
+   "price": 72000,
+   "tags": [
+    "spicy",
+    "hearty",
+    "fishy"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "catfish"
+     ],
+     "n": 1
+    },
+    {
+     "item": "chili",
+     "n": 2
+    },
+    {
+     "item": "radish",
+     "n": 1
+    },
+    {
+     "item": "tofu",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "boil",
+    "simmer",
+    "plate"
+   ],
+   "desc": "통통한 메기 한 마리로 끓인 진한 매운탕.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#3A3A3A"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#B83A22",
+     "r": 0.005
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.09,
+      0.03,
+      0.04
+     ],
+     "at": [
+      0,
+      0.115,
+      0
+     ],
+     "c": "#6A5A4A"
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.04,
+      0.03,
+      0.04
+     ],
+     "at": [
+      -0.06,
+      0.11,
+      0.03
+     ],
+     "c": "#FFFFFF",
+     "r": 0.2
+    }
+   ]
+  },
+  {
+   "id": "herb_bibimbap",
+   "name": "산나물 비빔밥",
+   "tier": 3,
+   "price": 19000,
+   "tags": [
+    "fresh",
+    "hearty",
+    "spicy"
+   ],
+   "ingredients": [
+    {
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "item": "wild_greens",
+     "n": 1
+    },
+    {
+     "item": "mugwort",
+     "n": 1
+    },
+    {
+     "item": "egg",
+     "n": 1
+    },
+    {
+     "item": "sesame_oil",
+     "n": 1
+    },
+    {
+     "item": "chili",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop",
+    "mix_hard",
+    "plate"
+   ],
+   "desc": "나물 두 가지에 계란 프라이, 고추장 한 숟갈.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#3A3A3A"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#F2EEE6",
+     "r": 0.005
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.015,
+      0.04
+     ],
+     "at": [
+      0.04,
+      0.105,
+      0.03
+     ],
+     "c": "#4E8A3A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.015,
+      0.04
+     ],
+     "at": [
+      -0.04,
+      0.105,
+      0.03
+     ],
+     "c": "#8AA870"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.015,
+      0.05
+     ],
+     "at": [
+      0,
+      0.11,
+      -0.04
+     ],
+     "c": "#FFFFFF"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.02,
+      0.012,
+      0.02
+     ],
+     "at": [
+      0,
+      0.12,
+      -0.04
+     ],
+     "c": "#F5B82A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.025,
+      0.012,
+      0.02
+     ],
+     "at": [
+      0.0,
+      0.115,
+      0.05
+     ],
+     "c": "#C8402A"
+    }
+   ]
+  },
+  {
+   "id": "eel_rice",
+   "name": "장어 덮밥",
+   "tier": 4,
+   "price": 120000,
+   "tags": [
+    "savory",
+    "sweet",
+    "hearty",
+    "fancy"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "eel"
+     ],
+     "n": 1
+    },
+    {
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "item": "soy_sauce",
+     "n": 1
+    },
+    {
+     "item": "sugar",
+     "n": 1
+    },
+    {
+     "item": "scallion",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "grill_hard",
+    "simmer",
+    "plate_hard"
+   ],
+   "desc": "달콤 짭조름한 양념을 발라 구운 장어를 밥 위에.",
+   "model": [
+    {
+     "s": "rbox",
+     "size": [
+      0.3,
+      0.08,
+      0.2
+     ],
+     "at": [
+      0,
+      0.04,
+      0
+     ],
+     "c": [
+      "#3A1A12",
+      "#5A2A1A"
+     ],
+     "r": 0.2
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.26,
+      0.02,
+      0.16
+     ],
+     "at": [
+      0,
+      0.085,
+      0
+     ],
+     "c": "#FFFFFF",
+     "r": 0.3
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.12,
+      0.03,
+      0.07
+     ],
+     "at": [
+      -0.06,
+      0.105,
+      0
+     ],
+     "c": [
+      "#7A3A1A",
+      "#B0602A"
+     ],
+     "r": 0.4
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.12,
+      0.03,
+      0.07
+     ],
+     "at": [
+      0.06,
+      0.105,
+      0
+     ],
+     "c": [
+      "#7A3A1A",
+      "#B0602A"
+     ],
+     "r": 0.4
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.02,
+      0.01,
+      0.02
+     ],
+     "at": [
+      0,
+      0.125,
+      0.03
+     ],
+     "c": "#6FB04A"
+    }
+   ]
+  },
+  {
+   "id": "steamed_mandarin",
+   "name": "쏘가리찜",
+   "tier": 4,
+   "price": 95000,
+   "tags": [
+    "light",
+    "fancy",
+    "fishy"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "mandarin"
+     ],
+     "n": 1
+    },
+    {
+     "item": "garlic",
+     "n": 2
+    },
+    {
+     "item": "soy_sauce",
+     "n": 1
+    },
+    {
+     "item": "scallion",
+     "n": 1
+    },
+    {
+     "item": "radish",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "boil",
+    "simmer",
+    "plate_hard"
+   ],
+   "desc": "귀한 쏘가리를 마늘·간장 양념으로 쪄 냈다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#F2EEE6"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.17,
+      0.045,
+      0.06
+     ],
+     "at": [
+      0,
+      0.06,
+      0
+     ],
+     "c": [
+      "#C8A070",
+      "#E8C890"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.02,
+      0.01,
+      0.03
+     ],
+     "at": [
+      0.05,
+      0.1,
+      0.02
+     ],
+     "c": "#6FB04A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.02,
+      0.01,
+      0.03
+     ],
+     "at": [
+      -0.05,
+      0.1,
+      -0.01
+     ],
+     "c": "#6FB04A"
+    }
+   ]
+  },
+  {
+   "id": "trout_butter",
+   "name": "무지개송어 버터구이",
+   "tier": 4,
+   "price": 260000,
+   "tags": [
+    "fancy",
+    "savory",
+    "fresh"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "rainbow_trout",
+      "cherry_salmon"
+     ],
+     "n": 1
+    },
+    {
+     "item": "butter",
+     "n": 1
+    },
+    {
+     "item": "lemon",
+     "n": 1
+    },
+    {
+     "item": "garlic",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "grill_hard",
+    "fry_flip",
+    "plate_hard"
+   ],
+   "desc": "버터에 노릇하게 구운 송어에 레몬을 곁들였다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.17,
+      0.04,
+      0.065
+     ],
+     "at": [
+      0,
+      0.055,
+      0
+     ],
+     "c": [
+      "#D88A5A",
+      "#F2B080"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.015,
+      0.04
+     ],
+     "at": [
+      0.12,
+      0.04,
+      0.08
+     ],
+     "c": "#F5D63A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.03,
+      0.02,
+      0.03
+     ],
+     "at": [
+      -0.02,
+      0.09,
+      0
+     ],
+     "c": "#F6D86A"
+    }
+   ]
+  },
+  {
+   "id": "golden_carp_set",
+   "name": "황금 잉어 정식",
+   "tier": 5,
+   "price": 380000,
+   "tags": [
+    "fancy",
+    "hearty",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "golden_carp"
+     ],
+     "n": 1
+    },
+    {
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "item": "shiitake",
+     "n": 1
+    },
+    {
+     "item": "tofu",
+     "n": 1
+    },
+    {
+     "item": "radish",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "simmer_hard",
+    "grill_hard",
+    "mix_hard",
+    "plate_hard"
+   ],
+   "desc": "황금 잉어 한 마리로 차린 다섯 가지 정식. 별 다섯 식당의 자존심.",
+   "model": [
+    {
+     "s": "rbox",
+     "size": [
+      0.4,
+      0.03,
+      0.28
+     ],
+     "at": [
+      0,
+      0.015,
+      0
+     ],
+     "c": [
+      "#6A3A1A",
+      "#8A5A2A"
+     ],
+     "r": 0.2
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.14,
+      0.04,
+      0.055
+     ],
+     "at": [
+      0,
+      0.06,
+      -0.05
+     ],
+     "c": [
+      "#E8A020",
+      "#FFD860"
+     ]
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.06,
+      0.05
+     ],
+     "at": [
+      -0.12,
+      0.055,
+      0.07
+     ],
+     "c": "#F2EEE6",
+     "r": 0.02
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.06,
+      0.05
+     ],
+     "at": [
+      0.0,
+      0.055,
+      0.08
+     ],
+     "c": "#3A3A3A",
+     "r": 0.02
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.06,
+      0.05
+     ],
+     "at": [
+      0.12,
+      0.055,
+      0.07
+     ],
+     "c": "#F2EEE6",
+     "r": 0.02
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.02,
+      0.05
+     ],
+     "at": [
+      -0.12,
+      0.085,
+      0.07
+     ],
+     "c": "#FFFFFF"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.015,
+      0.05
+     ],
+     "at": [
+      0.0,
+      0.08,
+      0.08
+     ],
+     "c": "#C8402A"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.02,
+      0.04
+     ],
+     "at": [
+      0.12,
+      0.085,
+      0.07
+     ],
+     "c": "#7A4A2E"
+    }
+   ]
+  },
+  {
+   "id": "sturgeon_steak",
+   "name": "철갑상어 스테이크",
+   "tier": 5,
+   "price": 420000,
+   "tags": [
+    "fancy",
+    "hearty",
+    "savory"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "sturgeon"
+     ],
+     "n": 1
+    },
+    {
+     "item": "butter",
+     "n": 1
+    },
+    {
+     "item": "lemon",
+     "n": 1
+    },
+    {
+     "item": "garlic",
+     "n": 2
+    },
+    {
+     "item": "potato",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "grill_hard",
+    "fry_flip",
+    "simmer_hard",
+    "plate_hard"
+   ],
+   "desc": "두툼한 철갑상어 살을 버터에 구워 감자를 곁들였다.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.2,
+      0.025
+     ],
+     "at": [
+      0,
+      0.0125,
+      0
+     ],
+     "c": [
+      "#E8E2D8",
+      "#FFFFFF"
+     ],
+     "r": 0.01
+    },
+    {
+     "s": "torus",
+     "size": [
+      0.19,
+      0.012
+     ],
+     "at": [
+      0,
+      0.026,
+      0
+     ],
+     "c": "#D8D0C2"
+    },
+    {
+     "s": "rbox",
+     "size": [
+      0.16,
+      0.05,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#A8783A",
+      "#D8A86A"
+     ],
+     "r": 0.35
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.05,
+      0.04,
+      0.05
+     ],
+     "at": [
+      0.11,
+      0.05,
+      0.07
+     ],
+     "c": [
+      "#C8A060",
+      "#E8C880"
+     ]
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.015,
+      0.04
+     ],
+     "at": [
+      -0.11,
+      0.04,
+      0.07
+     ],
+     "c": "#F5D63A"
+    }
+   ]
+  },
+  {
+   "id": "turtle_soup",
+   "name": "자라 보양탕",
+   "tier": 5,
+   "price": 400000,
+   "tags": [
+    "hearty",
+    "fancy",
+    "light"
+   ],
+   "ingredients": [
+    {
+     "item_any": [
+      "softshell_turtle"
+     ],
+     "n": 1
+    },
+    {
+     "item": "garlic",
+     "n": 2
+    },
+    {
+     "item": "shiitake",
+     "n": 1
+    },
+    {
+     "item": "scallion",
+     "n": 1
+    },
+    {
+     "item": "wild_chive",
+     "n": 1
+    }
+   ],
+   "steps": [
+    "chop_fine",
+    "boil",
+    "simmer_hard",
+    "plate_hard"
+   ],
+   "desc": "자라와 표고·달래를 오래 고아 낸 보양식.",
+   "model": [
+    {
+     "s": "cyl",
+     "size": [
+      0.14,
+      0.1
+     ],
+     "at": [
+      0,
+      0.05,
+      0
+     ],
+     "c": [
+      "#D8CFC0",
+      "#2A2A2A"
+     ],
+     "r": 0.04
+    },
+    {
+     "s": "cyl",
+     "size": [
+      0.12,
+      0.01
+     ],
+     "at": [
+      0,
+      0.095,
+      0
+     ],
+     "c": "#C8A878",
+     "r": 0.005
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.04,
+      0.02,
+      0.04
+     ],
+     "at": [
+      0.03,
+      0.11,
+      0.02
+     ],
+     "c": "#7A4A2E"
+    },
+    {
+     "s": "sphere",
+     "size": [
+      0.03,
+      0.01,
+      0.02
+     ],
+     "at": [
+      -0.03,
+      0.11,
+      -0.02
+     ],
+     "c": "#7FB06A"
+    }
+   ]
+  }
+ ]
+}
