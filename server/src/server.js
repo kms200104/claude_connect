@@ -11,6 +11,8 @@ import { createClock, isWeather, timeBand, weatherAt } from './clock.js';
 import { chopTree, refreshTree, treeWire, TreeStage } from './trees.js';
 import { beginTalk, endTalk, npcWire, stepNpcs } from './npcs.js';
 import { addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
+import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
+import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const UID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -44,10 +46,24 @@ export function createServer(overrides = {}) {
   const profileWire = (player) => {
     const friends = {};
     for (const [id, rel] of Object.entries(player.profile.npcs)) friends[id] = rel.f;
-    return { sol: player.profile.sol, quests: player.profile.quests.map((q) => questWire(q, player.slots, data)), friends };
+    return {
+      sol: player.profile.sol,
+      quests: player.profile.quests.map((q) => questWire(q, player.slots, data)),
+      friends,
+      outfit: { ...player.profile.outfit },
+    };
   };
   const sendProfile = (player) => sendTo(player, { t: 'profile', ...profileWire(player) });
   const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now() });
+  const shopLevels = data.shop.levels;
+  const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
+  const inShop = (player) => inInterior(data.shop, player.x, player.z);
+  /** 지금 구할 수 있는 소지품: 상점 진열품 + 나무에서 나오는 것. */
+  const goodsPool = (room) => {
+    const pool = new Set(stockFor(room.shopPoints, shopLevels).filter((id) => data.kindOf(id) === 'goods'));
+    for (const drops of Object.values(data.chopDrops)) for (const d of drops) if (data.kindOf(d.id) === 'goods') pool.add(d.id);
+    return [...pool];
+  };
 
   const fishing = createFishing({
     cfg,
@@ -128,6 +144,8 @@ export function createServer(overrides = {}) {
       w: weatherOf(room),
       trees: [...room.trees].map(([id, st]) => treeWire(id, st)),
       npcs: [...room.npcs.values()].map(npcWire),
+      shop: roomShopWire(room),
+      placed: [...room.placed.values()].map((f) => placedWire(f, (uid) => room.slotOfUid(uid))),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
     room.dirty = true;
@@ -224,7 +242,7 @@ export function createServer(overrides = {}) {
     const today = clock.day();
     refreshTree(state, today);
     if (state.s !== TreeStage.grown) return fail(ErrorCode.treeNotReady);
-    const drop = pickWeighted(data.chopDrops, (d) => d.weight, random).id;
+    const drop = pickWeighted(data.chopDrops[def.kind], (d) => d.weight, random).id;
     // 가방이 가득 차면 나무를 찍지 않는다(찍힌 횟수도 그대로).
     if (!canAdd(player.slots, drop, 1, data.limitOf)) return fail(ErrorCode.inventoryFull);
     player.lastChopAt = t;
@@ -278,7 +296,7 @@ export function createServer(overrides = {}) {
           const only = data.quests.templates.filter((t) => t.id === cfg.questTemplate);
           const rules = only.length > 0 ? { ...data.quests, templates: only } : data.quests;
           profile.questSeq += 1;
-          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq });
+          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq, goodsPool: goodsPool(room) });
           rel.offerDay = today;
           profile.lastQuestDay = today;
           reply.offer = player.offer;
@@ -330,6 +348,142 @@ export function createServer(overrides = {}) {
     }
   }
 
+  // ---- 상점 ----
+
+  /** 상점 문으로 드나들기: 서버가 위치를 옮기고 알려 준다 (이동 검사를 거치지 않는 순간 이동). */
+  function moveThroughDoor(ctx, inside) {
+    const { player, room } = ctx;
+    const spot = inside ? data.shop.inside_spawn : data.shop.outside_spawn;
+    player.x = spot.x;
+    player.z = spot.z;
+    player.y = 0.1;
+    player.vx = 0;
+    player.vz = 0;
+    player.lastMoveAt = now();
+    player.doorAt = now();
+    fishing.drop(player);
+    closeTalk(room, player, false);
+    room.dirty = true;
+    room.saveDirty = true;
+    send(ctx.ws, { t: 'shop_door', inside, x: player.x, y: player.y, z: player.z, shop: roomShopWire(room) });
+  }
+
+  function handleShop(ctx, msg, fail) {
+    const { player, room } = ctx;
+    switch (msg.t) {
+      case 'shop_enter': {
+        if (!nearPoint(data.shop.door, player.x, player.z, data.shop.enter_range + 0.5)) return fail(ErrorCode.notNearDoor);
+        return moveThroughDoor(ctx, true);
+      }
+      case 'shop_exit': {
+        if (!inShop(player) || !nearPoint(data.shop.exit, player.x, player.z, data.shop.exit_range + 0.5)) return fail(ErrorCode.notNearDoor);
+        return moveThroughDoor(ctx, false);
+      }
+      case 'shop_sell':
+      case 'shop_buy': {
+        if (!player.acceptRid(msg.rid)) return;
+        if (!inShop(player)) return fail(ErrorCode.notInShop);
+        const n = msg.n === undefined ? 1 : msg.n;
+        if (!Number.isInteger(n) || n < 1 || n > 99) return fail(ErrorCode.badItem);
+        const before = levelFor(room.shopPoints, shopLevels).level;
+        let item;
+        let amount;
+        if (msg.t === 'shop_sell') {
+          const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+          if (!slot) return fail(ErrorCode.badItem);
+          const base = data.priceOf(slot.id);
+          if (base <= 0) return fail(ErrorCode.cantSell);
+          item = slot.id;
+          amount = sellValue(base, n, room.shopPoints, shopLevels);
+          if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
+          player.profile.sol += amount;
+        } else {
+          item = msg.item;
+          if (typeof item !== 'string' || !stockFor(room.shopPoints, shopLevels).includes(item)) return fail(ErrorCode.notForSale);
+          amount = data.items.get(item).buy * n;
+          if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
+          if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+          player.profile.sol -= amount;
+        }
+        // 사고판 솔만큼 상점 포인트가 쌓인다 (마을 공용).
+        room.shopPoints += Math.round(amount * data.shop.points_per_sol * cfg.shopPointsScale);
+        const shop = roomShopWire(room);
+        send(ctx.ws, { t: 'shop_result', rid: msg.rid, kind: msg.t === 'shop_sell' ? 'sell' : 'buy', item, n, sol: player.profile.sol, amount });
+        sendInventory(player);
+        sendProfile(player);
+        room.broadcast({ t: 'shop', ...shop, up: shop.level > before });
+        rooms.save(room);
+        return;
+      }
+    }
+  }
+
+  // ---- 가구 설치 · 옷 ----
+
+  function handleFurniture(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    switch (msg.t) {
+      case 'place': {
+        const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+        if (!slot || data.kindOf(slot.id) !== 'furniture') return fail(ErrorCode.badItem);
+        const mine = [...room.placed.values()].filter((f) => f.owner === player.uid).length;
+        if (mine >= cfg.maxPlacedPerPlayer) return fail(ErrorCode.placeLimit);
+        const x = snap(Number(msg.x));
+        const z = snap(Number(msg.z));
+        if (placementProblem({ x, z, player, placed: room.placed, data, cfg })) return fail(ErrorCode.badPlace);
+        removeAt(player.slots, msg.slot, 1);
+        room.placedSeq += 1;
+        const rot = Number.isInteger(msg.rot) ? ((msg.rot % 4) + 4) % 4 : 0;
+        const f = { id: `f${room.placedSeq}`, item: slot.id, x, z, rot, owner: player.uid };
+        room.placed.set(f.id, f);
+        sendInventory(player);
+        sendProfile(player);
+        room.broadcast({ t: 'placed', rid: msg.rid, by: player.id, f: placedWire(f, (uid) => room.slotOfUid(uid)) });
+        rooms.save(room);
+        return;
+      }
+      case 'pickup': {
+        const f = typeof msg.id === 'string' ? room.placed.get(msg.id) : null;
+        if (!f || Math.hypot(player.x - f.x, player.z - f.z) > PICKUP_RANGE) return fail(ErrorCode.badPlace);
+        if (f.owner !== player.uid) return fail(ErrorCode.notOwner);
+        if (!addItem(player.slots, f.item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+        room.placed.delete(f.id);
+        sendInventory(player);
+        sendProfile(player);
+        room.broadcast({ t: 'unplaced', rid: msg.rid, id: f.id });
+        rooms.save(room);
+        return;
+      }
+      case 'wear': {
+        const index = msg.slot;
+        const slot = Number.isInteger(index) ? player.slots[index] : null;
+        const info = slot ? data.items.get(slot.id) : null;
+        if (!info || info.kind !== 'clothing') return fail(ErrorCode.notWearable);
+        // 입던 옷은 방금 비운 그 칸으로 돌아간다 (가방이 꽉 차 있어도 갈아입을 수 있다).
+        const previous = player.profile.outfit[info.wear];
+        removeAt(player.slots, index, 1);
+        if (previous) player.slots[index] = { id: previous, n: 1 };
+        player.profile.outfit[info.wear] = info.id;
+        break;
+      }
+      case 'unwear': {
+        const part = msg.part;
+        if (part !== 'hat' && part !== 'top') return fail(ErrorCode.notWearable);
+        const worn = player.profile.outfit[part];
+        if (!worn) return fail(ErrorCode.notWearable);
+        if (!addItem(player.slots, worn, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+        player.profile.outfit[part] = '';
+        break;
+      }
+    }
+    // 옷을 입거나 벗었다.
+    sendInventory(player);
+    sendProfile(player);
+    room.dirty = true; // 스냅샷으로 상대에게 옷을 보여 준다
+    rooms.save(room);
+  }
+
   /** 낚시·인벤토리·나무·대화 요청. 결과는 항상 서버가 확정해서 알린다. */
   function handleAction(ctx, msg) {
     const { player } = ctx;
@@ -356,6 +510,16 @@ export function createServer(overrides = {}) {
         return handleInventory(ctx, msg, fail);
       case 'chop':
         return handleChop(ctx, msg, fail);
+      case 'shop_enter':
+      case 'shop_exit':
+      case 'shop_sell':
+      case 'shop_buy':
+        return handleShop(ctx, msg, fail);
+      case 'place':
+      case 'pickup':
+      case 'wear':
+      case 'unwear':
+        return handleFurniture(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -377,6 +541,8 @@ export function createServer(overrides = {}) {
     const dx = tx - player.x;
     const dz = tz - player.z;
     const dist = Math.hypot(dx, dz);
+    // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
+    if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
     const allowed = cfg.maxSpeed * cfg.speedTolerance * dt + cfg.moveSlackMeters;
     let corrected = tx !== msg.x || tz !== msg.z || ty !== msg.y;
     if (dist > allowed) {
@@ -453,6 +619,14 @@ export function createServer(overrides = {}) {
       case 'quest_accept':
       case 'quest_decline':
       case 'quest_turnin':
+      case 'shop_enter':
+      case 'shop_exit':
+      case 'shop_sell':
+      case 'shop_buy':
+      case 'place':
+      case 'pickup':
+      case 'wear':
+      case 'unwear':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -503,7 +677,19 @@ export function createServer(overrides = {}) {
       room.broadcast({
         t: 'snap',
         st: now(),
-        p: [...room.players.values()].map((p) => ({ id: p.id, fishing: p.fishing !== null, held: p.heldItem, x: p.x, y: p.y, z: p.z, yaw: p.yaw, vx: p.vx, vz: p.vz })),
+        p: [...room.players.values()].map((p) => ({
+          id: p.id,
+          fishing: p.fishing !== null,
+          held: p.heldItem,
+          hat: p.profile.outfit.hat,
+          top: p.profile.outfit.top,
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          yaw: p.yaw,
+          vx: p.vx,
+          vz: p.vz,
+        })),
       });
     }
   }, 1000 / cfg.tickRate);

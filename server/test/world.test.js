@@ -153,6 +153,19 @@ describe('부탁', () => {
     assert.equal(questReady([{ id: 'carp', n: 1 }, { id: 'loach', n: 1 }], anyFish, data), true);
   });
 
+  it('소지품 부탁: 지금 구할 수 있는 소지품만, 산 값보다 넉넉한 보상', () => {
+    const only = { ...rules, templates: rules.templates.filter((t) => t.id === 'goods') };
+    const npcDef = data.npcs.get('morak');
+    const q = makeQuest({ rules: only, data, npcDef, random: () => 0.5, hour: 12, weather: 'clear', today: 1, seq: 1, goodsPool: ['honey_jar', 'tea_leaves'] });
+    assert.equal(q.kind, 'deliver');
+    assert.ok(['honey_jar', 'tea_leaves'].includes(q.item));
+    assert.ok(q.reward > data.items.get(q.item).buy * q.n);
+    for (let i = 0; i < 60; i++) {
+      const other = makeQuest({ rules, data, npcDef, random: Math.random, hour: 12, weather: 'clear', today: 1, seq: i, goodsPool: [] });
+      assert.notEqual(data.kindOf(other.item ?? ''), 'goods', '구할 수 있는 소지품이 없으면 소지품 부탁은 나오지 않는다');
+    }
+  });
+
   it('기한이 지난 부탁은 사라진다', () => {
     assert.deepEqual(pruneExpired([{ id: 'a', exp: 4 }, { id: 'b', exp: 5 }], 5), [{ id: 'b', exp: 5 }]);
   });

@@ -8,21 +8,21 @@
       "about": "찻집을 하는 다정한 할머니. 따뜻한 차와 수다를 좋아한다.",
       "house": { "x": 14, "z": -20, "yaw": 0 },
       "waypoints": [[14, -16], [18, -12], [12, -10], [9, -15]],
-      "likes": ["any_fish", "softwood"]
+      "likes": ["any_fish", "softwood", "goods"]
     },
     {
       "id": "tongtong", "name": "통통", "personality": "lively", "color": "#F2C14E",
       "about": "하루 종일 뛰어다니는 기운찬 친구. 운동과 내기를 좋아한다.",
       "house": { "x": -2, "z": 24, "yaw": 3.14159 },
       "waypoints": [[-2, 20], [4, 16], [-6, 15], [2, 21]],
-      "likes": ["fish_species", "wood"]
+      "likes": ["fish_species", "wood", "goods"]
     },
     {
       "id": "haerang", "name": "해랑", "personality": "lazy", "color": "#8EC5E8",
       "about": "호숫가에서 그림을 그리는 느긋한 화가. 낮잠이 취미다.",
       "house": { "x": -20, "z": 20, "yaw": 3.14159 },
       "waypoints": [[-20, 16], [-14, 13], [-25, 13], [-18, 12]],
-      "likes": ["fish_species", "any_fish"]
+      "likes": ["fish_species", "any_fish", "birchwood"]
     },
     {
       "id": "mujin", "name": "무진", "personality": "gruff", "color": "#9C8BD1",

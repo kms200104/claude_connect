@@ -7,6 +7,7 @@ import { emptySlots, hasItem, sanitize } from './inventory.js';
 import { sanitizeTrees } from './trees.js';
 import { createNpcRuntime } from './npcs.js';
 import { sanitizeQuests, sanitizeRelations } from './quests.js';
+import { sanitizePlaced } from './furniture.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const intOr = (v, fallback) => (Number.isInteger(v) ? v : fallback);
@@ -46,7 +47,18 @@ function newProfile(uid, slot, cfg) {
     quests: [],
     questSeq: 0,
     lastQuestDay: null,
+    outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
   };
+}
+
+function sanitizeOutfit(raw, data) {
+  const out = { hat: '', top: '' };
+  if (!raw || typeof raw !== 'object') return out;
+  for (const part of ['hat', 'top']) {
+    const id = raw[part];
+    if (typeof id === 'string' && data.items.get(id)?.kind === 'clothing' && data.items.get(id).wear === part) out[part] = id;
+  }
+  return out;
 }
 
 /** 접속 중(또는 재접속 유예 중)인 플레이어. 영속 데이터는 profile 에 있다. */
@@ -64,6 +76,7 @@ export class Player {
     this.vz = 0;
     this.lastMoveAt = 0; // performance.now() 기준 ms
     this.lastChopAt = -Infinity;
+    this.doorAt = -Infinity; // 상점 문을 지난 시각
     this.graceTimer = null;
     this.fishing = null; // 낚시 세션 (fishing.js)
     this.talkingTo = null; // 대화 중인 NPC id
@@ -99,6 +112,8 @@ export class Player {
       online: this.online,
       fishing: this.fishing !== null,
       held: this.heldItem,
+      hat: this.profile.outfit.hat,
+      top: this.profile.outfit.top,
       x: this.x,
       y: this.y,
       z: this.z,
@@ -129,6 +144,9 @@ export class Room {
     this.stats = { totalCatches: 0, species: {} }; // 월드(마을) 공용 상태
     this.weatherSeed = randomInt(0x7fffffff);
     this.trees = sanitizeTrees(null, data.trees);
+    this.shopPoints = 0; // 상점 포인트 (마을 공용, 단계는 포인트로 정해진다)
+    this.placed = new Map(); // 설치된 가구 (furniture.js)
+    this.placedSeq = 0;
     // NPC 위치는 저장하지 않는다 (방을 다시 열면 집 앞에서 시작).
     this.npcs = createNpcRuntime(data.npcs, performance.now(), Math.random);
     this.npcsDirty = true;
@@ -148,6 +166,9 @@ export class Room {
     }
     if (Number.isInteger(world.weatherSeed)) room.weatherSeed = world.weatherSeed;
     room.trees = sanitizeTrees(world.trees, data.trees);
+    room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0)));
+    room.placed = sanitizePlaced(world.placed, data);
+    room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
@@ -169,6 +190,7 @@ export class Room {
         quests: sanitizeQuests(p.quests, data),
         questSeq: Math.max(0, intOr(p.questSeq, 0)),
         lastQuestDay: intOr(p.lastQuestDay, null),
+        outfit: sanitizeOutfit(p.outfit, data),
       });
     }
     return room;
@@ -188,9 +210,22 @@ export class Room {
       code: this.code,
       createdAt: this.createdAt,
       savedAt: Date.now(),
-      world: { totalCatches: this.stats.totalCatches, species: { ...this.stats.species }, weatherSeed: this.weatherSeed, trees },
+      world: {
+        totalCatches: this.stats.totalCatches,
+        species: { ...this.stats.species },
+        weatherSeed: this.weatherSeed,
+        trees,
+        shopPoints: this.shopPoints,
+        placed: [...this.placed.values()].map((f) => ({ ...f })),
+        placedSeq: this.placedSeq,
+      },
       profiles,
     };
+  }
+
+  /** 저장된 사람 uid → 자리 번호 (없으면 0). */
+  slotOfUid(uid) {
+    return this.profiles.get(uid)?.slot ?? 0;
   }
 
   freeSlot() {

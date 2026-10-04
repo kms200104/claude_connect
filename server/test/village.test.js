@@ -68,7 +68,9 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal(w.trees.length, server.data.trees.size);
     assert.ok(w.trees.every((t) => t.s === 'grown'));
     assert.deepEqual(w.npcs.map((n) => n.id).sort(), ['haerang', 'morak', 'mujin', 'tongtong']);
-    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {} });
+    assert.deepEqual(w.prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' } });
+    assert.deepEqual(w.shop, { level: 1, points: 0, next: 1500 });
+    assert.deepEqual(w.placed, []);
     assert.equal(typeof w.clock.g, 'number');
     assert.equal(w.players[0].held, 'rod');
   });

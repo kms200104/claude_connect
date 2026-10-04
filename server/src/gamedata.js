@@ -15,11 +15,20 @@ export function loadGameData(dataDir, cfg) {
   const itemsFile = read('items/items.json');
   const items = new Map(itemsFile.items.map((it) => [it.id, it]));
   for (const id of items.keys()) if (fish.has(id)) throw new Error(`item ${id} 가 물고기 id 와 겹침`);
+  // 나무 종류별로 나오는 목재·소지품 가중치.
   const chopDrops = itemsFile.chop_drops;
-  for (const d of chopDrops) if (!items.has(d.id)) throw new Error(`chop_drops: unknown item ${d.id}`);
+  for (const [kind, drops] of Object.entries(chopDrops)) {
+    for (const d of drops) if (!items.has(d.id)) throw new Error(`chop_drops.${kind}: unknown item ${d.id}`);
+  }
 
   const treesFile = read('world/trees.json');
   const trees = new Map(treesFile.trees.map((t) => [t.id, t]));
+  for (const t of trees.values()) if (!chopDrops[t.kind]) throw new Error(`tree ${t.id}: chop_drops 에 ${t.kind} 없음`);
+
+  const shop = read('shop/shop.json');
+  for (const lv of shop.levels) {
+    for (const id of lv.stock) if (!items.get(id)?.buy) throw new Error(`shop level ${lv.level}: ${id} 에 buy 가격이 없음`);
+  }
 
   const npcsFile = read('npcs/npcs.json');
   const npcs = new Map(npcsFile.npcs.map((n) => [n.id, n]));
@@ -31,6 +40,9 @@ export function loadGameData(dataDir, cfg) {
   const isKnown = (id) => fish.has(id) || items.has(id);
   const limitOf = (id) => (fish.has(id) ? cfg.inventoryStackSize : (items.get(id)?.stack ?? 1));
   const isTool = (id) => items.get(id)?.kind === 'tool';
+  const kindOf = (id) => (fish.has(id) ? 'fish' : (items.get(id)?.kind ?? ''));
+  // 상점에 팔 때 받는 기본 가격 (도구는 못 판다 → 0).
+  const priceOf = (id) => (fish.has(id) ? fish.get(id).price ?? 0 : isTool(id) ? 0 : (items.get(id)?.price ?? 0));
 
   return {
     fish,
@@ -42,6 +54,9 @@ export function loadGameData(dataDir, cfg) {
     npcs,
     npcRules: { talkRange: npcsFile.talk_range, walkSpeed: npcsFile.walk_speed },
     quests,
+    shop,
+    kindOf,
+    priceOf,
     isFish,
     isKnown,
     isTool,

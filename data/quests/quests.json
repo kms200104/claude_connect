@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "chance": 0.3,
   "chance_per_friend_stage": 0.05,
   "chance_max": 0.6,
@@ -9,11 +9,78 @@
   "friend_per_quest": 5,
   "like_weight_bonus": 3,
   "templates": [
-    { "id": "wood",         "kind": "deliver",      "item": "wood",     "min": 3, "max": 6, "reward_base": 100, "reward_per": 40, "weight": 3 },
-    { "id": "softwood",     "kind": "deliver",      "item": "softwood", "min": 2, "max": 3, "reward_base": 120, "reward_per": 80, "weight": 1 },
-    { "id": "hardwood",     "kind": "deliver",      "item": "hardwood", "min": 2, "max": 3, "reward_base": 120, "reward_per": 90, "weight": 1 },
-    { "id": "fish_species", "kind": "deliver_fish",                     "min": 1, "max": 1, "reward_base": 0,   "reward_per": 0,  "weight": 2,
-      "reward_by_rarity": { "common": 200, "uncommon": 450, "rare": 900 } },
-    { "id": "any_fish",     "kind": "any_fish",                         "min": 2, "max": 3, "reward_base": 80,  "reward_per": 120, "weight": 2 }
+    {
+      "id": "wood",
+      "kind": "deliver",
+      "item": "wood",
+      "min": 3,
+      "max": 6,
+      "reward_base": 100,
+      "reward_per": 40,
+      "weight": 3
+    },
+    {
+      "id": "softwood",
+      "kind": "deliver",
+      "item": "softwood",
+      "min": 2,
+      "max": 3,
+      "reward_base": 120,
+      "reward_per": 80,
+      "weight": 1
+    },
+    {
+      "id": "hardwood",
+      "kind": "deliver",
+      "item": "hardwood",
+      "min": 2,
+      "max": 3,
+      "reward_base": 120,
+      "reward_per": 90,
+      "weight": 1
+    },
+    {
+      "id": "birchwood",
+      "kind": "deliver",
+      "item": "birchwood",
+      "min": 2,
+      "max": 4,
+      "reward_base": 120,
+      "reward_per": 100,
+      "weight": 1
+    },
+    {
+      "id": "goods",
+      "kind": "deliver",
+      "pool": "goods",
+      "min": 1,
+      "max": 2,
+      "reward_base": 150,
+      "reward_per": 0,
+      "weight": 2
+    },
+    {
+      "id": "fish_species",
+      "kind": "deliver_fish",
+      "min": 1,
+      "max": 1,
+      "reward_base": 0,
+      "reward_per": 0,
+      "weight": 2,
+      "reward_by_rarity": {
+        "common": 200,
+        "uncommon": 450,
+        "rare": 900
+      }
+    },
+    {
+      "id": "any_fish",
+      "kind": "any_fish",
+      "min": 2,
+      "max": 3,
+      "reward_base": 80,
+      "reward_per": 120,
+      "weight": 2
+    }
   ]
 }

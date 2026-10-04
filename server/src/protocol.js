@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -29,6 +29,17 @@ export const ErrorCode = Object.freeze({
   noOffer: 'no_offer',
   badQuest: 'bad_quest',
   questNotReady: 'quest_not_ready', // 아이템이 모자람
+  // 상점
+  notNearDoor: 'not_near_door',
+  notInShop: 'not_in_shop',
+  notForSale: 'not_for_sale', // 지금 상점 단계에서 팔지 않는 물건
+  notEnoughSol: 'not_enough_sol',
+  cantSell: 'cant_sell', // 도구 등
+  // 가구 설치 · 옷
+  badPlace: 'bad_place', // 너무 멀거나, 물·나무·다른 가구와 겹침, 상점 안
+  placeLimit: 'place_limit',
+  notOwner: 'not_owner',
+  notWearable: 'not_wearable',
 });
 
 export const Weather = Object.freeze({

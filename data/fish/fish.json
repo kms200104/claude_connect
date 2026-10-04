@@ -1,13 +1,25 @@
 {
-  "version": 2,
+  "version": 3,
   "fish": [
-    { "id": "crucian",  "name": "붕어",     "size": "M",  "rarity": "common",   "weight": 40, "hook_window_ms": 700, "desc": "호수 어디서나 만나는 순한 물고기." },
-    { "id": "loach",    "name": "미꾸라지", "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700, "desc": "진흙 속을 미끄러지듯 헤엄친다." },
-    { "id": "minnow",   "name": "송사리",   "size": "S",  "rarity": "common",   "weight": 30, "hook_window_ms": 700, "hours": [5, 20], "desc": "해가 떠 있을 때 얕은 물가에 모인다." },
-    { "id": "carp",     "name": "잉어",     "size": "L",  "rarity": "common",   "weight": 25, "hook_window_ms": 650, "desc": "느긋하게 호수 바닥을 누비는 큰 물고기." },
-    { "id": "catfish",  "name": "메기",     "size": "L",  "rarity": "uncommon", "weight": 12, "hook_window_ms": 550, "hours": [17, 5], "desc": "해 질 녘부터 바닥에서 슬그머니 올라온다." },
-    { "id": "mandarin", "name": "쏘가리",   "size": "M",  "rarity": "uncommon", "weight": 10, "hook_window_ms": 550, "hours": [9, 17], "desc": "얼룩무늬가 멋진 낮의 사냥꾼." },
-    { "id": "goldfish", "name": "금붕어",   "size": "S",  "rarity": "rare",     "weight": 4,  "hook_window_ms": 500, "weather": ["clear", "cloudy"], "desc": "누군가 놓아준 걸까? 맑은 날에만 반짝인다." },
-    { "id": "sturgeon", "name": "철갑상어", "size": "XL", "rarity": "rare",     "weight": 3,  "hook_window_ms": 450, "weather": ["rain", "thunder"], "desc": "비 오는 날 깊은 곳에서 모습을 드러내는 호수의 주인." }
+    {"id": "crucian", "name": "붕어", "size": "M", "rarity": "common", "weight": 40, "hook_window_ms": 700, "price": 60, "desc": "호수 어디서나 만나는 순한 물고기."},
+    {"id": "loach", "name": "미꾸라지", "size": "S", "rarity": "common", "weight": 30, "hook_window_ms": 700, "price": 50, "desc": "진흙 속을 미끄러지듯 헤엄친다."},
+    {"id": "minnow", "name": "송사리", "size": "S", "rarity": "common", "weight": 30, "hook_window_ms": 700, "price": 40, "hours": [5, 20], "desc": "해가 떠 있을 때 얕은 물가에 모인다."},
+    {"id": "pale_chub", "name": "피라미", "size": "S", "rarity": "common", "weight": 30, "hook_window_ms": 700, "price": 55, "hours": [6, 18], "desc": "번쩍이는 비늘로 물살을 가르는 날쌘돌이."},
+    {"id": "korean_minnow", "name": "버들치", "size": "S", "rarity": "common", "weight": 25, "hook_window_ms": 700, "price": 65, "weather": ["clear", "cloudy"], "desc": "맑은 물을 좋아하는 작은 물고기."},
+    {"id": "smelt", "name": "빙어", "size": "S", "rarity": "common", "weight": 20, "hook_window_ms": 650, "price": 90, "hours": [5, 10], "desc": "이른 아침 차가운 물에서만 보인다."},
+    {"id": "carp", "name": "잉어", "size": "L", "rarity": "common", "weight": 25, "hook_window_ms": 650, "price": 120, "desc": "느긋하게 호수 바닥을 누비는 큰 물고기."},
+    {"id": "dark_chub", "name": "갈겨니", "size": "M", "rarity": "common", "weight": 20, "hook_window_ms": 650, "price": 100, "hours": [9, 17], "desc": "수염 없이 날렵한 낮의 물고기."},
+    {"id": "bitterling", "name": "납자루", "size": "S", "rarity": "uncommon", "weight": 12, "hook_window_ms": 600, "price": 220, "weather": ["clear"], "desc": "조개 속에 알을 낳는 무지갯빛 물고기."},
+    {"id": "catfish", "name": "메기", "size": "L", "rarity": "uncommon", "weight": 12, "hook_window_ms": 550, "price": 300, "hours": [17, 5], "desc": "해 질 녘부터 바닥에서 슬그머니 올라온다."},
+    {"id": "mandarin", "name": "쏘가리", "size": "M", "rarity": "uncommon", "weight": 10, "hook_window_ms": 550, "price": 350, "hours": [9, 17], "desc": "얼룩무늬가 멋진 낮의 사냥꾼."},
+    {"id": "sleeper", "name": "동사리", "size": "M", "rarity": "uncommon", "weight": 10, "hook_window_ms": 550, "price": 280, "hours": [19, 5], "desc": "밤이면 돌 틈에서 나와 먹이를 찾는다."},
+    {"id": "aucha_perch", "name": "꺽지", "size": "M", "rarity": "uncommon", "weight": 9, "hook_window_ms": 550, "price": 320, "weather": ["cloudy", "rain"], "desc": "흐린 날 바위 그늘에 숨어 있다."},
+    {"id": "snakehead", "name": "가물치", "size": "L", "rarity": "uncommon", "weight": 8, "hook_window_ms": 500, "price": 400, "hours": [10, 20], "desc": "수초 사이에서 불쑥 튀어나오는 힘센 물고기."},
+    {"id": "eel", "name": "뱀장어", "size": "L", "rarity": "uncommon", "weight": 7, "hook_window_ms": 500, "price": 450, "hours": [18, 5], "weather": ["rain", "thunder"], "desc": "비 오는 밤 호숫가로 올라온다."},
+    {"id": "goldfish", "name": "금붕어", "size": "S", "rarity": "rare", "weight": 4, "hook_window_ms": 500, "price": 900, "weather": ["clear", "cloudy"], "desc": "누군가 놓아준 걸까? 맑은 날에만 반짝인다."},
+    {"id": "golden_carp", "name": "황금 잉어", "size": "L", "rarity": "rare", "weight": 3, "hook_window_ms": 450, "price": 1300, "hours": [10, 16], "weather": ["clear"], "desc": "햇빛을 받으면 금빛으로 빛나는 잉어."},
+    {"id": "rainbow_trout", "name": "무지개송어", "size": "M", "rarity": "rare", "weight": 3, "hook_window_ms": 450, "price": 1000, "hours": [5, 9], "desc": "새벽 물안개 속에서 무지개처럼 빛난다."},
+    {"id": "cherry_salmon", "name": "산천어", "size": "M", "rarity": "rare", "weight": 3, "hook_window_ms": 450, "price": 1100, "weather": ["cloudy", "rain"], "desc": "흐리고 비 오는 날 찬물을 거슬러 오른다."},
+    {"id": "sturgeon", "name": "철갑상어", "size": "XL", "rarity": "rare", "weight": 3, "hook_window_ms": 450, "price": 1500, "weather": ["rain", "thunder"], "desc": "비 오는 날 깊은 곳에서 모습을 드러내는 호수의 주인."}
   ]
 }

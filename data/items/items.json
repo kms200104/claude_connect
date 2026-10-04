@@ -1,15 +1,102 @@
 {
-  "version": 1,
+  "version": 2,
   "items": [
-    { "id": "rod",      "name": "낚싯대",        "abbr": "낚시", "kind": "tool",     "stack": 1,  "color": "#C08A4A", "desc": "대나무를 깎아 만든 가벼운 낚싯대. 퀵슬롯에서 골라 들고 물가에서 던진다." },
-    { "id": "axe",      "name": "도끼",          "abbr": "도끼", "kind": "tool",     "stack": 1,  "color": "#8FA3B0", "desc": "손에 꼭 맞는 작은 도끼. 다 자란 나무를 세 번 찍으면 쓰러진다." },
-    { "id": "wood",     "name": "목재",          "abbr": "목재", "kind": "material", "stack": 30, "color": "#B07A45", "desc": "곧게 자란 나무에서 얻은 평범한 목재." },
-    { "id": "softwood", "name": "부드러운 목재", "abbr": "연목", "kind": "material", "stack": 30, "color": "#D9B27C", "desc": "결이 고와서 깎기 쉬운 목재." },
-    { "id": "hardwood", "name": "단단한 목재",   "abbr": "경목", "kind": "material", "stack": 30, "color": "#7A4B2A", "desc": "오래 버티는 묵직한 목재. 목수들이 좋아한다." }
+    {"id": "rod", "name": "낚싯대", "abbr": "낚시", "kind": "tool", "stack": 1, "color": "#C08A4A", "desc": "대나무를 깎아 만든 가벼운 낚싯대. 퀵슬롯에서 골라 들고 물가에서 던진다."},
+    {"id": "axe", "name": "도끼", "abbr": "도끼", "kind": "tool", "stack": 1, "color": "#8FA3B0", "desc": "손에 꼭 맞는 작은 도끼. 다 자란 나무를 세 번 찍으면 쓰러진다."},
+    {"id": "branch", "name": "마른 나뭇가지", "abbr": "가지", "kind": "material", "stack": 30, "price": 20, "color": "#9C7A55", "desc": "바람에 떨어진 가는 가지. 불쏘시개로 좋다."},
+    {"id": "wood", "name": "목재", "abbr": "목재", "kind": "material", "stack": 30, "price": 60, "color": "#B07A45", "desc": "곧게 자란 나무에서 얻은 평범한 목재."},
+    {"id": "softwood", "name": "부드러운 목재", "abbr": "연목", "kind": "material", "stack": 30, "price": 80, "color": "#D9B27C", "desc": "결이 고와서 깎기 쉬운 목재."},
+    {"id": "birchwood", "name": "자작나무 목재", "abbr": "자작", "kind": "material", "stack": 30, "price": 95, "color": "#EDE3CF", "desc": "하얀 껍질의 자작나무에서 얻은 밝은 목재. 가구 장인들이 좋아한다."},
+    {"id": "hardwood", "name": "단단한 목재", "abbr": "경목", "kind": "material", "stack": 30, "price": 120, "color": "#7A4B2A", "desc": "오래 버티는 묵직한 목재. 목수들이 좋아한다."},
+    {"id": "cedarwood", "name": "향나무 목재", "abbr": "향목", "kind": "material", "stack": 30, "price": 300, "color": "#B5563A", "desc": "은은한 향이 나는 귀한 목재. 소나무 숲에서 아주 가끔 나온다."},
+    {"id": "pinecone", "name": "솔방울", "abbr": "솔방", "kind": "goods", "stack": 10, "price": 30, "color": "#8A5A36", "desc": "소나무 아래 떨어진 솔방울. 마을 이름의 유래라는 소문이 있다."},
+    {"id": "acorn", "name": "도토리", "abbr": "도토", "kind": "goods", "stack": 10, "price": 25, "color": "#A8743E", "desc": "동그란 모자를 쓴 도토리. 다람쥐가 찾고 있을지도."},
+    {"id": "feather", "name": "새 깃털", "abbr": "깃털", "kind": "goods", "stack": 10, "price": 40, "color": "#DDE6F0", "desc": "자작나무 가지에 걸려 있던 하얀 깃털."},
+    {"id": "tea_leaves", "name": "찻잎 봉투", "abbr": "찻잎", "kind": "goods", "stack": 10, "price": 60, "buy": 120, "color": "#7DA35A", "desc": "향긋한 녹차 잎이 든 종이봉투."},
+    {"id": "letter_set", "name": "편지지 세트", "abbr": "편지", "kind": "goods", "stack": 10, "price": 90, "buy": 180, "color": "#F3E9D2", "desc": "꽃무늬 편지지와 봉투. 마음을 전하기 좋다."},
+    {"id": "honey_jar", "name": "꿀단지", "abbr": "꿀", "kind": "goods", "stack": 10, "price": 130, "buy": 260, "color": "#F2B53C", "desc": "이웃 마을 양봉장에서 온 진한 꿀."},
+    {"id": "yarn", "name": "털실 뭉치", "abbr": "털실", "kind": "goods", "stack": 10, "price": 150, "buy": 300, "color": "#E87A90", "desc": "폭신한 분홍 털실. 목도리 한 줄은 뜰 수 있다."},
+    {"id": "bouquet", "name": "들꽃 꽃다발", "abbr": "꽃", "kind": "goods", "stack": 10, "price": 200, "buy": 400, "color": "#F7D35A", "desc": "노란 들꽃을 묶은 작은 꽃다발."},
+    {"id": "scented_candle", "name": "향초", "abbr": "향초", "kind": "goods", "stack": 10, "price": 320, "buy": 650, "color": "#C9A2D9", "desc": "라벤더 향이 나는 보랏빛 초."},
+    {"id": "silver_teapot", "name": "은빛 찻주전자", "abbr": "주전", "kind": "goods", "stack": 5, "price": 600, "buy": 1200, "color": "#C8CDD3", "desc": "반짝이는 은빛 찻주전자. 모락 할머니가 탐낼지도."},
+    {"id": "log_stool", "name": "통나무 스툴", "abbr": "스툴", "kind": "furniture", "stack": 1, "price": 200, "buy": 400, "color": "#9C6B3E", "desc": "통나무를 잘라 만든 작은 의자.", "model": [{"s": "cyl", "size": [0.28, 0.45], "at": [0, 0.225, 0], "c": "#9C6B3E"}, {"s": "cyl", "size": [0.27, 0.02], "at": [0, 0.46, 0], "c": "#D9B27C"}]},
+    {"id": "flower_pot", "name": "꽃 화분", "abbr": "화분", "kind": "furniture", "stack": 1, "price": 175, "buy": 350, "color": "#C8643C", "desc": "노랑·분홍 꽃이 핀 토분.", "model": [{"s": "cyl", "size": [0.22, 0.35], "at": [0, 0.175, 0], "c": "#C8643C"}, {"s": "cyl", "size": [0.2, 0.02], "at": [0, 0.35, 0], "c": "#5A3A22"}, {"s": "sphere", "size": [0.25], "at": [0, 0.55, 0], "c": "#5FA052"}, {"s": "sphere", "size": [0.09], "at": [0.12, 0.72, 0.05], "c": "#F2C14E"}, {"s": "sphere", "size": [0.08], "at": [-0.1, 0.7, -0.06], "c": "#E87A90"}]},
+    {"id": "wood_chair", "name": "나무 의자", "abbr": "의자", "kind": "furniture", "stack": 1, "price": 300, "buy": 600, "color": "#B07A45", "desc": "등받이가 있는 소박한 나무 의자.", "model": [{"s": "box", "size": [0.5, 0.08, 0.5], "at": [0, 0.45, 0], "c": "#B07A45"}, {"s": "box", "size": [0.06, 0.45, 0.06], "at": [-0.2, 0.225, -0.2], "c": "#8A5A36"}, {"s": "box", "size": [0.06, 0.45, 0.06], "at": [-0.2, 0.225, 0.2], "c": "#8A5A36"}, {"s": "box", "size": [0.06, 0.45, 0.06], "at": [0.2, 0.225, -0.2], "c": "#8A5A36"}, {"s": "box", "size": [0.06, 0.45, 0.06], "at": [0.2, 0.225, 0.2], "c": "#8A5A36"}, {"s": "box", "size": [0.5, 0.5, 0.06], "at": [0, 0.75, -0.22], "c": "#B07A45"}]},
+    {"id": "round_table", "name": "둥근 탁자", "abbr": "탁자", "kind": "furniture", "stack": 1, "price": 600, "buy": 1200, "color": "#C89A63", "desc": "찻잔 두 개가 딱 맞는 둥근 탁자.", "model": [{"s": "cyl", "size": [0.55, 0.06], "at": [0, 0.72, 0], "c": "#C89A63"}, {"s": "cyl", "size": [0.07, 0.7], "at": [0, 0.35, 0], "c": "#8A5A36"}, {"s": "cyl", "size": [0.3, 0.04], "at": [0, 0.02, 0], "c": "#8A5A36"}]},
+    {"id": "bench", "name": "공원 벤치", "abbr": "벤치", "kind": "furniture", "stack": 1, "price": 750, "buy": 1500, "color": "#A0714A", "desc": "둘이 나란히 앉기 좋은 긴 벤치.", "model": [{"s": "box", "size": [1.4, 0.08, 0.45], "at": [0, 0.45, 0], "c": "#A0714A"}, {"s": "box", "size": [0.08, 0.45, 0.4], "at": [-0.6, 0.225, 0], "c": "#4A4A4A"}, {"s": "box", "size": [0.08, 0.45, 0.4], "at": [0.6, 0.225, 0], "c": "#4A4A4A"}, {"s": "box", "size": [1.4, 0.3, 0.06], "at": [0, 0.75, -0.2], "c": "#A0714A"}]},
+    {"id": "floor_lamp", "name": "스탠드 조명", "abbr": "조명", "kind": "furniture", "stack": 1, "price": 900, "buy": 1800, "color": "#F5E6C8", "desc": "따뜻한 빛의 갓을 씌운 키 큰 조명.", "model": [{"s": "cyl", "size": [0.2, 0.04], "at": [0, 0.02, 0], "c": "#5A5A5A"}, {"s": "cyl", "size": [0.03, 1.4], "at": [0, 0.72, 0], "c": "#5A5A5A"}, {"s": "cone", "size": [0.3, 0.35], "at": [0, 1.5, 0], "c": "#F5E6C8"}]},
+    {"id": "bookshelf", "name": "책장", "abbr": "책장", "kind": "furniture", "stack": 1, "price": 1100, "buy": 2200, "color": "#8A5A36", "desc": "좋아하는 책을 꽂아 두는 3단 책장.", "model": [{"s": "box", "size": [1.0, 1.6, 0.35], "at": [0, 0.8, 0], "c": "#8A5A36"}, {"s": "box", "size": [0.8, 0.3, 0.25], "at": [0, 0.45, 0.07], "c": "#C0504D"}, {"s": "box", "size": [0.8, 0.3, 0.25], "at": [0, 0.95, 0.07], "c": "#4F81BD"}, {"s": "box", "size": [0.8, 0.3, 0.25], "at": [0, 1.4, 0.07], "c": "#9BBB59"}]},
+    {"id": "rocking_chair", "name": "흔들의자", "abbr": "흔들", "kind": "furniture", "stack": 1, "price": 1750, "buy": 3500, "color": "#8C5A3A", "desc": "앉으면 스르르 잠이 오는 흔들의자.", "model": [{"s": "box", "size": [0.55, 0.08, 0.55], "at": [0, 0.45, 0], "c": "#8C5A3A"}, {"s": "box", "size": [0.06, 0.42, 0.06], "at": [-0.22, 0.24, -0.22], "c": "#6E4A2E"}, {"s": "box", "size": [0.06, 0.42, 0.06], "at": [-0.22, 0.24, 0.22], "c": "#6E4A2E"}, {"s": "box", "size": [0.06, 0.42, 0.06], "at": [0.22, 0.24, -0.22], "c": "#6E4A2E"}, {"s": "box", "size": [0.06, 0.42, 0.06], "at": [0.22, 0.24, 0.22], "c": "#6E4A2E"}, {"s": "box", "size": [0.06, 0.06, 0.9], "at": [-0.22, 0.03, 0], "c": "#6E4A2E"}, {"s": "box", "size": [0.06, 0.06, 0.9], "at": [0.22, 0.03, 0], "c": "#6E4A2E"}, {"s": "box", "size": [0.55, 0.65, 0.06], "at": [0, 0.82, -0.25], "c": "#8C5A3A"}]},
+    {"id": "sofa", "name": "벨벳 소파", "abbr": "소파", "kind": "furniture", "stack": 1, "price": 2600, "buy": 5200, "color": "#B5485A", "desc": "푹신한 벨벳 소파. 고급 상점에서만 판다.", "model": [{"s": "box", "size": [1.6, 0.4, 0.8], "at": [0, 0.25, 0], "c": "#B5485A"}, {"s": "box", "size": [1.6, 0.5, 0.2], "at": [0, 0.65, -0.3], "c": "#B5485A"}, {"s": "box", "size": [0.2, 0.35, 0.8], "at": [-0.8, 0.6, 0], "c": "#9E3A4B"}, {"s": "box", "size": [0.2, 0.35, 0.8], "at": [0.8, 0.6, 0], "c": "#9E3A4B"}, {"s": "box", "size": [1.2, 0.12, 0.55], "at": [0, 0.5, 0.08], "c": "#D46A7A"}]},
+    {"id": "fountain", "name": "작은 분수대", "abbr": "분수", "kind": "furniture", "stack": 1, "price": 4000, "buy": 8000, "color": "#C9C9C9", "desc": "졸졸 물소리가 나는 돌 분수대. 마을의 자랑거리.", "model": [{"s": "cyl", "size": [1.0, 0.4], "at": [0, 0.2, 0], "c": "#C9C9C9"}, {"s": "cyl", "size": [0.9, 0.02], "at": [0, 0.41, 0], "c": "#6FB7E0"}, {"s": "cyl", "size": [0.15, 0.8], "at": [0, 0.6, 0], "c": "#E0E0E0"}, {"s": "cyl", "size": [0.4, 0.1], "at": [0, 1.0, 0], "c": "#D8D8D8"}, {"s": "sphere", "size": [0.18], "at": [0, 1.12, 0], "c": "#8FD0F0"}]},
+    {"id": "grand_piano", "name": "그랜드 피아노", "abbr": "피아", "kind": "furniture", "stack": 1, "price": 4750, "buy": 9500, "color": "#1E1E24", "desc": "반짝이는 검은 피아노. 마을 음악회를 열어 볼까?", "model": [{"s": "box", "size": [1.4, 0.35, 1.2], "at": [0, 0.92, 0], "c": "#1E1E24"}, {"s": "cyl", "size": [0.06, 0.75], "at": [-0.55, 0.375, 0.4], "c": "#1E1E24"}, {"s": "cyl", "size": [0.06, 0.75], "at": [0.55, 0.375, 0.4], "c": "#1E1E24"}, {"s": "cyl", "size": [0.06, 0.75], "at": [0, 0.375, -0.45], "c": "#1E1E24"}, {"s": "box", "size": [1.2, 0.05, 0.25], "at": [0, 0.94, 0.7], "c": "#F4F4F4"}, {"s": "box", "size": [1.3, 0.04, 1.1], "at": [0, 1.12, -0.05], "c": "#2A2A33"}]},
+    {"id": "straw_hat", "name": "밀짚모자", "abbr": "밀짚", "kind": "clothing", "wear": "hat", "stack": 1, "price": 250, "buy": 500, "color": "#E8C872", "desc": "햇볕 좋은 날 낚시할 때 딱 좋은 모자.", "model": [{"s": "cyl", "size": [0.55, 0.04], "at": [0, 0.72, 0], "c": "#E8C872"}, {"s": "cyl", "size": [0.3, 0.22], "at": [0, 0.84, 0], "c": "#E8C872"}, {"s": "cyl", "size": [0.31, 0.06], "at": [0, 0.77, 0], "c": "#C0504D"}]},
+    {"id": "striped_tee", "name": "줄무늬 티셔츠", "abbr": "줄티", "kind": "clothing", "wear": "top", "stack": 1, "price": 225, "buy": 450, "color": "#4F81BD", "desc": "파란 줄무늬가 시원한 티셔츠.", "model": [{"s": "cyl", "size": [0.415, 0.5], "at": [0, -0.15, 0], "c": "#FFFFFF"}, {"s": "cyl", "size": [0.42, 0.08], "at": [0, -0.05, 0], "c": "#4F81BD"}, {"s": "cyl", "size": [0.42, 0.08], "at": [0, -0.25, 0], "c": "#4F81BD"}]},
+    {"id": "knit_cap", "name": "방울 털모자", "abbr": "털모", "kind": "clothing", "wear": "hat", "stack": 1, "price": 400, "buy": 800, "color": "#4F81BD", "desc": "꼭대기에 방울이 달린 따뜻한 털모자.", "model": [{"s": "cone", "size": [0.36, 0.45], "at": [0, 0.88, 0], "c": "#4F81BD"}, {"s": "sphere", "size": [0.08], "at": [0, 1.12, 0], "c": "#FFFFFF"}]},
+    {"id": "apron", "name": "목공 앞치마", "abbr": "앞치", "kind": "clothing", "wear": "top", "stack": 1, "price": 450, "buy": 900, "color": "#E9D8B4", "desc": "주머니가 넉넉한 튼튼한 앞치마.", "model": [{"s": "box", "size": [0.5, 0.6, 0.04], "at": [0, -0.15, -0.41], "c": "#E9D8B4"}, {"s": "box", "size": [0.22, 0.12, 0.02], "at": [0, -0.25, -0.435], "c": "#C9A877"}]},
+    {"id": "raincoat", "name": "노란 우비", "abbr": "우비", "kind": "clothing", "wear": "top", "stack": 1, "price": 550, "buy": 1100, "color": "#F2C14E", "desc": "비 오는 날 호수에 갈 때 입는 노란 우비.", "model": [{"s": "cyl", "size": [0.43, 0.75], "at": [0, -0.05, 0], "c": "#F2C14E"}]},
+    {"id": "flower_hat", "name": "꽃장식 모자", "abbr": "꽃모", "kind": "clothing", "wear": "hat", "stack": 1, "price": 1100, "buy": 2200, "color": "#F7E3EA", "desc": "챙에 생화를 꽂은 우아한 모자.", "model": [{"s": "cyl", "size": [0.5, 0.03], "at": [0, 0.74, 0], "c": "#F7E3EA"}, {"s": "cyl", "size": [0.28, 0.2], "at": [0, 0.85, 0], "c": "#F7E3EA"}, {"s": "sphere", "size": [0.07], "at": [0.2, 0.9, 0.15], "c": "#E87A90"}, {"s": "sphere", "size": [0.07], "at": [-0.15, 0.92, 0.18], "c": "#F2C14E"}]},
+    {"id": "velvet_beret", "name": "벨벳 베레모", "abbr": "베레", "kind": "clothing", "wear": "hat", "stack": 1, "price": 1500, "buy": 3000, "color": "#7A1F3D", "desc": "고급 상점의 자랑, 와인빛 베레모.", "model": [{"s": "cyl", "size": [0.38, 0.08], "at": [0.04, 0.82, 0], "c": "#7A1F3D"}, {"s": "sphere", "size": [0.05], "at": [0.04, 0.88, 0], "c": "#7A1F3D"}]},
+    {"id": "formal_vest", "name": "나비넥타이 조끼", "abbr": "조끼", "kind": "clothing", "wear": "top", "stack": 1, "price": 1300, "buy": 2600, "color": "#2E3A59", "desc": "나비넥타이까지 갖춘 멋쟁이 조끼.", "model": [{"s": "cyl", "size": [0.42, 0.5], "at": [0, -0.1, 0], "c": "#2E3A59"}, {"s": "sphere", "size": [0.03], "at": [0, 0.0, -0.42], "c": "#E8C872"}, {"s": "sphere", "size": [0.03], "at": [0, -0.15, -0.42], "c": "#E8C872"}, {"s": "box", "size": [0.18, 0.07, 0.05], "at": [0, 0.2, -0.4], "c": "#C0504D"}]}
   ],
-  "chop_drops": [
-    { "id": "wood",     "weight": 60 },
-    { "id": "softwood", "weight": 25 },
-    { "id": "hardwood", "weight": 15 }
-  ]
+  "chop_drops": {
+    "round": [
+      {
+        "id": "wood",
+        "weight": 55
+      },
+      {
+        "id": "hardwood",
+        "weight": 20
+      },
+      {
+        "id": "branch",
+        "weight": 20
+      },
+      {
+        "id": "acorn",
+        "weight": 5
+      }
+    ],
+    "pine": [
+      {
+        "id": "softwood",
+        "weight": 55
+      },
+      {
+        "id": "wood",
+        "weight": 20
+      },
+      {
+        "id": "branch",
+        "weight": 15
+      },
+      {
+        "id": "cedarwood",
+        "weight": 5
+      },
+      {
+        "id": "pinecone",
+        "weight": 5
+      }
+    ],
+    "birch": [
+      {
+        "id": "birchwood",
+        "weight": 60
+      },
+      {
+        "id": "wood",
+        "weight": 20
+      },
+      {
+        "id": "branch",
+        "weight": 15
+      },
+      {
+        "id": "feather",
+        "weight": 5
+      }
+    ]
+  }
 }

@@ -37,18 +37,28 @@ export function shouldOffer({ rules, profile, npcId, today, random, chance = nul
 
 const between = (random, min, max) => min + Math.floor(random() * (max - min + 1));
 
-/** 부탁 하나를 만든다. 지금 낚을 수 있는 물고기가 없으면 물고기 부탁은 고르지 않는다. */
-export function makeQuest({ rules, data, npcDef, random, hour, weather, today, seq }) {
+/**
+ * 부탁 하나를 만든다. 지금 낚을 수 있는 물고기가 없으면 물고기 부탁은 고르지 않는다.
+ * goodsPool: 지금 구할 수 있는 소지품 id (상점 진열품 + 나무에서 나오는 것). 비어 있으면 소지품 부탁은 고르지 않는다.
+ */
+export function makeQuest({ rules, data, npcDef, random, hour, weather, today, seq, goodsPool = [] }) {
   const fishNow = [];
   for (const spot of data.spots.values()) {
     for (const f of availableFish(spot, data.fish, hour, weather)) if (!fishNow.includes(f)) fishNow.push(f);
   }
   const likes = npcDef.likes ?? [];
-  const templates = rules.templates.filter((t) => t.kind !== QuestKind.deliverFish || fishNow.length > 0);
+  const templates = rules.templates.filter(
+    (t) => (t.kind !== QuestKind.deliverFish || fishNow.length > 0) && (t.pool !== 'goods' || goodsPool.length > 0),
+  );
   const t = pickWeighted(templates, (x) => x.weight + (likes.includes(x.id) ? rules.like_weight_bonus : 0), random);
   const n = between(random, t.min, t.max);
   const quest = { id: `q${seq}`, npc: npcDef.id, kind: t.kind, n, reward: t.reward_base + t.reward_per * n, exp: today + 1 };
-  if (t.kind === QuestKind.deliver) quest.item = t.item;
+  if (t.kind === QuestKind.deliver && t.pool === 'goods') {
+    // 소지품: 사 오거나 주워 와야 해서 그 값만큼 더 쳐준다.
+    quest.item = goodsPool[Math.floor(random() * goodsPool.length)];
+    const info = data.items.get(quest.item);
+    quest.reward = t.reward_base + (info.buy ?? info.price * 2) * n;
+  } else if (t.kind === QuestKind.deliver) quest.item = t.item;
   if (t.kind === QuestKind.deliverFish) {
     const fish = pickWeighted(fishNow, (f) => f.weight, random);
     quest.item = fish.id;

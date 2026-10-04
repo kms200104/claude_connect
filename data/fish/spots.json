@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "spots": [
     {
       "id": "lake",
@@ -9,7 +9,28 @@
       "half_x": 9.0,
       "half_z": 7.0,
       "cast_range": 3.5,
-      "fish": ["crucian", "loach", "minnow", "carp", "catfish", "mandarin", "goldfish", "sturgeon"]
+      "fish": [
+        "crucian",
+        "loach",
+        "minnow",
+        "pale_chub",
+        "korean_minnow",
+        "smelt",
+        "carp",
+        "dark_chub",
+        "bitterling",
+        "catfish",
+        "mandarin",
+        "sleeper",
+        "aucha_perch",
+        "snakehead",
+        "eel",
+        "goldfish",
+        "golden_carp",
+        "rainbow_trout",
+        "cherry_salmon",
+        "sturgeon"
+      ]
     }
   ]
 }

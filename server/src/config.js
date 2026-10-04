@@ -20,7 +20,8 @@ export const defaultConfig = {
   // ws ping 주기(ms). 응답 없는 소켓은 다음 주기에 끊는다.
   heartbeatMs: num('HEARTBEAT_MS', 10000),
   // 이동 검증: 클라이언트 최대 속도(m/s)에 여유를 곱한 값 + 고정 여유 거리(m).
-  maxSpeed: num('MAX_SPEED', 4.5),
+  // 달리기 속도(7m/s)까지 받는다. 걷기는 4.5m/s.
+  maxSpeed: num('MAX_SPEED', 7.2),
   speedTolerance: num('SPEED_TOLERANCE', 1.6),
   moveSlackMeters: num('MOVE_SLACK_M', 0.6),
   // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위.
@@ -83,6 +84,12 @@ export const defaultConfig = {
   talkLeaveMeters: num('TALK_LEAVE_M', 6),
   // 부탁(퀘스트) 확률. 비우면 data/quests/quests.json 의 값.
   questChance: process.env.QUEST_CHANCE !== undefined && process.env.QUEST_CHANCE !== '' ? Number(process.env.QUEST_CHANCE) : null,
+  // 상점 문을 지난 직후 이 시간 동안은 문 반대편(10m 넘게 떨어진 곳)에서 온 낡은 이동 요청을 버린다.
+  doorGraceMs: num('DOOR_GRACE_MS', 1500),
+  // 상점 포인트 배율 (시연·테스트용. 1이면 거래한 솔만큼 포인트).
+  shopPointsScale: num('SHOP_POINTS_SCALE', 1),
+  // 한 사람이 마을에 설치할 수 있는 가구 수.
+  maxPlacedPerPlayer: num('MAX_PLACED_PER_PLAYER', 30),
   // 부탁 종류를 하나로 고정한다 (quests.json 의 템플릿 id, 시연·테스트용). 비우면 전부.
   questTemplate: process.env.QUEST_TEMPLATE || '',
 };
