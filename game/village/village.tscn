@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -10,6 +10,10 @@
 [ext_resource type="Material" path="res://assets/materials/block_gray.tres" id="8_block"]
 [ext_resource type="Material" path="res://assets/materials/player_body.tres" id="9_body"]
 [ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="10_nose"]
+[ext_resource type="Script" path="res://game/village/player_replicator.gd" id="11_replicator"]
+[ext_resource type="PackedScene" path="res://game/player/remote_player.tscn" id="12_remote"]
+[ext_resource type="Material" path="res://assets/materials/remote_body.tres" id="13_remote_body"]
+[ext_resource type="PackedScene" path="res://ui/hud/room_panel.tscn" id="14_panel"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -68,7 +72,7 @@ world_environment = NodePath("../WorldEnvironment")
 focus = NodePath("../Player")
 toon_shader = ExtResource("5_toon")
 lit_shader = ExtResource("6_lit")
-materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose")])
+materials = Array[ShaderMaterial]([ExtResource("7_ground"), ExtResource("8_block"), ExtResource("9_body"), ExtResource("10_nose"), ExtResource("13_remote_body")])
 
 [node name="Terrain" type="Node3D" parent="."]
 
@@ -128,6 +132,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 joystick = NodePath("../HUD/Joystick")
 camera = NodePath("../CameraRig/Camera3D")
 
+[node name="PlayerReplicator" type="Node" parent="." node_paths=PackedStringArray("player", "remote_parent")]
+script = ExtResource("11_replicator")
+player = NodePath("../Player")
+remote_scene = ExtResource("12_remote")
+remote_parent = NodePath("..")
+
 [node name="CameraRig" type="Node3D" parent="." node_paths=PackedStringArray("target", "camera")]
 script = ExtResource("2_camera")
 target = NodePath("../Player")
@@ -145,3 +155,5 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_joystick")
+
+[node name="RoomPanel" parent="HUD" instance=ExtResource("14_panel")]

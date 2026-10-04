@@ -1,0 +1,15 @@
+{
+  "name": "solbaram-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "솔바람 마을 WebSocket 세션 서버 (방 코드, 위치 동기화, 재접속)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

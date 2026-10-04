@@ -1,0 +1,102 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/hud/room_panel.gd" id="1_panel"]
+
+[node name="RoomPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_panel")
+
+[node name="Card" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 24.0
+offset_top = 60.0
+offset_right = -24.0
+grow_horizontal = 2
+
+[node name="Margin" type="MarginContainer" parent="Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Form" type="VBoxContainer" parent="Card/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ServerEdit" type="LineEdit" parent="Card/Margin/VBox/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+placeholder_text = "서버 주소 (ws://192.168.0.5:8080)"
+
+[node name="CodeEdit" type="LineEdit" parent="Card/Margin/VBox/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+placeholder_text = "방 코드 6자리"
+alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Card/Margin/VBox/Form"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CreateButton" type="Button" parent="Card/Margin/VBox/Form/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+text = "방 만들기"
+
+[node name="JoinButton" type="Button" parent="Card/Margin/VBox/Form/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+text = "참가"
+
+[node name="ResumeButton" type="Button" parent="Card/Margin/VBox/Form"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "이전 방으로 이어하기"
+
+[node name="StatusRow" type="HBoxContainer" parent="Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatusLabel" type="Label" parent="Card/Margin/VBox/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 30
+text = "방을 만들거나 코드로 참가하세요"
+autowrap_mode = 3
+
+[node name="LeaveButton" type="Button" parent="Card/Margin/VBox/StatusRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(150, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "나가기"

@@ -1,0 +1,40 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://game/player/remote_player.gd" id="1_remote"]
+[ext_resource type="Material" path="res://assets/materials/remote_body.tres" id="2_body"]
+[ext_resource type="Material" path="res://assets/materials/player_nose.tres" id="3_nose"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.4
+height = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_nose"]
+size = Vector3(0.22, 0.22, 0.32)
+
+[node name="RemotePlayer" type="Node3D" node_paths=PackedStringArray("body", "name_label")]
+script = ExtResource("1_remote")
+body = NodePath("Body")
+name_label = NodePath("NameLabel")
+
+[node name="Body" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+
+[node name="Capsule" type="MeshInstance3D" parent="Body"]
+mesh = SubResource("CapsuleMesh_body")
+surface_material_override/0 = ExtResource("2_body")
+
+[node name="Nose" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.42)
+mesh = SubResource("BoxMesh_nose")
+surface_material_override/0 = ExtResource("3_nose")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+pixel_size = 0.008
+billboard = 1
+double_sided = false
+no_depth_test = true
+fixed_size = false
+text = "플레이어"
+font_size = 56
+outline_size = 14

@@ -8,6 +8,10 @@ run/main_scene="res://game/village/village.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 run/max_fps=30
 
+[autoload]
+
+Net="*res://autoload/net/net.gd"
+
 [debug]
 
 gdscript/warnings/untyped_declaration=1
