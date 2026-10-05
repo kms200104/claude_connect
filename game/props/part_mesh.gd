@@ -12,12 +12,33 @@ extends RefCounted
 static var _cache: Dictionary[String, ArrayMesh] = {}
 
 
-## key 로 한 번만 만든다 (같은 아이템은 메시 공유).
+## Blender 로 다시 만든 모형 (tools/blender/build_items.py, v0.11): 있으면 절차 모형 대신 쓴다.
+const MODEL_DIR: String = "res://assets/models/items"
+
+
+## key 로 한 번만 만든다 (같은 아이템은 메시 공유). Blender 모형(<key>.glb)이 있으면 그것을 쓴다.
 static func get_mesh(key: String, parts: Array) -> ArrayMesh:
 	if _cache.has(key):
 		return _cache[key]
-	var mesh: ArrayMesh = build(parts)
+	var mesh: ArrayMesh = load_model(key)
+	if mesh == null:
+		mesh = build(parts)
 	_cache[key] = mesh
+	return mesh
+
+
+## assets/models/items/<key>.glb 의 첫 메시. 없거나 읽지 못하면 null.
+static func load_model(key: String) -> ArrayMesh:
+	var path: String = "%s/%s.glb" % [MODEL_DIR, key]
+	if not ResourceLoader.exists(path):
+		return null
+	var scene: PackedScene = load(path) as PackedScene
+	if scene == null:
+		return null
+	var root: Node = scene.instantiate()
+	var found: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+	var mesh: ArrayMesh = (found[0] as MeshInstance3D).mesh as ArrayMesh if not found.is_empty() else null
+	root.free()
 	return mesh
 
 

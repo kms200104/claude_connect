@@ -1,7 +1,9 @@
 class_name KitchenWindow
 extends Control
 ## 식당 주방 창 (카운터에서 "주방"): 앉은 손님의 주문 목록 → 하나를 골라 요리 → 동작마다 박자 맞추기 → 서버가 별점을 매긴다.
-##   썰기(beats): 똑딱 박자에 맞춰 "탁!"   굽기·끓이기·담기(timing): 눈금이 초록 칸에 왔을 때 "지금!"   섞기(mash): 시간 안에 마구 누르기
+##   썰기(beats): 똑딱 박자에 맞춰 "탁!"   끓이기·담기(timing): 눈금이 초록 칸에 왔을 때 "지금!"   섞기(mash): 시간 안에 마구 누르기
+##   굽기(grill, v0.11): 팬 위 재료의 아랫면이 노릇해지면 "뒤집기!", 다른 면도 노릇해지면 "꺼내기!" (늦으면 탄다)
+##   찌기(steam, v0.11): 재료를 하나씩 냄비에 담고 → 물을 꾹 눌러 선까지 붓고(떼면 뚜껑이 닫힘) → 김이 알맞게 오르면 "뚜껑 열기!"
 ## 누른 시각(동작 시작부터 ms)만 서버로 보내고, 솜씨·맛·시간·손님 MBTI 로 별점을 매기는 건 서버다.
 ## 요리하는 동안 캐릭터는 칼·팬·국자를 들고 그 동작을 한다.
 ## v9 같이 요리: 동작을 하나씩 맡아서(rest_cook) 한다 — 친구가 다른 동작을 맡고 있으면 그 동작은 건너뛰고 내 몫만 한다.
@@ -41,6 +43,9 @@ var _gauge: Control = null
 var _prompt: Label = null
 var _tap_button: Button = null
 var _result: Dictionary = {}
+## 찌기: 물을 붓는 중 (단추를 누르고 있음).
+var _pouring: bool = false
+var _sizzle_seed: int = 0
 
 
 func _ready() -> void:
@@ -193,15 +198,9 @@ func _order_card(o: Dictionary) -> Control:
 		style = " · %s %s" % [customer.mbti, "늦어도 너그러움" if customer.mbti[2] == "F" else "솜씨에 깐깐함"]
 	info.add_child(_label("%s%s%s" % [who, "  ♥단골" if bool(o.get("regular", false)) else "", style], 26, SOFT))
 	info.add_child(_label("%s · %s" % [recipe.display_name if recipe != null else dish, Money.short(recipe.price if recipe != null else 0)], 32, INK))
-	var bar: ProgressBar = ProgressBar.new()
+	var bar: MeterBar = MeterBar.make(20.0, 1.0, GOOD)
 	bar.name = "Patience"
 	bar.set_meta("order", str(o.get("id", "")))
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0, 20)
-	bar.add_theme_stylebox_override("background", EventHud._box(Color(0.85, 0.8, 0.72), Color(0.75, 0.66, 0.54), 10, 1, 0))
-	bar.add_theme_stylebox_override("fill", EventHud._box(Color.WHITE, Color.WHITE, 10, 0, 0))
 	info.add_child(bar)
 	# 동작마다 누가 맡았는지: ✓ 끝 · 이름 맡는 중 · 빈칸.
 	var chips: PackedStringArray = []
@@ -227,14 +226,14 @@ func _order_card(o: Dictionary) -> Control:
 
 
 func _update_patience() -> void:
-	for bar: Node in _list.find_children("Patience", "ProgressBar", true, false):
-		var pb: ProgressBar = bar as ProgressBar
+	for bar: Node in _list.find_children("Patience", "MeterBar", true, false):
+		var pb: MeterBar = bar as MeterBar
 		var o: Dictionary = Economy.orders.get(str(pb.get_meta("order", "")), {})
 		if o.is_empty():
 			continue
 		var ratio: float = Economy.order_left_ms(o) / maxf(float(o.get("patience", 1.0)), 1.0)
-		pb.value = ratio
-		pb.modulate = GOOD.lerp(WARN, 1.0 - ratio)
+		pb.ratio = ratio
+		pb.fill_color = GOOD.lerp(WARN, 1.0 - ratio)
 
 
 func _build_menu() -> void:
@@ -275,20 +274,30 @@ func _start_cooking(order_id: String) -> void:
 		player.look_toward(site.counter_facing() if site != null else Vector3.BACK)
 	if site != null:
 		site.set_steaming(true)
+	_start_cooking_view()
+	_next_step()
+
+
+## 요리 화면 (제목 · 안내 · 그림 · 큰 단추).
+func _start_cooking_view() -> void:
 	for c: Node in _list.get_children():
 		c.queue_free()
 	_list.add_child(_label("%s 만들기" % _recipe.display_name, 36, INK))
 	_prompt = _label("", 32, INK)
 	_list.add_child(_prompt)
-	_gauge = Control.new()
-	_gauge.custom_minimum_size = Vector2(0, 150)
-	_gauge.draw.connect(_draw_gauge)
+	var gauge: Control = Control.new()
+	gauge.custom_minimum_size = Vector2(0, 150)
+	# 앞 요리 화면의 (지워지는 중인) 그림판이 새 그림판에 그리지 않게 한다.
+	gauge.draw.connect(func() -> void:
+		if gauge == _gauge:
+			_draw_gauge())
+	_gauge = gauge
 	_list.add_child(_gauge)
 	_tap_button = _button("탁!", 48)
 	_tap_button.custom_minimum_size = Vector2(0, 200)
 	_tap_button.button_down.connect(_on_tap)
+	_tap_button.button_up.connect(_on_release)
 	_list.add_child(_tap_button)
-	_next_step()
 
 
 ## 아직 아무도 안 맡은 다음 동작을 맡는다. 없으면 친구가 마무리하기를 기다린다.
@@ -334,18 +343,26 @@ func _begin_step(i: int) -> void:
 	_step_index = i
 	_step = GameData.econ.step(_recipe.steps[i])
 	_step_taps = []
+	_pouring = false
+	_sizzle_seed = randi()
 	_step_start_ms = float(Time.get_ticks_msec()) + 350.0
+	if _gauge != null:
+		_gauge.custom_minimum_size = Vector2(0, 340 if str(_step.get("kind", "")) in ["grill", "steam"] else 150)
 	match str(_step.get("kind", "")):
 		"beats":
 			_step_end_ms = _step_start_ms + float(int(_step.get("beats", 4)) + 1) * float(_step.get("interval_ms", 480))
 		"timing":
 			_step_end_ms = _step_start_ms + float(_step.get("ideal_ms", 2000)) + float(_step.get("window_ms", 300)) * 3.0
+		"grill":
+			_step_end_ms = _step_start_ms + float(_step.get("sides", 2)) * float(_step.get("side_ms", 2000)) * 1.9
+		"steam":
+			_step_end_ms = _step_start_ms + 3000.0 + float(_step.get("fill_ms", 1600)) * 2.5 + float(_step.get("steam_ms", 2600)) * 2.0
 		_:
 			_step_end_ms = _step_start_ms + float(_step.get("duration_ms", 2600))
 	var tool_id: String = str(_step.get("tool", ""))
 	if player != null and player.rig != null:
 		player.rig.set_cooking(str(_step.get("anim", "")), tool_id)
-	_tap_button.text = {"beats": "탁!", "timing": "지금!", "mash": "섞기!"}.get(str(_step.get("kind", "")), "탁!")
+	_tap_button.text = _button_text()
 	match str(_step.get("anim", "")):
 		"cook_stir", "cook_flip":
 			Audio.play_sfx("cook_sizzle" if tool_id == "pan" else "cook_bubble", -6.0)
@@ -365,12 +382,23 @@ func _tick_step() -> void:
 			# 박자마다 칼 소리 (다음 박자 표시).
 		"timing":
 			_prompt.text = "%s — 눈금이 초록 칸에 오면 지금!" % label if _step_taps.is_empty() else "%s — 좋아요, 기다려요…" % label
+		"grill":
+			var sides: int = int(_step.get("sides", 2))
+			_prompt.text = "%s — 다 구웠어요!" % label if _step_taps.size() >= sides else "%s — %d번째 면: 아랫면이 노릇해지면 %s" % [label, _step_taps.size() + 1, "꺼내요" if _step_taps.size() == sides - 1 else "뒤집어요"]
+		"steam":
+			_prompt.text = "%s — %s" % [label, _steam_hint()]
 		_:
 			_prompt.text = "%s — 마구 눌러요! (%d/%d)" % [label, _step_taps.size(), int(_step.get("taps", 10))]
 	if t < 0.0:
 		_prompt.text = "준비… " + label
 	# 타이밍 동작은 누른 뒤 조금 있다가 넘어간다 (너무 빨리 낸 요리는 서버가 받지 않는다).
 	var done: bool = now >= _step_end_ms
+	if kind == "grill" and _step_taps.size() >= int(_step.get("sides", 2)):
+		done = now >= _step_start_ms + _step_taps[-1] + 450.0
+	elif kind == "steam" and _step_taps.size() >= int(_step.get("items", 3)) + 3:
+		done = now >= _step_start_ms + _step_taps[-1] + 600.0
+	if done and _pouring:
+		_on_release()
 	if kind == "timing" and not _step_taps.is_empty():
 		var earliest: float = _step_start_ms + float(_step.get("ideal_ms", 2000)) - float(_step.get("window_ms", 300)) * 1.5
 		done = done or now >= maxf(_step_start_ms + _step_taps[0] + 350.0, earliest)
@@ -387,6 +415,27 @@ func _on_tap() -> void:
 	var kind: String = str(_step.get("kind", ""))
 	if kind == "timing" and not _step_taps.is_empty():
 		return
+	if kind == "grill":
+		if _step_taps.size() >= int(_step.get("sides", 2)):
+			return
+		_step_taps.append(roundf(t))
+		Audio.play_sfx("cook_sizzle", -4.0, 1.15, 0.1)
+		_tap_button.text = _button_text()
+		return
+	if kind == "steam":
+		var n: int = int(_step.get("items", 3))
+		if _pouring or _step_taps.size() == n + 1 or _step_taps.size() >= n + 3:
+			return
+		_step_taps.append(roundf(t))
+		if _step_taps.size() == n + 1:
+			_pouring = true
+			Audio.play_sfx("cook_bubble", -8.0, 1.4)
+		elif _step_taps.size() == n + 3:
+			Audio.play_sfx("cook_bubble", -2.0, 0.8)
+		else:
+			Audio.play_sfx("cook_plate", -8.0, 1.3, 0.1)
+		_tap_button.text = _button_text()
+		return
 	_step_taps.append(roundf(t))
 	match str(_step.get("anim", "")):
 		"cook_chop":
@@ -399,8 +448,221 @@ func _on_tap() -> void:
 			Audio.play_sfx("ui_click", -6.0, 1.2)
 
 
+## 단추를 뗐다: 찌기에서 물 붓기를 멈추면 뚜껑이 닫히고 김이 오르기 시작한다.
+func _on_release() -> void:
+	if not _pouring or _mode != Mode.COOKING:
+		return
+	_pouring = false
+	_step_taps.append(roundf(maxf(float(Time.get_ticks_msec()) - _step_start_ms, _step_taps[-1] + 1.0)))
+	Audio.play_sfx("cook_plate", -6.0, 0.7)
+	_tap_button.text = _button_text()
+
+
+func _button_text() -> String:
+	match str(_step.get("kind", "")):
+		"beats":
+			return "탁!"
+		"timing":
+			return "지금!"
+		"grill":
+			return "꺼내기!" if _step_taps.size() >= int(_step.get("sides", 2)) - 1 else "뒤집기!"
+		"steam":
+			var n: int = int(_step.get("items", 3))
+			if _step_taps.size() < n:
+				return "재료 넣기 (%d/%d)" % [_step_taps.size() + 1, n]
+			if _step_taps.size() == n + 1:
+				return "붓는 중… 선에서 떼요"
+			if _step_taps.size() == n:
+				return "물 붓기 (꾹 눌러요)"
+			return "뚜껑 열기!"
+	return "섞기!"
+
+
+func _steam_hint() -> String:
+	var n: int = int(_step.get("items", 3))
+	if _step_taps.size() < n:
+		return "재료를 냄비에 하나씩 담아요"
+	if _step_taps.size() == n:
+		return "단추를 꾹 눌러 물을 붓고, 선에 닿으면 떼요"
+	if _pouring:
+		return "조금만 더… 선에서 떼요!"
+	if _step_taps.size() == n + 2:
+		return "뚜껑을 덮고 찌는 중 — 김이 초록 칸에 오면 열어요"
+	return "다 쪘어요!"
+
+
+## 지금 하면 딱 좋은 입력 (시연·테스트용): {"at": 동작 시작부터 ms, "release": 뗄 차례인가}. 할 게 없으면 at = INF.
+func next_ideal_input() -> Dictionary:
+	var taps: Array[float] = _step_taps
+	match str(_step.get("kind", "")):
+		"grill":
+			if taps.size() < int(_step.get("sides", 2)):
+				return {"at": (taps[-1] if not taps.is_empty() else 0.0) + float(_step.get("side_ms", 2000)), "release": false}
+		"steam":
+			var n: int = int(_step.get("items", 3))
+			if taps.size() < n:
+				return {"at": 150.0 * (taps.size() + 1), "release": false}
+			if taps.size() == n:
+				return {"at": taps[-1] + 200.0, "release": false}
+			if taps.size() == n + 1:
+				return {"at": taps[-1] + float(_step.get("fill_ms", 1600)), "release": true}
+			if taps.size() == n + 2:
+				return {"at": taps[-1] + float(_step.get("steam_ms", 2600)), "release": false}
+	return {"at": INF, "release": false}
+
+
+## 굽기 장면: 팬, 재료(윗면 = 앞서 구운 면, 아래 테두리 = 지금 굽는 면), 익힘 막대(노릇한 칸), 지글지글·탄 연기.
+func _draw_grill(area: Rect2, t: float) -> void:
+	var side_ms: float = float(_step.get("side_ms", 2000))
+	var window: float = float(_step.get("window_ms", 300))
+	var sides: int = int(_step.get("sides", 2))
+	var flips: int = _step_taps.size()
+	var since: float = t - (_step_taps[-1] if flips > 0 else 0.0)
+	var cooking: bool = flips < sides and t >= 0.0
+	var doneness: float = since / side_ms if cooking else 0.0
+	var center: Vector2 = Vector2(area.position.x + area.size.x * 0.42, area.position.y + 120.0)
+	# 팬 (손잡이 + 테두리 + 바닥)
+	_gauge.draw_line(center + Vector2(150.0, 0.0), center + Vector2(300.0, 20.0), Color(0.25, 0.18, 0.12), 22.0)
+	_draw_ellipse(center, Vector2(160.0, 92.0), Color(0.18, 0.18, 0.2))
+	_draw_ellipse(center + Vector2(0.0, -4.0), Vector2(146.0, 80.0), Color(0.3, 0.3, 0.33))
+	# 재료: 뒤집는 순간 납작해졌다가 돌아온다.
+	var flip_t: float = clampf(since / 220.0, 0.0, 1.0) if flips > 0 else 1.0
+	var squash: float = absf(cos(flip_t * PI)) * 0.85 + 0.15 if flip_t < 1.0 else 1.0
+	var top_color: Color = _doneness_color(1.0 if flips > 0 else 0.0, window / side_ms) if flips < sides else _doneness_color(1.0, 0.1)
+	var under_color: Color = _doneness_color(doneness, window / side_ms)
+	var lift: float = -sin(flip_t * PI) * 40.0 if flip_t < 1.0 else 0.0
+	var food: Vector2 = center + Vector2(0.0, -8.0 + lift)
+	_draw_ellipse(food + Vector2(0.0, 8.0), Vector2(96.0, 40.0 * squash), under_color)
+	_draw_ellipse(food, Vector2(92.0, 36.0 * squash), top_color)
+	_draw_ellipse(food + Vector2(-20.0, -10.0 * squash), Vector2(30.0, 8.0 * squash), Color(1.0, 1.0, 1.0, 0.25))
+	# 지글지글 (익는 중) · 탄 연기 (너무 오래)
+	if cooking:
+		var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+		rng.seed = _sizzle_seed
+		for i: int in 10:
+			var phase: float = fmod(t / 600.0 + rng.randf(), 1.0)
+			var x: float = center.x + rng.randf_range(-120.0, 120.0)
+			var col: Color = Color(1, 1, 1, 0.6 * (1.0 - phase)) if doneness < 1.0 + 2.0 * window / side_ms else Color(0.3, 0.3, 0.3, 0.7 * (1.0 - phase))
+			_gauge.draw_circle(Vector2(x, center.y - 30.0 - phase * 90.0), 4.0 + phase * (6.0 if col.r < 0.5 else 2.0), col)
+	# 익힘 막대: 0 ~ 2배 시간, 노릇한 칸(초록)
+	var bar: Rect2 = Rect2(Vector2(area.position.x + 20.0, area.end.y - 64.0), Vector2(area.size.x - 40.0, 36.0))
+	_gauge.draw_rect(bar, Color(0.92, 0.86, 0.74), true)
+	var to_x: Callable = func(r: float) -> float: return bar.position.x + bar.size.x * clampf(r / 2.0, 0.0, 1.0)
+	var z0: float = to_x.call(1.0 - window / side_ms)
+	var z1: float = to_x.call(1.0 + window / side_ms)
+	_gauge.draw_rect(Rect2(z0, bar.position.y, z1 - z0, bar.size.y), Color(GOOD, 0.6), true)
+	_gauge.draw_rect(Rect2(to_x.call(1.0 + 2.0 * window / side_ms), bar.position.y, bar.end.x - to_x.call(1.0 + 2.0 * window / side_ms), bar.size.y), Color(0.35, 0.2, 0.12, 0.45), true)
+	if cooking:
+		var cx: float = to_x.call(doneness)
+		_gauge.draw_line(Vector2(cx, bar.position.y - 10.0), Vector2(cx, bar.end.y + 10.0), INK, 5.0)
+	_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(bar.position.x, bar.end.y + 26.0), "날것", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, SOFT)
+	_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(z0, bar.end.y + 26.0), "노릇노릇", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, GOOD.darkened(0.3))
+	_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(bar.end.x - 50.0, bar.end.y + 26.0), "탐", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, WARN)
+
+
+## 날것(분홍빛) → 노릇(황금) → 탐(갈색·검정). r = 익힌 시간 / 알맞은 시간.
+func _doneness_color(r: float, tolerance: float) -> Color:
+	var raw: Color = Color(0.93, 0.8, 0.74)
+	var golden: Color = Color(0.86, 0.6, 0.24)
+	var burnt: Color = Color(0.25, 0.15, 0.1)
+	if r <= 1.0:
+		return raw.lerp(golden, clampf(r, 0.0, 1.0))
+	return golden.lerp(burnt, clampf((r - 1.0) / maxf(tolerance * 3.0, 0.05), 0.0, 1.0))
+
+
+## 찌기 장면: 냄비(물 선 표시), 담긴 재료, 붓는 물, 뚜껑, 오르는 김과 김 막대.
+func _draw_steam(area: Rect2, t: float) -> void:
+	var n: int = int(_step.get("items", 3))
+	var fill_ms: float = float(_step.get("fill_ms", 1600))
+	var steam_ms: float = float(_step.get("steam_ms", 2600))
+	var window: float = float(_step.get("window_ms", 300))
+	var taps: Array[float] = _step_taps
+	var pot: Rect2 = Rect2(Vector2(area.position.x + area.size.x * 0.5 - 150.0, area.position.y + 70.0), Vector2(300.0, 170.0))
+	# 물 높이: 1.0 = 선 (냄비 높이의 70%)
+	var level: float = 0.0
+	if taps.size() == n + 1:
+		level = (t - taps[n]) / fill_ms
+	elif taps.size() >= n + 2:
+		level = (taps[n + 1] - taps[n]) / fill_ms
+	var line_y: float = pot.end.y - pot.size.y * 0.7
+	var water_top: float = pot.end.y - pot.size.y * 0.7 * clampf(level, 0.0, 1.35)
+	# 냄비 몸통 · 물 · 재료
+	_gauge.draw_rect(pot, Color(0.55, 0.57, 0.6), true)
+	_gauge.draw_rect(Rect2(pot.position + Vector2(10.0, 0.0), pot.size - Vector2(20.0, 10.0)), Color(0.82, 0.84, 0.86), true)
+	if level > 0.0:
+		_gauge.draw_rect(Rect2(Vector2(pot.position.x + 10.0, water_top), Vector2(pot.size.x - 20.0, pot.end.y - 10.0 - water_top)), Color(0.45, 0.7, 0.95, 0.7), true)
+	var colors: Array[Color] = []
+	if _recipe != null:
+		for ing: Dictionary in _recipe.ingredients:
+			var info: ItemInfo = GameData.item(str(ing.get("item", (ing.get("item_any", [""]) as Array)[0] if ing.has("item_any") else "")))
+			colors.append(info.color if info != null else Color(0.95, 0.85, 0.5))
+	if colors.is_empty():
+		colors = [Color(0.95, 0.85, 0.5)]
+	for i: int in mini(taps.size(), n):
+		var drop: float = clampf((t - taps[i]) / 250.0, 0.0, 1.0)
+		var x: float = pot.position.x + 50.0 + (pot.size.x - 100.0) * (float(i) / maxf(n - 1, 1))
+		var y: float = lerpf(pot.position.y - 60.0, pot.end.y - 40.0, drop * drop)
+		_gauge.draw_circle(Vector2(x, y), 26.0, colors[i % colors.size()])
+		_gauge.draw_circle(Vector2(x - 8.0, y - 8.0), 7.0, Color(1, 1, 1, 0.35))
+	# 물 선 (점선)
+	var dash: float = pot.position.x + 4.0
+	while dash < pot.end.x - 4.0:
+		_gauge.draw_line(Vector2(dash, line_y), Vector2(minf(dash + 14.0, pot.end.x - 4.0), line_y), Color(0.15, 0.35, 0.75), 4.0)
+		dash += 24.0
+	_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(pot.end.x + 10.0, line_y + 8.0), "물 선", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.15, 0.35, 0.75))
+	# 붓는 물줄기
+	if _pouring:
+		_gauge.draw_rect(Rect2(Vector2(pot.position.x + 60.0, pot.position.y - 70.0), Vector2(14.0, water_top - pot.position.y + 70.0)), Color(0.45, 0.7, 0.95, 0.8), true)
+	# 뚜껑: 물을 다 붓고 나면 덮이고, 열면 옆으로 비킨다.
+	var lid_on: bool = taps.size() == n + 2
+	var lid_x: float = pot.position.x - 10.0 + (180.0 if taps.size() >= n + 3 else 0.0)
+	if taps.size() >= n + 2:
+		var lid: Rect2 = Rect2(Vector2(lid_x, pot.position.y - 22.0 - (30.0 if not lid_on else 0.0)), Vector2(pot.size.x + 20.0, 22.0))
+		_gauge.draw_rect(lid, Color(0.4, 0.42, 0.46), true)
+		_gauge.draw_rect(Rect2(lid.get_center() - Vector2(20.0, 22.0), Vector2(40.0, 12.0)), Color(0.25, 0.25, 0.28), true)
+	# 김: 덮고 찌는 동안 점점 많이, 너무 오래면 뿌옇게
+	var steamed: float = 0.0
+	if lid_on:
+		steamed = (t - taps[n + 1]) / steam_ms
+		for i: int in int(4 + steamed * 8.0):
+			var ph: float = fmod(t / 900.0 + i * 0.17, 1.0)
+			var sx: float = pot.position.x + fmod(i * 73.0, pot.size.x)
+			_gauge.draw_circle(Vector2(sx, pot.position.y - 30.0 - ph * 60.0), 6.0 + ph * 12.0, Color(1, 1, 1, 0.55 * (1.0 - ph)))
+	elif taps.size() >= n + 3:
+		var ph2: float = clampf((t - taps[n + 2]) / 600.0, 0.0, 1.0)
+		_gauge.draw_circle(pot.get_center() - Vector2(0.0, 110.0 + ph2 * 30.0), 40.0 + ph2 * 30.0, Color(1, 1, 1, 0.6 * (1.0 - ph2)))
+	# 김 막대 (뚜껑을 덮은 뒤)
+	if taps.size() >= n + 2:
+		var bar: Rect2 = Rect2(Vector2(area.position.x + 20.0, area.end.y - 52.0), Vector2(area.size.x - 40.0, 30.0))
+		_gauge.draw_rect(bar, Color(0.92, 0.86, 0.74), true)
+		var to_x: Callable = func(ms: float) -> float: return bar.position.x + bar.size.x * clampf(ms / (steam_ms * 2.0), 0.0, 1.0)
+		var z0: float = to_x.call(steam_ms - window)
+		_gauge.draw_rect(Rect2(z0, bar.position.y, to_x.call(steam_ms + window) - z0, bar.size.y), Color(GOOD, 0.6), true)
+		var cur: float = (t - taps[n + 1]) if lid_on else (taps[n + 2] - taps[n + 1])
+		var cx: float = to_x.call(cur)
+		_gauge.draw_line(Vector2(cx, bar.position.y - 10.0), Vector2(cx, bar.end.y + 10.0), INK, 5.0)
+
+
+func _draw_ellipse(center: Vector2, radii: Vector2, color: Color) -> void:
+	var pts: PackedVector2Array = PackedVector2Array()
+	for i: int in 32:
+		var a: float = TAU * i / 32.0
+		pts.append(center + Vector2(cos(a) * radii.x, sin(a) * radii.y))
+	_gauge.draw_colored_polygon(pts, color)
+
+
 func _draw_gauge() -> void:
 	var size: Vector2 = _gauge.size
+	var kind0: String = str(_step.get("kind", ""))
+	if kind0 in ["grill", "steam"]:
+		var now_t: float = float(Time.get_ticks_msec()) - _step_start_ms
+		_gauge.draw_rect(Rect2(Vector2.ZERO, size), Color(0.96, 0.92, 0.84), true)
+		if kind0 == "grill":
+			_draw_grill(Rect2(Vector2.ZERO, size), now_t)
+		else:
+			_draw_steam(Rect2(Vector2.ZERO, size), now_t)
+		_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(10.0, 30.0), "%d / %d" % [_step_index + 1, _recipe.steps.size() if _recipe != null else 1], HORIZONTAL_ALIGNMENT_LEFT, -1, 26, SOFT)
+		return
 	var r: Rect2 = Rect2(Vector2(10.0, 40.0), Vector2(size.x - 20.0, 70.0))
 	_gauge.draw_rect(r, Color(0.92, 0.86, 0.74), true)
 	var t: float = float(Time.get_ticks_msec()) - _step_start_ms

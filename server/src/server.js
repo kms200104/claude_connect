@@ -9,7 +9,8 @@ import { createFishing } from './fishing.js';
 import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
 import { createClock, isWeather, timeBand, weatherAt } from './clock.js';
 import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
-import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs } from './npcs.js';
+import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
+import { createMessenger } from './messenger.js';
 import { addChatFriendship, addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
 import { flowerWire, onPath, pickFlower, plantProblem, refreshFlower, snapPlant } from './plants.js';
 import { groundProblem } from './world.js';
@@ -89,7 +90,8 @@ export function createServer(overrides = {}) {
     const staff = data.civic.staff.find((s) => s.desk === desk);
     return !!staff && Math.hypot(player.x - staff.x, player.z - staff.z) <= data.civic.service_range + 0.5 + extra;
   };
-  const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk });
+  const messenger = createMessenger({ data, cfg, random, sendTo, clock });
+  const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
@@ -337,6 +339,7 @@ export function createServer(overrides = {}) {
       tiles: [...room.tiles.values()].map((t) => [t.x, t.z, t.s]),
       digspots: [...room.digSpots.values()].map(digSpotWire),
       shoals: [...room.shoals.values()].map(shoalWire),
+      chats: messenger.wire(room, player.profile),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
     // 집 안에서 끊겼다 돌아오면 그 집 안 그대로 (위치로 어느 집인지 찾는다).
@@ -1256,6 +1259,14 @@ export function createServer(overrides = {}) {
         if (err) fail(err);
         return;
       }
+      case 'msg_send':
+      case 'msg_read':
+        return messenger.handle(ctx, msg, fail);
+      case 'fish_reel': {
+        const err = fishing.reel(player, msg.rid, msg.taps);
+        if (err) fail(err);
+        return;
+      }
       case 'fish_cancel':
         return fishing.cancel(player);
       case 'equip':
@@ -1406,6 +1417,9 @@ export function createServer(overrides = {}) {
         return handleMove(ctx, msg);
       case 'fish_cast':
       case 'fish_hook':
+      case 'fish_reel':
+      case 'msg_send':
+      case 'msg_read':
       case 'fish_cancel':
       case 'equip':
       case 'inv_move':
@@ -1539,6 +1553,23 @@ export function createServer(overrides = {}) {
           room.npcsDirty = true;
         }
       }
+      const online = [...room.players.values()].filter((p) => p.online);
+      const approached = updateApproaches(room.npcs, online, {
+        rules: data.npcRules.approach && { ...data.npcRules.approach, chance_per_s: data.npcRules.approach.chance_per_s * cfg.npcApproachScale },
+        now: t,
+        dtMs,
+        random,
+        mode: stayHome ? 'home' : 'roam',
+        friendOf: (p, npcId) => p.profile.npcs?.[npcId]?.f ?? 0,
+        lastApproached: (p, npcId) => p.approachedAt?.[npcId] ?? -Infinity,
+        canBeApproached: (p) => p.talkingTo === null && !p.fishing && !p.home && !inShop(p),
+        onGreet: (npc, p) => {
+          p.approachedAt ??= {};
+          p.approachedAt[npc.id] = t;
+          sendTo(p, { t: 'npc_greet', npc: npc.id });
+        },
+      });
+      if (approached) room.npcsDirty = true;
       const moved = stepNpcs(room.npcs, {
         dtMs,
         now: t,
@@ -1555,6 +1586,12 @@ export function createServer(overrides = {}) {
       tickShoals(room, dtMs / 1000, t);
     }
   }, 1000 / cfg.npcTickRate);
+
+  // 마을톡: 친한 주민이 가끔 먼저 연락한다.
+  const messengerTimer = setInterval(() => {
+    for (const room of rooms.rooms.values()) messenger.tick(room, { weather: weatherOf(room), restaurantOpen: !!room.shift });
+  }, cfg.messengerCheckMs || data.messenger.check_ms);
+  messengerTimer.unref?.();
 
   /** 여울 물고기: 사람이 가까이 있는 여울만 움직이고 알린다. */
   function tickShoals(room, dt, t) {
@@ -1649,6 +1686,7 @@ export function createServer(overrides = {}) {
       clearInterval(heartbeat);
       clearInterval(autosave);
       clearInterval(marketTick);
+      clearInterval(messengerTimer);
       market.save();
       for (const room of rooms.rooms.values()) {
         for (const p of room.players.values()) {

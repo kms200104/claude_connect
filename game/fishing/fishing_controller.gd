@@ -1,9 +1,10 @@
 class_name FishingController
 extends Node
 ## 낚시 한 판의 클라이언트 쪽 진행. 판정은 전부 서버가 하고, 여기서는 연출과 입력만 맡는다.
-##   던지기 요청 → (대기, 가짜 입질…) → 진짜 입질 → 챔질 요청(반응 시간 보고) → 서버가 확정한 결과
+##   던지기 요청 → (대기: 물고기 그림자가 다가옴, 가짜 입질…) → 진짜 입질(강한 진동 + 찌가 쑥) → 챔질 요청(반응 시간 보고)
+##   → 끌어올리기 연타(v0.11, 정해진 시간 안에 정해진 횟수) → 서버가 확정한 결과
 
-enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
+enum Phase { IDLE, CASTING, WAITING, BITE, REEL, RESULT }
 
 @export_group("References")
 @export var player: Player
@@ -29,12 +30,24 @@ enum Phase { IDLE, CASTING, WAITING, BITE, RESULT }
 ## 낚은 물고기를 두 손으로 내밀고 자랑하는 시간 (희귀할수록 조금 더 길게).
 @export_range(0.5, 8.0, 0.1, "suffix:s") var show_off_time: float = 3.2
 @export var vibrate_on_bite: bool = true
+## 진동 (ms, 세기 0~1): 그림자가 찌를 건드림 · 물고 들어감 · 연타 한 번.
+@export var nibble_vibration: Vector2 = Vector2(45.0, 0.35)
+@export var bite_vibration: Vector2 = Vector2(320.0, 1.0)
+@export var tap_vibration: Vector2 = Vector2(18.0, 0.5)
 
 var phase: Phase = Phase.IDLE
 
 var _bite_shown_ms: float = 0.0
 var _hooked: bool = false
 var _cast_pressed_ms: int = 0
+var _shadow_size: float = 1.0
+var _shadow: FishShadow = null
+var _bite_window_ms: int = 0
+var _reel_need: int = 0
+var _reel_ms: int = 0
+var _reel_shown_ms: float = 0.0
+var _reel_taps: PackedFloat32Array = PackedFloat32Array()
+var _reel_sent: bool = false
 
 
 func _ready() -> void:
@@ -44,6 +57,11 @@ func _ready() -> void:
 	Net.fish_started.connect(_on_started)
 	Net.fish_nibble.connect(_on_nibble)
 	Net.fish_bite.connect(_on_bite)
+	Net.fish_reel.connect(_on_reel)
+	_shadow = FishShadow.new()
+	_shadow.name = "FishShadow"
+	_shadow.touched.connect(_on_shadow_touched)
+	add_child.call_deferred(_shadow)
 	Net.fish_result.connect(_on_result)
 	Net.action_rejected.connect(_on_rejected)
 	Net.state_changed.connect(_on_net_state_changed)
@@ -51,6 +69,11 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	if phase == Phase.REEL and not _reel_sent:
+		var left: float = _reel_ms - (Time.get_ticks_msec() - _reel_shown_ms)
+		hud.update_reel(_reel_taps.size(), _reel_need, left / maxf(_reel_ms, 1.0))
+		if left <= 0.0:
+			_send_reel()
 	if phase == Phase.IDLE:
 		# 낚싯대를 손에 들고 물가에 있어야 던질 수 있다.
 		spot = _nearest_spot(player.global_position)
@@ -92,14 +115,18 @@ func _on_action_pressed() -> void:
 			if not _hooked:
 				_hooked = true
 				# 입질 연출이 보인 시점부터 누른 시점까지 — 네트워크 지연이 섞이지 않는 값.
-				Net.hook_fishing(Time.get_ticks_msec() - _bite_shown_ms)
+				# 찌가 잠기기 전에 누르면 반응 0 → 서버가 '너무 일찍'으로 처리한다.
+				Net.hook_fishing(0.0 if _bite_shown_ms < 0.0 else Time.get_ticks_msec() - _bite_shown_ms)
 				hud.show_hooked()
 				Audio.play_sfx("fish_reel", -3.0)
+		Phase.REEL:
+			_reel_tap()
 
 
-func _on_started() -> void:
+func _on_started(shadow: float = 1.0) -> void:
 	phase = Phase.WAITING
 	_hooked = false
+	_shadow_size = shadow
 	player.set_input_lock(&"fishing", true)
 	var forward: Vector3 = -player.body.global_basis.z
 	forward.y = 0.0
@@ -123,31 +150,102 @@ func _play_cast_whoosh() -> void:
 	Audio.play_sfx("fish_cast", 0.0, 1.0, 0.05)
 
 
-## 찌가 물에 닿았다: 퐁당.
-func _on_bobber_landed(_position: Vector3) -> void:
+## 찌가 물에 닿았다: 퐁당. 곧 물 밑에서 물고기 그림자가 다가온다 (희귀할수록 크다).
+func _on_bobber_landed(landed_at: Vector3) -> void:
 	Audio.play_sfx("fish_plop", 0.0, 1.0, 0.08)
+	if phase == Phase.WAITING and _shadow != null:
+		_shadow.appear(Vector3(landed_at.x, spot.water_height + 0.015, landed_at.z), _shadow_size)
 
 
+## 가짜 입질: 그림자가 쏙 다가와 찌를 건드린다. 닿는 순간(_on_shadow_touched) 찌가 톡, 휴대폰이 살짝 떨린다.
 func _on_nibble() -> void:
 	if phase != Phase.WAITING:
 		return
-	bobber.nibble()
-	Audio.play_at("fish_nibble", bobber.global_position, -4.0, 1.0, 0.15)
-	hud.show_nibble()
-	if vibrate_on_bite:
-		Input.vibrate_handheld(30)
+	if _shadow != null and _shadow.mode != FishShadow.Mode.HIDDEN:
+		_shadow.nibble()
+	else:
+		_on_shadow_touched(false)
 
 
+## 진짜 입질: 그림자가 확 달려들어 찌를 물고 들어간다. 닿는 순간 강한 진동과 함께 찌가 쑥 잠긴다.
 func _on_bite(window_ms: int) -> void:
 	if phase != Phase.WAITING:
 		return
 	phase = Phase.BITE
+	_bite_window_ms = window_ms
+	_bite_shown_ms = -1.0
+	if _shadow != null and _shadow.mode != FishShadow.Mode.HIDDEN:
+		_shadow.bite()
+	else:
+		_on_shadow_touched(true)
+
+
+## 진짜 입질에서 찌가 잠기는 게 화면에 보였는가 (이때부터 챔질 반응 시간을 잰다).
+func is_bite_visible() -> bool:
+	return phase == Phase.BITE and _bite_shown_ms >= 0.0
+
+
+func _on_shadow_touched(strong: bool) -> void:
+	if not strong:
+		if phase != Phase.WAITING:
+			return
+		bobber.nibble()
+		Audio.play_at("fish_nibble", bobber.global_position, -4.0, 1.0, 0.15)
+		hud.show_nibble()
+		_vibrate(nibble_vibration)
+		return
+	if phase != Phase.BITE or _hooked:
+		return
+	# 반응 시간은 찌가 잠기는 게 보인 때부터 잰다.
 	_bite_shown_ms = Time.get_ticks_msec()
 	bobber.bite()
 	Audio.play_at("fish_bite", bobber.global_position, 1.0)
-	hud.show_bite(window_ms)
+	hud.show_bite(_bite_window_ms)
+	_vibrate(bite_vibration)
+
+
+## 챔질 성공 → 끌어올리기: 정해진 시간 안에 정해진 만큼 연타. 다 채우면 바로 서버에 보낸다.
+func _on_reel(taps: int, ms: int) -> void:
+	if phase != Phase.BITE:
+		return
+	phase = Phase.REEL
+	_reel_need = taps
+	_reel_ms = ms
+	_reel_taps = PackedFloat32Array()
+	_reel_sent = false
+	_reel_shown_ms = Time.get_ticks_msec()
+	bobber.struggle()
+	if _shadow != null:
+		_shadow.struggle()
+	hud.show_reel(taps, ms)
+	_vibrate(Vector2(90.0, 0.8))
+
+
+func _reel_tap() -> void:
+	if _reel_sent:
+		return
+	_reel_taps.append(Time.get_ticks_msec() - _reel_shown_ms)
+	bobber.tug()
+	_vibrate(tap_vibration)
+	Audio.play_sfx("fish_reel", -8.0, 1.0 + 0.04 * _reel_taps.size(), 0.05)
+	hud.update_reel(_reel_taps.size(), _reel_need, 1.0 - (Time.get_ticks_msec() - _reel_shown_ms) / maxf(_reel_ms, 1.0))
+	if player.rig != null:
+		player.rig.reel_tug()
+	if _reel_taps.size() >= _reel_need:
+		_send_reel()
+
+
+func _send_reel() -> void:
+	if _reel_sent:
+		return
+	_reel_sent = true
+	hud.show_hooked()
+	Net.reel_fishing(_reel_taps)
+
+
+func _vibrate(v: Vector2) -> void:
 	if vibrate_on_bite:
-		Input.vibrate_handheld(120)
+		Input.vibrate_handheld(int(v.x), v.y)
 
 
 func _on_result(success: bool, fish_id: String, reason: String) -> void:
@@ -155,6 +253,11 @@ func _on_result(success: bool, fish_id: String, reason: String) -> void:
 		return
 	phase = Phase.RESULT
 	bobber.hide_bobber()
+	if _shadow != null:
+		if success:
+			_shadow.hide_shadow()
+		else:
+			_shadow.leave()
 	player.set_fishing_pose(false)
 	if success and GameData.fish.has(fish_id):
 		await _show_off(fish_id)
@@ -224,7 +327,10 @@ func _reset() -> void:
 	_end_show_off()
 	phase = Phase.IDLE
 	_hooked = false
+	_reel_sent = false
 	bobber.hide_bobber()
+	if _shadow != null and _shadow.is_inside_tree():
+		_shadow.hide_shadow()
 	player.set_fishing_pose(false)
 	player.clear_look_direction()
 	player.set_input_lock(&"fishing", false)
@@ -241,6 +347,8 @@ func _describe(success: bool, fish_id: String, reason: String) -> String:
 			return "너무 늦었어요"
 		NetProtocol.FISH_ESCAPED:
 			return "물고기가 도망갔어요"
+		NetProtocol.FISH_SNAPPED:
+			return "힘이 모자라 놓쳤어요… 더 빨리 연타!"
 		NetProtocol.FISH_MOVED:
 			return "움직여서 낚시가 끊겼어요"
 		NetProtocol.FISH_INVENTORY_FULL:

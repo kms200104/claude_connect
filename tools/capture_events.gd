@@ -174,6 +174,18 @@ func _gift() -> void:
 	await _shot("e11_cast_flight")
 	await _wait(0.5)
 	await _shot("e12_bobber_landed")
+	# v0.11: 물 밑 그림자가 다가옴 → 물고 들어감 → 끌어올리기 연타
+	await _wait(2.5)
+	await _shot("e13_fish_shadow")
+	await _wait_until(func() -> bool: return fishing.is_bite_visible(), 40.0)
+	await _wait(0.12)
+	await _shot("e14_bite_sink")
+	fishing.hud.action_pressed.emit()
+	await _wait_until(func() -> bool: return fishing.phase == FishingController.Phase.REEL, 3.0)
+	for i: int in 3:
+		fishing.hud.action_pressed.emit()
+		await _wait(0.12)
+	await _shot("e15_reel_mash")
 
 
 func _meteor() -> void:

@@ -62,6 +62,14 @@ export const defaultConfig = {
   fishReactionSlackMs: num('FISH_REACTION_SLACK_MS', 100),
   // 낚시 중 캐스팅 지점에서 이 이상 움직이면 낚시가 취소된다.
   fishMaxMoveMeters: num('FISH_MAX_MOVE_M', 1.5),
+  // 끌어올리기 연타 (v0.11): 필요한 횟수 배율(0 이면 연타 없이 챔질만으로 낚는다 — 옛 테스트용), 연타 사이 최소 간격.
+  fishReelScale: num('FISH_REEL_SCALE', 1),
+  fishMinTapGapMs: num('FISH_MIN_TAP_GAP_MS', 40),
+  // 마을톡 (v0.11): 주민이 먼저 연락할지 굴리는 간격(없으면 data 의 check_ms), 주민 답장 지연 배율(테스트는 0.01).
+  messengerCheckMs: num('MESSENGER_CHECK_MS', 0),
+  messengerReplyScale: num('MESSENGER_REPLY_SCALE', 1),
+  // 친한 주민이 먼저 다가올 확률 배율 (시연·테스트용, 1 = data/npcs/npcs.json 그대로).
+  npcApproachScale: num('NPC_APPROACH_SCALE', 1),
 
   // 마을 시계. 기본은 실제 시간(배율 1, 한국 시간). 테스트·시연은 배율을 키우거나 시각을 옮긴다.
   clockScale: num('CLOCK_SCALE', 1),

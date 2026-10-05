@@ -6,16 +6,11 @@
 //   · 직원이 둘 이상이면 손님이 1.25배 오래 기다려 주고 더 자주 오며, 두 사람이 나눠 만든 요리는 판정 창이 15% 넓고(서로 거들어 덜 서두른다)
 //     팀 보너스 10% 를 더 받아 나눠 가진다.
 import { ErrorCode } from './protocol.js';
-import { capacity, chooseOrder, cookQuality, menuOf, pantryOf, payFor, ratingOf, starsFor, tasteMatch, tierOf, updateRegular } from './restaurant.js';
+import { capacity, chooseOrder, cookQuality, stepMinMs, menuOf, pantryOf, payFor, ratingOf, starsFor, tasteMatch, tierOf, updateRegular } from './restaurant.js';
 import { countWhere, removeWhere } from './inventory.js';
 import { earn } from './economy.js';
 
-/** 동작 하나를 하는 데 걸리는 가장 짧은 시간 (ms). 이보다 빨리 낸 동작은 받지 않는다 (×0.9 여유). */
-export function stepMinMs(step) {
-  if (step.kind === 'beats') return step.beats * step.interval_ms - step.window_ms;
-  if (step.kind === 'timing') return step.ideal_ms - step.window_ms * 2;
-  return step.duration_ms * 0.5;
-}
+export { stepMinMs };
 
 /** 판정 창을 넓힌 동작 표 (같이 만들 때). */
 export function lenientSteps(steps, factor) {

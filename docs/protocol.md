@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v10
+# 네트워크 프로토콜 v11
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -10,6 +10,7 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` → `face`), 프로필·플레이어 정보의 `face`, 에러 `not_near_mirror` `bad_face`. 저장 파일은 schema 4 그대로 (프로필에 `face` 가 없으면 자리 기본 얼굴).
 v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 값 ×100), 증권(`stock_order`, `market_tick`), 아파트(`apt_buy` `apt_sell`, `homes`), 은행(`bank_quote` `loan_take` `loan_repay`, `bank`, 주간 정산 `week`), 식당(`rest_open` `rest_close` `rest_cook` `rest_serve`, `rest` `rest_order` `rest_served` `rest_left` `rest_closed` `rest_result`), 들판 채집물(`drop.kind: "forage"`), 성성호수 낚시터(`fish_cast.spot: "seongseong"`), 대화 주제 `worry` `mbti`. `profile` 에 `stocks trades loans credit income worth`, `welcome` 에 `market homes rest`. 저장 파일 schema 5 (schema 4 이하의 솔·상점 포인트·부탁 보상은 읽을 때 ×100).
 v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`rest_join`, 직원의 `rest_close` = 그만두기, `rest_staff`)·동작 나눠 맡기(`rest_cook{order, step}` → `rest_claim`, `rest_step` → `rest_stepped`, 마지막 동작에 서버가 `rest_result` — `rest_serve` 없어짐), `rest` 의 `staff team orders[].steps`, 같이 베기(`chop_result.coop`, `coop_bonus`), 같이 낚시·얕은/깊은 물(`fish_started.zone coop`), 동사무소(`civic_info` `civic_civil` `civic_apply` `marry_propose` `marry_answer`, `civic` `civic_result` `marry_proposal` `marry_declined` `household`), 정책대출(`apt_buy.policy: "didimdol"`, `loan_take.product: "sunshine_youth"`, 대출의 `product fixed`), 카드 캐시백(`shop_result.back`), 주간 지원금(`week.grant`), 여울 뜰채(`net` → `net_result`, `shoal`), 삽(`dig` → `dig_result`, `tile` `digspot` `digspot_gone`). `profile` 에 `civ`, `welcome` 에 `civic tiles digspots shoals`. 저장 파일은 schema 5 그대로 (world 에 `tiles households householdSeq`, 프로필에 `household civic age` — 없으면 기본값).
+v10 → v11: 낚시 끌어올리기 — `fish_started.shadow`(물고기 그림자 크기), 챔질 뒤 `fish_reel{taps, ms}` → 클라이언트 `fish_reel{rid, taps[]}`, 실패 사유 `snapped`. 요리 동작 `grill`(면마다 뒤집기) · `steam`(재료 담기 → 물 붓기 → 뚜껑 열기). 주민이 먼저 다가와 말 걸기(`npcs` 의 `ap`, `npc_greet`). 마을톡(`msg_send` `msg_read` → `msg`, `welcome.chats`). 저장 파일은 schema 5 그대로 (프로필에 `chats`, 주민 관계에 `msgReplyDay` — 없으면 빈 값).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
@@ -22,7 +23,10 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `ping` | `c` | 클라이언트 시각. `pong`으로 RTT·서버 시계 추정 |
 | `fish_cast` | `rid spot` | 낚시터에 던지기 요청. **낚싯대를 손에 들고** 수역 `cast_range` 안에 있어야 한다 |
 | `fish_hook` | `rid reaction` | 챔질 요청. `reaction` = 입질 연출이 보인 뒤 버튼을 누르기까지 걸린 ms (입질 전이면 0) |
+| `fish_reel` | `rid taps[]` | 끌어올리기 연타 (v11). `taps` = 서버 `fish_reel` 을 받아 연타 화면이 뜬 뒤 누른 시각들(ms). 필요한 수를 채우면 바로, 못 채우면 시간이 다 됐을 때 보낸다 |
 | `fish_cancel` | | 낚시 취소 |
+| `msg_send` | `rid th tx` | 마을톡 보내기 (v11). `th` = `npc:<주민>` 또는 `pl:<자리>`(같은 마을 친구), `tx` 1~200자. 시스템 방(`sys:*`)·나 자신·없는 방은 `bad_message` |
+| `msg_read` | `th` | 그 대화방을 다 읽었다 (답 없음) |
 | `equip` | `slot` | 손에 들 퀵슬롯 번호(0~4, `-1` = 빈손). 거절되면 `inventory`로 서버 값을 다시 보낸다 |
 | `inv_move` | `rid from to` | 칸 옮기기. 같은 아이템이면 쌓을 수 있는 만큼 합치고, 아니면 맞바꾼다 |
 | `inv_discard` | `rid slot n` | 칸에서 n개 버리기(물고기는 놓아주기). 도구는 `cant_discard` |
@@ -114,14 +118,17 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `home_f` | `rid unit f[]` | 그 집 가구 목록 (v10, 요청한 사람에게는 `rid` 와 함께, 같은 집 안의 다른 사람에게도) |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
 | `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
-| `fish_started` | `rid spot zone coop` | 던지기 수락. v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
+| `fish_started` | `rid spot zone coop shadow` | 던지기 수락. v11: `shadow` = 물 밑에서 다가오는 그림자 크기 (희귀도 흔함 0.75 · 보통 1.0 · 희귀 1.35 × 몸 S 0.85 · M 1 · L 1.2 — 어떤 물고기인지는 모른다). v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
 | `fish_nibble` | `rid` | 가짜 입질 (0~3번). 아직 당기면 안 된다 |
 | `fish_bite` | `rid windowMs` | 진짜 입질. 물고기 종류는 알리지 않는다 |
-| `fish_result` | `rid ok fish? reason? bonus?` | 서버가 확정한 결과. 실패 사유: `early late escaped moved cancelled inventory_full`. 낚시 대회 중이면 `bonus` 솔을 더 받았다 |
+| `fish_reel` | `rid taps ms` | 챔질 성공 → 끌어올리기 (v11): `ms` 안에 `taps` 번 연타해야 한다 |
+| `fish_result` | `rid ok fish? reason? bonus?` | 서버가 확정한 결과. 실패 사유: `early late escaped moved cancelled inventory_full snapped`(v11: 연타가 모자라 놓침). 낚시 대회 중이면 `bonus` 솔을 더 받았다 |
 | `chop_result` | `rid ok item n tree felled coop` | 도끼질 성공. `item` `n`개(나무꾼의 날 2개)가 인벤토리에 들어갔고, `felled`면 나무가 쓰러졌다. v9: `coop` = 4초 안에 다른 사람이 찍은 나무라 두 번 찍은 셈 (같이 쓰러뜨리면 둘 다 +1) |
 | `tree` | `id s c k? x? z? by?` | 나무 상태 변화 (방 전체). `s` = `grown` / `stump` / `sprout` / `sapling` / `young` (v6: 게임 시간으로 자람), `c` = 오늘 찍힌 횟수. 씨앗을 심은 나무(`id` = `p…`)는 `k`(종류) `x z`도 실린다 |
 | `act` | `id kind tree? e?` | 상대의 동작: `kind: chop`(도끼질, `tree`), `kind: emote`(감정표현·몸짓 `e`, v6) |
-| `npcs` | `st n[]` | 주민 위치 (방 전체, 움직이거나 기분이 바뀔 때 10Hz). `n[]`: `{id, x, z, yaw, talk, m}` (`talk` = 대화 중인 플레이어 id, 0 = 없음, `m` = 기분 `happy calm sad grumpy sleepy excited`, v6) |
+| `npcs` | `st n[]` | 주민 위치 (방 전체, 움직이거나 기분이 바뀔 때 10Hz). `n[]`: `{id, x, z, yaw, talk, m}` (`talk` = 대화 중인 플레이어 id, 0 = 없음, `m` = 기분 `happy calm sad grumpy sleepy excited`, v6, `ap` = 먼저 말을 걸러 다가가는 플레이어 id, v11) |
+| `npc_greet` | `npc` | 친한 주민이 내 곁까지 걸어와 먼저 말을 걸었다 (그 사람에게만, v11). 클라이언트는 인사·한마디(`dialogue.json` 의 `approach`)를 보이고, 가만히 있으면 대화를 연다 |
+| `msg` | `th m{f, tx, at}` | 마을톡 새 메시지 (v11). `f` = `me` · 주민 id · `bank` · `town` · `p<자리>`, `at` = 유닉스 ms. `{player}` 는 받는 화면에서 그 사람 이름으로 채운다 |
 | `talk_open` | `rid npc f first m quest? ready? offer? teach? gift?` | 말 걸기 수락. `f` 친밀도, `first` 오늘 첫 대화, `m` 지금 기분, `quest` 이 주민의 진행 중 부탁(`ready` = 지금 완료 가능), `offer` 새 부탁 제안, `teach` 이번에 가르쳐 준 감정표현, `gift` 친해져서 준 선물(이미 가방에) |
 | `talk_topic` | `npc topic f gain m` | 주제 수다 결과 (v6): `gain` = 오른 친밀도(하루 상한이면 0), `m` = 수다 뒤 기분 |
 | `npc_emote` | `npc e to m from` | 주민이 감정표현에 반응했다 (방 전체, v6): `e` 주민의 몸짓, `to` 감정표현을 한 사람, `m` 바뀐 기분, `from` 그 사람의 감정표현 |
@@ -161,6 +168,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - `ev` = `ev` 메시지와 같은 모양(지금 열린 이벤트), `drops[]` = 바닥의 선물·별 조각·채집물 전체.
 - `market` (v8) = `{minute, open, source, fee, tax, stocks[{id, name, sector, about, price, ref, hist[]}]}` — `ref` 는 오늘 기준가(어제 마지막 가격), `hist` 는 최근 120분 가격. `homes` = `homes` 메시지, `rest` = `rest` 메시지와 같은 모양.
 - v9: `civic` = `civic` 메시지, `tiles[[x, z, s]]` = 고친 땅 칸 전체, `digspots[]` = 조개 숨구멍 전체, `shoals[]` = 여울 물고기 떼 전체. `prof.civ` = `{age, resident, card, partner, household, since, approvals}`, `prof.loans[]` 에 `product fixed`.
+- v11: `chats` = `{th: {m: [{f, tx, at}], read}}` 마을톡 대화방 전체 (처음이면 `sys:town` 환영 인사).
 - `prof` 의 경제 정보 (v8): `stocks{id: {q, cost}}`, `trades[]`(최근 10건), `loans[{id, kind, principal, rate, unit, since, weekly}]`, `credit{score, grade}`, `income{week, year}`, `worth{assets, debt, net}`.
 
 ## 마을 이벤트 (서버 판정, `data/events/events.json`)
@@ -188,7 +196,9 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 연결당 초당 60개(버스트 120) 초과 시 `rate_limited`, 계속 넘으면 close `4008`. 메시지는 1KB 이하.
 
 ## 낚시 (서버 판정)
-`fish_cast` → `fish_started` → 가짜 `fish_nibble` × 0~3 → `fish_bite{windowMs}` → `fish_hook{reaction}` → `fish_result`.
+`fish_cast` → `fish_started{shadow}` → 가짜 `fish_nibble` × 0~3 → `fish_bite{windowMs}` → `fish_hook{reaction}` → `fish_reel{taps, ms}` → `fish_reel{taps[]}` → `fish_result`.
+- (v11) 끌어올리기: 흔함 6번/2.6초 · 보통 9번/3.0초 · 희귀 13번/3.4초, L 은 +2번 +0.3초, S 는 −1번. 40ms 보다 촘촘한 누름은 세지 않고, 시각이 거꾸로 가거나 서버가 잰 시간보다 늦은 기록은 실패. `ms + FISH_HOOK_GRACE_MS` 안에 아무것도 안 오면 `snapped`. `FISH_REEL_SCALE` = 횟수 배율 (0 이면 챔질만으로 낚는다 — 옛 테스트용).
+- (v11 클라이언트) 찌가 물에 닿으면 그림자가 멀리서 맴돌며 다가오고, 가짜 입질 = 그림자가 쏙 와서 찌를 건드림 + 약한 진동, 진짜 입질 = 그림자가 달려들어 물고 들어감 + 강한 진동 + 찌가 쑥 잠김. 반응 시간은 찌가 잠긴 순간부터 잰다.
 - 물고기는 던질 때 서버가 **지금 시각·날씨에 낚이는 물고기 중에서** 가중치로 정하고(`fish.json`의 `hours`·`weather`), 결과가 확정될 때에만 `fish_result.fish`로 알린다.
 - 서버는 `reaction`이 허용 창(`hook_window_ms`, 450~700ms) 안인지, 사람이 낼 수 있는 값(≥80ms)인지, 서버가 잰 경과 시간과 모순되지 않는지만 본다. 네트워크 지연은 판정에 들어가지 않는다.
 - 입질 전에 당기면 `early`, 창을 넘기면 `late`, 아예 반응이 없으면 `escaped`, 캐스팅 지점에서 1.5m 넘게 움직이면 `moved`.
@@ -249,6 +259,8 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - 재료: 상점 식재료(1단계 13종, 2단계 감자·버터·레몬), 들판 채집물(산나물·쑥·표고·산딸기·달래, 75초마다 섬 곳곳에 돋아남, 최대 14개), 물고기. `fish: common` 은 그 희귀도 이하 아무 물고기(싼 것부터), `item_any` 는 목록 중 하나.
 - 별점 = 최근 20명의 별점 평균(처음엔 2.0 으로 기운다, 가중치 3). 별점이 2.5 · 3.3 · 4.0 · 4.6 을 넘으면 2~5단계 요리가 열린다 — 높은 단계일수록 비싸지만 동작이 많고 판정 창이 좁다. 1단계는 물고기 한 마리 구이처럼 쉽고 마진이 적다.
 - 요리 동작: `beats`(박자마다 가장 가까운 누름과의 차이), `timing`(한 번 누른 시각과 딱 좋은 때의 차이), `mash`(시간 안에 누른 횟수, 50ms 보다 촘촘한 누름은 세지 않음). 솜씨 = 동작 평균.
+  - (v11) `grill`: `sides` 면을 차례로 굽는다. `taps[k]` = k번째 면을 뒤집은(마지막은 꺼낸) 시각 — 면마다 구운 시간(`taps[k] − taps[k−1]`)과 `side_ms` 의 차이를 `window_ms` 로 본다. 더 누르면 한 번에 0.1 깎는다.
+  - (v11) `steam`: `taps` = 재료 `items` 개 넣은 시각 → 물 붓기 시작 → 멈춤 → 뚜껑 연 시각. 솜씨 = (담은 재료 비율 + 물 높이 `(멈춤 − 시작) / fill_ms` 가 1 에 가까운 정도(`water_window`) + 찐 시간과 `steam_ms` 의 차이(`window_ms`)) / 3.
 - 손님 별점(1~5) = 1 + 4 × (0.6 × 솜씨 + 0.25 × 입맛 + 0.15 × 시간). 입맛 = 좋아하는 맛 태그 +0.25, 싫어하는 맛 −0.4. MBTI: F 손님은 늦어도 시간 점수가 0.5 아래로 안 떨어지고, T 손님은 솜씨를 1.25 제곱해서 본다. 받는 돈 = 값 × (0.8 · 0.95 · 1.05 · 1.2, 별 2~5) (+단골 10%).
 - 단골: 같은 요리에 4점 이상을 3번 연속 주면 단골 — 그 손님은 그 요리만 시킨다(재료가 없으면 시키지 않는다). 3점 아래를 주면 풀린다. 기다리다 떠나면 별 1개.
 - 손님 = 주민 6명(각자 입맛) + 섬 밖 손님 6명(등산객·학생·직장인·낚시꾼·미식가·여행객). 기다림은 단계마다 70~140초. 주인이 접속을 끊으면 닫는다, 3분 동안 손님이 없어도 닫는다.
@@ -280,10 +292,19 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - 가구: 아직 아무도 손대지 않은 집은 평면도 `defaults`(TV · 에어컨 · 선풍기 · 침대)를 보여 주고, 처음 놓기·옮기기·회수할 때 그 집 것(`room.homeItems[호수]`)이 된다. 서버는 0.25m 격자에 맞추고 가구 가운데가 방 사각형 안(0.05m 안쪽)인지만 본다 — 벽·두 방에 걸치는지는 클라이언트(꾸미기 화면)가 귀퉁이로 거른다.
 - 꾸밀 수 있는 사람 = 주인 또는 주인과 같은 세대(혼인신고). 집을 팔아도 가구는 집에 남는다.
 
+## 주민이 먼저 다가오기 · 마을톡 (서버 판정, v11)
+- 주민: 친밀도가 `approach.min_friendship`(6) 이상인 사람이 9m 안에 있고, 그 사람이 대화·낚시 중이 아니고 집·상점 안이 아니면, 초당 `chance_per_s`(0.12) 확률로 그쪽으로 걸어간다 (가장 친한 사람에게). 1.5m 앞에서 멈추고 `npc_greet`. 한 사람에게 5분에 한 번, 주민마다 45초에 한 번. 15초 안에 닿지 못하거나 멀어지면 그만둔다. `NPC_APPROACH_SCALE` = 확률 배율.
+- 클라이언트: 멈춰 선 주민은 5m 안의 나를 돌아본다 (서버 방향과 별개, 화면에서만).
+- 마을톡 (`data/messenger/messenger.json`, `server/src/messenger.js`): 대화방 `npc:<주민>` · `sys:bank`(은행·동사무소) · `sys:town`(환영 인사) · `pl:<자리>`(친구). 프로필에 방마다 최근 60개와 읽은 수를 저장해서 끊겨 있던 사람도 들어오면 `welcome.chats` 로 받는다.
+  - 친밀도 4 이상인 주민이 `check_ms`(20초)마다 20% 확률로 먼저 연락 (주민마다 하루 한 번, 사람마다 하루 3통): 안부 · "식당 언제 열어?"(식당이 닫혀 있을 때) · 비 오는 날 이야기.
+  - 주민에게 보내면 1.5~4초 뒤 답장, 하루 한 번 친밀도 +1. 친구에게 보내면 두 사람의 방에 같이 들어가고, 받는 사람이 접속 중이면 바로 `msg`.
+  - 은행: 주간 정산 때 이자를 냈으면 · 못 내서 원금에 더했으면 · 월세 수입 · 청년 월세 지원금을 알린다.
+  - `MESSENGER_CHECK_MS` · `MESSENGER_REPLY_SCALE` 은 테스트용.
+
 ## 앱 안 테스트 서버 (v10)
 - 서버 주소 `test://local` = 클라이언트 안의 `LocalTestServer` (127.0.0.1 의 빈 포트, 18680~). 같은 메시지 형식으로 답한다.
 - 입장 정보는 `data/testserver/welcome.json` (`node server/tools/make_test_snapshot.js` 로 진짜 서버에서 찍음) + 저장된 가방·솔·위치.
-- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`). 나무·꽃은 게임 1분 = 실제 6초로 자란다. 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 …)은 `error{code: "test_server"}`.
+- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_reel` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`), v11: 주민 마을톡(`msg_send npc:*` 답장, 친한 주민이 30초마다 먼저 연락 — 친구 방은 `test_server`) · 가까이 서 있는 친한 주민의 `npc_greet`. 나무·꽃은 게임 1분 = 실제 6초로 자란다. 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 …)은 `error{code: "test_server"}`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).

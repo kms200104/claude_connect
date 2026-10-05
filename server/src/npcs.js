@@ -27,6 +27,8 @@ export function createNpcRuntime(defs, now, random) {
       moodOverride: null, // 감정표현·대화로 잠시 바뀐 기분 { m, until }
       mood: 'calm', // 지금 기분 (방송용)
       reactAt: -Infinity, // 마지막으로 감정표현에 반응한 시각
+      approaching: null, // v0.11: 먼저 말을 걸러 다가가는 중 { pid, since }
+      approachAt: -Infinity, // 마지막으로 누군가에게 다가간 시각
     });
   }
   return npcs;
@@ -40,6 +42,7 @@ export function stepNpcs(npcs, { dtMs, now, random, mode, speed, idleMinMs, idle
   for (const n of npcs.values()) {
     if (n.talkingWith !== null) continue;
     if (n.target === null) {
+      if (n.approaching) continue;
       if (now < n.waitUntil) continue;
       const next = chooseWaypoint(n, mode, random);
       if (next === null) {
@@ -58,7 +61,7 @@ export function stepNpcs(npcs, { dtMs, now, random, mode, speed, idleMinMs, idle
       n.x = n.target.x;
       n.z = n.target.z;
       n.target = null;
-      n.waitUntil = now + idleMinMs + random() * (idleMaxMs - idleMinMs);
+      if (!n.approaching) n.waitUntil = now + idleMinMs + random() * (idleMaxMs - idleMinMs);
     } else {
       n.x += (dx / dist) * step;
       n.z += (dz / dist) * step;
@@ -99,6 +102,65 @@ export function endTalk(n, now) {
   n.waitUntil = now + 1500;
 }
 
+/**
+ * 먼저 다가가 말 걸기 (v0.11). 친한 사람이 가까이 있으면 가끔 그 사람 쪽으로 걸어가고, 닿으면 onGreet(n, player).
+ * players: 이 방의 온라인 플레이어들. friendOf(player, npcId) = 친밀도. canBeApproached(player) = 낚시·대화 중이 아님.
+ * 사람에게 걸어가는 동안은 stepNpcs 가 목표(그 사람 옆)를 따라 걷는다.
+ */
+export function updateApproaches(npcs, players, { rules, now, dtMs, random, mode, friendOf, lastApproached, canBeApproached, onGreet }) {
+  if (!rules) return false;
+  let changed = false;
+  for (const n of npcs.values()) {
+    if (n.talkingWith !== null) {
+      n.approaching = null;
+      continue;
+    }
+    if (n.approaching) {
+      const p = players.find((q) => q.id === n.approaching.pid);
+      const d = p ? Math.hypot(p.x - n.x, p.z - n.z) : Infinity;
+      if (!p || !canBeApproached(p) || d > rules.range * 1.6 || now - n.approaching.since > rules.give_up_ms) {
+        n.approaching = null;
+        n.target = null;
+        n.waitUntil = now + 1500;
+        changed = true;
+        continue;
+      }
+      if (d <= rules.stop_distance + 0.35) {
+        n.approaching = null;
+        n.target = null;
+        n.waitUntil = now + rules.wait_ms;
+        n.yaw = yawToward(p.x - n.x, p.z - n.z);
+        onGreet(n, p);
+        changed = true;
+        continue;
+      }
+      // 그 사람 옆 (stop_distance 앞) 을 목표로 계속 고친다.
+      const k = (d - rules.stop_distance) / d;
+      n.target = { x: n.x + (p.x - n.x) * k, z: n.z + (p.z - n.z) * k };
+      continue;
+    }
+    if (mode !== 'roam' || now - n.approachAt < rules.npc_cooldown_ms) continue;
+    if (random() > rules.chance_per_s * (dtMs / 1000)) continue;
+    const near = players.filter(
+      (p) =>
+        canBeApproached(p) &&
+        friendOf(p, n.id) >= rules.min_friendship &&
+        now - lastApproached(p, n.id) >= rules.cooldown_ms &&
+        Math.hypot(p.x - n.x, p.z - n.z) <= rules.range &&
+        Math.hypot(p.x - n.x, p.z - n.z) > rules.stop_distance + 0.5,
+    );
+    if (near.length === 0) continue;
+    // 가장 친한 사람에게.
+    near.sort((a, b) => friendOf(b, n.id) - friendOf(a, n.id));
+    n.approaching = { pid: near[0].id, since: now };
+    n.approachAt = now;
+    n.target = null;
+    n.waitUntil = 0;
+    changed = true;
+  }
+  return changed;
+}
+
 export function npcWire(n) {
-  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0, m: n.mood };
+  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0, m: n.mood, ap: n.approaching?.pid ?? 0 };
 }

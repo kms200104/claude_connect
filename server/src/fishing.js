@@ -20,11 +20,28 @@ export function zoneWeight(zone, f) {
 /**
  * 낚시 판정(서버 권위).
  *
- * 흐름: fish_cast → fish_started → (가짜 fish_nibble × 0~3) → fish_bite{windowMs} → fish_hook{reaction}
+ * 흐름: fish_cast → fish_started{shadow} → (가짜 fish_nibble × 0~3) → fish_bite{windowMs} → fish_hook{reaction}
+ *       → fish_reel{taps, ms} (v0.11: 끌어올리기 연타) → 클라이언트 fish_reel{taps:[ms…]} → fish_result
+ * shadow 는 물 밑 그림자의 크기(희귀하고 클수록 크다)라서 어떤 물고기인지는 알려 주지 않는다.
  * 클라이언트는 "입질 연출이 화면에 뜬 뒤 버튼을 누르기까지 걸린 시간(reaction)"만 보낸다.
  * 서버는 reaction이 허용 창 안인지, 서버가 잰 경과 시간과 모순되지 않는지만 본다 → 네트워크 지연은 불리하게 작용하지 않는다.
  * 물고기 종류는 결과가 확정될 때에만 알려 준다. 낚싯대를 손에 들고 있어야 하고, 시각·날씨에 따라 낚이는 물고기가 다르다.
  */
+/** 물 밑 그림자 크기: 희귀도 × 몸 크기. 흔함·S 가 가장 작고 희귀·L 이 가장 크다. */
+export function shadowSize(f) {
+  const r = { common: 0.75, uncommon: 1.0, rare: 1.35 }[f.rarity] ?? 0.75;
+  const s = { S: 0.85, M: 1.0, L: 1.2 }[f.size] ?? 1.0;
+  return Math.round(r * s * 100) / 100;
+}
+
+/** 끌어올리기 연타: 몇 번을 몇 ms 안에. 희귀하고 클수록 많이, 시간은 조금 더 준다. */
+export function reelNeed(f, cfg) {
+  const base = { common: [6, 2600], uncommon: [9, 3000], rare: [13, 3400] }[f.rarity] ?? [6, 2600];
+  const extra = f.size === 'L' ? 2 : f.size === 'S' ? -1 : 0;
+  const taps = Math.max(1, Math.round((base[0] + extra) * cfg.fishReelScale));
+  return { taps, ms: base[1] + (f.size === 'L' ? 300 : 0) };
+}
+
 export function createFishing({
   cfg,
   data,
@@ -92,7 +109,7 @@ export function createFishing({
       biteAt: 0,
     };
     player.fishing = session;
-    notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop });
+    notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop, shadow: shadowSize(fish) });
     onFishingChanged(player);
 
     // 입질 일정: 가짜 입질 0~N번 뒤에 진짜 입질.
@@ -141,7 +158,55 @@ export function createFishing({
       end(player, { ok: false, reason: FishFail.inventoryFull });
       return null;
     }
-    // 성공: 인벤토리 지급 + 대회 상금 + 통계 갱신을 한 번에 기록한다.
+    if (cfg.fishReelScale <= 0) {
+      land(player, session);
+      return null;
+    }
+    // 챔질 성공 → 끌어올리기: 정해진 시간 안에 연타를 채워야 한다.
+    clearTimers(session);
+    const need = reelNeed(session.fish, cfg);
+    session.phase = 'reel';
+    session.reel = { ...need, at: now() };
+    notify(player, { t: 'fish_reel', rid, taps: need.taps, ms: need.ms });
+    session.timers.push(
+      setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.snapped }), need.ms + cfg.fishHookGraceMs),
+    );
+    return null;
+  }
+
+  /** 끌어올리기 결과: taps = 연타 화면이 뜬 뒤 누른 시각들(ms). 수와 간격, 서버가 잰 시간과의 모순을 본다. */
+  function reel(player, rid, taps) {
+    const session = player.fishing;
+    if (!session || session.rid !== rid) return ErrorCode.notFishing;
+    if (session.phase !== 'reel') return ErrorCode.notFishing;
+    if (!Array.isArray(taps) || taps.length > 200 || !taps.every((t) => typeof t === 'number' && Number.isFinite(t) && t >= 0)) {
+      return ErrorCode.badMessage;
+    }
+    const { taps: need, ms, at } = session.reel;
+    const elapsedOnServer = now() - at;
+    let prev = -Infinity;
+    let counted = 0;
+    let honest = true;
+    for (const t of taps) {
+      if (t < prev) honest = false;
+      else if (t - prev >= cfg.fishMinTapGapMs && t <= ms) counted += 1;
+      prev = Math.max(prev, t);
+    }
+    if (taps.length > 0 && taps[taps.length - 1] > elapsedOnServer + cfg.fishReactionSlackMs) honest = false;
+    if (!honest || counted < need) {
+      end(player, { ok: false, reason: FishFail.snapped });
+      return null;
+    }
+    if (!canAdd(player.slots, session.fish.id, 1, data.limitOf)) {
+      end(player, { ok: false, reason: FishFail.inventoryFull });
+      return null;
+    }
+    land(player, session);
+    return null;
+  }
+
+  // 성공: 인벤토리 지급 + 대회 상금 + 통계 갱신을 한 번에 기록한다.
+  function land(player, session) {
     addItem(player.slots, session.fish.id, 1, cfg, data.limitOf);
     player.profile.catches += 1;
     const contest = derby(player);
@@ -150,7 +215,6 @@ export function createFishing({
     earn(player.profile, bonus);
     onInventoryChanged(player, session.fish.id);
     end(player, bonus > 0 ? { ok: true, fish: session.fish.id, bonus } : { ok: true, fish: session.fish.id });
-    return null;
   }
 
   function cancel(player, reason = FishFail.cancelled) {
@@ -169,5 +233,5 @@ export function createFishing({
     if (s && Math.hypot(player.x - s.startX, player.z - s.startZ) > cfg.fishMaxMoveMeters) cancel(player, FishFail.moved);
   }
 
-  return { cast, hook, cancel, drop, onMove };
+  return { cast, hook, reel, cancel, drop, onMove };
 }

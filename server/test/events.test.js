@@ -12,7 +12,7 @@ import { Client, sleep, uid } from './helpers.js';
 
 const clockAt = (hour) => ({ hour: () => hour, day: () => 100, gameMs: () => 0, scale: 1 });
 // random=0: 둥근 나무에서는 항상 '목재', 낚시는 항상 붕어.
-const BASE = { port: 0, moveSlackMeters: 200, random: () => 0, saveIntervalMs: 60000, chopCooldownMs: 0, weatherForce: 'clear', fishTimeScale: 0.01, fishHookGraceMs: 500 };
+const BASE = { port: 0, moveSlackMeters: 200, random: () => 0, saveIntervalMs: 60000, chopCooldownMs: 0, weatherForce: 'clear', fishTimeScale: 0.01, fishHookGraceMs: 500, fishReelScale: 0 };
 
 describe('마을 이벤트', () => {
   const servers = [];

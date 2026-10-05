@@ -9,6 +9,8 @@ var yaw: float = 0.0
 var talking_with: int = 0
 ## 지금 기분 (happy / calm / sad / grumpy / sleepy / excited). 말투와 머리 위 표정이 바뀐다.
 var mood: String = "calm"
+## 먼저 말을 걸러 다가가는 플레이어 id (0이면 아무도 아님, v0.11).
+var approaching: int = 0
 
 
 static func from_dict(data: Dictionary) -> NetNpcState:
@@ -18,4 +20,5 @@ static func from_dict(data: Dictionary) -> NetNpcState:
 	state.yaw = float(data.get("yaw", 0.0))
 	state.talking_with = int(data.get("talk", 0))
 	state.mood = str(data.get("m", "calm"))
+	state.approaching = int(data.get("ap", 0))
 	return state

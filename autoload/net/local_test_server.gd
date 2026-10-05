@@ -40,6 +40,13 @@ var _placed_seq: int = 0
 var _outfit: Dictionary = {"hat": "", "top": ""}
 var _face: Dictionary = {}
 var _friends: Dictionary = {}
+## 친한 주민이 먼저 말 걸기 (테스트 서버의 주민은 걷지 않으니, 가까이 서 있을 때만): 주민 id → 마지막으로 건 시각.
+var _greeted_at: Dictionary = {}
+## 마을톡: 대화방 id → { m: [...], read }. 오늘 먼저 연락한 주민.
+var _chats: Dictionary = {}
+var _msg_day: Dictionary = {"day": "", "from": []}
+var _next_msg_check_ms: float = 30000.0
+var _next_greet_check_ms: float = 0.0
 var _talk_days: Dictionary = {}
 var _chat_today: Dictionary = {}
 ## 지금 이야기하는 주민.
@@ -118,6 +125,12 @@ func _process(_delta: float) -> void:
 	if _peer != null and now >= _next_forage_ms:
 		_next_forage_ms = now + FORAGE_EVERY_MS
 		_spawn_forage()
+	if _peer != null and now >= _next_msg_check_ms:
+		_next_msg_check_ms = now + 30000.0
+		_maybe_text()
+	if _peer != null and now >= _next_greet_check_ms:
+		_next_greet_check_ms = now + 1000.0
+		_maybe_greet()
 	while _tcp.is_connection_available():
 		var peer: WebSocketPeer = WebSocketPeer.new()
 		if peer.accept_stream(_tcp.take_connection()) == OK:
@@ -244,6 +257,12 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_handle_home(peer, msg, fail)
 		"talk":
 			_talk(peer, msg, fail)
+		"msg_send":
+			_msg_send(msg, fail)
+		"msg_read":
+			var th: String = str(msg.get("th", ""))
+			if _chats.has(th):
+				_chats[th]["read"] = (_chats[th]["m"] as Array).size()
 		"talk_topic":
 			_talk_topic(peer, msg)
 		"chop":
@@ -252,6 +271,8 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_fish_cast(peer, msg, fail)
 		"fish_hook":
 			_fish_hook(peer, msg)
+		"fish_reel":
+			_fish_reel(peer, msg)
 		"fish_cancel":
 			if not _fishing.is_empty():
 				_end_fishing(peer, {"ok": false, "reason": "cancelled"})
@@ -293,7 +314,78 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 				fail.call(ERR_TEST_ONLY)
 
 
+# ---- 마을톡 (주민과만: 친구는 테스트 서버에 없다) ----
+
+func _chat_push(th: String, from: String, text: String) -> void:
+	if not _chats.has(th):
+		_chats[th] = {"m": [], "read": 0}
+	var m: Dictionary = {"f": from, "tx": text, "at": Time.get_unix_time_from_system() * 1000.0}
+	(_chats[th]["m"] as Array).append(m)
+	if from == "me":
+		_chats[th]["read"] = (_chats[th]["m"] as Array).size()
+	if _peer != null:
+		_send(_peer, {"t": "msg", "th": th, "m": m})
+	_save()
+
+
+func _msg_send(msg: Dictionary, fail: Callable) -> void:
+	var th: String = str(msg.get("th", ""))
+	var text: String = str(msg.get("tx", "")).strip_edges().left(200)
+	if th.begins_with("pl:"):
+		fail.call(ERR_TEST_ONLY)
+		return
+	var npc: String = th.trim_prefix("npc:")
+	var lines: Dictionary = (GameData.messenger.get("lines", {}) as Dictionary).get(_personality_of(npc), {})
+	if not th.begins_with("npc:") or text.is_empty() or lines.is_empty():
+		fail.call(NetProtocol.ERR_BAD_MESSAGE)
+		return
+	_chat_push(th, "me", text)
+	var replies: Array = lines.get("reply", [])
+	_timers.append([_now() + _rng.randf_range(1500.0, 3500.0), func() -> void:
+		if not replies.is_empty():
+			_chat_push(th, npc, str(replies[_rng.randi() % replies.size()]))])
+
+
+## 친한 주민이 하루 한 번씩 먼저 연락 (하루 3통까지).
+func _maybe_text() -> void:
+	var rules: Dictionary = GameData.messenger
+	var today: String = Time.get_date_string_from_system()
+	if _msg_day["day"] != today:
+		_msg_day = {"day": today, "from": []}
+	if (_msg_day["from"] as Array).size() >= int(rules.get("daily_max", 3)) or _rng.randf() > 0.5:
+		return
+	for n: Variant in _snapshot.get("npcs", []):
+		var id: String = str(n["id"])
+		var lines: Dictionary = (rules.get("lines", {}) as Dictionary).get(_personality_of(id), {})
+		if lines.is_empty() or id in _msg_day["from"] or int(_friends.get(id, 0)) < int(rules.get("min_friendship", 4)):
+			continue
+		var pool: Array = lines.get("daily", []) + lines.get("shop", [])
+		(_msg_day["from"] as Array).append(id)
+		_chat_push("npc:" + id, id, str(pool[_rng.randi() % pool.size()]))
+		return
+
+
+func _personality_of(npc_id: String) -> String:
+	var info: NpcInfo = GameData.npcs.get(npc_id)
+	return info.personality if info != null else ""
+
+
 # ---- 주민 대화 ----
+
+func _maybe_greet() -> void:
+	var rules: Dictionary = GameData.npc_approach
+	if rules.is_empty() or not _talking.is_empty() or not _fishing.is_empty():
+		return
+	for n: Variant in _snapshot.get("npcs", []):
+		var id: String = str(n["id"])
+		if int(_friends.get(id, 0)) < int(rules.get("min_friendship", 6)) or _now() - float(_greeted_at.get(id, -INF)) < float(rules.get("cooldown_ms", 300000)):
+			continue
+		if Vector2(float(n["x"]) - _pos.x, float(n["z"]) - _pos.z).length() > 4.0 or _rng.randf() > float(rules.get("chance_per_s", 0.12)):
+			continue
+		_greeted_at[id] = _now()
+		_send(_peer, {"t": "npc_greet", "npc": id})
+		return
+
 
 func _talk(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 	var npc: String = str(msg.get("npc", ""))
@@ -408,7 +500,7 @@ func _fish_cast(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 	var fish: String = _weighted(entries)
 	var info: FishInfo = GameData.fish.get(fish)
 	_fishing = {"rid": rid, "fish": fish, "bite_at": -1.0, "window": float(info.hook_window_ms if info != null else 700)}
-	_send(peer, {"t": "fish_started", "rid": rid, "spot": spot, "zone": "deep", "coop": false})
+	_send(peer, {"t": "fish_started", "rid": rid, "spot": spot, "zone": "deep", "coop": false, "shadow": _shadow_size(info)})
 	var at: float = _now() + _rng.randf_range(2000.0, 4000.0)
 	for i: int in _rng.randi_range(0, 2):
 		_timers.append([at, func() -> void:
@@ -421,7 +513,7 @@ func _fish_cast(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 		_fishing["bite_at"] = _now()
 		_send(peer, {"t": "fish_bite", "rid": rid, "windowMs": int(_fishing["window"])})
 		_timers.append([_now() + float(_fishing["window"]) + 1500.0, func() -> void:
-			if not _fishing.is_empty() and _fishing["rid"] == rid:
+			if not _fishing.is_empty() and _fishing["rid"] == rid and not _fishing.has("reel"):
 				_end_fishing(peer, {"ok": false, "reason": "escaped"})])])
 
 
@@ -435,6 +527,36 @@ func _fish_hook(peer: WebSocketPeer, msg: Dictionary) -> void:
 	if reaction > float(_fishing["window"]):
 		_end_fishing(peer, {"ok": false, "reason": "late"})
 		return
+	# 끌어올리기 연타 (진짜 서버의 reelNeed 와 같은 표).
+	var info: FishInfo = GameData.fish.get(str(_fishing["fish"]))
+	var rarity: String = info.rarity if info != null else "common"
+	var size: String = info.size if info != null else "M"
+	var base: Array = {"common": [6, 2600], "uncommon": [9, 3000], "rare": [13, 3400]}.get(rarity, [6, 2600])
+	var taps: int = maxi(1, int(base[0]) + (2 if size == "L" else (-1 if size == "S" else 0)))
+	var ms: int = int(base[1]) + (300 if size == "L" else 0)
+	_fishing["reel"] = {"taps": taps, "ms": ms}
+	_fishing["bite_at"] = -2.0
+	var rid: Variant = _fishing["rid"]
+	_send(peer, {"t": "fish_reel", "rid": rid, "taps": taps, "ms": ms})
+	_timers.append([_now() + ms + 1500.0, func() -> void:
+		if not _fishing.is_empty() and _fishing["rid"] == rid and _fishing.has("reel"):
+			_end_fishing(peer, {"ok": false, "reason": "snapped"})])
+
+
+func _fish_reel(peer: WebSocketPeer, msg: Dictionary) -> void:
+	if _fishing.is_empty() or _fishing["rid"] != msg.get("rid") or not _fishing.has("reel"):
+		return
+	var need: Dictionary = _fishing["reel"]
+	var counted: int = 0
+	var prev: float = -INF
+	for t: Variant in (msg.get("taps", []) as Array):
+		var at: float = float(t)
+		if at - prev >= 40.0 and at <= float(need["ms"]):
+			counted += 1
+		prev = maxf(prev, at)
+	if counted < int(need["taps"]):
+		_end_fishing(peer, {"ok": false, "reason": "snapped"})
+		return
 	var fish: String = str(_fishing["fish"])
 	if not _add(fish, 1):
 		_end_fishing(peer, {"ok": false, "reason": "inventory_full"})
@@ -442,6 +564,15 @@ func _fish_hook(peer: WebSocketPeer, msg: Dictionary) -> void:
 	_send_inventory(peer)
 	_end_fishing(peer, {"ok": true, "fish": fish})
 	_save()
+
+
+## 물 밑 그림자 크기 (진짜 서버의 shadowSize 와 같은 표).
+static func _shadow_size(info: FishInfo) -> float:
+	if info == null:
+		return 0.75
+	var r: float = {"common": 0.75, "uncommon": 1.0, "rare": 1.35}.get(info.rarity, 0.75)
+	var s: float = {"S": 0.85, "M": 1.0, "L": 1.2}.get(info.size, 1.0)
+	return snappedf(r * s, 0.01)
 
 
 func _end_fishing(peer: WebSocketPeer, result: Dictionary) -> void:
@@ -730,6 +861,9 @@ func _welcome(resumed: bool) -> Dictionary:
 	w["trees"] = trees
 	w["flowers"] = _flowers.values().map(func(f: Dictionary) -> Dictionary: return _flower_wire(f))
 	w["drops"] = _drops.values()
+	if _chats.is_empty():
+		_chats["sys:town"] = {"m": [{"f": "town", "tx": str(GameData.messenger.get("welcome", "")) + " (테스트 서버에서는 주민과만 이야기할 수 있어요.)", "at": Time.get_unix_time_from_system() * 1000.0}], "read": 0}
+	w["chats"] = _chats
 	return w
 
 
@@ -824,6 +958,7 @@ func _load() -> void:
 	var p: Array = saved.get("pos", [0, 0])
 	_pos = Vector3(float(p[0]), 0.1, float(p[1]))
 	_home = str(saved.get("home", ""))
+	_chats = saved.get("chats", {}) if saved.get("chats") is Dictionary else {}
 	_home_items = saved.get("home_items", {}) if saved.get("home_items") is Dictionary else {}
 	_home_seq = int(saved.get("home_seq", 0))
 	_placed = saved.get("placed", {}) if saved.get("placed") is Dictionary else {}
@@ -858,7 +993,7 @@ func _save() -> void:
 	f.store_string(JSON.stringify({"slots": _slots, "held": _held, "sol": _sol, "pos": [_pos.x, _pos.z], "home": _home,
 		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
 		"outfit": _outfit, "face": _face, "friends": _friends, "talk_days": _talk_days,
-		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq}))
+		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats}))
 
 
 static func _read_json(path: String) -> Dictionary:

@@ -9,6 +9,7 @@ import { sanitizeFlowers } from './plants.js';
 import { defaultFace, sanitizeFace } from './face.js';
 import { sanitizeHoldings } from './market.js';
 import { sanitizeHomes } from './realestate.js';
+import { sanitizeChats } from './messenger.js';
 import { newCredit, sanitizeLoans } from './bank.js';
 import { sanitizeRestaurant } from './restaurant.js';
 import { sanitizeCivic } from './civic.js';
@@ -92,6 +93,7 @@ function newProfile(uid, slot, cfg, data) {
     household: null, // 혼인신고한 세대 id (v0.9, 지갑을 같이 쓴다)
     civic: sanitizeCivic(null), // 동사무소 기록: 전입 · 받은 지원금 · 천안사랑카드 · 정책대출 승인
     age: data?.civic?.player_age?.[(slot - 1) % (data.civic.player_age.length || 1)] ?? 29,
+    chats: {}, // 마을톡 대화방 (v0.11, messenger.js)
   };
 }
 
@@ -315,6 +317,7 @@ export class Room {
         credit: { ...newCredit(data.bank), ...(p.credit && typeof p.credit === 'object' ? { paid: intOr(p.credit.paid, 0), missed: intOr(p.credit.missed, 0), weeks: intOr(p.credit.weeks, 0) } : {}) },
         income: { amount: Math.max(0, Math.trunc(finite(p.income?.amount, 0))), history: Array.isArray(p.income?.history) ? p.income.history.filter(Number.isFinite).slice(-8) : [] },
         civic: sanitizeCivic(p.civic),
+        chats: data.messenger ? sanitizeChats(p.chats, data.messenger) : {},
       });
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);

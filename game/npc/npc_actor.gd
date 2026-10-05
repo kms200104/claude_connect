@@ -17,10 +17,16 @@ extends Node3D
 @export_range(0.2, 10.0, 0.1, "suffix:m/s") var walk_speed_reference: float = 1.4
 ## 이보다 멀리 떨어진 서버 위치는 보간하지 않고 바로 옮긴다.
 @export_range(1.0, 50.0, 0.5, "suffix:m") var teleport_distance: float = 8.0
+## 멈춰 있을 때 이 거리 안에 내 캐릭터가 오면 그쪽을 돌아본다 (v0.11).
+@export_range(0.0, 15.0, 0.5, "suffix:m") var look_range: float = 5.0
 
 var info: NpcInfo = null
 ## 대화 중인 플레이어 id (0 = 없음).
 var talking_with: int = 0
+## 나에게 다가오는 중인 플레이어 id (0 = 없음).
+var approaching: int = 0
+## 돌아볼 대상 (내 캐릭터). NpcCrowd 가 채운다.
+var look_target: Node3D = null
 
 var _target_position: Vector3 = Vector3.ZERO
 var _target_yaw: float = 0.0
@@ -50,6 +56,7 @@ func setup(npc: NpcInfo) -> void:
 
 func apply_state(state: NetNpcState) -> void:
 	talking_with = state.talking_with
+	approaching = state.approaching
 	mood = state.mood
 	_target_yaw = state.yaw
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:
@@ -97,7 +104,7 @@ func _process(delta: float) -> void:
 	var before: Vector3 = global_position
 	global_position = global_position.lerp(_target_position, weight)
 	if body != null:
-		body.rotation.y = lerp_angle(body.rotation.y, _target_yaw, 1.0 - exp(-turn_smoothing * delta))
+		body.rotation.y = lerp_angle(body.rotation.y, _look_yaw(), 1.0 - exp(-turn_smoothing * delta))
 	if rig != null and delta > 0.0:
 		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-10.0 * delta))
@@ -105,6 +112,25 @@ func _process(delta: float) -> void:
 	if mark != null and mark.visible:
 		_mark_time += delta
 		mark.position.y = 2.45 + sin(_mark_time * 4.0) * 0.06
+
+
+## 서 있을 때 가까이 온 내 캐릭터를 돌아본다 (대화 중이 아니고, 걷는 중이 아닐 때). 아니면 서버가 정한 방향.
+func _look_yaw() -> float:
+	if look_target == null or talking_with != 0 or _shown_speed > 0.25 or not look_target.is_inside_tree():
+		return _target_yaw
+	var d: Vector3 = look_target.global_position - global_position
+	var dist: float = Vector2(d.x, d.z).length()
+	if dist > look_range or dist < 0.05:
+		return _target_yaw
+	return atan2(-d.x, -d.z)
+
+
+## 지금 나를 바라보고 있는가 (서버 방향이든 돌아봄이든).
+func is_looking_at(position: Vector3, tolerance: float = 0.5) -> bool:
+	if body == null:
+		return false
+	var d: Vector3 = position - global_position
+	return absf(angle_difference(body.rotation.y, atan2(-d.x, -d.z))) < tolerance
 
 
 func _set_animating(on: bool) -> void:

@@ -3,6 +3,8 @@ extends Node3D
 ## 주민 전체와 주민 집. 주민 목록·집 위치는 data/npcs/npcs.json, 주민 위치는 서버가 보낸다.
 
 @export var actor_scene: PackedScene
+## 주민들이 돌아보는 내 캐릭터 (없으면 "player" 무리에서 찾는다).
+@export var look_target: Node3D
 @export_group("House Materials")
 ## 정점 색을 쓰는 흰 툰 머티리얼 (벽·지붕·문·화분 모두).
 @export var clay_material: Material
@@ -41,6 +43,10 @@ func actor(id: String) -> NpcActor:
 
 
 func _process(delta: float) -> void:
+	if look_target == null:
+		look_target = get_tree().get_first_node_in_group(&"player") as Node3D
+		for a: NpcActor in _actors.values():
+			a.look_target = look_target
 	_gesture_left -= delta
 	if _gesture_left > 0.0 or Net.state != Net.State.ONLINE:
 		return

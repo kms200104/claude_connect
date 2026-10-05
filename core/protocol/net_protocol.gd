@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 10
+const VERSION: int = 11
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -76,6 +76,8 @@ const QUEST_ANY_FISH: String = "any_fish"
 const FISH_EARLY: String = "early"
 const FISH_LATE: String = "late"
 const FISH_ESCAPED: String = "escaped"
+## 끌어올리기 연타가 모자라 놓침 (v0.11).
+const FISH_SNAPPED: String = "snapped"
 const FISH_MOVED: String = "moved"
 const FISH_CANCELLED: String = "cancelled"
 const FISH_INVENTORY_FULL: String = "inventory_full"

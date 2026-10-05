@@ -31,6 +31,10 @@ var npcs: Dictionary[String, NpcInfo] = {}
 var chop_range: float = 2.2
 ## 주민에게 말을 걸 수 있는 거리 (서버 판정과 같은 값).
 var talk_range: float = 3.0
+## 마을톡 규칙과 주민 문자 (data/messenger/messenger.json, v0.11). 테스트 서버가 쓴다.
+var messenger: Dictionary = {}
+## 친한 주민이 먼저 다가와 말 걸기 규칙 (data/npcs/npcs.json 의 approach, v0.11).
+var npc_approach: Dictionary = {}
 
 ## 상점 데이터 (data/shop/shop.json): 문·실내 위치, 단계별 이름·포인트·진열품.
 var shop: ShopData = null
@@ -88,6 +92,8 @@ func _ready() -> void:
 			trees[tree.id] = tree
 	var npcs_file: Dictionary = _read_json(NPCS_PATH)
 	talk_range = float(npcs_file.get("talk_range", talk_range))
+	npc_approach = npcs_file.get("approach", {})
+	messenger = _read_json("res://data/messenger/messenger.json")
 	for entry: Variant in npcs_file.get("npcs", []):
 		if entry is Dictionary:
 			var npc: NpcInfo = NpcInfo.from_dict(entry)

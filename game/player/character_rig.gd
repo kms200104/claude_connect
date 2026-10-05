@@ -59,6 +59,7 @@ var _cook_value: float = 0.0
 var _sit_target: float = 0.0
 var _sit_value: float = 0.0
 var _tool_id: String = ""
+var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
 var _hold: Node3D = null
 var _held_before_show: String = ""
@@ -286,6 +287,11 @@ func set_eye_offset(offset: Vector2) -> void:
 	_eyes.rotation = Vector3(pitch, yaw, 0.0)
 
 
+## 낚싯대를 홱 끌어당기는 작은 반동 (끌어올리기 연타 한 번마다). 애니메이션과 따로 몸 전체를 뒤로 젖힌다.
+func reel_tug() -> void:
+	_tug = minf(_tug + 0.11, 0.2)
+
+
 func get_eye_offset() -> Vector2:
 	return _eye_offset
 
@@ -305,6 +311,11 @@ func _process(delta: float) -> void:
 	tree.set("parameters/CookBlend/blend_amount", _cook_value)
 	_sit_value = move_toward(_sit_value, _sit_target, 6.0 * delta)
 	tree.set("parameters/SitBlend/blend_amount", _sit_value)
+	if _tug > 0.0 or rotation.x != 0.0:
+		_tug = move_toward(_tug, 0.0, 0.9 * delta)
+		rotation.x = lerpf(rotation.x, _tug, 1.0 - exp(-30.0 * delta))
+		if _tug == 0.0 and absf(rotation.x) < 0.002:
+			rotation.x = 0.0
 
 
 ## 겉모습과 상관없는 부분: 눈, 도구, 팔다리 메시 자리.

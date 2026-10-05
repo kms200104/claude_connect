@@ -111,6 +111,9 @@ export function loadGameData(dataDir, cfg) {
     for (const d of p.defaults) if (items.get(d.item)?.kind !== 'furniture') throw new Error(`plan ${p.id}: ${d.item} is not furniture`);
   }
 
+  // 마을톡 (v0.11)
+  const messenger = read('messenger/messenger.json');
+
   // 식당: 요리 · 동작 · 손님
   const recipesFile = read('restaurant/recipes.json');
   const restaurant = read('restaurant/restaurant.json');
@@ -157,6 +160,7 @@ export function loadGameData(dataDir, cfg) {
       gift: npcsFile.gift_rules ?? { min_friendship: 12, chance: 0.45, cooldown_days: 1 },
       topicFriendPerDay: npcsFile.topic_friend_per_day ?? 3,
       talkExtraFriend: npcsFile.talk_extra_friend ?? 1,
+      approach: npcsFile.approach ?? null,
     },
     quests,
     shop,
@@ -184,6 +188,7 @@ export function loadGameData(dataDir, cfg) {
     recipeById: new Map(recipes.map((r) => [r.id, r])),
     cookSteps,
     restaurant,
+    messenger,
     customers,
     civic,
     programs,

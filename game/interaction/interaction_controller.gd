@@ -34,10 +34,12 @@ extends Node
 ## 서버 판정 거리보다 이만큼 안쪽에서만 버튼을 보여 줘서 경계에서 거절당하지 않게 한다.
 @export_range(0.0, 1.0, 0.05, "suffix:m") var safety_margin: float = 0.3
 ## 도끼를 휘두르는 동안 멈춰 있는 시간.
-@export_range(0.1, 1.5, 0.05, "suffix:s") var chop_lock_time: float = 0.45
+@export_range(0.1, 1.5, 0.05, "suffix:s") var chop_lock_time: float = 0.55
 
 ## 씨앗을 심는 동안 멈춰 있는 시간 (쪼그려 앉아 토닥토닥).
 @export_range(0.1, 2.0, 0.05, "suffix:s") var plant_lock_time: float = 0.8
+## 주민이 먼저 말을 걸면, 이만큼 가만히 있을 때 대화가 열린다 (움직이면 그냥 지나간다).
+@export_range(0.2, 5.0, 0.1, "suffix:s") var greet_answer_delay: float = 1.4
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
@@ -64,6 +66,7 @@ func _ready() -> void:
 	Net.collected.connect(_on_collected)
 	Net.fish_bonus.connect(func(amount: int) -> void: toast_hud.show_toast("낚시 대회 상금 %s!" % Money.delta(amount), true))
 	Net.planted.connect(_on_planted)
+	Net.npc_greeted.connect(_on_npc_greeted)
 	Net.flower_picked.connect(func(item_id: String) -> void: toast_hud.show_toast("%s을(를) 땄어요" % GameData.item_name(item_id), true))
 	_build_plant_marker()
 
@@ -364,6 +367,27 @@ func _on_collected(kind: String, item_id: String) -> void:
 func _on_furniture_placed(info: PlacedInfo, by_player: int) -> void:
 	if by_player == Net.my_id:
 		toast_hud.show_toast("%s을(를) 놓았어요" % GameData.item_name(info.item), true)
+
+
+## 친한 주민이 먼저 다가와 말을 걸었다 (v0.11): 서로 돌아보고 인사와 한마디. 잠깐 가만히 있으면 그대로 대화가 열린다.
+func _on_npc_greeted(npc_id: String) -> void:
+	var actor: NpcActor = npcs.actor(npc_id) if npcs != null else null
+	if actor == null or actor.info == null or dialogue == null:
+		return
+	actor.face_toward(player.global_position)
+	var line: String = GameData.dialogue_line(actor.info.personality, "approach", {"player": GameData.player_name(Net.my_id)})
+	actor.play_emote("hello", MoodSpeech.apply(line, actor.mood, actor.info))
+	toast_hud.show_toast("%s이(가) 먼저 말을 걸어 왔어요" % actor.info.display_name, true)
+	if player.is_input_locked() or dialogue.is_active():
+		return
+	player.look_toward(actor.global_position - player.global_position)
+	await get_tree().create_timer(greet_answer_delay).timeout
+	var still: bool = Vector2(player.velocity.x, player.velocity.z).length() < 0.3
+	var near: bool = _flat(player.global_position, actor.global_position) <= GameData.talk_range - 0.2
+	if still and near and not player.is_input_locked() and not dialogue.is_active():
+		dialogue.start(npc_id)
+	else:
+		player.clear_look_direction()
 
 
 static func _flat(a: Vector3, b: Vector3) -> float:

@@ -43,7 +43,10 @@ signal furniture_placed(info: PlacedInfo, by_player: int)
 signal furniture_removed(id: String)
 ## 요청이 거부됨. kind = 요청 종류(chop, talk, quest_accept, quest_turnin, inv_move, inv_discard …), code = NetProtocol.ERR_*
 signal request_failed(kind: String, code: String)
-signal fish_started
+## 찌를 던졌다. shadow = 물 밑에 다가올 물고기 그림자 크기 (희귀하고 클수록 크다, 0.6~1.7).
+signal fish_started(shadow: float)
+## 챔질 성공 → 끌어올리기: ms 안에 taps 번 연타해야 한다 (v0.11).
+signal fish_reel(taps: int, ms: int)
 signal fish_nibble
 ## 진짜 입질. 이 순간부터 `window_ms` 안에 챔질해야 한다.
 signal fish_bite(window_ms: int)
@@ -74,6 +77,8 @@ signal peer_emoted(player_id: int, emote_id: String)
 signal face_changed(player_id: int, face: Dictionary)
 ## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
 ## from = 그 사람이 한 감정표현 (주민 반응은 그에 대한 것).
+## 친한 주민이 먼저 다가와 나에게 말을 걸었다 (v0.11).
+signal npc_greeted(npc_id: String)
 signal npc_emoted(npc_id: String, emote_id: String, to_player: int, mood: String, from: String)
 ## 대화 주제로 수다를 떨었다 (gain: 오른 친밀도).
 signal topic_answered(npc_id: String, topic: String, gain: int)
@@ -262,6 +267,16 @@ func hook_fishing(reaction_ms: float) -> void:
 	if _fishing_rid.is_empty():
 		return
 	_send({"t": "fish_hook", "rid": _fishing_rid, "reaction": snappedf(reaction_ms, 0.1)})
+
+
+## 끌어올리기 연타 결과: 연타 화면이 뜬 뒤 누른 시각(ms)들. 서버가 수·간격을 보고 낚았는지 정한다.
+func reel_fishing(tap_times_ms: PackedFloat32Array) -> void:
+	if _fishing_rid.is_empty():
+		return
+	var taps: Array[float] = []
+	for t: float in tap_times_ms:
+		taps.append(snappedf(t, 0.1))
+	_send({"t": "fish_reel", "rid": _fishing_rid, "taps": taps})
 
 
 func cancel_fishing() -> void:
@@ -674,6 +689,8 @@ func _handle_text(text: String) -> void:
 		"pick_result":
 			_pending.erase(str(msg.get("rid", "")))
 			flower_picked.emit(str(msg.get("item", "")))
+		"npc_greet":
+			npc_greeted.emit(str(msg.get("npc", "")))
 		"npc_emote":
 			var npc_id: String = str(msg.get("npc", ""))
 			npc_moods[npc_id] = str(msg.get("m", npc_moods.get(npc_id, "calm")))
@@ -741,7 +758,9 @@ func _handle_text(text: String) -> void:
 			sol = int(msg.get("sol", sol))
 			quest_completed.emit(str(msg.get("quest", "")), str(msg.get("npc", "")), int(msg.get("reward", 0)))
 		"fish_started":
-			fish_started.emit()
+			fish_started.emit(float(msg.get("shadow", 1.0)))
+		"fish_reel":
+			fish_reel.emit(int(msg.get("taps", 6)), int(msg.get("ms", 2600)))
 		"fish_nibble":
 			fish_nibble.emit()
 		"fish_bite":

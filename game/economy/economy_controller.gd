@@ -60,6 +60,10 @@ func _ready() -> void:
 		hud.add_child.call_deferred(kitchen)
 		hud.add_child.call_deferred(civic)
 		hud.add_child.call_deferred(phone)
+	Talk.received.connect(_on_talk_received)
+	Talk.changed.connect(func() -> void:
+		if _phone_button != null:
+			_phone_button.queue_redraw())
 	Economy.trade_done.connect(_on_trade)
 	Economy.apt_done.connect(_on_apt)
 	Economy.loan_done.connect(_on_loan)
@@ -245,6 +249,18 @@ func _dish_name(id: String) -> String:
 
 
 ## 휴대폰 그림 (그림 파일 없이): 둥근 몸체 + 화면 + 작은 그래프.
+## 마을톡 새 메시지: 짧은 진동 + 알림 (그 대화방을 보고 있으면 조용히).
+func _on_talk_received(thread: String, message: Dictionary) -> void:
+	if str(message.get("f", "")) == "me":
+		return
+	if phone.showing_thread() == thread:
+		return
+	Input.vibrate_handheld(60, 0.4)
+	Audio.play_sfx("emote_pop", -6.0, 1.2)
+	var text: String = Talk.fill(str(message.get("tx", "")))
+	toast_hud.show_toast("[마을톡] %s: %s" % [Talk.sender_name(str(message.get("f", ""))), text.left(28) + ("…" if text.length() > 28 else "")], true)
+
+
 func _draw_phone_icon() -> void:
 	var s: Vector2 = _phone_button.size
 	var body: Rect2 = Rect2(s * Vector2(0.3, 0.16), s * Vector2(0.4, 0.68))
@@ -260,3 +276,13 @@ func _draw_phone_icon() -> void:
 		pts.append(screen.position + Vector2(screen.size.x * (0.1 + 0.2 * i), screen.size.y * [0.75, 0.55, 0.62, 0.35, 0.25][i]))
 	_phone_button.draw_polyline(pts, Color("#E0483A"), 3.0, true)
 	_phone_button.draw_circle(Vector2(body.get_center().x, body.end.y - s.y * 0.045), s.x * 0.025, Color("#8A96A2"))
+	# 마을톡 안 읽은 메시지 수 (빨간 동그라미).
+	var unread: int = Talk.unread_total()
+	if unread > 0:
+		var at: Vector2 = Vector2(s.x * 0.8, s.y * 0.2)
+		_phone_button.draw_circle(at, s.x * 0.17, Color("#E0483A"))
+		var font: Font = _phone_button.get_theme_default_font()
+		var label: String = str(unread) if unread < 10 else "9+"
+		var fs: int = int(s.x * 0.2)
+		var w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		_phone_button.draw_string(font, at + Vector2(-w * 0.5, fs * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)

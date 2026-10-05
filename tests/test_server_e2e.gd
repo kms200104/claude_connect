@@ -114,8 +114,7 @@ func _run() -> void:
 	fishing_hud.action_pressed.emit()
 	_check(await _wait_until(func() -> bool: return fishing.phase == FishingController.Phase.WAITING or fishing.phase == FishingController.Phase.BITE, 3.0), "낚싯대를 던짐 (fish_started)")
 	_check(await _wait_until(func() -> bool: return fishing.phase == FishingController.Phase.BITE, 12.0), "입질이 옴")
-	await get_tree().create_timer(0.15).timeout
-	fishing_hud.action_pressed.emit()
+	await _hook_and_reel(fishing_hud, fishing)
 	_check(await _wait_until(func() -> bool: return _bag_total() == fish_before + 1, 4.0), "챔질해서 물고기를 낚음")
 	await _wait_until(func() -> bool: return fishing.phase == FishingController.Phase.IDLE, 8.0)
 
@@ -142,3 +141,17 @@ func _run() -> void:
 	Net.play_on_test_server()
 	_check(await _wait_until(func() -> bool: return Net.state == Net.State.ONLINE, 5.0), "다시 테스트 서버로")
 	_check(_bag_total() == bag, "가방이 그대로 (%d)" % _bag_total())
+
+
+## 사람처럼: 찌가 잠기는 걸 보고 150ms 뒤 챔질 → 끌어올리기 연타(80ms 간격)로 끝까지.
+func _hook_and_reel(h: FishingHud, c: FishingController) -> void:
+	await _wait_until(func() -> bool: return c.is_bite_visible(), 3.0)
+	await get_tree().create_timer(0.15).timeout
+	h.action_pressed.emit()
+	if not await _wait_until(func() -> bool: return c.phase == FishingController.Phase.REEL, 3.0):
+		return
+	var pressed: int = 0
+	while c.phase == FishingController.Phase.REEL and pressed < 40:
+		h.action_pressed.emit()
+		pressed += 1
+		await get_tree().create_timer(0.08).timeout

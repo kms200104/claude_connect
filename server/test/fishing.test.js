@@ -26,6 +26,15 @@ describe('낚시 · 인벤토리 · 저장', () => {
     const welcome = await client.type('welcome');
     return { welcome, uid: id };
   }
+  // 끌어올리기 연타 (v0.11): fish_reel 이 오면 필요한 만큼 사람 속도(45ms 간격)로 눌렀다고 보낸다.
+  async function reelIn(client, r, short = 0) {
+    const m = await client.type('fish_reel');
+    const n = m.taps - short;
+    await sleep(n * 45 + 20);
+    client.send({ t: 'fish_reel', rid: r, taps: Array.from({ length: n }, (_, i) => i * 45 + 10) });
+    return m;
+  }
+
   async function goToPond(client) {
     client.send({ t: 'move', ...AT_POND, yaw: 0, vx: 0, vz: 0 });
     await client.next((m) => m.t === 'snap' && m.p.some((p) => p.x === AT_POND.x));
@@ -67,6 +76,8 @@ describe('낚시 · 인벤토리 · 저장', () => {
     assert.equal(bite.fish, undefined, '물고기 종류는 결과 전에 알리지 않는다');
     await sleep(120);
     a.send({ t: 'fish_hook', rid: r, reaction: 120 });
+    const started = await reelIn(a, r);
+    assert.deepEqual({ taps: started.taps, ms: started.ms }, { taps: 6, ms: 2600 }, '흔한 M 크기 붕어: 6번, 2.6초');
     const result = await a.type('fish_result');
     assert.deepEqual({ ok: result.ok, fish: result.fish }, { ok: true, fish: 'crucian' });
     const inv = await a.type('inventory');
@@ -78,6 +89,44 @@ describe('낚시 · 인벤토리 · 저장', () => {
     assert.deepEqual(saved.profiles[Object.keys(saved.profiles)[0]].slots[5], { id: 'crucian', n: 1 });
     assert.equal(saved.world.totalCatches, 1);
     assert.equal(saved.world.species.crucian, 1);
+  });
+
+  it('던질 때 물고기 그림자 크기를 알려 주고, 연타가 모자라면 놓친다(snapped)', async () => {
+    const a = await open();
+    await enter(a);
+    await goToPond(a);
+    const r = newRid();
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
+    const started = await a.type('fish_started');
+    assert.equal(started.shadow, 0.75, '흔한 물고기는 작은 그림자');
+    await a.type('fish_bite');
+    await sleep(120);
+    a.send({ t: 'fish_hook', rid: r, reaction: 120 });
+    await reelIn(a, r, 2);
+    assert.deepEqual(await a.type('fish_result').then((m) => [m.ok, m.reason]), [false, 'snapped']);
+    // 너무 촘촘한(매크로) 연타는 세지 않는다.
+    const r2 = newRid();
+    a.send({ t: 'fish_cast', rid: r2, spot: 'lake' });
+    await a.type('fish_bite');
+    await sleep(120);
+    a.send({ t: 'fish_hook', rid: r2, reaction: 120 });
+    const m = await a.type('fish_reel');
+    await sleep(300);
+    a.send({ t: 'fish_reel', rid: r2, taps: Array.from({ length: m.taps }, (_, i) => i * 5) });
+    assert.equal((await a.type('fish_result')).reason, 'snapped');
+  });
+
+  it('연타 시간 안에 아무것도 안 하면 놓친다', async () => {
+    const a = await open();
+    await enter(a);
+    await goToPond(a);
+    const r = newRid();
+    a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
+    await a.type('fish_bite');
+    await sleep(120);
+    a.send({ t: 'fish_hook', rid: r, reaction: 120 });
+    await a.type('fish_reel');
+    assert.equal((await a.type('fish_result', 4000)).reason, 'snapped');
   });
 
   it('입질 전에 당기면 실패(early)', async () => {
@@ -196,6 +245,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
+    await reelIn(a, r);
     await a.type('fish_result');
     await a.type('inventory');
 
@@ -222,6 +272,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
+    await reelIn(a, r);
     assert.equal((await a.type('fish_result')).ok, true);
     const b = await open(s1);
     const wb = (await enter(b, { code: welcome.code, id: B })).welcome;
@@ -282,6 +333,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await a.type('fish_bite');
     await sleep(100);
     a.send({ t: 'fish_hook', rid: r, reaction: 100 });
+    await reelIn(a, r);
     assert.equal((await a.type('fish_result')).ok, true);
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     assert.equal((await a.type('error')).code, 'inventory_full');

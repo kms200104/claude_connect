@@ -191,6 +191,10 @@ func _play_minigame(kitchen: KitchenWindow) -> void:
 				if beat < int(step.get("beats", 4)) and t >= float(step.get("interval_ms", 480)) * float(beat + 1):
 					kitchen.call("_on_tap")
 					beat += 1
+			"grill", "steam":
+				var ideal: Dictionary = kitchen.call("next_ideal_input")
+				if t >= float(ideal["at"]):
+					kitchen.call("_on_release" if bool(ideal["release"]) else "_on_tap")
 			"timing":
 				if beat == 0 and t >= float(step.get("ideal_ms", 2000)):
 					kitchen.call("_on_tap")

@@ -131,6 +131,7 @@ export function sanitizeRelations(raw, data) {
       emoteDay: Number.isInteger(r.emoteDay) ? r.emoteDay : null,
       chatDay: Number.isInteger(r.chatDay) ? r.chatDay : null,
       chatCount: Number.isInteger(r.chatCount) ? r.chatCount : 0,
+      msgReplyDay: Number.isInteger(r.msgReplyDay) ? r.msgReplyDay : null, // 마을톡 답장으로 친밀도를 올린 날 (v0.11)
     };
   }
   return out;

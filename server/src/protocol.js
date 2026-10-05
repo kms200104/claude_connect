@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -110,6 +110,7 @@ export const FishFail = Object.freeze({
   moved: 'moved', // 움직여서 취소됨
   cancelled: 'cancelled',
   inventoryFull: 'inventory_full',
+  snapped: 'snapped', // 끌어올리기 연타가 모자라 놓침 (v0.11)
   disconnected: 'disconnected',
 });
 

@@ -92,6 +92,30 @@ func show_bite(window_ms: int) -> void:
 	tween.tween_property(_bite_mark, "scale", Vector2.ONE, 0.2)
 
 
+## 끌어올리기 연타: 큰 단추를 계속 누른다. 위쪽 막대는 남은 시간.
+func show_reel(taps: int, _ms: int) -> void:
+	_window_ms = 0.0
+	_bite_mark.visible = false
+	_action.visible = true
+	_action.disabled = false
+	_action.text = "감아올려!"
+	_cancel.visible = false
+	_status.visible = true
+	_window_bar.visible = true
+	_window_bar.value = 100.0
+	update_reel(0, taps, 1.0)
+
+
+func update_reel(count: int, need: int, time_left: float) -> void:
+	_status.text = "연타! %d / %d" % [mini(count, need), need]
+	_window_bar.value = clampf(time_left, 0.0, 1.0) * 100.0
+	if count > 0:
+		_action.pivot_offset = _action.size * 0.5
+		var tween: Tween = create_tween()
+		tween.tween_property(_action, "scale", Vector2(0.92, 0.92), 0.04)
+		tween.tween_property(_action, "scale", Vector2.ONE, 0.08)
+
+
 func show_hooked() -> void:
 	_action.disabled = true
 	_status.text = "…"

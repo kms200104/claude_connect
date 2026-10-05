@@ -117,21 +117,32 @@ export function chooseOrder({ menu, avail, data, taste, regularDish, random }) {
 }
 
 /** 요리에 걸리는 가장 짧은 시간 (ms) — 이보다 빨리 낸 요리는 받지 않는다. */
+/** 동작 하나를 하는 데 걸리는 가장 짧은 시간 (ms). 이보다 빨리 낸 동작은 받지 않는다. */
+export function stepMinMs(step) {
+  if (step.kind === 'beats') return step.beats * step.interval_ms - step.window_ms;
+  if (step.kind === 'timing') return step.ideal_ms - step.window_ms * 2;
+  if (step.kind === 'grill') return step.sides * (step.side_ms - step.window_ms * 2);
+  if (step.kind === 'steam') return step.fill_ms * 0.5 + step.steam_ms - step.window_ms * 2;
+  return step.duration_ms * 0.5;
+}
+
 export function minCookMs(recipe, steps) {
   let ms = 0;
-  for (const id of recipe.steps) {
-    const s = steps[id];
-    if (s.kind === 'beats') ms += s.beats * s.interval_ms - s.window_ms;
-    else if (s.kind === 'timing') ms += s.ideal_ms - s.window_ms * 2;
-    else ms += s.duration_ms * 0.5;
-  }
+  for (const id of recipe.steps) ms += stepMinMs(steps[id]);
   return Math.max(0, ms);
 }
 
 /**
  * 동작 하나의 솜씨 (0~1). taps = 그 동작을 시작하고 누른 시각들 (ms).
  *  beats: 박자마다 가장 가까운 누름과의 차이 / timing: 한 번 누른 시각과 딱 좋은 때의 차이 / mash: 시간 안에 누른 횟수.
+ *  grill (v0.11): 면마다 노릇해졌을 때 뒤집기·꺼내기 — 누름 간격(한 면을 구운 시간)과 side_ms 의 차이.
+ *  steam (v0.11): 재료 items 번 넣기 → 물 붓기 시작·멈춤(물 높이 = 부은 시간 / fill_ms, 선에 맞추기) → 뚜껑 열기(찐 시간과 steam_ms 의 차이).
  */
+export function timingScore(off, window) {
+  if (off <= window) return 1 - 0.3 * (off / window);
+  return Math.max(0, 0.7 - 0.7 * ((off - window) / (window * 2)));
+}
+
 export function stepQuality(step, taps) {
   const t = Array.isArray(taps) ? taps.filter((x) => Number.isFinite(x) && x >= 0 && x < 20000).sort((a, b) => a - b) : [];
   if (step.kind === 'beats') {
@@ -146,9 +157,25 @@ export function stepQuality(step, taps) {
   }
   if (step.kind === 'timing') {
     if (t.length === 0) return 0;
-    const off = Math.abs(t[0] - step.ideal_ms);
-    if (off <= step.window_ms) return 1 - 0.3 * (off / step.window_ms);
-    return Math.max(0, 0.7 - 0.7 * ((off - step.window_ms) / (step.window_ms * 2)));
+    return timingScore(Math.abs(t[0] - step.ideal_ms), step.window_ms);
+  }
+  if (step.kind === 'grill') {
+    let total = 0;
+    for (let k = 0; k < step.sides; k++) {
+      if (k >= t.length) break;
+      total += timingScore(Math.abs(t[k] - (k === 0 ? 0 : t[k - 1]) - step.side_ms), step.window_ms);
+    }
+    // 더 누른 건(뒤집개를 마구 휘두름) 조금 깎는다.
+    return Math.max(0, total / step.sides - Math.max(0, t.length - step.sides) * 0.1);
+  }
+  if (step.kind === 'steam') {
+    const n = step.items;
+    const items = Math.min(t.length, n) / n;
+    if (t.length < n + 3) return items / 3;
+    const level = (t[n + 1] - t[n]) / step.fill_ms;
+    const water = timingScore(Math.abs(level - 1), step.water_window);
+    const steamed = timingScore(Math.abs(t[n + 2] - t[n + 1] - step.steam_ms), step.window_ms);
+    return (items + water + steamed) / 3;
   }
   // mash: 50ms 보다 촘촘한 누름(자동 연타)은 세지 않는다.
   let count = 0;

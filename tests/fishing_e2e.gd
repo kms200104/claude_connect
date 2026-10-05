@@ -76,11 +76,12 @@ func _run() -> void:
 	# 첫 입질은 서버 시간 배율상 0.5초 이후라서, 그 전에 낚시 자세가 완전히 들어가야 한다.
 	_check(await _wait_until(func() -> bool: return player.rig._fishing_value > 0.9, 1.5), "AnimationTree 낚시 가중치가 올라감 (%.2f)" % player.rig._fishing_value)
 	_check(controller.phase == FishingController.Phase.WAITING, "아직 입질 전")
+	var shadow: FishShadow = controller.get_node("FishShadow")
+	_check(await _wait_until(func() -> bool: return shadow.visible and shadow.mode != FishShadow.Mode.HIDDEN, 2.0), "찌 주변에 물고기 그림자가 나타남 (크기 %.2f)" % shadow.scale.x)
 
 	# 진짜 입질을 기다렸다가 사람처럼 150ms 뒤에 챔질
 	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 8.0), "진짜 입질이 옴")
-	await get_tree().create_timer(0.15).timeout
-	hud.action_pressed.emit()
+	await _hook_and_reel(hud, controller)
 	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.RESULT, 3.0), "결과가 확정됨")
 	var first_bag: InventoryItem = Net.inventory[Net.quick_slot_count]
 	_check(_count_fish() == 1 and first_bag != null and first_bag.count == 1, "가방 첫 칸에 물고기 1마리: %s" % (GameData.fish_name(first_bag.id) if first_bag != null else "없음"))
@@ -107,8 +108,7 @@ func _run() -> void:
 	# 한 마리 더 잡고, 서버를 재시작해도 남는지 본다
 	hud.action_pressed.emit()
 	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 8.0)
-	await get_tree().create_timer(0.15).timeout
-	hud.action_pressed.emit()
+	await _hook_and_reel(hud, controller)
 	await _wait_until(func() -> bool: return _count_fish() == 1, 3.0)
 	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.IDLE, 6.0)
 	var kept: String = Net.inventory[Net.quick_slot_count].id
@@ -133,3 +133,17 @@ func _count_fish() -> int:
 		if item != null and GameData.fish.has(item.id):
 			n += item.count
 	return n
+
+
+## 사람처럼: 찌가 잠기는 걸 보고 150ms 뒤 챔질 → 끌어올리기 연타(80ms 간격)로 끝까지.
+func _hook_and_reel(h: FishingHud, c: FishingController) -> void:
+	await _wait_until(func() -> bool: return c.is_bite_visible(), 3.0)
+	await get_tree().create_timer(0.15).timeout
+	h.action_pressed.emit()
+	if not await _wait_until(func() -> bool: return c.phase == FishingController.Phase.REEL, 3.0):
+		return
+	var pressed: int = 0
+	while c.phase == FishingController.Phase.REEL and pressed < 40:
+		h.action_pressed.emit()
+		pressed += 1
+		await get_tree().create_timer(0.08).timeout

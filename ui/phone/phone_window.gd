@@ -6,7 +6,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -17,7 +17,10 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡"]
+## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
+const MINE: Color = Color("#FFE27A")
+const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
 const WIDTH: float = 1000.0
 
 var _tab: Tab = Tab.STOCKS
@@ -36,6 +39,12 @@ var _loan_ratio: float = 0.0
 var _use_didimdol: bool = false
 var _dirty: bool = false
 var _week_reports: Array[Dictionary] = []
+## 마을톡: 열어 둔 대화방 ("" = 목록)과 쓰다 만 글.
+var _thread: String = ""
+var _draft: String = ""
+var _talk_badge: Label = null
+## 글을 쓰는 중이었는지 (새 메시지로 화면을 다시 그려도 자판을 닫지 않는다).
+var _typing: bool = false
 
 
 func _ready() -> void:
@@ -87,6 +96,17 @@ func _ready() -> void:
 	_scroll.add_child(_body)
 	for sig: Signal in [Economy.market_changed, Economy.portfolio_changed, Economy.homes_changed, Economy.bank_changed]:
 		sig.connect(func() -> void: _dirty = true)
+	Talk.changed.connect(func() -> void:
+		_update_talk_badge()
+		if visible and _tab == Tab.TALK:
+			_dirty = true)
+	_talk_badge = _label("", 22, Color.WHITE, false)
+	_talk_badge.add_theme_stylebox_override("normal", EventHud._box(Color("#E0483A"), Color("#B03028"), 18, 0, 6))
+	_talk_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_talk_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_talk_badge.position = Vector2(-44.0, -6.0)
+	_tab_buttons[Tab.TALK].add_child(_talk_badge)
+	_update_talk_badge()
 	Economy.week_passed.connect(func(r: Dictionary) -> void:
 		_week_reports.push_front(r)
 		if _week_reports.size() > 6:
@@ -114,6 +134,7 @@ func close() -> void:
 	if not visible:
 		return
 	visible = false
+	_typing = false
 	Audio.play_sfx("ui_close", -6.0)
 	closed.emit()
 
@@ -141,6 +162,12 @@ func _rebuild() -> void:
 			_build_bank()
 		Tab.ASSETS:
 			_build_assets()
+		Tab.TALK:
+			_build_talk()
+			if not _thread.is_empty():
+				# 대화방은 늘 맨 아래(최근 메시지)를 보여 준다.
+				_scroll.set_deferred("scroll_vertical", 1 << 20)
+				return
 	_scroll.set_deferred("scroll_vertical", keep)
 
 
@@ -369,14 +396,7 @@ func _build_bank() -> void:
 	var score: int = int(b.get("score", Economy.credit_score))
 	var grade: int = int(b.get("grade", Economy.credit_grade))
 	card.add_child(_label("신용점수 %d점 · %d등급" % [score, grade], 38, INK))
-	var bar: ProgressBar = ProgressBar.new()
-	bar.min_value = 0
-	bar.max_value = 1000
-	bar.value = score
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0, 26)
-	bar.add_theme_stylebox_override("background", EventHud._box(Color(0.85, 0.8, 0.72), Color(0.75, 0.66, 0.54), 12, 1, 0))
-	bar.add_theme_stylebox_override("fill", EventHud._box(GOOD if grade <= 4 else (Color("#E8A820") if grade <= 6 else UP), GOOD, 12, 0, 0))
+	var bar: MeterBar = MeterBar.make(26.0, score / 1000.0, GOOD if grade <= 4 else (Color("#E8A820") if grade <= 6 else UP))
 	card.add_child(bar)
 	card.add_child(_label("기준금리 %s · 신용대출 %s · 주택담보 %s" % [Money.percent(float(b.get("base", 0.0))), Money.percent(float(b.get("rate_credit", 0.0))), Money.percent(float(b.get("rate_mortgage", 0.0)))], 28, INK))
 	card.add_child(_label("연 소득(최근 4주 × 52) %s · 이번 주 번 돈 %s" % [Money.short(int(b.get("income_year", Economy.income_year))), Money.short(int(b.get("income_week", Economy.income_week)))], 26, SOFT))
@@ -455,6 +475,202 @@ func _build_assets() -> void:
 
 
 # ---- 도우미 ----
+
+# ---- 마을톡 ----
+
+## 지금 화면에 열려 있는 마을톡 대화방 ("" = 마을톡을 보고 있지 않음).
+func showing_thread() -> String:
+	return _thread if visible and _tab == Tab.TALK else ""
+
+## 대화방 하나를 바로 연다 (알림을 눌렀을 때).
+func open_thread(thread: String) -> void:
+	_thread = thread
+	open(Tab.TALK)
+
+
+func _update_talk_badge() -> void:
+	if _talk_badge == null:
+		return
+	var n: int = Talk.unread_total()
+	_talk_badge.visible = n > 0
+	_talk_badge.text = " %d " % n if n < 100 else " 99+ "
+
+
+func _build_talk() -> void:
+	if _thread.is_empty():
+		_build_talk_list()
+	else:
+		_build_talk_room(_thread)
+
+
+func _build_talk_list() -> void:
+	_body.add_child(_label("마을톡 · 친한 주민·은행·친구가 보낸 연락", 26, SOFT))
+	var ids: PackedStringArray = Talk.sorted_threads()
+	if ids.is_empty():
+		_body.add_child(_label("아직 대화가 없어요. 주민과 친해지면 먼저 연락이 와요.", 28, SOFT))
+	for th: String in ids:
+		var row: Button = _row_button()
+		row.custom_minimum_size = Vector2(0, 124)
+		var line: HBoxContainer = HBoxContainer.new()
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_theme_constant_override("separation", 18)
+		row.add_child(line)
+		_fill(line)
+		line.add_child(_avatar(th, 84.0))
+		var text_box: VBoxContainer = VBoxContainer.new()
+		text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		text_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		text_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_child(text_box)
+		text_box.add_child(_label(Talk.title(th), 32, INK, false))
+		var last: Label = _label(Talk.last_text(th) if not Talk.last_text(th).is_empty() else "대화를 시작해 보세요", 24, SOFT, false)
+		last.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		last.clip_text = true
+		text_box.add_child(last)
+		var side: VBoxContainer = VBoxContainer.new()
+		side.alignment = BoxContainer.ALIGNMENT_CENTER
+		side.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_child(side)
+		side.add_child(_label(_time_text(Talk.last_at(th)), 22, SOFT, false))
+		var unread: int = Talk.unread(th)
+		if unread > 0:
+			var badge: Label = _label(" %d " % unread, 22, Color.WHITE, false)
+			badge.add_theme_stylebox_override("normal", EventHud._box(Color("#E0483A"), Color("#B03028"), 16, 0, 6))
+			badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			side.add_child(badge)
+		row.pressed.connect(func() -> void:
+			_thread = th
+			_rebuild())
+		_body.add_child(row)
+
+
+func _build_talk_room(th: String) -> void:
+	var top: HBoxContainer = HBoxContainer.new()
+	top.add_theme_constant_override("separation", 14)
+	_body.add_child(top)
+	var back: Button = _button("‹ 목록", 28)
+	back.pressed.connect(func() -> void:
+		_thread = ""
+		_rebuild())
+	top.add_child(back)
+	top.add_child(_avatar(th, 64.0))
+	var title: Label = _label(Talk.title(th), 32, INK, false)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top.add_child(title)
+	var list: Array = Talk.threads.get(th, {}).get("m", [])
+	if list.is_empty():
+		_body.add_child(_label("첫 메시지를 보내 보세요.", 26, SOFT))
+	var prev_from: String = ""
+	for m: Variant in list:
+		var msg: Dictionary = m
+		var from: String = str(msg.get("f", ""))
+		_body.add_child(_bubble(th, msg, from != prev_from))
+		prev_from = from
+	if Talk.can_reply(th):
+		var input: HBoxContainer = HBoxContainer.new()
+		input.add_theme_constant_override("separation", 10)
+		_body.add_child(input)
+		var edit: LineEdit = LineEdit.new()
+		edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		edit.custom_minimum_size = Vector2(0, 88)
+		edit.placeholder_text = "메시지 보내기"
+		edit.max_length = 200
+		edit.text = _draft
+		edit.add_theme_font_size_override("font_size", 30)
+		edit.text_changed.connect(func(t: String) -> void: _draft = t)
+		edit.focus_entered.connect(func() -> void: _typing = true)
+		edit.focus_exited.connect(func() -> void:
+			if edit.is_inside_tree() and not edit.is_queued_for_deletion():
+				_typing = false)
+		input.add_child(edit)
+		if _typing:
+			edit.call_deferred("grab_focus")
+			edit.caret_column = _draft.length()
+		var send: Button = _button("보내기", 30, INK, true)
+		var do_send: Callable = func(_t: String = "") -> void:
+			if _draft.strip_edges().is_empty():
+				return
+			Talk.send(th, _draft)
+			_draft = ""
+			Audio.play_sfx("ui_click", -6.0, 1.3)
+		send.pressed.connect(do_send)
+		edit.text_submitted.connect(do_send)
+		input.add_child(send)
+	Talk.mark_read(th)
+
+
+## 말풍선: 내 것은 오른쪽 노랑, 받은 것은 왼쪽 흰색 (보낸 쪽이 바뀔 때만 이름을 붙인다).
+func _bubble(th: String, msg: Dictionary, show_name: bool) -> Control:
+	var mine: bool = str(msg.get("f", "")) == "me"
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var spacer: Control = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.custom_minimum_size = Vector2(140, 0)
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col: VBoxContainer = VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.size_flags_horizontal = Control.SIZE_SHRINK_END if mine else Control.SIZE_SHRINK_BEGIN
+	if not mine and show_name:
+		col.add_child(_label(Talk.sender_name(str(msg.get("f", ""))), 22, SOFT, false))
+	var panel: PanelContainer = PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", EventHud._box(MINE if mine else THEIRS, Color(0.8, 0.72, 0.6), 22, 1, 16))
+	var text: Label = _label(Talk.fill(str(msg.get("tx", ""))), 28, INK)
+	text.custom_minimum_size = Vector2(0, 0)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(text)
+	# 긴 글은 화면 폭의 70% 에서 줄바꿈.
+	var longest: float = text.get_theme_font("font").get_string_size(text.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
+	panel.custom_minimum_size = Vector2(minf(longest + 40.0, WIDTH * 0.62), 0)
+	col.add_child(panel)
+	var time: Label = _label(_time_text(float(msg.get("at", 0.0))), 18, SOFT, false)
+	time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine else HORIZONTAL_ALIGNMENT_LEFT
+	col.add_child(time)
+	if mine:
+		row.add_child(spacer)
+		row.add_child(col)
+	else:
+		row.add_child(_avatar(th if str(msg.get("f", "")) != "me" else "", 56.0))
+		row.add_child(col)
+		row.add_child(spacer)
+	return row
+
+
+## 동그란 프로필: 대화방 색 + 이름 첫 글자.
+func _avatar(th: String, d: float) -> Control:
+	var c: Control = Control.new()
+	c.custom_minimum_size = Vector2(d, d)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var initial: String = Talk.title(th).left(1) if not th.is_empty() else ""
+	var color: Color = Talk.color_of(th)
+	c.draw.connect(func() -> void:
+		c.draw_circle(c.size * 0.5, d * 0.5, color.darkened(0.15))
+		c.draw_circle(c.size * 0.5, d * 0.5 - 3.0, color)
+		var font: Font = c.get_theme_default_font()
+		var fs: int = int(d * 0.45)
+		var w: float = font.get_string_size(initial, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		c.draw_string(font, Vector2((d - w) * 0.5, d * 0.5 + fs * 0.36), initial, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE))
+	return c
+
+
+## 받은 시각: 오늘이면 "오후 3:05", 아니면 "10/4".
+func _time_text(at_ms: float) -> String:
+	if at_ms <= 0.0:
+		return ""
+	var t: Dictionary = Time.get_datetime_dict_from_unix_time(int(at_ms / 1000.0) + _tz_offset_s())
+	var today: Dictionary = Time.get_datetime_dict_from_system()
+	if int(t["day"]) != int(today["day"]) or int(t["month"]) != int(today["month"]):
+		return "%d/%d" % [int(t["month"]), int(t["day"])]
+	var h: int = int(t["hour"])
+	return "%s %d:%02d" % ["오전" if h < 12 else "오후", (h + 11) % 12 + 1, int(t["minute"])]
+
+
+static func _tz_offset_s() -> int:
+	return int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+
 
 func _card() -> VBoxContainer:
 	var panel: PanelContainer = PanelContainer.new()

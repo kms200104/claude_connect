@@ -160,12 +160,20 @@ describe('식당 계산', () => {
     const steps = data.cookSteps;
     assert.equal(stepQuality(steps.chop, [480, 960, 1440, 1920]), 1);
     assert.ok(stepQuality(steps.chop, [100, 200]) < 0.4);
-    assert.ok(stepQuality(steps.grill, [2600]) === 1);
-    assert.ok(stepQuality(steps.grill, [4000]) < 0.3);
+    assert.ok(stepQuality(steps.boil, [3000]) === 1);
+    assert.ok(stepQuality(steps.boil, [4500]) < 0.3);
+    // 굽기 (v0.11): 한 면 2초씩 — 2초에 뒤집고 4초에 꺼내면 완벽, 한쪽을 태우면 깎인다, 안 뒤집으면 반만.
+    assert.equal(stepQuality(steps.grill, [2000, 4000]), 1);
+    assert.ok(stepQuality(steps.grill, [3200, 5200]) < 0.75, '첫 면을 태움');
+    assert.ok(stepQuality(steps.grill, [2000]) <= 0.5, '한 면만 구움');
+    // 찌기: 재료 3개 → 물 1.6초 붓기(선에 딱) → 2.6초 찌고 뚜껑 열기.
+    assert.equal(stepQuality(steps.steam, [100, 300, 500, 800, 2400, 5000]), 1);
+    assert.ok(stepQuality(steps.steam, [100, 300, 500, 800, 3600, 6200]) < 0.8, '물을 너무 많이 부음');
+    assert.ok(stepQuality(steps.steam, [100, 300]) < 0.25, '재료만 넣다 맒');
     assert.equal(stepQuality(steps.mix, Array.from({ length: 12 }, (_, i) => i * 150)), 1);
     assert.ok(stepQuality(steps.mix, Array.from({ length: 30 }, (_, i) => i * 10)) <= 0.6, '50ms 보다 촘촘한 자동 연타는 세지 않는다');
     const r = recipe('grilled_fish');
-    assert.equal(cookQuality(r, steps, [[2600], [1300]]), 1);
+    assert.equal(cookQuality(r, steps, [[2000, 4000], [1300]]), 1);
     assert.ok(minCookMs(r, steps) > 2000);
   });
 

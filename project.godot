@@ -17,6 +17,7 @@ Quality="*res://autoload/quality/quality.gd"
 Economy="*res://autoload/economy/economy.gd"
 Field="*res://autoload/field/field.gd"
 Home="*res://autoload/home/home.gd"
+Talk="*res://autoload/talk/talk.gd"
 
 [debug]
 

@@ -76,6 +76,11 @@ var _footsteps: Footsteps = Footsteps.new()
 var _brake_dust_left: float = 0.0
 
 
+func _ready() -> void:
+	# 주민들이 돌아보는 대상 (NpcCrowd).
+	add_to_group(&"player")
+
+
 func _physics_process(delta: float) -> void:
 	var input: Vector2 = _read_input()
 	_update_running(input.length(), delta)

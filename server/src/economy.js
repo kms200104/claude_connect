@@ -323,6 +323,11 @@ export function createEconomy(deps) {
       room.baseRate = stepBaseRate(data.bank, room.baseRate, random);
       room.aptIndex = stepIndex(data.realestate, room.aptIndex, random);
     }
+    // 마을톡 은행 알림 (끊겨 있는 사람도 다음에 들어오면 보인다).
+    for (const [uid, r] of reports) {
+      const profile = room.profiles.get(uid);
+      if (profile) deps.onWeekReport?.(room, profile, { interest: r.paid, capitalized: r.capitalized, missed: r.missed, rent: r.rent, grant: r.grant });
+    }
     for (const player of room.players.values()) {
       const r = reports.get(player.uid);
       if (!r) continue;

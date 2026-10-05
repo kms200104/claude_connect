@@ -20,6 +20,7 @@ var _time: float = 0.0
 var _dip: float = 0.0
 var _tween: Tween = null
 var _biting: bool = false
+var _tug: float = 0.0
 var _flight: Tween = null
 static var _ring: ArrayMesh = null
 
@@ -83,6 +84,7 @@ func hide_bobber() -> void:
 		_flight.kill()
 	_stop_tween()
 	_biting = false
+	_tug = 0.0
 	visible = false
 
 
@@ -93,13 +95,36 @@ func nibble() -> void:
 	_tween.tween_property(self, "_dip", 0.0, 0.18)
 
 
-## 진짜 입질: 크게 가라앉은 채로 출렁인다 (챔질하거나 결과가 날 때까지).
+## 진짜 입질: 물고기가 물고 들어가듯 쑥 잠겼다가(물결), 잠긴 채로 끌려가듯 출렁인다 (챔질하거나 결과가 날 때까지).
 func bite() -> void:
 	_stop_tween()
 	_biting = true
+	ripple()
+	_tween = create_tween()
+	_tween.tween_property(self, "_dip", bite_dip * 1.7, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tween.tween_property(self, "_dip", bite_dip * 1.1, 0.16)
+	_tween.tween_callback(func() -> void:
+		_tween = create_tween().set_loops()
+		_tween.tween_property(self, "_dip", bite_dip * 1.4, 0.11)
+		_tween.tween_property(self, "_dip", bite_dip * 0.9, 0.13))
+
+
+## 끌어올리기: 물고기가 버티며 찌를 끌어당긴다 (반복).
+func struggle() -> void:
+	_stop_tween()
+	_biting = true
 	_tween = create_tween().set_loops()
-	_tween.tween_property(self, "_dip", bite_dip, 0.12)
-	_tween.tween_property(self, "_dip", bite_dip * 0.5, 0.12)
+	_tween.tween_property(self, "_dip", bite_dip * 1.2, 0.07)
+	_tween.tween_property(self, "_dip", bite_dip * 0.6, 0.09)
+	_tween.tween_property(self, "_dip", bite_dip * 1.0, 0.06)
+	_tween.tween_property(self, "_dip", bite_dip * 0.5, 0.1)
+
+
+## 연타 한 번: 찌가 위로 홱 끌려 올라온다 (struggle 출렁임 위에 더해진다).
+func tug() -> void:
+	_tug = 0.12
+	if randf() < 0.35:
+		ripple()
 
 
 func _process(delta: float) -> void:
@@ -107,7 +132,10 @@ func _process(delta: float) -> void:
 		return
 	_time += delta
 	var bob: float = sin(_time * TAU * idle_bob_speed) * idle_bob_height
-	visual.position.y = bob - _dip
+	_tug = move_toward(_tug, 0.0, delta * 0.8)
+	visual.position.y = bob - _dip + _tug
+	# 끌려가는 동안 좌우로 흔들린다.
+	visual.rotation.z = sin(_time * 23.0) * 0.25 * clampf(_dip / maxf(bite_dip, 0.01), 0.0, 1.0) if _biting else 0.0
 
 
 func _stop_tween() -> void:

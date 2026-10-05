@@ -659,12 +659,13 @@
       }
     }
   ],
-  "_comment": "주민. personality 는 대사 묶음(dialogue.json), mood_bias 는 오늘 기분 뽑기 가중치, weather 는 날씨별로 바뀌는 기분, teaches 는 [감정표현, 필요한 친밀도], gifts 는 친해지면 주는 선물, topics·opinions 는 대화 주제.",
+  "_comment": "주민. personality 는 대사 묶음(dialogue.json), mood_bias 는 오늘 기분 뽑기 가중치, weather 는 날씨별로 바뀌는 기분, teaches 는 [감정표현, 필요한 친밀도], gifts 는 친해지면 주는 선물, topics·opinions 는 대화 주제. approach (v0.11): 친밀도가 min_friendship 이상인 사람이 range 안에 있으면 가끔(chance_per_s) 다가와 먼저 말을 건다 (그 사람에게는 cooldown_ms 에 한 번).",
   "gift_rules": {
     "min_friendship": 12,
     "chance": 0.45,
     "cooldown_days": 1
   },
   "topic_friend_per_day": 3,
-  "talk_extra_friend": 1
+  "talk_extra_friend": 1,
+  "approach": { "min_friendship": 6, "range": 9.0, "stop_distance": 1.5, "chance_per_s": 0.12, "cooldown_ms": 300000, "npc_cooldown_ms": 45000, "wait_ms": 7000, "give_up_ms": 15000 }
 }

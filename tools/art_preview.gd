@@ -2,12 +2,14 @@ extends Node3D
 ## 모델 확인용 사진관 (테스트 아님, 실제 렌더러 필요). 나무·캐릭터·소품을 줄지어 세우고 PNG로 찍는다.
 ## 사용: godot --path . res://tools/art_preview.tscn -- --what=trees --out=/tmp/preview.png
 ##   --what: trees / characters / outfits / furniture / clothes / shop / village (--cam=x,y,z --at=x,y,z, 서버 없이 마을 전체)
+##           compare (--ids=tv,bed_double: 앞줄 = 절차 모형, 뒷줄 = Blender 모형 assets/models/items)
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
 var _cam: Vector3 = Vector3(0.0, 30.0, 30.0)
 var _at: Vector3 = Vector3.ZERO
+var _ids: PackedStringArray = []
 
 
 func _ready() -> void:
@@ -20,6 +22,8 @@ func _ready() -> void:
 			_cam = _vec(arg.trim_prefix("--cam="))
 		elif arg.begins_with("--at="):
 			_at = _vec(arg.trim_prefix("--at="))
+		elif arg.begins_with("--ids="):
+			_ids = arg.trim_prefix("--ids=").split(",")
 	if _what == "village":
 		var village: Node = load("res://game/village/village.tscn").instantiate()
 		add_child(village)
@@ -96,6 +100,21 @@ func _ready() -> void:
 				mi.position = Vector3([0.0, -7.0, 0.0, 9.0][level], 0.0, 0.0)
 				add_child(mi)
 			_camera(Vector3(0.0, 7.0, 16.0), Vector3(0.0, 2.0, -2.0), 45.0)
+		"compare":
+			# 왼쪽 = 절차 모형, 오른쪽 = Blender 모형. 아이템마다 한 줄씩 (위에서 아래로).
+			var z: float = 0.0
+			for id: String in _ids:
+				var info: ItemInfo = GameData.item(id)
+				var procedural: ArrayMesh = PartMesh.build(info.model)
+				var size: Vector3 = procedural.get_aabb().size
+				for col: int in 2:
+					var mi: MeshInstance3D = MeshInstance3D.new()
+					mi.mesh = procedural if col == 0 else PartMesh.load_model(id)
+					mi.material_override = load("res://assets/materials/foliage.tres")
+					mi.position = Vector3((col - 0.5) * (maxf(size.x, 0.6) + 0.5), 0.0, -z)
+					add_child(mi)
+				z += maxf(size.z, 0.6) + 0.6
+			_camera(Vector3(0.0, 2.2 + z * 0.55, 2.6 + z * 0.4), Vector3(0.0, 0.3, -z * 0.45), 40.0)
 		"furniture", "clothes":
 			var kind: String = ItemInfo.KIND_FURNITURE if _what == "furniture" else ItemInfo.KIND_CLOTHING
 			var meshes: Array = []
