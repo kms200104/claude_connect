@@ -124,6 +124,8 @@ func set_fishing(active: bool) -> void:
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
 ## 손에 든 도구 가운데 Tool 자리에 끼우는 것 (v9 뜰채 · 삽). 요리 중이면 요리 도구가 먼저다.
 const HAND_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
+## Tripo 모형이 있는 도구 (텍스처 머티리얼 이름, tools/blender/import_tripo.py).
+const TOOL_MODELS: Dictionary[String, String] = {"knife": "tool_knife", "pan": "tool_pan", "ladle": "tool_ladle"}
 ## 뜰채를 도구 자리 안에서 돌리는 각도 (X축) — 손에서 위·조금 앞으로 뻗게.
 const NET_PITCH_DEG: float = -163.0
 ## 얼굴을 가리지 않게 바깥(오른쪽)으로 기울이는 각도 (Z축).
@@ -222,6 +224,7 @@ func _set_tool(tool_id: String) -> void:
 		mi.material_override = clay_material
 		tool.add_child(mi)
 	var mesh: ArrayMesh = null
+	mi.material_override = PartMesh.material_for(TOOL_MODELS.get(tool_id, ""), clay_material)
 	match tool_id:
 		"knife":
 			mesh = CharacterModel.knife()

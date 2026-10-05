@@ -302,7 +302,8 @@ func _apply_stage(node: TreeNode, stage: String) -> void:
 	node.shape.position = Vector3(0.0, cylinder.height * 0.5, 0.0)
 
 
-## 모양별 메시를 한 번만 만든다. 부위마다 정점 색을 칠해 머티리얼 1개로 그린다 (나무 1그루 = 드로우콜 1, 1,200 삼각형 이하).
+## 모양별 메시를 한 번만 만든다. 부위마다 정점 색을 칠해 머티리얼 1개로 그린다 (나무 1그루 = 드로우콜 1, 2,500 삼각형 이하 —
+## 기준 기기(S24 · 폴드7)에 맞춰 둥근 면을 촘촘히. 화면에 동시에 보이는 나무는 10그루 남짓이고 draw_distance 밖은 그리지 않는다).
 static func _mesh(kind: String) -> ArrayMesh:
 	if _meshes.has(kind):
 		return _meshes[kind]
@@ -315,7 +316,7 @@ static func _mesh(kind: String) -> ArrayMesh:
 			for i: int in tiers.size():
 				var tier: Vector3 = tiers[i]
 				var color: Color = LEAF_PINE.lerp(LEAF_PINE_TIP, float(i) / 3.0)
-				ClayMesh.add_lathe(st, _tier_profile(tier.x, tier.z), 18, Transform3D(Basis(), Vector3(0.0, tier.y, 0.0)),
+				ClayMesh.add_lathe(st, _tier_profile(tier.x, tier.z), 27, Transform3D(Basis(), Vector3(0.0, tier.y, 0.0)),
 						ClayMesh.vertical_gradient(color.darkened(0.18), color.lightened(0.08), 1.5), ClayMesh.scallop_wobble(9, 0.16, float(i)))
 		"birch":
 			_add_trunk(st, 0.16, 1.9, BIRCH_BARK, true)
@@ -327,7 +328,7 @@ static func _mesh(kind: String) -> ArrayMesh:
 					var ring: float = sin(Vector2(local.x, local.z).length() * 38.0)
 					return STUMP_TOP.lerp(STUMP_TOP.darkened(0.18), clampf(ring * 0.5 + 0.5, 0.0, 1.0) * 0.6)
 				return TRUNK_COLOR.darkened(0.08 * (1.0 - local.y))
-			ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.46, 0.36, 0.0, 0.45, 0.05, 2), 14, Transform3D(), stump_color)
+			ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.46, 0.36, 0.0, 0.45, 0.05, 3), 22, Transform3D(), stump_color)
 		"sprout":
 			# 흙 둔덕 위에 떡잎 두 장.
 			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.02, 0.0), Vector3(0.28, 0.07, 0.28), Color("#8A6A4A"), 10, 3)
@@ -359,7 +360,7 @@ static func _add_trunk(st: SurfaceTool, radius: float, height: float, color: Col
 		paint = func(local: Vector3, _normal: Vector3) -> Color:
 			var band: float = sin(local.y * 9.0 + sin(atan2(local.z, local.x) * 3.0) * 1.3)
 			return BIRCH_MARK if band > 0.72 else color
-	ClayMesh.add_lathe(st, profile, 9, Transform3D(), paint, ClayMesh.blob_wobble(5, 0.12, 4))
+	ClayMesh.add_lathe(st, profile, 14, Transform3D(), paint, ClayMesh.blob_wobble(5, 0.12, 4))
 
 
 ## 둥글게 부푼 잎 덩어리 세 개(위 하나, 옆 둘) + 겉에 박힌 작은 꽃. 덩어리 겉은 잔물결로 몽글몽글하게.
@@ -375,7 +376,7 @@ static func _add_canopy(st: SurfaceTool, leaf: Color, size: float, center: Vecto
 	for lump: Vector4 in lumps:
 		var c: Vector3 = center + Vector3(lump.x, lump.y * stretch_y, lump.z) * size
 		var r: float = lump.w * size
-		ClayMesh.add_ellipsoid(st, c, Vector3(r, r * stretch_y * 0.9, r), paint, 12, 9, Basis(), ClayMesh.blob_wobble(rng.randi(), 0.07, 7))
+		ClayMesh.add_ellipsoid(st, c, Vector3(r, r * stretch_y * 0.9, r), paint, 18, 13, Basis(), ClayMesh.blob_wobble(rng.randi(), 0.07, 7))
 	if flowers.is_empty():
 		return
 	# 바깥·위쪽을 향한 자리에만 꽃을 박는다 (안쪽에 묻힌 꽃은 안 보이니 만들지 않는다). 꽃 하나 = 삼각형 20개.

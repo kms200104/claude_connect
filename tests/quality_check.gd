@@ -1,6 +1,6 @@
 extends Node
 ## 화질 설정 검사 (서버 없이 마을을 띄운다): 절약·고화질을 바꾸면 3D 해상도·MSAA·그림자·풀 개수·캐릭터 촘촘함·리소스팩이 바뀌는지,
-## 갤럭시 S24 · Z 폴드7 화면에서 3D 해상도 배율이 맞는지.
+## 갤럭시 S24 · Z 폴드7 화면에서 3D 해상도 배율이 맞는지, 60fps 상한인지.
 ## 사용: godot --headless --path . res://tests/quality_check.tscn
 
 var _failed: int = 0
@@ -18,9 +18,10 @@ func _ready() -> void:
 	var high_budget: int = int((Quality._presets["high"] as Dictionary)["pixel_budget"])
 	_check(is_equal_approx(Quality.scale_for(Vector2i(1080, 2340), low_budget), 0.8), "S24 절약: 3D 80%% (%.2f)" % Quality.scale_for(Vector2i(1080, 2340), low_budget))
 	_check(is_equal_approx(Quality.scale_for(Vector2i(1080, 2340), high_budget), 1.0), "S24 고화질: 3D 100%")
-	_check(is_equal_approx(Quality.scale_for(Vector2i(1968, 2184), high_budget), 0.9), "폴드7 펼침 고화질: 3D 90%% (%.2f)" % Quality.scale_for(Vector2i(1968, 2184), high_budget))
+	_check(is_equal_approx(Quality.scale_for(Vector2i(1968, 2184), high_budget), 1.0), "폴드7 펼침 고화질: 3D 100%% (%.2f)" % Quality.scale_for(Vector2i(1968, 2184), high_budget))
 	_check(is_equal_approx(Quality.scale_for(Vector2i(1080, 2520), high_budget), 1.0), "폴드7 접음(바깥 화면) 고화질: 3D 100%")
 	_check(Quality.scale_for(Vector2i(1968, 2184), low_budget) <= 0.65, "폴드7 펼침 절약: 3D %.2f" % Quality.scale_for(Vector2i(1968, 2184), low_budget))
+	_check(Engine.max_fps == 60, "60fps 상한 (%d)" % Engine.max_fps)
 
 	Quality.choose("low")
 	await get_tree().process_frame
@@ -32,9 +33,9 @@ func _ready() -> void:
 	Quality.choose("high")
 	await get_tree().process_frame
 	var high_grass: int = _instances(decor)
-	_check(CharacterModel.detail == 1 and root.msaa_3d == Viewport.MSAA_4X and root.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR, "고화질: 캐릭터 1단계 · MSAA 4배 · FSR")
+	_check(CharacterModel.detail == 2 and root.msaa_3d == Viewport.MSAA_4X and root.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR, "고화질: 캐릭터 2단계 · MSAA 4배 · 쌍선형 (Mobile 렌더러는 FSR 없음)")
 	_check(_ground_size() == 2048, "고화질 리소스팩: 바닥 2048 (%d)" % _ground_size())
-	_check(high_grass > low_grass * 1.5, "풀·꽃이 고화질에서 더 많다 (%d → %d)" % [low_grass, high_grass])
+	_check(high_grass > low_grass * 1.3, "풀·꽃이 고화질에서 더 많다 (%d → %d, 꽃밭은 같은 수)" % [low_grass, high_grass])
 	_check(player.rig.body_mesh.mesh != low_mesh, "서 있던 캐릭터도 다시 빚는다")
 	var style: WorldStyle = village.get_node("WorldStyle")
 	_check(is_equal_approx(style.shadow_distance, 32.0), "그림자 거리 32m (%.1f)" % style.shadow_distance)

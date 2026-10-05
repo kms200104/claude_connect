@@ -12,6 +12,31 @@ extends RefCounted
 static var _cache: Dictionary[String, ArrayMesh] = {}
 ## false 면(절약 화질) 줄인 모형 <key>_low.glb 를 먼저 찾는다. Quality 가 정하고 바꾸면 clear_cache() 한다.
 static var full_models: bool = true
+## 둥근 도형을 나누는 칸 수 배율 (화질의 mesh_detail). 바꾸면 clear_cache().
+static var detail: float = 1.0
+## 텍스처를 쓰는 모형(<key>.jpg|png 가 함께 있는 Tripo 모형)의 툰 머티리얼. key 로 한 번만 만든다.
+static var _materials: Dictionary[String, Material] = {}
+const TOON_SHADER: String = "res://assets/shaders/toon_world.gdshader"
+
+
+## key 모형의 머티리얼: 같은 이름의 텍스처가 있으면 그 텍스처를 꽂은 툰 머티리얼, 없으면 fallback (정점 색 모형).
+## 모형을 그리는 곳은 material_override 에 이것을 넣는다.
+static func material_for(key: String, fallback: Material) -> Material:
+	if _materials.has(key):
+		return _materials[key]
+	var texture: Texture2D = null
+	for ext: String in ["jpg", "png"]:
+		var path: String = "%s/%s.%s" % [MODEL_DIR, key, ext]
+		if ResourceLoader.exists(path):
+			texture = load(path) as Texture2D
+			break
+	if texture == null:
+		return fallback
+	var material: ShaderMaterial = ShaderMaterial.new()
+	material.shader = load(TOON_SHADER)
+	material.set_shader_parameter("albedo_texture", texture)
+	_materials[key] = material
+	return material
 
 
 ## 화질이 바뀌었을 때: 만들어 둔 메시를 버린다 (다음에 찾을 때 그 화질의 모형으로 다시 만든다).
@@ -88,10 +113,10 @@ static func _add_part(st: SurfaceTool, part: Dictionary) -> bool:
 	var paint: Variant = _paint(part.get("c", "#FFFFFF"))
 	var flat: Color = paint if paint is Color else Color.WHITE
 	var round_amount: float = float(part.get("r", 0.0))
-	# 작은 도형은 면을 덜 쪼갠다 (가구 삼각형 예산: 작은 것 300 · 중간 800 · 큰 것 1,500).
+	# 작은 도형은 면을 덜 쪼갠다. 고화질(detail 1.5)은 둥근 면을 1.5배 촘촘히.
 	var extent: float = maxf(a, maxf(b, c)) * (1.0 if shape in ["box", "rbox"] else 2.0)
-	var seg: int = 8 if extent < 0.5 else (10 if extent < 1.5 else 12)
-	var rings: int = 4 if extent < 0.5 else (6 if extent < 1.5 else 8)
+	var seg: int = roundi((8.0 if extent < 0.5 else (10.0 if extent < 1.5 else 12.0)) * detail / 2.0) * 2
+	var rings: int = roundi((4.0 if extent < 0.5 else (6.0 if extent < 1.5 else 8.0)) * detail)
 	match shape:
 		"box":
 			if part.get("c") is Array:
@@ -110,7 +135,7 @@ static func _add_part(st: SurfaceTool, part: Dictionary) -> bool:
 				cyl.bottom_radius = a
 				cyl.top_radius = top
 				cyl.height = b
-				cyl.radial_segments = 12
+				cyl.radial_segments = roundi(12.0 * detail)
 				cyl.rings = 1
 				ClayMesh.add_primitive(st, cyl, Transform3D(basis, at), flat)
 		"sphere":
@@ -121,9 +146,9 @@ static func _add_part(st: SurfaceTool, part: Dictionary) -> bool:
 		"torus":
 			ClayMesh.add_torus(st, at, a, b, paint, seg + 4, 4 if b < 0.05 else 5, basis)
 		"cap":
-			ClayMesh.add_capsule(st, at, _vec(part.get("to", [0, 1, 0])), a, paint, 6, 2)
+			ClayMesh.add_capsule(st, at, _vec(part.get("to", [0, 1, 0])), a, paint, roundi(6.0 * detail), 2)
 		"rod":
-			ClayMesh.add_rod(st, at, _vec(part.get("to", [0, 1, 0])), a, b, paint, 6)
+			ClayMesh.add_rod(st, at, _vec(part.get("to", [0, 1, 0])), a, b, paint, roundi(6.0 * detail))
 		_:
 			return false
 	return true

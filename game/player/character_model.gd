@@ -27,12 +27,12 @@ const FEATURE_LIFT: float = 0.003
 const EYE_LIFT: float = 0.0055
 ## 같은 부품 안에서 층마다 더 띄우는 거리 (깊이 겹침 방지).
 const LAYER_LIFT: float = 0.0009
-## 머리 타원체 [둘레 칸, 위아래 칸] — 절약(0) / 고화질(1). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
-const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(32, 22)]
+## 머리 타원체 [둘레 칸, 위아래 칸] — 촘촘함 0 (절약) / 1 / 2 (고화질). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
+const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(32, 22), Vector2i(44, 30)]
 ## 머리카락 껍질 [둘레 칸, 위아래 칸].
-const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(28, 18)]
+const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(28, 18), Vector2i(38, 24)]
 ## 머리카락 다발 [마디 수, 단면 꼭짓점 수].
-const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 4), Vector2i(8, 6)]
+const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 4), Vector2i(8, 6), Vector2i(11, 8)]
 ## 머리카락 껍질의 중심과 반지름 (머리보다 조금 크고 위·뒤로 치우친 타원체). 다발은 이 겉면을 따라 내려온다.
 const HAIR_CENTER: Vector3 = Vector3(0.0, 0.43, 0.02)
 const HAIR_RADII: Vector3 = Vector3(0.44, 0.39, 0.36)
@@ -40,8 +40,11 @@ const HAIR_RADII: Vector3 = Vector3(0.44, 0.39, 0.36)
 const EAR_CENTER: Vector3 = Vector3(0.4, 0.33, 0.03)
 const EAR_RADII: Vector3 = Vector3(0.05, 0.08, 0.06)
 
-## 0 = 절약, 1 = 고화질 (Quality 가 정한다). 바꾸면 clear_cache() 로 메시를 다시 만든다.
+## 0 = 절약 … MAX_DETAIL = 고화질 (Quality 가 정한다). 바꾸면 clear_cache() 로 메시를 다시 만든다.
 static var detail: int = 1
+const MAX_DETAIL: int = 2
+## 촘촘함별 얼굴 도형 삼각형의 가장 긴 변 (m).
+const FACE_MAX_EDGE: Array[float] = [0.05, 0.035, 0.024]
 static var _cache: Dictionary[String, ArrayMesh] = {}
 
 
@@ -70,7 +73,7 @@ static func body(look: CharacterLook) -> ArrayMesh:
 		ClayMesh.add_torus(st, Vector3(HIP.x * side, -0.525, 0.0), 0.095, 0.022, look.bottom.lightened(0.12), 8, 4)
 	# 머리: 볼·턱 쪽이 넓은 찹쌀떡 (높이마다 옆·앞뒤 반지름에 head_width 를 곱한 회전체). 둘레를 촘촘히 나눠
 	# 얼굴 부품과 겉면 사이가 벌어지거나 파묻히지 않게 한다. 얼굴 부품은 같은 겉면(face_point)에 붙는다.
-	var head: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, 1)]
+	var head: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var cover: float = _hair_cover_bottom(look.hair_style)
 	var head_profile: PackedVector2Array = PackedVector2Array()
 	for i: int in head.y + 1:
@@ -420,14 +423,14 @@ static func _catalog() -> FaceCatalog:
 
 ## 얼굴 도형 삼각형의 가장 긴 변 (머리 반지름 0.32m 에서 0.035m 변은 가운데가 겉면보다 0.5mm 안쪽).
 static func _face_max_edge() -> float:
-	return 0.035 if detail >= 1 else 0.05
+	return FACE_MAX_EDGE[clampi(detail, 0, MAX_DETAIL)]
 
 
 ## 머리카락: 머리보다 조금 큰 껍질(얼굴 자리는 머리 속으로 눌러 넣고, 결을 따라 살짝 골이 진다) 위에 끝이 모이는 도톰한 다발을 얹는다.
 ## 다발은 껍질 겉면을 따라 내려오다 늘어뜨린다 (_lock). 앞머리·옆머리·뒷머리·묶은 머리가 모양마다 다르다.
 static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 	var color: Callable = ClayMesh.vertical_gradient(look.hair.darkened(0.2), look.hair.lightened(0.1), 1.0)
-	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, 1)]
+	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var one: Callable = func(_d: Vector3) -> float: return 1.0
 	# 정수리에서 내려오는 결: 둘레를 따라 넓은 골이 진다 (아래로 갈수록 옅다).
 	var grooves: Callable = func(dir: Vector3) -> float:
@@ -546,7 +549,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 ## 머리 겉면과 만나는 선이 계단 없이 둥글고, 완전히 파묻힌 면만 뺀다. 아래 끝은 앞(bottom)에서 뒤(bottom_back)로 이어진다.
 ## shape 는 방향별 반지름 배율 (결·곱슬), scale 은 껍질 반지름 배율.
 static func _hair_shell(st: SurfaceTool, color: Variant, face_top: float, face_half: float, bottom: float, bottom_back: float, shape: Callable, scale: Vector3 = Vector3.ONE) -> void:
-	var seg: Vector2i = HAIR_SEGMENTS[clampi(detail, 0, 1)]
+	var seg: Vector2i = HAIR_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var face: Callable = func(dir: Vector3) -> float:
 		return _ramp(face_top + 0.08, face_top - 0.06, dir.y) * _ramp(face_half + 0.08, face_half - 0.06, absf(dir.x)) * _ramp(-0.02, -0.22, dir.z)
 	var keep: Callable = func(dir: Vector3) -> bool:
@@ -589,7 +592,7 @@ static func _side_bangs(st: SurfaceTool, color: Variant, direction: float) -> vo
 ## lift = 껍질에서 띄우는 비율, flip = 끝을 바깥으로 젖히는 정도, wave = 늘어뜨린 부분의 물결(0~1), blunt = 끝을 똑 자른 정도(0~1).
 static func _lock(st: SurfaceTool, color: Variant, yaw: float, pitch0: float, pitch1: float, width: float, thick: float,
 		sweep: float = 0.0, hang: float = 0.0, lift: float = 0.03, flip: float = 0.0, wave: float = 0.0, blunt: float = 0.0) -> void:
-	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, 1)]
+	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var points: PackedVector3Array = PackedVector3Array()
 	var n: int = lock_seg.x
 	for k: int in n + 1:

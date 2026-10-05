@@ -162,7 +162,7 @@ func _build(new_level: int) -> void:
 		var counter_mi: MeshInstance3D = MeshInstance3D.new()
 		counter_mi.name = "Counter"
 		counter_mi.mesh = counter
-		counter_mi.material_override = material
+		counter_mi.material_override = PartMesh.material_for(ShopBuilder.COUNTER_MODEL, material)
 		counter_mi.position = ShopBuilder.counter_position(level)
 		_interior.add_child(counter_mi)
 	var chandelier: Array = ShopBuilder.chandelier_parts(level)
@@ -203,7 +203,7 @@ func _add_mesh(parent: Node3D, key: String, parts: Array, mat: Material) -> void
 		return
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.mesh = PartMesh.get_mesh(key, parts)
-	mi.material_override = mat
+	mi.material_override = PartMesh.material_for(key, mat)
 	parent.add_child(mi)
 
 

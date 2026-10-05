@@ -1,5 +1,5 @@
 extends Node
-## 화질 설정 (data/quality/presets.json): 절약(갤럭시 S24 기준) · 고화질(갤럭시 Z 폴드7 기준).
+## 화질 설정 (data/quality/presets.json): 고화질(갤럭시 S24 · Z 폴드7 기본, 60fps) · 절약(배터리·발열 절약, 더 낮은 기기).
 ## 처음엔 기기 모델명으로 추천 설정을 고르고("자동"), 플레이어가 바꾸면 user://settings.cfg 에 기억한다.
 ## 바꾸는 것: Tripo 모형 폴리곤(고화질 = 원본, 절약 = 예산까지 줄인 _low), 3D 해상도(화면 픽셀이 pixel_budget 을 넘으면 그만큼 낮춘다 — 폴드7 을 펼치거나 접으면 다시 계산),
 ## 계단 현상 줄이기(MSAA), 그림자 크기·부드러움·거리, 풀·들꽃·야자수 수, 캐릭터 머리·얼굴 촘촘함, 리소스팩(바닥 텍스처 해상도).
@@ -97,10 +97,10 @@ func _detect(data: Dictionary) -> void:
 			recommended = str(entry.get("preset", recommended))
 			device_name = str(entry.get("name", model))
 			return
-	# 목록에 없는 기기: 메모리가 넉넉하면(11GB 이상) 고화질. 컴퓨터(편집기·도구)도 고화질.
+	# 목록에 없는 기기: 메모리가 S24 급(7.5GB 이상, 8GB 기기는 7.5GB 남짓으로 보고된다)이면 고화질. 컴퓨터(편집기·도구)도 고화질.
 	if OS.has_feature("mobile"):
 		var memory: Dictionary = OS.get_memory_info()
-		if int(memory.get("physical", 0)) >= 11 * 1024 * 1024 * 1024:
+		if int(memory.get("physical", 0)) >= 7 * 1024 * 1024 * 1024 + 512 * 1024 * 1024:
 			recommended = "high" if _presets.has("high") else recommended
 	elif _presets.has("high"):
 		recommended = "high"
@@ -118,11 +118,13 @@ func _apply(notify: bool) -> void:
 		RenderingServer.SHADOW_QUALITY_SOFT_LOW if bool(preset.get("shadow_soft", false)) else RenderingServer.SHADOW_QUALITY_HARD)
 	var detail: int = int(preset.get("character_detail", 1))
 	var full_models: bool = str(preset.get("models", "full")) == "full"
+	var mesh_detail: float = float(preset.get("mesh_detail", 1.0))
 	if CharacterModel.detail != detail or PartMesh.full_models != full_models:
 		CharacterModel.detail = detail
 		CharacterModel.clear_cache()
-	if PartMesh.full_models != full_models:
+	if PartMesh.full_models != full_models or not is_equal_approx(PartMesh.detail, mesh_detail):
 		PartMesh.full_models = full_models
+		PartMesh.detail = mesh_detail
 		PartMesh.clear_cache()
 	_apply_pack(str(preset.get("pack", preset_id)))
 	if notify:

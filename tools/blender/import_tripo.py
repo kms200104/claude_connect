@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Tripo 에서 받은 모형(art_source/tripo/<이름>.glb) → 게임용 assets/models/items/<id>.glb · <id>_low.glb.
 
-게임 모형은 텍스처 없이 정점 색 + 흰 툰 머티리얼 하나로 그린다 (build_items.py 와 같은 방식). 그래서
-  - 바탕색 텍스처를 모서리(corner)마다 읽어 정점 색 'Col' 에 굽고 (노멀·러프니스 맵은 버린다),
+Tripo 모형은 UV 와 바탕색 텍스처를 그대로 쓴다 (예전엔 정점 색으로 구웠는데, 정점 2~4천 개로는 창틀·기와 경계가 뭉개졌다). 그래서
+  - 바탕색 텍스처 원본(JPEG)을 glb 에서 꺼내 <id>.jpg 로 두고 (노멀·러프니스 맵은 버린다 — 툰 셰이더가 쓰지 않는다),
+    게임은 같은 이름의 텍스처가 있으면 툰 셰이더에 그 텍스처를 꽂은 머티리얼로 그린다 (PartMesh.material_for),
   - 게임 좌표(Y 위, +Z 앞)로 돌리고 크기·원점(도구는 쥐는 곳, 건물은 바닥 가운데 또는 앞면)을 맞춘 뒤,
   - 고화질용 <id>.glb 는 원본 폴리곤 그대로, 절약(중사양)용 <id>_low.glb 는 삼각형 예산(CLAUDE.md)까지 줄여서 낸다
     (Decimate — 색은 줄이기 전에 구워야 덜 뭉개진다).
@@ -10,7 +11,9 @@
 
 사용: python3 tools/blender/import_tripo.py [id …]      (pip install bpy — Blender 5.0 파이썬 모듈)
 """
+import json
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -65,44 +68,23 @@ def import_mesh(path):
     return ob
 
 
-def base_color_image(ob):
-    for mat in ob.data.materials:
-        if mat is None or not mat.use_nodes:
-            continue
-        for node in mat.node_tree.nodes:
-            if node.type == 'BSDF_PRINCIPLED':
-                link = node.inputs['Base Color'].links
-                if link and link[0].from_node.type == 'TEX_IMAGE':
-                    return link[0].from_node.image
-    return None
-
-
-def bake_texture_colors(ob):
-    """바탕색 텍스처 → 모서리 정점 색 (sRGB 값 그대로, 게임 셰이더가 선형으로 바꾼다). 5×5 평균으로 잔무늬를 누른다."""
-    img = base_color_image(ob)
-    me = ob.data
-    col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER')
-    me.color_attributes.active_color = col
-    if img is None:
-        print('[tripo]   바탕색 텍스처 없음 → 흰색')
-        for d in col.data:
-            d.color = (1.0, 1.0, 1.0, 1.0)
-        return
-    w, h = img.size
-    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
-    pad = np.pad(px, ((2, 2), (2, 2), (0, 0)), mode='edge')
-    blur = sum(pad[dy:dy + h, dx:dx + w] for dy in range(5) for dx in range(5)) / 25.0
-    # img.pixels 는 선형 값이다. 게임 정점 색은 sRGB 로 칠하는 약속이라 되돌린다.
-    lin = np.clip(blur[..., :3], 0.0, 1.0)
-    blur[..., :3] = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1.0 / 2.4) - 0.055)
-    uv = me.uv_layers.active.data
-    for i, d in enumerate(col.data):
-        u, v = uv[i].uv
-        x = min(max(int(round((u % 1.0) * (w - 1))), 0), w - 1)
-        y = min(max(int(round((v % 1.0) * (h - 1))), 0), h - 1)
-        r, g, b, _a = blur[y, x]
-        d.color = (float(r), float(g), float(b), 1.0)
-    print(f'[tripo]   텍스처 {img.name} {w}x{h} → 정점 색')
+def extract_base_color(src, dest):
+    """glb 안의 바탕색 텍스처 원본 바이트를 그대로 꺼낸다 (다시 압축하지 않아 화질이 그대로)."""
+    data = src.read_bytes()
+    json_len = struct.unpack('<I', data[12:16])[0]
+    gltf = json.loads(data[20:20 + json_len])
+    bin_start = 20 + json_len + 8
+    tex = gltf['materials'][0]['pbrMetallicRoughness']['baseColorTexture']['index']
+    image = gltf['images'][gltf['textures'][tex]['source']]
+    view = gltf['bufferViews'][image['bufferView']]
+    start = bin_start + view.get('byteOffset', 0)
+    ext = '.png' if image.get('mimeType') == 'image/png' else '.jpg'
+    for old in ('.png', '.jpg'):
+        for stale in (dest.with_suffix(old), dest.with_suffix(old + '.import')):
+            stale.unlink(missing_ok=True)
+    out = dest.with_suffix(ext)
+    out.write_bytes(data[start:start + view['byteLength']])
+    return out
 
 
 def fit_budget(ob, budget):
@@ -170,17 +152,19 @@ def export(ob, name):
     for o in bpy.context.scene.objects:
         o.select_set(o == ob)
     bpy.ops.export_scene.gltf(filepath=str(OUT / f'{name}.glb'), export_format='GLB', use_selection=True,
-                              export_vertex_color='ACTIVE', export_materials='NONE', export_normals=True,
-                              export_texcoords=False, export_apply=True)
+                              export_vertex_color='NONE', export_materials='NONE', export_normals=True,
+                              export_texcoords=True, export_apply=True)
 
 
 def build(asset_id, cfg):
     print(f'[tripo] {asset_id} ← {cfg["src"]}')
     ob = import_mesh(SRC / cfg['src'])
-    bake_texture_colors(ob)
+    OUT.mkdir(parents=True, exist_ok=True)
+    tex = extract_base_color(SRC / cfg['src'], OUT / asset_id)
+    print(f'[tripo]   텍스처 {tex.name} ({tex.stat().st_size // 1024} KB)')
     place(ob, cfg)
     ob.data.materials.clear()
-    for name in [a.name for a in ob.data.color_attributes if a.name != 'Col']:
+    for name in [a.name for a in ob.data.color_attributes]:
         ob.data.color_attributes.remove(ob.data.color_attributes[name])
     ob.data.transform(G2B)
     OUT.mkdir(parents=True, exist_ok=True)

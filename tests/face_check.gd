@@ -1,15 +1,16 @@
 extends Node
 ## 얼굴 검사 (렌더러 없이): 모든 눈·코·입 도형의 꼭짓점이 머리 메시 겉면보다 바깥에 있는지(파묻혀 깨지지 않는지),
-## 감정표현 눈썹·눈물도 겉면 밖인지, 캐릭터 하나 삼각형 수(가장 무거운 표정 포함)가 예산(8,000) 안인지, 절약·고화질 둘 다.
+## 감정표현 눈썹·눈물도 겉면 밖인지, 캐릭터 하나 삼각형 수(가장 무거운 표정 포함)가 촘촘함별 예산(BUDGET) 안인지, 모든 촘촘함에서.
 ## 사용: godot --headless --path . res://tests/face_check.tscn
 
-const BUDGET: int = 8000
+## 촘촘함(0 절약 · 1 · 2 고화질)별 캐릭터 하나 삼각형 상한 (CLAUDE.md).
+const BUDGET: Array[int] = [8000, 8000, 12000]
 var _failed: int = 0
 
 
 func _ready() -> void:
 	var catalog: FaceCatalog = GameData.face
-	for detail: int in [0, 1]:
+	for detail: int in range(CharacterModel.MAX_DETAIL + 1):
 		CharacterModel.detail = detail
 		CharacterModel.clear_cache()
 		var head: Vector2i = CharacterModel.HEAD_SEGMENTS[detail]
@@ -55,7 +56,7 @@ func _ready() -> void:
 			if tris > most:
 				most = tris
 				most_name = hair.id
-		_check(most <= BUDGET, "detail %d: 캐릭터 삼각형 %d ≤ %d (가장 많은 머리: %s)" % [detail, most, BUDGET, most_name])
+		_check(most <= BUDGET[detail], "detail %d: 캐릭터 삼각형 %d ≤ %d (가장 많은 머리: %s)" % [detail, most, BUDGET[detail], most_name])
 	print("FACE %s" % ("PASS" if _failed == 0 else "FAIL"))
 	get_tree().quit(0 if _failed == 0 else 1)
 

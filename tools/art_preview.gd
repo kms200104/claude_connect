@@ -5,6 +5,7 @@ extends Node3D
 ##           compare (--ids=tv,bed_double: 앞줄 = 절차 모형, 뒷줄 = Blender 모형 assets/models/items)
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 ##           portraits (표정 6가지를 정면에서, 얼굴 비율 비교용)
+##   --stats: 찍은 프레임의 그린 삼각형·드로우콜·물체 수를 함께 출력 (village 는 --at 자리에서 게임 카메라 구도: 거리 7.5m · 48° · FOV 55)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 
 var _what: String = "trees"
@@ -12,6 +13,7 @@ var _out: String = "user://preview.png"
 var _cam: Vector3 = Vector3(0.0, 30.0, 30.0)
 var _at: Vector3 = Vector3.ZERO
 var _ids: PackedStringArray = []
+var _stats: bool = false
 
 
 func _ready() -> void:
@@ -26,16 +28,24 @@ func _ready() -> void:
 			_at = _vec(arg.trim_prefix("--at="))
 		elif arg.begins_with("--ids="):
 			_ids = arg.trim_prefix("--ids=").split(",")
+		elif arg == "--stats":
+			_stats = true
 	if _what == "village":
 		var village: Node = load("res://game/village/village.tscn").instantiate()
 		add_child(village)
 		(village.get_node("HUD") as CanvasLayer).visible = false
 		await get_tree().create_timer(0.3).timeout
-		_camera(_cam, _at, 50.0)
+		if _stats:
+			var pitch: float = deg_to_rad(48.0)
+			var look: Vector3 = _at + Vector3(0.0, 1.0, 0.0)
+			_camera(look + Vector3(0.0, sin(pitch), cos(pitch)) * 7.5, look, 55.0)
+		else:
+			_camera(_cam, _at, 50.0)
 		await get_tree().create_timer(0.8).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_out)
 		print("[preview] %s" % _out)
+		_print_stats()
 		get_tree().quit()
 		return
 	_stage()
@@ -161,7 +171,19 @@ func _ready() -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(_out)
 	print("[preview] %s" % _out)
+	_print_stats()
 	get_tree().quit()
+
+
+func _print_stats() -> void:
+	if not _stats:
+		return
+	var vp: Viewport = get_viewport()
+	var tris: int = vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)
+	var draws: int = vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME)
+	var objects: int = vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_OBJECTS_IN_FRAME)
+	var shadow_tris: int = vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)
+	print("[stats] tris %d · draws %d · objects %d · shadow tris %d · 3d scale %.2f" % [tris, draws, objects, shadow_tris, vp.scaling_3d_scale])
 
 
 func _stage() -> void:

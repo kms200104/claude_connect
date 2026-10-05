@@ -9,7 +9,7 @@ global uniform float world_wetness;
 global uniform float night_light;
 
 uniform vec4 albedo : source_color = vec4(1.0);
-uniform sampler2D albedo_texture : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 // 밤에만 켜지는 자체 발광 (가로등 갓, 창문).
 uniform vec3 emission : source_color = vec3(0.0);
 uniform float emission_energy = 0.0;
