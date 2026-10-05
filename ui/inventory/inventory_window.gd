@@ -194,7 +194,12 @@ func _on_use_pressed() -> void:
 		var yaw: float = player.body.rotation.y if player.body != null else 0.0
 		var forward: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
 		var rot: int = posmod(roundi(yaw / (PI * 0.5)), 4)
-		Net.place_furniture(selected_slot, player.global_position + forward * 1.5, rot)
+		if Home.is_inside():
+			# 집 안 (v0.10): 집 가구로 놓는다 (45° 단위, 보이지 않는 격자에 맞춘다). 내 집이 아니면 서버가 거절한다.
+			var at: Vector2 = Home.to_local(player.global_position + forward * 1.2)
+			Home.place(selected_slot, at.snapped(Vector2.ONE * Home.grid()), rot * 2)
+		else:
+			Net.place_furniture(selected_slot, player.global_position + forward * 1.5, rot)
 		close()
 
 

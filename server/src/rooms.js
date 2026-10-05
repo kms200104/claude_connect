@@ -14,6 +14,7 @@ import { sanitizeRestaurant } from './restaurant.js';
 import { sanitizeCivic } from './civic.js';
 import { sanitizeTiles } from './dig.js';
 import { shallowZones, newShoal } from './shoal.js';
+import { sanitizeHomeItems } from './homes.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
@@ -137,6 +138,7 @@ export class Player {
     this.lastMoveAt = 0; // performance.now() 기준 ms
     this.lastChopAt = -Infinity;
     this.doorAt = -Infinity; // 상점 문을 지난 시각
+    this.home = null; // v0.10: 들어가 있는 집 (호수)
     this.lastEmoteAt = -Infinity; // 감정표현 간격
     this.lastMotionAt = -Infinity; // 몸짓(브레이크) 간격
     this.graceTimer = null;
@@ -247,6 +249,9 @@ export class Room {
     this.nextDigAt = { beach: 0, lake: 0 };
     this.shoals = new Map(shallowZones(data.spots ?? new Map()).map((z) => [z.id, newShoal(z)]));
     this.treeHits = new Map();
+    // v0.10: 집 안 가구 (호수 → [{id, item, x, z, rot}], 저장). 아직 없는 집은 평면도의 기본 가구를 보여 준다.
+    this.homeItems = {};
+    this.homeItemSeq = 0;
     this.dirty = false; // 위치 스냅샷 방송 필요
     this.saveDirty = false; // 파일 저장 필요
   }
@@ -273,6 +278,8 @@ export class Room {
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
     room.homes = sanitizeHomes(world.homes, data.units);
+    room.homeItems = sanitizeHomeItems(world.homeItems, data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
+    room.homeItemSeq = Math.max(0, intOr(world.homeItemSeq, 0));
     if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
     if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
     room.week = intOr(world.week, null);
@@ -356,6 +363,8 @@ export class Room {
         tiles: [...this.tiles.values()].map((t) => [t.x, t.z, t.s]),
         households: [...this.households.values()].map((h) => ({ id: h.id, members: [...h.members], sol: h.wallet.sol, since: h.since })),
         householdSeq: this.householdSeq,
+        homeItems: structuredClone(this.homeItems),
+        homeItemSeq: this.homeItemSeq,
       },
       profiles,
     };

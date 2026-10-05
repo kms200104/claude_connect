@@ -16,6 +16,8 @@ extends Control
 @onready var _status: Label = %StatusLabel
 
 var _last_error: String = ""
+## 진짜 서버에 연결하지 못하면 보이는 "테스트 서버로 하기" (v0.10).
+var _test_button: Button = null
 var _reconnect_started_ms: float = 0.0
 
 
@@ -29,6 +31,17 @@ func _ready() -> void:
 	_join_button.pressed.connect(_on_join_pressed)
 	_resume_button.pressed.connect(_on_resume_pressed)
 	_leave_button.pressed.connect(Net.leave)
+	_test_button = Button.new()
+	_test_button.name = "TestServerButton"
+	_test_button.text = "연결이 안 되면: 테스트 서버로 하기"
+	_test_button.focus_mode = Control.FOCUS_NONE
+	_test_button.custom_minimum_size = _resume_button.custom_minimum_size
+	_test_button.add_theme_font_size_override("font_size", _resume_button.get_theme_font_size("font_size"))
+	_test_button.pressed.connect(func() -> void:
+		_last_error = ""
+		_server_edit.text = Net.TEST_SERVER_URL
+		Net.play_on_test_server())
+	_form.add_child(_test_button)
 	# 방 정보 줄에 화질 단추 (창은 HUD 맨 위에 붙인다).
 	var quality: QualityWindow = QualityWindow.attach(get_parent() if get_parent() != null else self)
 	var quality_button: Button = QualityWindow.make_button(quality, 26)
@@ -119,7 +132,7 @@ func _describe_error(code: String) -> String:
 		NetProtocol.ERR_BAD_VERSION:
 			return "앱 버전이 서버와 달라요"
 		NetProtocol.ERR_CONNECT_FAILED:
-			return "서버에 연결하지 못했어요"
+			return "서버에 연결하지 못했어요 — 아래 '테스트 서버로 하기'로 서버 없이 해 볼 수 있어요"
 		NetProtocol.ERR_RESUME_FAILED, NetProtocol.ERR_RECONNECT_TIMEOUT:
 			return "자리를 되찾지 못했어요"
 		"replaced":
@@ -135,6 +148,9 @@ func _refresh() -> void:
 	_create_button.disabled = busy
 	_join_button.disabled = busy
 	_leave_button.visible = Net.state == Net.State.ONLINE or Net.state == Net.State.RECONNECTING
+	if _test_button != null:
+		_test_button.visible = offline and not _last_error.is_empty()
+		_test_button.disabled = busy
 	_refresh_status()
 
 
@@ -149,6 +165,8 @@ func _refresh_status() -> void:
 			if Net.partner_present:
 				partner = "상대 접속 중" if Net.partner_online else "상대 연결 끊김"
 			_status.text = "방 코드 %s · %s · %d ms" % [Net.room_code, partner, int(Net.rtt_ms)]
+			if Net.is_test_server():
+				_status.text = "테스트 서버 (앱 안, 혼자) · 방 %s" % Net.room_code
 		Net.State.RECONNECTING:
 			var secs: int = int((Time.get_ticks_msec() - _reconnect_started_ms) / 1000.0)
 			_status.text = "연결이 끊겼어요 — 다시 연결하는 중… %d초" % secs

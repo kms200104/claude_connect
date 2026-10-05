@@ -16,6 +16,7 @@ Audio="*res://autoload/audio/audio.gd"
 Quality="*res://autoload/quality/quality.gd"
 Economy="*res://autoload/economy/economy.gd"
 Field="*res://autoload/field/field.gd"
+Home="*res://autoload/home/home.gd"
 
 [debug]
 

@@ -3,17 +3,18 @@
   "_comment": "아파트 단지 (성성호수 북쪽 물가). 동마다 floors 층 × lines 호. 가격 = 평형 기준가 × 층 할증 × 동 할증 × 마을 집값 지수(주마다 움직임). 세금·수수료와 대출(LTV)은 한국 기준을 단순화했다. 소유한 집은 세를 놓아 주마다 월세(연 수익률 rent_yield)를 받는다.",
   "complex": { "id": "seongseong", "name": "솔바람 성성호수 푸르지오", "short": "성성호수 아파트" },
   "buildings": [
-    { "id": "101", "x": 53.0, "z": 31.0, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.0 },
-    { "id": "102", "x": 64.0, "z": 29.5, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.02 },
-    { "id": "103", "x": 75.0, "z": 31.0, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.0 }
+    { "id": "101", "x": 53.0, "z": 31.0, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.0, "line_types": ["26", "27"] },
+    { "id": "102", "x": 64.0, "z": 29.5, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.02, "line_types": ["34", "35"] },
+    { "id": "103", "x": 75.0, "z": 31.0, "yaw": 0.0, "floors": 10, "lines": 2, "premium": 0.0, "line_types": ["26", "34"], "plans": { "26": "26b" } }
   ],
   "types": {
-    "59": { "name": "59㎡ (24평)", "area": 59, "price": 290000000, "rooms": 3 },
-    "84": { "name": "84㎡ (34평)", "area": 84, "price": 420000000, "rooms": 3 },
-    "114": { "name": "114㎡ (45평) 호수 조망 꼭대기 층", "area": 114, "price": 630000000, "rooms": 4 }
+    "26": { "name": "59㎡ (26평)", "area": 59, "pyeong": 26, "price": 290000000, "rooms": 3, "plan": "26a" },
+    "27": { "name": "59㎡ (27평)", "area": 59, "pyeong": 27, "price": 305000000, "rooms": 3, "plan": "27" },
+    "34": { "name": "84㎡ (34평)", "area": 84, "pyeong": 34, "price": 420000000, "rooms": 4, "plan": "34" },
+    "35": { "name": "84㎡ (35평)", "area": 84, "pyeong": 35, "price": 440000000, "rooms": 4, "plan": "35" }
   },
-  "line_types": ["59", "84"],
-  "top_floor_type": "114",
+  "_types_comment": "v0.10: 평형은 받은 푸르지오 평면도 네 가지(26·27·34·35평). 동마다 line_types 로 1·2호 라인의 평형을, plans 로 같은 평형의 다른 평면(26평 B형)을 고른다. 꼭대기 층도 같은 평형(층 할증만 높다).",
+  "line_types": ["26", "34"],
   "floor_premium": [[1, -0.06], [3, -0.02], [6, 0.0], [9, 0.02], [10, 0.05]],
   "index": { "start": 1.0, "weekly_drift": 0.0015, "weekly_vol": 0.006, "min": 0.6, "max": 2.0 },
   "acquisition_tax": 0.011,

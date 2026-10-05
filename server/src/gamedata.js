@@ -4,6 +4,7 @@ import { inHours } from './clock.js';
 import { blockedAreas } from './world.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
+import { loadPlans, planIdOf } from './homes.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -102,6 +103,13 @@ export function loadGameData(dataDir, cfg) {
   const units = listUnits(realestate);
   for (const u of units) if (!realestate.types[u.type]) throw new Error(`apartment ${u.id}: unknown type ${u.type}`);
   const bank = read('bank/bank.json');
+  // 집 안 (v0.10): 평면도 · 집 안 자리 · 처음 놓이는 가구.
+  const floorplans = read('realestate/floorplans.json');
+  const plans = loadPlans(floorplans);
+  for (const u of units) if (!plans.has(planIdOf(realestate, u))) throw new Error(`apartment ${u.id}: unknown plan ${planIdOf(realestate, u)}`);
+  for (const p of plans.values()) {
+    for (const d of p.defaults) if (items.get(d.item)?.kind !== 'furniture') throw new Error(`plan ${p.id}: ${d.item} is not furniture`);
+  }
 
   // 식당: 요리 · 동작 · 손님
   const recipesFile = read('restaurant/recipes.json');
@@ -168,6 +176,9 @@ export function loadGameData(dataDir, cfg) {
     market,
     realestate,
     units,
+    floorplans,
+    plans,
+    planOf: (unit) => plans.get(planIdOf(realestate, unit)) ?? null,
     bank,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),

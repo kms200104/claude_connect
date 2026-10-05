@@ -1,0 +1,6 @@
+# Caddy: 도메인에 HTTPS 인증서를 저절로 받고, wss:// 를 서버(ws://127.0.0.1:8080)로 넘긴다.
+# 앱의 서버 주소는 wss://game.example.com 처럼 쓴다 (안드로이드에서 암호화되지 않은 ws:// 가 막히는 문제도 피한다).
+#   sudo cp server/deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+game.example.com {
+	reverse_proxy 127.0.0.1:8080
+}

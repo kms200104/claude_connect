@@ -25,6 +25,8 @@ extends Node
 @export var economy: EconomyController
 ## 뜰채질 · 조개 캐기 · 구덩이·흙길 (v0.9, 없어도 된다).
 @export var field: FieldController
+## 아파트 집 구경 · 집 안 나가기 (v0.10, 없어도 된다).
+@export var home: HomeController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -39,7 +41,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME }
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -96,6 +98,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action(economy.target_label(target_id))
 		Target.FIELD:
 			action_hud.show_action(field.target_label(target_id))
+		Target.HOME:
+			action_hud.show_action(home.target_label(target_id))
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
@@ -107,6 +111,8 @@ func _pick_target() -> void:
 	if Net.state != Net.State.ONLINE or player.is_input_locked() or dialogue.is_active() or (mirror_window != null and mirror_window.is_open()):
 		return
 	if economy != null and economy.is_busy():
+		return
+	if home != null and home.is_busy():
 		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
@@ -124,6 +130,15 @@ func _pick_target() -> void:
 		if site != null and site.near(pos, GameData.talk_range - safety_margin):
 			target = Target.TALK
 			target_id = site.npc_id()
+			return
+	if home != null:
+		var home_target: String = home.pick_target(pos)
+		if not home_target.is_empty():
+			target = Target.HOME
+			target_id = home_target
+			return
+		# 집 안에서는 다른 상황 버튼(심기 · 줍기 …)을 띄우지 않는다.
+		if Home.is_inside():
 			return
 	if economy != null:
 		var econ_target: String = economy.pick_target(pos, GameData.talk_range - safety_margin)
@@ -215,6 +230,8 @@ func _on_action_pressed() -> void:
 			economy.activate(target_id)
 		Target.FIELD:
 			field.activate(target_id)
+		Target.HOME:
+			home.activate(target_id)
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))
@@ -354,6 +371,9 @@ static func _flat(a: Vector3, b: Vector3) -> float:
 
 
 func _on_request_failed(kind: String, code: String) -> void:
+	if code == LocalTestServer.ERR_TEST_ONLY:
+		toast_hud.show_toast("테스트 서버에서는 아직 안 되는 기능이에요 (진짜 서버에서 해 보세요)", false)
+		return
 	match kind:
 		"place":
 			match code:

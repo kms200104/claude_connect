@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 9
+const VERSION: int = 10
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -134,6 +134,11 @@ const ERR_NO_PARTNER: String = "no_partner"
 const ERR_ALREADY_MARRIED: String = "already_married"
 const ERR_NOT_IN_SHALLOW: String = "not_in_shallow"
 const ERR_BAD_DIG: String = "bad_dig"
+## v10: 집 안
+const ERR_NOT_AT_LOBBY: String = "not_at_lobby"
+const ERR_NOT_HOME: String = "not_home"
+const ERR_NOT_EDITABLE: String = "not_editable"
+const ERR_HOME_FULL: String = "home_full"
 
 ## 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
 const MOTION_BRAKE: String = "brake"

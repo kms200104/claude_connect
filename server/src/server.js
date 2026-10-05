@@ -15,6 +15,7 @@ import { flowerWire, onPath, pickFlower, plantProblem, refreshFlower, snapPlant 
 import { groundProblem } from './world.js';
 import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, mbtiLetter, moodAfterEmote, setMood } from './social.js';
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
+import { defaultFurniture, furnitureWire, interiorOrigin, lobbyOf, normRot, onFloor, snapGrid } from './homes.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
 import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
 import { applyFaceRequest, nearMirror } from './face.js';
@@ -338,6 +339,9 @@ export function createServer(overrides = {}) {
       shoals: [...room.shoals.values()].map(shoalWire),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
+    // 집 안에서 끊겼다 돌아오면 그 집 안 그대로 (위치로 어느 집인지 찾는다).
+    player.home = homeAtPosition(player.x, player.z);
+    if (player.home) send(ctx.ws, homeMessage(room, player, null));
     room.dirty = true;
     rooms.save(room);
   }
@@ -986,6 +990,139 @@ export function createServer(overrides = {}) {
     }
   }
 
+  // ---- 집 안 (v0.10): 아파트 호수마다 평면도대로 지은 집 안, 가구 놓기·옮기기·회수 ----
+
+  const homeRules = data.floorplans;
+  const HOME_MAX_FURNITURE = 60;
+  /** 그 호수 집 안의 월드 원점 (평면도 왼쪽 위). */
+  const homeOrigin = (unitId) => (homeRules ? interiorOrigin(homeRules, data.units, unitId) : null);
+  const unitById = (unitId) => data.units.find((u) => u.id === unitId) ?? null;
+  /** 이 위치가 어느 집 안인지 (끊겼다 돌아왔을 때). */
+  function homeAtPosition(x, z) {
+    if (!homeRules || x > -100) return null;
+    for (const u of data.units) {
+      const o = homeOrigin(u.id);
+      const plan = data.planOf(u);
+      if (o && plan && x >= o.x - 1 && x <= o.x + plan.size.x + 1 && z >= o.z - 1 && z <= o.z + plan.size.z + 1) return u.id;
+    }
+    return null;
+  }
+  /** 그 집 가구 목록 (아직 아무도 손대지 않은 집은 평면도의 기본 가구). */
+  const homeList = (room, unitId) => room.homeItems[unitId] ?? defaultFurniture(data.planOf(unitById(unitId)));
+  /** 내 집이거나 우리 세대(혼인신고한 배우자) 집이면 가구를 옮길 수 있다. */
+  function canEditHome(room, player, unitId) {
+    const owner = room.homes[unitId]?.owner;
+    if (!owner) return false;
+    return room.householdOf(player.profile).some((p) => p.uid === owner);
+  }
+  function homeMessage(room, player, rid) {
+    const unit = unitById(player.home);
+    const o = homeOrigin(player.home);
+    const owner = room.homes[player.home]?.owner;
+    return {
+      t: 'home', rid, unit: player.home, plan: data.planOf(unit)?.id ?? '', ox: o.x, oz: o.z,
+      owner: owner ? room.slotOfUid(owner) ?? 0 : 0, edit: canEditHome(room, player, player.home),
+      x: player.x, y: player.y, z: player.z, f: furnitureWire(homeList(room, player.home)),
+    };
+  }
+  /** 그 집 안에 있는 사람 모두에게 가구 목록을 다시 보낸다 (요청한 사람에게는 rid 와 함께). */
+  function broadcastHomeFurniture(room, unitId, requester, rid) {
+    const wire = furnitureWire(homeList(room, unitId));
+    for (const p of room.players.values()) {
+      if (!p.online || p.home !== unitId) continue;
+      sendTo(p, { t: 'home_f', rid: p === requester ? rid : null, unit: unitId, f: wire });
+    }
+  }
+  function teleport(ctx, x, z) {
+    const { player, room } = ctx;
+    player.x = x;
+    player.z = z;
+    player.y = 0.1;
+    player.vx = 0;
+    player.vz = 0;
+    player.lastMoveAt = now();
+    player.doorAt = now();
+    fishing.drop(player);
+    closeTalk(room, player, false);
+    room.dirty = true;
+    room.saveDirty = true;
+  }
+
+  function handleHomeInside(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (!homeRules) return fail(ErrorCode.notHome);
+    if (msg.t === 'home_enter') {
+      const unit = typeof msg.unit === 'string' ? unitById(msg.unit) : null;
+      if (!unit) return fail(ErrorCode.badUnit);
+      if (player.home) return fail(ErrorCode.notAtLobby);
+      const lobby = lobbyOf(data.realestate, homeRules, unit.building);
+      if (!lobby || Math.hypot(player.x - lobby.x, player.z - lobby.z) > homeRules.lobby.range + 0.5) return fail(ErrorCode.notAtLobby);
+      const plan = data.planOf(unit);
+      const o = homeOrigin(unit.id);
+      player.home = unit.id;
+      teleport(ctx, o.x + plan.spawn[0], o.z + plan.spawn[1]);
+      return send(ctx.ws, homeMessage(room, player, msg.rid));
+    }
+    if (!player.home) return fail(ErrorCode.notHome);
+    const unitId = player.home;
+    const plan = data.planOf(unitById(unitId));
+    const o = homeOrigin(unitId);
+    if (msg.t === 'home_exit') {
+      if (Math.hypot(player.x - (o.x + plan.front[0]), player.z - (o.z + plan.front[1])) > 2.2) return fail(ErrorCode.notHome);
+      const lobby = lobbyOf(data.realestate, homeRules, unitById(unitId).building);
+      player.home = null;
+      teleport(ctx, lobby.x, lobby.z + 0.6);
+      return send(ctx.ws, { t: 'home', rid: msg.rid, unit: '', x: player.x, y: player.y, z: player.z });
+    }
+    if (!canEditHome(room, player, unitId)) return fail(ErrorCode.notEditable);
+    const grid = homeRules.grid ?? 0.25;
+    const spot = () => {
+      if (![msg.x, msg.z].every(isNum)) return null;
+      const x = snapGrid(msg.x, grid);
+      const z = snapGrid(msg.z, grid);
+      return onFloor(plan, x, z, 0.05) ? { x, z } : null;
+    };
+    // 처음 손대는 집: 기본 가구를 그 집 것으로 만든다.
+    const list = (room.homeItems[unitId] ??= defaultFurniture(plan));
+    switch (msg.t) {
+      case 'home_place': {
+        const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+        if (!slot || data.kindOf(slot.id) !== 'furniture') return fail(ErrorCode.badItem);
+        if (list.length >= HOME_MAX_FURNITURE) return fail(ErrorCode.homeFull);
+        const at = spot();
+        if (!at) return fail(ErrorCode.badPlace);
+        removeAt(player.slots, msg.slot, 1);
+        room.homeItemSeq += 1;
+        list.push({ id: `h${room.homeItemSeq}`, item: slot.id, x: at.x, z: at.z, rot: normRot(msg.rot) });
+        sendInventory(player);
+        break;
+      }
+      case 'home_move': {
+        const f = list.find((x) => x.id === msg.id);
+        if (!f) return fail(ErrorCode.badPlace);
+        const at = spot();
+        if (!at) return fail(ErrorCode.badPlace);
+        f.x = at.x;
+        f.z = at.z;
+        f.rot = normRot(msg.rot);
+        break;
+      }
+      case 'home_pickup': {
+        const i = list.findIndex((x) => x.id === msg.id);
+        if (i < 0) return fail(ErrorCode.badPlace);
+        if (!addItem(player.slots, list[i].item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+        list.splice(i, 1);
+        sendInventory(player);
+        break;
+      }
+      default:
+        return fail(ErrorCode.badMessage);
+    }
+    broadcastHomeFurniture(room, unitId, player, msg.rid);
+    rooms.save(room);
+  }
+
   // ---- 삽: 조개 캐기 · 땅 고치기 ----
 
   /** 바닷가·호숫가에 조개 숨구멍을 돋운다 (worldTick). */
@@ -1174,6 +1311,12 @@ export function createServer(overrides = {}) {
         return handleNet(ctx, msg, fail);
       case 'dig':
         return handleDig(ctx, msg, fail);
+      case 'home_enter':
+      case 'home_exit':
+      case 'home_place':
+      case 'home_move':
+      case 'home_pickup':
+        return handleHomeInside(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -1307,6 +1450,11 @@ export function createServer(overrides = {}) {
       case 'marry_answer':
       case 'net':
       case 'dig':
+      case 'home_enter':
+      case 'home_exit':
+      case 'home_place':
+      case 'home_move':
+      case 'home_pickup':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');

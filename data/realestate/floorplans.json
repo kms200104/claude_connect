@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "_comment": "솔바람 성성호수 푸르지오 평면도 (v0.10). 받은 평면도 그림의 픽셀 좌표를 그대로 적고 scale(m/px)로 미터로 바꾼다 — 그림 왼쪽 위가 북서쪽, 아래(+y → +z)가 남쪽 발코니·큰 창. rooms: 방마다 사각형(r) 하나 이상, kind 로 바닥·벽·붙박이를 정한다. 거실·주방·복도·현관은 벽 없이 이어진다(open). doors: 방과 방 사이 문 자리(그 벽 0.9m 를 비운다). front: 현관문(바깥으로 나가는 문). defaults: 처음 집에 놓이는 가구 (at = 그림 픽셀 좌표, rot = 45° 단위, 0 = 가구 앞면이 남쪽(+z)).",
+  "wall_height": 2.3,
+  "wall_thickness": 0.14,
+  "door_width": 0.9,
+  "grid": 0.25,
+  "interiors": { "x0": -185.0, "dx": 26.0, "cols": 3, "z0": -190.0, "dz": 19.5 },
+  "lobby": { "front": 4.2, "range": 2.4 },
+  "kinds": {
+    "living": { "name": "거실", "open": true, "floor": "wood" },
+    "kitchen": { "name": "주방·식당", "open": true, "floor": "wood" },
+    "hall": { "name": "복도", "open": true, "floor": "wood" },
+    "entry": { "name": "현관", "open": true, "floor": "entry" },
+    "master": { "name": "안방", "floor": "light_wood" },
+    "bedroom": { "name": "침실", "floor": "light_wood" },
+    "dress": { "name": "드레스룸", "floor": "light_wood" },
+    "bath": { "name": "욕실", "floor": "tile" },
+    "balcony": { "name": "발코니", "floor": "balcony" },
+    "utility": { "name": "다용도실", "floor": "utility" }
+  },
+  "plans": {
+    "26a": {
+      "name": "59㎡A · 26평", "pyeong": 26, "scale": 0.034,
+      "rooms": [
+        { "id": "dress", "kind": "dress", "r": [[10, 5, 57, 112]] },
+        { "id": "bath1", "kind": "bath", "r": [[57, 40, 108, 112]] },
+        { "id": "master", "kind": "master", "r": [[8, 112, 108, 202]] },
+        { "id": "balcony", "kind": "balcony", "r": [[42, 202, 108, 238]] },
+        { "id": "kitchen", "kind": "kitchen", "r": [[108, 5, 190, 72]] },
+        { "id": "living", "kind": "living", "r": [[108, 72, 190, 112], [108, 112, 212, 238]] },
+        { "id": "hall", "kind": "hall", "r": [[212, 112, 320, 146]] },
+        { "id": "entry", "kind": "entry", "r": [[276, 75, 320, 112]] },
+        { "id": "bed2", "kind": "bedroom", "r": [[212, 146, 292, 238]] },
+        { "id": "bed3", "kind": "bedroom", "r": [[292, 146, 370, 238]] },
+        { "id": "bath2", "kind": "bath", "r": [[320, 85, 370, 146]] },
+        { "id": "utility", "kind": "utility", "r": [[190, 5, 258, 62]] }
+      ],
+      "doors": [[108, 128], [35, 112], [57, 62], [75, 202], [222, 146], [300, 146], [320, 128], [190, 50]],
+      "front": [298, 75],
+      "defaults": [
+        { "item": "bed_double", "at": [58, 146], "rot": 0 },
+        { "item": "bed_single", "at": [272, 205], "rot": 0 },
+        { "item": "bed_single", "at": [350, 205], "rot": 0 },
+        { "item": "tv", "at": [117, 185], "rot": 2 },
+        { "item": "air_conditioner", "at": [118, 228], "rot": 2 },
+        { "item": "electric_fan", "at": [222, 228], "rot": 2 }
+      ]
+    },
+    "26b": {
+      "name": "59㎡B · 26평", "pyeong": 26, "scale": 0.0356,
+      "rooms": [
+        { "id": "bed2", "kind": "bedroom", "r": [[411, 117, 490, 207]] },
+        { "id": "hall", "kind": "hall", "r": [[490, 117, 567, 150]] },
+        { "id": "bed3", "kind": "bedroom", "r": [[490, 150, 567, 238]] },
+        { "id": "kitchen", "kind": "kitchen", "r": [[582, 8, 660, 80]] },
+        { "id": "living", "kind": "living", "r": [[582, 80, 668, 117], [567, 117, 668, 238]] },
+        { "id": "bath2", "kind": "bath", "r": [[540, 58, 582, 117]] },
+        { "id": "entry", "kind": "entry", "r": [[488, 80, 540, 117]] },
+        { "id": "master", "kind": "master", "r": [[668, 117, 790, 203]] },
+        { "id": "dress", "kind": "dress", "r": [[728, 72, 757, 117]] },
+        { "id": "bath1", "kind": "bath", "r": [[688, 72, 728, 117]] },
+        { "id": "balcony", "kind": "balcony", "r": [[705, 203, 757, 238]] },
+        { "id": "utility", "kind": "utility", "r": [[660, 8, 702, 70]] }
+      ],
+      "doors": [[490, 128], [550, 150], [552, 117], [668, 128], [742, 117], [705, 117], [720, 203], [660, 45]],
+      "front": [510, 80],
+      "defaults": [
+        { "item": "bed_double", "at": [730, 150], "rot": 0 },
+        { "item": "bed_single", "at": [430, 152], "rot": 0 },
+        { "item": "bed_single", "at": [507, 196], "rot": 0 },
+        { "item": "tv", "at": [576, 190], "rot": 2 },
+        { "item": "air_conditioner", "at": [577, 230], "rot": 2 },
+        { "item": "electric_fan", "at": [480, 196], "rot": 6 }
+      ]
+    },
+    "27": {
+      "name": "59㎡C · 27평", "pyeong": 27, "scale": 0.018,
+      "rooms": [
+        { "id": "bed2", "kind": "bedroom", "r": [[20, 272, 160, 445]] },
+        { "id": "bed3", "kind": "bedroom", "r": [[160, 272, 300, 445]] },
+        { "id": "hall", "kind": "hall", "r": [[103, 205, 300, 272]] },
+        { "id": "living", "kind": "living", "r": [[300, 140, 510, 445]] },
+        { "id": "kitchen", "kind": "kitchen", "r": [[350, 10, 510, 140]] },
+        { "id": "entry", "kind": "entry", "r": [[130, 118, 190, 205]] },
+        { "id": "bath2", "kind": "bath", "r": [[20, 155, 103, 265]] },
+        { "id": "master", "kind": "master", "r": [[510, 210, 705, 378]] },
+        { "id": "dress", "kind": "dress", "r": [[608, 25, 660, 210]] },
+        { "id": "bath1", "kind": "bath", "r": [[530, 85, 608, 210]] },
+        { "id": "balcony", "kind": "balcony", "r": [[510, 378, 615, 445]] },
+        { "id": "utility", "kind": "utility", "r": [[220, 10, 350, 118]] }
+      ],
+      "doors": [[130, 272], [270, 272], [103, 240], [510, 240], [630, 210], [608, 135], [560, 378], [350, 95]],
+      "front": [160, 118],
+      "defaults": [
+        { "item": "bed_double", "at": [640, 272], "rot": 0 },
+        { "item": "bed_single", "at": [60, 332], "rot": 0 },
+        { "item": "bed_single", "at": [200, 332], "rot": 0 },
+        { "item": "tv", "at": [310, 360], "rot": 2 },
+        { "item": "air_conditioner", "at": [314, 430], "rot": 2 },
+        { "item": "electric_fan", "at": [285, 430], "rot": 6 }
+      ]
+    },
+    "34": {
+      "name": "84㎡A · 34평", "pyeong": 34, "scale": 0.0197,
+      "rooms": [
+        { "id": "bed2", "kind": "bedroom", "r": [[12, 292, 155, 475]] },
+        { "id": "bed3", "kind": "bedroom", "r": [[155, 292, 295, 475]] },
+        { "id": "hall", "kind": "hall", "r": [[90, 230, 295, 292]] },
+        { "id": "living", "kind": "living", "r": [[315, 140, 512, 230], [295, 230, 512, 475]] },
+        { "id": "kitchen", "kind": "kitchen", "r": [[315, 12, 475, 140]] },
+        { "id": "bed4", "kind": "bedroom", "r": [[202, 72, 315, 230]] },
+        { "id": "entry", "kind": "entry", "r": [[110, 145, 170, 230]] },
+        { "id": "bath2", "kind": "bath", "r": [[12, 180, 90, 292]] },
+        { "id": "master", "kind": "master", "r": [[512, 230, 698, 408]] },
+        { "id": "dress", "kind": "dress", "r": [[598, 60, 660, 230]] },
+        { "id": "bath1", "kind": "bath", "r": [[515, 105, 598, 230]] },
+        { "id": "balcony", "kind": "balcony", "r": [[512, 408, 612, 475]] },
+        { "id": "utility", "kind": "utility", "r": [[475, 10, 598, 105]] }
+      ],
+      "doors": [[130, 292], [270, 292], [225, 230], [90, 260], [512, 250], [630, 230], [560, 230], [560, 408], [475, 80]],
+      "front": [135, 145],
+      "defaults": [
+        { "item": "bed_double", "at": [640, 292], "rot": 0 },
+        { "item": "bed_single", "at": [55, 356], "rot": 0 },
+        { "item": "bed_single", "at": [195, 356], "rot": 0 },
+        { "item": "bed_single", "at": [285, 128], "rot": 0 },
+        { "item": "tv", "at": [305, 380], "rot": 2 },
+        { "item": "air_conditioner", "at": [307, 455], "rot": 2 },
+        { "item": "electric_fan", "at": [283, 460], "rot": 6 }
+      ]
+    },
+    "35": {
+      "name": "84㎡B · 35평", "pyeong": 35, "scale": 0.0243,
+      "rooms": [
+        { "id": "master", "kind": "master", "r": [[28, 213, 178, 355]] },
+        { "id": "dress", "kind": "dress", "r": [[52, 150, 108, 213]] },
+        { "id": "bath1", "kind": "bath", "r": [[108, 118, 178, 213]] },
+        { "id": "kitchen", "kind": "kitchen", "r": [[178, 45, 312, 150]] },
+        { "id": "living", "kind": "living", "r": [[178, 150, 352, 405]] },
+        { "id": "hall", "kind": "hall", "r": [[352, 215, 578, 262]] },
+        { "id": "bed2", "kind": "bedroom", "r": [[352, 262, 467, 405]] },
+        { "id": "bed3", "kind": "bedroom", "r": [[467, 262, 578, 405]] },
+        { "id": "bed4", "kind": "bedroom", "r": [[578, 215, 697, 370]] },
+        { "id": "bath2", "kind": "bath", "r": [[405, 122, 470, 215]] },
+        { "id": "entry", "kind": "entry", "r": [[488, 135, 535, 215]] },
+        { "id": "balcony", "kind": "balcony", "r": [[78, 355, 178, 405]] },
+        { "id": "utility", "kind": "utility", "r": [[312, 45, 405, 120]] }
+      ],
+      "doors": [[178, 228], [80, 213], [140, 213], [440, 262], [555, 262], [578, 228], [440, 215], [120, 355], [312, 95]],
+      "front": [510, 135],
+      "defaults": [
+        { "item": "bed_double", "at": [95, 272], "rot": 0 },
+        { "item": "bed_single", "at": [385, 332], "rot": 0 },
+        { "item": "bed_single", "at": [497, 332], "rot": 0 },
+        { "item": "bed_single", "at": [665, 292], "rot": 0 },
+        { "item": "tv", "at": [187, 330], "rot": 2 },
+        { "item": "air_conditioner", "at": [188, 392], "rot": 2 },
+        { "item": "electric_fan", "at": [602, 355], "rot": 2 }
+      ]
+    }
+  }
+}

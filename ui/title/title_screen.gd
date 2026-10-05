@@ -75,6 +75,14 @@ func _ready() -> void:
 	var quality: QualityWindow = QualityWindow.attach(_overlay)
 	var quality_button: Button = QualityWindow.make_button(quality, 32)
 	_start_button.get_parent().add_child(quality_button)
+	# 서버 없이 해 보기 (v0.10): 앱 안 테스트 서버로 들어간다 (안드로이드 기기 하나로 테스트할 때).
+	var test_button: Button = Button.new()
+	test_button.name = "TestServerButton"
+	test_button.text = "서버 없이 테스트하기"
+	test_button.focus_mode = Control.FOCUS_NONE
+	test_button.add_theme_font_size_override("font_size", 28)
+	test_button.pressed.connect(func() -> void: _enter(Net.play_on_test_server))
+	_start_button.get_parent().add_child(test_button)
 	_place_camera()
 	Audio.play_music(Audio.MUSIC_TITLE)
 

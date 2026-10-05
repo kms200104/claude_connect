@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -79,6 +79,11 @@ export const ErrorCode = Object.freeze({
   alreadyMarried: 'already_married', // 이미 혼인신고한 세대
   notInShallow: 'not_in_shallow', // 여울(얕은 물) 안이 아니다
   badDig: 'bad_dig', // 팔 수 없는 자리 (물·건물·길·나무 곁 …)
+  // v10: 집 안
+  notAtLobby: 'not_at_lobby', // 그 동 공동 현관 앞이 아님
+  notHome: 'not_home', // 집 안이 아님 (또는 현관문 곁이 아님)
+  notEditable: 'not_editable', // 내(세대) 집이 아니라 가구를 옮길 수 없음
+  homeFull: 'home_full', // 집 안 가구가 너무 많음
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
   // 대화 주제

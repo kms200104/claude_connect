@@ -1,0 +1,14 @@
+# 서버 이미지에는 server/ 와 data/ 만 들어간다.
+.godot
+.git
+assets
+art_source
+autoload
+core
+game
+ui
+tests
+tools
+docs
+server/node_modules
+server/saves

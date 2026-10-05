@@ -1,13 +1,14 @@
 // 아파트 (서버 권위): 단지·동·호수와 시세, 사고팔기, 월세. 소유는 방(마을) 단위로 저장한다 — 한 집은 한 사람만.
 // 가격 = 평형 기준가 × (1 + 층 할증 + 동 할증) × 마을 집값 지수. 지수는 마을 시계로 한 주마다 조금씩 움직인다.
 
-/** 단지의 모든 호수: [{ id: '101-803', building, floor, line, type }] */
+/** 단지의 모든 호수: [{ id: '101-803', building, floor, line, type }]. 동마다 line_types 로 라인별 평형을 정할 수 있다 (v0.10). */
 export function listUnits(rules) {
   const units = [];
   for (const b of rules.buildings) {
     for (let floor = 1; floor <= b.floors; floor++) {
       for (let line = 1; line <= b.lines; line++) {
-        const type = floor === b.floors && rules.top_floor_type ? rules.top_floor_type : rules.line_types[(line - 1) % rules.line_types.length];
+        const lineTypes = b.line_types ?? rules.line_types;
+        const type = floor === b.floors && rules.top_floor_type ? rules.top_floor_type : lineTypes[(line - 1) % lineTypes.length];
         units.push({ id: `${b.id}-${floor}${String(line).padStart(2, '0')}`, building: b.id, floor, line, type });
       }
     }

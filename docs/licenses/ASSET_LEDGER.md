@@ -21,3 +21,6 @@
 | 아파트·식당·부동산 부스 모형 (v0.8) | `game/places/apartment_site.gd` · `restaurant_site.gd` | 코드로 빚음 (`PartMesh`) | 프로젝트 | 마을 건물 |
 | 도구·조개·땅 속 물건·조개 요리 아이콘 14장 (v0.9) | `assets/icons/items/` (뜰채 그물·삽·바지락·개조개·맛조개·키조개·재첩·화석·옛날 동전·동글 조약돌) · `assets/icons/dishes/` (바지락 칼국수·재첩국·맛조개 구이·키조개 관자 구이) | 게임 모형(`items.json` · `recipes.json` 의 model)을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 · 주문 말풍선 |
 | 동사무소 건물·창구 · 여울(얕은 물) · 물고기 떼 · 조개 숨구멍 · 구덩이/흙길 · 첫 화면 구름 (v0.9) | `game/places/civic_site.gd` · `game/fishing/fishing_spot.gd` · `game/field/field_controller.gd` · `ui/title/title_screen.gd` | 코드로 빚음 (`PartMesh`, `ClayMesh`) | 프로젝트 | 마을 건물·물가·땅 |
+| 가구 아이콘 11장 (v0.10) | `assets/icons/items/` (TV · 스탠드 에어컨 · 선풍기 · 더블/싱글 침대 · 4인 식탁 · 양문형 냉장고 · 옷장 · 책상 세트 · 패브릭 소파 · 드럼 세탁기) | 게임 모형(`items.json` 의 model)을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 · 꾸미기 |
+| 아파트 평면도 데이터 (v0.10) | `data/realestate/floorplans.json` (방 사각형 · 문 · 현관 좌표) | 프로젝트 오너가 준 푸르지오 평면도 그림 4장(네이버 부동산 평면도 이미지)을 보고 좌표만 옮겨 적음 — 그림 자체는 저장소에 넣지 않았다 | 평면 배치 참고 — 공개 전 사용 범위 확인 필요 | 집 안 벽·바닥 |
+| 집 안 벽·바닥·붙박이 (v0.10) | `game/home/home_interior.gd` | 평면도 데이터로 코드가 빚음 (`PartMesh`) | 프로젝트 | 아파트 집 안 |

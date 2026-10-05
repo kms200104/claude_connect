@@ -10,6 +10,7 @@ const RECIPES_PATH: String = "res://data/restaurant/recipes.json"
 const RESTAURANT_PATH: String = "res://data/restaurant/restaurant.json"
 const CIVIC_PATH: String = "res://data/civic/civic.json"
 const DIG_PATH: String = "res://data/world/dig.json"
+const FLOORPLANS_PATH: String = "res://data/realestate/floorplans.json"
 
 const RARITY_RANK: Dictionary = {"common": 0, "uncommon": 1, "rare": 2}
 const RARITY_NAMES: Dictionary = {"common": "흔한", "uncommon": "드문", "rare": "귀한"}
@@ -49,6 +50,9 @@ var customers: Dictionary[String, Customer] = {}
 var civic: Dictionary = {}
 ## 삽 · 뜰채 규칙 (data/world/dig.json).
 var dig: Dictionary = {}
+## 집 안 (v0.10): 평면도 규칙(벽 높이·격자·집 안 자리·방 종류)과 평면도들.
+var home_rules: Dictionary = {}
+var plans: Dictionary[String, FloorPlan] = {}
 
 
 static func load_all() -> EconData:
@@ -59,6 +63,10 @@ static func load_all() -> EconData:
 	e.restaurant = _read(RESTAURANT_PATH)
 	e.civic = _read(CIVIC_PATH)
 	e.dig = _read(DIG_PATH)
+	e.home_rules = _read(FLOORPLANS_PATH)
+	var raw_plans: Dictionary = e.home_rules.get("plans", {})
+	for plan_id: String in raw_plans:
+		e.plans[plan_id] = FloorPlan.from_dict(plan_id, raw_plans[plan_id])
 	var recipes_file: Dictionary = _read(RECIPES_PATH)
 	e.cook_steps = recipes_file.get("steps", {})
 	for entry: Variant in recipes_file.get("recipes", []):
@@ -189,6 +197,51 @@ func mortgage_limit(price: int) -> int:
 	return floori(float(price) * float(apartments.get("ltv", 0.7)) / 10000.0) * 10000
 
 
+# ---- 집 안 (v0.10) ----
+
+## 그 호수의 평면도: 동의 plans 가 평형별로 바꿀 수 있고, 아니면 평형의 plan (서버 planIdOf 와 같다).
+func plan_of(unit_id: String) -> FloorPlan:
+	var u: Unit = unit(unit_id)
+	if u == null:
+		return null
+	var plan_id: String = str(type_info(u.type).get("plan", ""))
+	for b: Variant in buildings():
+		if b is Dictionary and str(b.get("id", "")) == u.building:
+			plan_id = str((b.get("plans", {}) as Dictionary).get(u.type, plan_id))
+	return plans.get(plan_id)
+
+
+## 그 호수 집 안의 월드 원점 (평면도 왼쪽 위). 서버 interiorOrigin 과 같다.
+func home_origin(unit_id: String) -> Vector3:
+	var g: Dictionary = home_rules.get("interiors", {})
+	var index: int = -1
+	for i: int in units.size():
+		if units[i].id == unit_id:
+			index = i
+	if index < 0:
+		return Vector3.ZERO
+	var cols: int = int(g.get("cols", 3))
+	return Vector3(float(g.get("x0", -185.0)) + (index % cols) * float(g.get("dx", 26.0)), 0.0, float(g.get("z0", -190.0)) + (index / cols) * float(g.get("dz", 19.5)))
+
+
+## 동 공동 현관 앞 (집 구경을 시작하는 자리).
+func lobby_of(building_id: String) -> Vector3:
+	var lobby: Dictionary = home_rules.get("lobby", {})
+	for b: Variant in buildings():
+		if b is Dictionary and str(b.get("id", "")) == building_id:
+			return Vector3(float(b.get("x", 0.0)), 0.0, float(b.get("z", 0.0)) + float(lobby.get("front", 4.2)))
+	return Vector3.ZERO
+
+
+func lobby_range() -> float:
+	return float((home_rules.get("lobby", {}) as Dictionary).get("range", 2.4))
+
+
+## 방 종류 정보 (이름 · 바닥 · 벽 없이 이어지는지).
+func room_kind(kind: String) -> Dictionary:
+	return (home_rules.get("kinds", {}) as Dictionary).get(kind, {})
+
+
 # ---- 동사무소 ----
 
 func program_def(id: String) -> Dictionary:
@@ -224,20 +277,22 @@ func step(step_id: String) -> Dictionary:
 
 func _build_units() -> void:
 	units.clear()
-	var line_types: Array = apartments.get("line_types", ["59"])
+	var line_types: Array = apartments.get("line_types", ["26"])
 	var top: String = str(apartments.get("top_floor_type", ""))
 	for b: Variant in buildings():
 		if not b is Dictionary:
 			continue
 		var floors: int = int(b.get("floors", 1))
 		var lines: int = int(b.get("lines", 1))
+		# v0.10: 동마다 라인별 평형 (없으면 단지 공통).
+		var building_types: Array = b.get("line_types", line_types)
 		for fl: int in range(1, floors + 1):
 			for line: int in range(1, lines + 1):
 				var u: Unit = Unit.new()
 				u.building = str(b.get("id", ""))
 				u.floor = fl
 				u.line = line
-				u.type = top if fl == floors and not top.is_empty() else str(line_types[(line - 1) % line_types.size()])
+				u.type = top if fl == floors and not top.is_empty() else str(building_types[(line - 1) % building_types.size()])
 				u.id = "%s-%d%02d" % [u.building, fl, line]
 				units.append(u)
 

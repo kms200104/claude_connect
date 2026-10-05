@@ -1,0 +1,28 @@
+# systemd 서비스 (리눅스 VM 에 직접 설치할 때). 꺼지면 다시 켜고, 부팅하면 저절로 켠다.
+#   sudo cp server/deploy/solbaram.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now solbaram
+#   journalctl -u solbaram -f   (로그 보기)
+[Unit]
+Description=Solbaram village session server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=solbaram
+WorkingDirectory=/opt/solbaram/server
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=SAVE_DIR=/var/lib/solbaram/saves
+Environment=DATA_DIR=/opt/solbaram/data
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+# 저장 파일만 쓸 수 있게.
+ReadWritePaths=/var/lib/solbaram
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

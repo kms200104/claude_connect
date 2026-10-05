@@ -89,6 +89,8 @@ enum State { DISCONNECTED, CONNECTING, JOINING, ONLINE, RECONNECTING }
 enum Intent { NONE, CREATE, JOIN, RESUME }
 
 const SETTINGS_BASE: String = "user://net"
+## 앱 안 테스트 서버 주소 (v0.10). 서버 주소 칸에 이걸 쓰거나 "테스트 서버로 하기"를 누르면 LocalTestServer 를 띄워 거기로 접속한다.
+const TEST_SERVER_URL: String = "test://local"
 const MAX_LOCAL_INSTANCES: int = 8
 
 @export_group("Connection")
@@ -159,6 +161,8 @@ var npc_moods: Dictionary[String, String] = {}
 var faces: Dictionary[int, Dictionary] = {}
 
 var _ws: WebSocketPeer = null
+## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
+var test_server: LocalTestServer = null
 var _intent: Intent = Intent.NONE
 var _token: String = ""
 var _open_handled: bool = false
@@ -468,10 +472,37 @@ func _open_socket() -> void:
 	_ws = WebSocketPeer.new()
 	_open_handled = false
 	_connect_started_ms = Time.get_ticks_msec()
-	var err: Error = _ws.connect_to_url(server_url)
+	var err: Error = _ws.connect_to_url(_socket_url())
 	if err != OK:
 		_ws = null
 		_on_socket_closed(-1)
+
+
+## 실제로 여는 WebSocket 주소. 테스트 서버 주소면 앱 안 서버를 (없으면) 띄우고 그 포트로.
+func _socket_url() -> String:
+	if server_url != TEST_SERVER_URL:
+		return server_url
+	if test_server == null:
+		test_server = LocalTestServer.new()
+		test_server.name = "LocalTestServer"
+		add_child(test_server)
+	if not test_server.start():
+		return "ws://127.0.0.1:1"
+	return test_server.url()
+
+
+## 지금 앱 안 테스트 서버에 붙어 있는지.
+func is_test_server() -> bool:
+	return server_url == TEST_SERVER_URL
+
+
+## 진짜 서버에 연결하지 못했을 때: 앱 안 테스트 서버로 새로 들어간다 (그 전 세션이 테스트 서버 것이면 이어한다).
+func play_on_test_server() -> void:
+	var cfg: ConfigFile = _load_settings()
+	if str(cfg.get_value("session", "url", "")) == TEST_SERVER_URL and has_saved_session():
+		resume_saved_session()
+	else:
+		create_room(TEST_SERVER_URL)
 
 
 func _close_socket(code: int, reason: String) -> void:

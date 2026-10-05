@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v9
+# 네트워크 프로토콜 v10
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -10,6 +10,7 @@ v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x 
 v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` → `face`), 프로필·플레이어 정보의 `face`, 에러 `not_near_mirror` `bad_face`. 저장 파일은 schema 4 그대로 (프로필에 `face` 가 없으면 자리 기본 얼굴).
 v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 값 ×100), 증권(`stock_order`, `market_tick`), 아파트(`apt_buy` `apt_sell`, `homes`), 은행(`bank_quote` `loan_take` `loan_repay`, `bank`, 주간 정산 `week`), 식당(`rest_open` `rest_close` `rest_cook` `rest_serve`, `rest` `rest_order` `rest_served` `rest_left` `rest_closed` `rest_result`), 들판 채집물(`drop.kind: "forage"`), 성성호수 낚시터(`fish_cast.spot: "seongseong"`), 대화 주제 `worry` `mbti`. `profile` 에 `stocks trades loans credit income worth`, `welcome` 에 `market homes rest`. 저장 파일 schema 5 (schema 4 이하의 솔·상점 포인트·부탁 보상은 읽을 때 ×100).
 v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`rest_join`, 직원의 `rest_close` = 그만두기, `rest_staff`)·동작 나눠 맡기(`rest_cook{order, step}` → `rest_claim`, `rest_step` → `rest_stepped`, 마지막 동작에 서버가 `rest_result` — `rest_serve` 없어짐), `rest` 의 `staff team orders[].steps`, 같이 베기(`chop_result.coop`, `coop_bonus`), 같이 낚시·얕은/깊은 물(`fish_started.zone coop`), 동사무소(`civic_info` `civic_civil` `civic_apply` `marry_propose` `marry_answer`, `civic` `civic_result` `marry_proposal` `marry_declined` `household`), 정책대출(`apt_buy.policy: "didimdol"`, `loan_take.product: "sunshine_youth"`, 대출의 `product fixed`), 카드 캐시백(`shop_result.back`), 주간 지원금(`week.grant`), 여울 뜰채(`net` → `net_result`, `shoal`), 삽(`dig` → `dig_result`, `tile` `digspot` `digspot_gone`). `profile` 에 `civ`, `welcome` 에 `civic tiles digspots shoals`. 저장 파일은 schema 5 그대로 (world 에 `tiles households householdSeq`, 프로필에 `household civic age` — 없으면 기본값).
+v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -66,6 +67,11 @@ v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`res
 | `marry_answer` | `rid accept` | 제안에 답하기 (2분 안). 수락하면 두 지갑을 합쳐 한 세대 → 방 전체에 `household`, 둘에게 `profile`·`civic`. 거절하면 제안한 사람에게 `marry_declined` |
 | `net` | `rid` | 뜰채질 (v9). **뜰채를 들고**(`no_tool`) 여울 안(+0.6m, `not_in_shallow`), 650ms 마다(`too_fast`). 캐릭터 앞 0.9m 둘레 1.1m(여울에 두 사람이면 1.45m) 안 물고기를 3마리까지 → `net_result`, 방 전체에 `shoal` |
 | `dig` | `rid x z mode` | 삽질 (v9). **삽을 들고**(`no_tool`), (x, z) 가 2.2m(+0.5) 안(`bad_dig`), 420ms 마다(`too_fast`). 조개 숨구멍 1.4m 안이면 조개 캐기, 아니면 `mode` = `dig`(풀밭 → 구덩이) / `fill`(구덩이 메우기) / `path`(흙길 깔기·걷기). 길·건물·물·모래밭·나무 곁은 `bad_dig` → `dig_result`, 방 전체에 `tile` 또는 `digspot`·`digspot_gone` |
+| `home_enter` | `rid unit` | 아파트 집 안으로 (v10). 그 동 공동 현관 앞(동 앞 4.2m, 2.4m+0.5 안, `not_at_lobby`), 이미 집 안이면 `not_at_lobby`, 모르는 호수 `bad_unit`. 누구 집이든 들어갈 수 있다(구경) → `home`, 서버가 그 집 현관으로 옮긴다 |
+| `home_exit` | `rid` | 현관문 곁(2.2m)에서 나가기 → `home{unit: ""}`, 동 앞으로 |
+| `home_place` | `rid slot x z rot` | 가방의 가구를 집에 놓기 (v10). 집 안(`not_home`), 내 집·우리 세대 집(`not_editable`), 가구(`bad_item`), (x, z) 는 평면도 기준 미터 → 0.25m 격자, 바닥 위(`bad_place`), 60개까지(`home_full`). `rot` = 45° 단위 0~7 → `home_f` |
+| `home_move` | `rid id x z rot` | 집 가구 옮기기·돌리기 (같은 검사) → `home_f` |
+| `home_pickup` | `rid id` | 집 가구를 가방에 넣기 (`inventory_full`) → `home_f`, `inventory` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
 
 ## 서버 → 클라이언트
@@ -104,6 +110,8 @@ v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`res
 | `tile` | `x z s` | 땅 칸이 바뀜 (v9, 방 전체). `s` = `hole` / `path` / `""`(원래대로) |
 | `digspot` / `digspot_gone` | `d{id, kind, x, z, hp}` / `id by` | 조개 숨구멍이 돋았거나 hp 가 줄었다 / 다 파서 사라졌다 (v9) |
 | `coop_bonus` | `kind item n with` | 같이 해서 받은 덤 (v9, 지금은 같이 쓰러뜨린 나무 — 상대가 마지막에 찍었을 때) |
+| `home` | `rid unit plan ox oz owner edit x y z f[]` | 집에 들어감 (v10) — `plan` = 평면도 id(`26a` `26b` `27` `34` `35`), `ox oz` = 집 안 월드 원점(평면도 왼쪽 위), `owner` = 주인 자리(0 = 아직 아무도 안 삼), `edit` = 꾸밀 수 있는지, `x y z` = 옮겨진 자리, `f` = 가구 `[[id, item, x, z, rot]]`. 나오면 `unit: ""` 와 `x y z` 만. 집 안에서 끊겼다 돌아오면 `welcome` 뒤에 다시 온다 |
+| `home_f` | `rid unit f[]` | 그 집 가구 목록 (v10, 요청한 사람에게는 `rid` 와 함께, 같은 집 안의 다른 사람에게도) |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
 | `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
 | `fish_started` | `rid spot zone coop` | 던지기 수락. v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
@@ -144,7 +152,7 @@ v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`res
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
@@ -264,6 +272,18 @@ v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`res
 - 물고기 떼(`server/src/shoal.js`, 규칙은 `data/world/dig.json` 의 `net`): 여울마다 최대 `max` 마리, 14초마다 한 마리씩 다시 참. 3.4m 안의 사람에게서 멀어지는 쪽으로 3.6m/s(허둥대면 2.4m/s), 여울 벽에 막히면 그 방향 속도를 잃고 1.5초 동안 지쳐서 ×0.35. 아무도 없으면 0.55m/s 로 어슬렁. 근처(14m)에 사람이 있을 때만 움직이고 그때마다 `shoal` 을 보낸다.
 - 조개 숨구멍(`server/src/dig.js`): 바닷가(섬 가장자리 모래밭) 최대 8곳, 처음엔 반을 한꺼번에, 그 뒤 45초마다 하나. hp 3, 바지락·개조개·맛조개·키조개. 호숫가는 낚시터마다 2곳, 60초마다, hp 2, 재첩·다슬기.
 - 땅 칸: 1m 격자(`round(x)`, `round(z)`), `hole`(30% 로 조약돌·옛날 동전·화석) / `path`. 최대 400칸, 방 저장 파일의 `world.tiles`.
+
+## 아파트 집 안 (서버 판정, v10)
+- 평면도 `data/realestate/floorplans.json`: 그림 픽셀 좌표 × `scale` → 미터, 평면도 왼쪽 위가 (0, 0) (`server/src/homes.js` 의 `planInMeters`, 클라이언트 `FloorPlan` 이 같은 식).
+- 호수의 평면도 = 동의 `plans[평형]` 또는 평형의 `plan`. 집 안 원점 = `interiors` 격자에서 호수 순서 번째 (x0 −185 + (i mod 3)·26, z0 −190 + ⌊i/3⌋·19.5) — 섬 서쪽 바다 위, 서버 경계(±200) 안.
+- 들어가면 현관 가운데(spawn)로, 나가면 동 공동 현관 앞으로 서버가 옮긴다 (이동 검사를 거치지 않는 순간 이동). `player.home` 은 위치로도 되찾는다 (재접속).
+- 가구: 아직 아무도 손대지 않은 집은 평면도 `defaults`(TV · 에어컨 · 선풍기 · 침대)를 보여 주고, 처음 놓기·옮기기·회수할 때 그 집 것(`room.homeItems[호수]`)이 된다. 서버는 0.25m 격자에 맞추고 가구 가운데가 방 사각형 안(0.05m 안쪽)인지만 본다 — 벽·두 방에 걸치는지는 클라이언트(꾸미기 화면)가 귀퉁이로 거른다.
+- 꾸밀 수 있는 사람 = 주인 또는 주인과 같은 세대(혼인신고). 집을 팔아도 가구는 집에 남는다.
+
+## 앱 안 테스트 서버 (v10)
+- 서버 주소 `test://local` = 클라이언트 안의 `LocalTestServer` (127.0.0.1 의 빈 포트, 18680~). 같은 메시지 형식으로 답한다.
+- 입장 정보는 `data/testserver/welcome.json` (`node server/tools/make_test_snapshot.js` 로 진짜 서버에서 찍음) + 저장된 가방·솔·위치.
+- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`). 그 밖에 rid 가 있는 요청은 `error{code: "test_server"}`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).

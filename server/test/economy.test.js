@@ -62,11 +62,14 @@ describe('증권: 호가·수수료·시세', () => {
 });
 
 describe('아파트 · 은행 계산', () => {
-  it('3개 동 × 10층 × 2호, 꼭대기 층은 큰 평형이고 높을수록 비싸다', () => {
+  it('3개 동 × 10층 × 2호, 동마다 라인별 평형(26·27·34·35평)이고 높을수록 비싸다', () => {
     const units = listUnits(data.realestate);
     assert.equal(units.length, 60);
     const top = units.find((u) => u.id === '101-1001');
-    assert.equal(top.type, '114');
+    assert.equal(top.type, '26');
+    assert.equal(units.find((u) => u.id === '101-1002').type, '27');
+    assert.equal(units.find((u) => u.id === '102-501').type, '34');
+    assert.equal(units.find((u) => u.id === '102-502').type, '35');
     const low = unitPrice(data.realestate, units.find((u) => u.id === '101-101'), 1);
     const mid = unitPrice(data.realestate, units.find((u) => u.id === '101-701'), 1);
     assert.ok(low < mid);
