@@ -1,6 +1,7 @@
 extends Node
 ## 아파트 집 안(v0.10) 화면을 PNG로 찍는다 (아트·연출 확인용, 테스트 아님). tools/capture_home.sh 가 서버를 띄운다.
 ##   평면도마다(26평 A·B · 27평 · 34평 · 35평): 집을 사고 → 공동 현관 "집 구경" → 엘리베이터 → 집 안(걸어 다니는 시점) → 꾸미기(위에서 본 평면도)
+##   --only=white (v0.12): 34평 거실·주방·안방을 비우고 모던 화이트 가구 세트를 놓아 찍는다 (서버 START_ITEMS 로 가구를 받는다).
 ## 인자: -- --srv=ws://… --out=/tmp/shots [--only=34]
 
 const UNITS: Dictionary = {"26a": "101-501", "27": "101-502", "34": "102-501", "35": "102-502", "26b": "103-501"}
@@ -25,7 +26,10 @@ func _ready() -> void:
 	Net.create_room(_server)
 	await Net.welcomed
 	await _wait(1.5)
-	await _run()
+	if _only == "white":
+		await _white()
+	else:
+		await _run()
 	get_tree().quit()
 
 
@@ -120,6 +124,70 @@ func _run() -> void:
 		await _wait_until(func() -> bool: return Home.unit.is_empty(), 3.0)
 		await _wait(0.5)
 	print("[capture] done %s" % str(player.global_position))
+
+
+func _white() -> void:
+	var home: HomeController = _village.get_node("Home")
+	var rig: FollowCamera = _village.get_node("CameraRig")
+	var unit: String = UNITS["34"]
+	Economy.buy_home(unit, 0)
+	await _wait_until(func() -> bool: return Economy.home_owners.get(unit, 0) == Net.my_id, 3.0)
+	await _put(GameData.econ.lobby_of(unit.split("-")[0]) + Vector3(0.0, 0.1, 0.4), Vector3.FORWARD)
+	Home.enter(unit)
+	await _wait_until(func() -> bool: return Home.unit == unit, 3.0)
+	await _wait(1.0)
+	var living: Rect2 = Home.plan.first_room("living").main_rect()
+	var kitchen: Rect2 = Home.plan.first_room("kitchen").main_rect()
+	var master: Rect2 = Home.plan.first_room("master").main_rect()
+	# 세 방의 기본 가구를 걷어 낸다.
+	for f: Home.Furniture in Home.furniture.duplicate():
+		if living.has_point(f.position) or kitchen.has_point(f.position) or master.has_point(f.position):
+			Home.pickup(f.id)
+			await _wait(0.25)
+	await _wait(0.5)
+	var c: Vector2 = living.get_center()
+	var k: Vector2 = kitchen.get_center()
+	var m: Vector2 = master.get_center()
+	var layout: Array = [
+		["white_rug", c, 0], ["white_tv_stand", Vector2(living.position.x + 0.35, c.y), 2],
+		["white_sofa", Vector2(living.end.x - 0.6, c.y), 6], ["white_coffee_table", c + Vector2(0.2, 0.0), 0],
+		["white_arc_lamp", Vector2(living.end.x - 0.45, c.y - 1.5), 4], ["white_shelf", Vector2(c.x - 1.2, living.position.y + 0.3), 0],
+		["white_dining_table", k, 0], ["white_chair", k + Vector2(-0.35, -0.72), 0], ["white_chair", k + Vector2(0.35, 0.72), 4],
+		["white_bed", m, 0], ["white_desk", Vector2(m.x + 1.0, master.end.y - 0.45), 4],
+	]
+	for row: Array in layout:
+		var slot: int = -1
+		for i: int in Net.inventory.size():
+			if Net.inventory[i] != null and Net.inventory[i].id == str(row[0]):
+				slot = i
+				break
+		if slot < 0:
+			print("[capture] %s 이(가) 가방에 없음" % row[0])
+			continue
+		var before: int = Home.furniture.size()
+		Home.place(slot, row[1], int(row[2]))
+		var ok: bool = await _wait_until(func() -> bool: return Home.furniture.size() > before, 1.5)
+		print("[capture] %s %s" % [row[0], "놓음" if ok else "못 놓음"])
+	await _wait(0.8)
+	rig.yaw_degrees = 225.0
+	rig.pitch_degrees = 40.0
+	rig.distance = 9.0
+	await _put(Home.to_world(c) + Vector3(0.0, 0.1, 0.0), Vector3.FORWARD)
+	rig.snap_to_target()
+	await _wait(0.8)
+	await _shot("w01_living")
+	await _put(Home.to_world(m) + Vector3(0.0, 0.1, 0.0), Vector3.FORWARD)
+	rig.snap_to_target()
+	await _wait(0.8)
+	await _shot("w02_master")
+	await _put(Home.to_world(k) + Vector3(0.0, 0.1, 0.0), Vector3.FORWARD)
+	rig.snap_to_target()
+	await _wait(0.8)
+	await _shot("w03_dining")
+	home.editor.start()
+	await _wait(1.0)
+	await _shot("w04_top")
+	home.editor.stop()
 
 
 func _to_screen(home: HomeController, at: Vector2) -> Vector2:

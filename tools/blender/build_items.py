@@ -25,6 +25,8 @@ from mathutils import Matrix, Vector  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'assets/models/items'
 BUDGET = {'small': 300, 'medium': 800, 'large': 1500}
+# 칸이 깊은 가구(오픈 선반 등)는 큰 면의 꼭짓점이 모두 구석이라 AO 가 면 전체를 어둡게 칠한다 → 아이템별로 약하게.
+AO_STRENGTH = {'white_shelf': 0.12}
 
 # 집 기본 가구에 더하는 디테일 (같은 도형 언어, 게임 좌표: Y 위, +Z 앞).
 EXTRA = {
@@ -284,7 +286,7 @@ def bake_ao(ob):
 def finish_colors(ob):
     """바탕 색 × AO (틈은 어둡게, 너무 검지는 않게: 가장 어두워도 바탕의 65%).
     러그처럼 납작한 것은 겹친 층마다 지저분하게 어두워지니 아주 약하게."""
-    strength = 0.1 if ob.dimensions.z < 0.12 else 0.35
+    strength = AO_STRENGTH.get(ob.name, 0.1 if ob.dimensions.z < 0.12 else 0.35)
     me = ob.data
     col = me.color_attributes['Col']
     ao = me.color_attributes['AO']

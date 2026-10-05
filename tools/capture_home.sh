@@ -13,6 +13,7 @@ NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (900 - NOW_MIN + 1440) % 1440 ))
 (cd "$ROOT/server" && exec env PORT=18213 SAVE_DIR="$DIR/saves" CLOCK_OFFSET_MIN="$OFFSET" MOVE_SLACK_M=400 DOOR_GRACE_MS=0 QUEST_CHANCE=0 \
   WEATHER_FORCE=clear EVENT_FORCE=none EVENT_SPAWN_SCALE=0.02 START_SOL=5000000000 \
+  START_ITEMS="${START_ITEMS:-white_sofa:1,white_coffee_table:1,white_dining_table:1,white_chair:2,white_bed:1,white_tv_stand:1,white_shelf:1,white_arc_lamp:1,white_desk:1,white_rug:1}" \
   node src/index.js >"$DIR/server.log" 2>&1) &
 sleep 1
 xvfb-run -a -s "-screen 0 1080x1920x24" "$GODOT" --path "$ROOT" --rendering-driver vulkan --rendering-method mobile \
