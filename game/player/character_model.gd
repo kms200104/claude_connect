@@ -215,6 +215,10 @@ static func axe() -> ArrayMesh:
 static func knife() -> ArrayMesh:
 	if _cache.has("knife"):
 		return _cache["knife"]
+	var model: ArrayMesh = PartMesh.load_model("tool_knife")
+	if model != null:
+		_cache["knife"] = model
+		return model
 	var st: SurfaceTool = ClayMesh.begin()
 	ClayMesh.add_rod(st, Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.07, 0.0), 0.022, 0.02, Color("#6E452C"), 8)
 	var blade: Callable = ClayMesh.vertical_gradient(Color("#9AA6AF"), Color("#E3EAEE"), 1.0)

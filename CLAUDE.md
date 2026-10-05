@@ -6,6 +6,7 @@
 - 타입 없는 `Variant`, 무분별한 `Dictionary`/`get_node` 문자열 경로 지양 → `@export`/`@onready var x: Type`, 데이터는 Resource 클래스.
 ## 3D 성능 (Mobile 렌더러, 30fps 고정, 프레임 33ms)
 - 폴리곤 예산 준수: 캐릭터 ≤8,000tri, 나무 1,200, 집 4,000, 소형 소품 300, 가구 300/800/1,500, 방 합계 50k, 마을 합계 350k.
+- Tripo 모형(`tools/blender/import_tripo.py`)은 예외: 고화질은 원본 폴리곤 그대로, 절약(중사양) 화질은 위 예산까지 줄인 `<id>_low.glb` 를 쓴다.
 - 반복 물체(풀·꽃·울타리·조약돌)는 반드시 `MultiMeshInstance3D`. 세트별 공용 아틀라스 머티리얼 1개, 투명 머티리얼은 화면 내 10개 이하(알파 블렌드 대신 알파 시저).
 - 노멀맵·블렌드셰이프·캐릭터 LOD 없음, 셰이더 8개 이하, 작은 소품은 visibility range 지정.
 ## 서버

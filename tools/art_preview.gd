@@ -129,7 +129,7 @@ func _ready() -> void:
 		"shop":
 			for level: int in [1, 2, 3]:
 				var mi: MeshInstance3D = MeshInstance3D.new()
-				mi.mesh = PartMesh.build(ShopBuilder.exterior_parts(level))
+				mi.mesh = PartMesh.get_mesh("shop_ext_%d" % level, ShopBuilder.exterior_parts(level))
 				mi.material_override = load("res://assets/materials/foliage.tres")
 				mi.position = Vector3([0.0, -7.0, 0.0, 9.0][level], 0.0, 0.0)
 				add_child(mi)

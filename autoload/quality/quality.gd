@@ -1,7 +1,7 @@
 extends Node
 ## 화질 설정 (data/quality/presets.json): 절약(갤럭시 S24 기준) · 고화질(갤럭시 Z 폴드7 기준).
 ## 처음엔 기기 모델명으로 추천 설정을 고르고("자동"), 플레이어가 바꾸면 user://settings.cfg 에 기억한다.
-## 바꾸는 것: 3D 해상도(화면 픽셀이 pixel_budget 을 넘으면 그만큼 낮춘다 — 폴드7 을 펼치거나 접으면 다시 계산),
+## 바꾸는 것: Tripo 모형 폴리곤(고화질 = 원본, 절약 = 예산까지 줄인 _low), 3D 해상도(화면 픽셀이 pixel_budget 을 넘으면 그만큼 낮춘다 — 폴드7 을 펼치거나 접으면 다시 계산),
 ## 계단 현상 줄이기(MSAA), 그림자 크기·부드러움·거리, 풀·들꽃·야자수 수, 캐릭터 머리·얼굴 촘촘함, 리소스팩(바닥 텍스처 해상도).
 
 signal changed
@@ -117,9 +117,13 @@ func _apply(notify: bool) -> void:
 	RenderingServer.directional_soft_shadow_filter_set_quality(
 		RenderingServer.SHADOW_QUALITY_SOFT_LOW if bool(preset.get("shadow_soft", false)) else RenderingServer.SHADOW_QUALITY_HARD)
 	var detail: int = int(preset.get("character_detail", 1))
-	if CharacterModel.detail != detail:
+	var full_models: bool = str(preset.get("models", "full")) == "full"
+	if CharacterModel.detail != detail or PartMesh.full_models != full_models:
 		CharacterModel.detail = detail
 		CharacterModel.clear_cache()
+	if PartMesh.full_models != full_models:
+		PartMesh.full_models = full_models
+		PartMesh.clear_cache()
 	_apply_pack(str(preset.get("pack", preset_id)))
 	if notify:
 		# 이미 서 있는 캐릭터들도 새 촘촘함으로 다시 빚는다.

@@ -10,6 +10,13 @@ extends RefCounted
 ##   rot: [x, y, z] 도 단위 회전 (선택), r: cyl·cone 의 모서리 둥글기 (선택, 없으면 각진 원기둥)
 
 static var _cache: Dictionary[String, ArrayMesh] = {}
+## false 면(절약 화질) 줄인 모형 <key>_low.glb 를 먼저 찾는다. Quality 가 정하고 바꾸면 clear_cache() 한다.
+static var full_models: bool = true
+
+
+## 화질이 바뀌었을 때: 만들어 둔 메시를 버린다 (다음에 찾을 때 그 화질의 모형으로 다시 만든다).
+static func clear_cache() -> void:
+	_cache.clear()
 
 
 ## Blender 로 다시 만든 모형 (tools/blender/build_items.py, v0.11): 있으면 절차 모형 대신 쓴다.
@@ -28,8 +35,12 @@ static func get_mesh(key: String, parts: Array) -> ArrayMesh:
 
 
 ## assets/models/items/<key>.glb 의 첫 메시. 없거나 읽지 못하면 null.
+## 절약 화질이면 폴리곤을 줄인 <key>_low.glb 가 있을 때 그것을 쓴다 (tools/blender/import_tripo.py).
 static func load_model(key: String) -> ArrayMesh:
 	var path: String = "%s/%s.glb" % [MODEL_DIR, key]
+	var low: String = "%s/%s_low.glb" % [MODEL_DIR, key]
+	if not full_models and ResourceLoader.exists(low):
+		path = low
 	if not ResourceLoader.exists(path):
 		return null
 	var scene: PackedScene = load(path) as PackedScene

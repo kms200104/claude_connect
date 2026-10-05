@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "화질 설정. 절약 = 갤럭시 S24 기준(작은 몸체 · 발열·배터리 우선), 고화질 = 갤럭시 Z 폴드7 기준(큰 안쪽 화면에서도 선명하게). pixel_budget 은 3D 를 그리는 픽셀 수 상한 (화면이 더 크면 3D 해상도를 그만큼 낮추고, UI 는 언제나 원래 해상도). density 는 풀·들꽃·야자수 개수 배율. pack 은 assets/packs/<pack>/ 리소스팩.",
+  "_comment": "화질 설정. 절약 = 갤럭시 S24 기준(작은 몸체 · 발열·배터리 우선), 고화질 = 갤럭시 Z 폴드7 기준(큰 안쪽 화면에서도 선명하게). pixel_budget 은 3D 를 그리는 픽셀 수 상한 (화면이 더 크면 3D 해상도를 그만큼 낮추고, UI 는 언제나 원래 해상도). density 는 풀·들꽃·야자수 개수 배율. pack 은 assets/packs/<pack>/ 리소스팩. models 는 Tripo 모형 폴리곤 (full = 원본, low = 예산까지 줄인 _low.glb).",
   "default": "low",
   "devices": [
     { "match": "^SM-S921", "name": "갤럭시 S24", "preset": "low" },
@@ -21,6 +21,7 @@
       "wild_flowers": 0.6,
       "palms": 0.6,
       "character_detail": 0,
+      "models": "low",
       "pack": "low"
     },
     "high": {
@@ -36,6 +37,7 @@
       "wild_flowers": 1.0,
       "palms": 1.0,
       "character_detail": 1,
+      "models": "full",
       "pack": "high"
     }
   }

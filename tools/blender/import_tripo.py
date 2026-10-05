@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Tripo 에서 받은 모형(art_source/tripo/<이름>.glb) → 게임용 assets/models/items/<id>.glb.
+"""Tripo 에서 받은 모형(art_source/tripo/<이름>.glb) → 게임용 assets/models/items/<id>.glb · <id>_low.glb.
 
 게임 모형은 텍스처 없이 정점 색 + 흰 툰 머티리얼 하나로 그린다 (build_items.py 와 같은 방식). 그래서
   - 바탕색 텍스처를 모서리(corner)마다 읽어 정점 색 'Col' 에 굽고 (노멀·러프니스 맵은 버린다),
-  - 삼각형 예산(CLAUDE.md)에 맞게 줄이고 (Decimate — 색은 줄이기 전에 구워야 덜 뭉개진다),
-  - 게임 좌표(Y 위, +Z 앞)로 돌리고 크기·원점(도구는 쥐는 곳, 건물은 바닥 가운데)을 맞춘다.
-게임은 같은 이름의 glb 가 있으면 코드로 빚은 모형 대신 그것을 쓴다 (PartMesh.load_model).
+  - 게임 좌표(Y 위, +Z 앞)로 돌리고 크기·원점(도구는 쥐는 곳, 건물은 바닥 가운데 또는 앞면)을 맞춘 뒤,
+  - 고화질용 <id>.glb 는 원본 폴리곤 그대로, 절약(중사양)용 <id>_low.glb 는 삼각형 예산(CLAUDE.md)까지 줄여서 낸다
+    (Decimate — 색은 줄이기 전에 구워야 덜 뭉개진다).
+게임은 같은 이름의 glb 가 있으면 코드로 빚은 모형 대신 그것을 쓰고, 절약 화질이면 _low 를 고른다 (PartMesh.load_model).
 
 사용: python3 tools/blender/import_tripo.py [id …]      (pip install bpy — Blender 5.0 파이썬 모듈)
 """
@@ -26,13 +27,19 @@ OUT = ROOT / 'assets/models/items'
 G2B = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 B2G = G2B.inverted()
 
-# src: art_source/tripo 의 파일, budget: 삼각형 상한,
+# src: art_source/tripo 의 파일, budget: 절약용(_low) 삼각형 상한,
 # turn: 게임 좌표 회전 [(축, 도) …] 또는 'tip_to_bowl'(자루 끝 → 그릇 쪽을 +Y 로),
-# span: 세로(Y) 길이 m, origin: 'bottom'(바닥 가운데) 또는 쥐는 곳(자루 끝에서 위로 m).
+# fit: (축 'x'|'y', 길이 m) — 그 축 길이에 맞춰 고르게 키운다,
+# origin: 'bottom'(바닥 가운데) · 'front'(바닥, 앞면이 z=0 — 상점처럼 문 자리에 맞추는 건물) · 쥐는 곳(자루 끝에서 위로 m).
 ASSETS = {
-    'tool_pan': {'src': 'pan.glb', 'budget': 300, 'turn': [('X', 90.0)], 'span': 0.5, 'origin': 0.06},
-    'tool_ladle': {'src': 'ladle.glb', 'budget': 300, 'turn': 'tip_to_bowl', 'span': 0.42, 'origin': 0.05},
-    'npc_house': {'src': 'house.glb', 'budget': 4000, 'turn': [('Y', -90.0)], 'span': 4.2, 'origin': 'bottom'},
+    'tool_pan': {'src': 'pan.glb', 'budget': 300, 'turn': [('X', 90.0)], 'fit': ('y', 0.5), 'origin': 0.06},
+    'tool_ladle': {'src': 'ladle.glb', 'budget': 300, 'turn': 'tip_to_bowl', 'fit': ('y', 0.42), 'origin': 0.05},
+    'tool_knife': {'src': 'knife.glb', 'budget': 200, 'turn': [('Z', 90.0)], 'fit': ('y', 0.32), 'origin': 0.05},
+    'npc_house': {'src': 'house.glb', 'budget': 4000, 'turn': [('Y', -90.0)], 'fit': ('y', 4.2), 'origin': 'bottom'},
+    'shop_ext_1': {'src': 'shop_1.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 4.5), 'origin': 'front'},
+    'shop_ext_2': {'src': 'shop_2.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 6.5), 'origin': 'front'},
+    'shop_ext_3': {'src': 'shop_3.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 9.0), 'origin': 'front'},
+    'shop_counter': {'src': 'shop_counter.glb', 'budget': 1500, 'turn': [], 'fit': ('x', 2.0), 'origin': 'bottom'},
 }
 
 
@@ -142,12 +149,15 @@ def place(ob, cfg):
         for axis, deg in turn:
             me.transform(Matrix.Rotation(math.radians(deg), 4, axis))
     v = verts(ob)
-    me.transform(Matrix.Scale(cfg['span'] / np.ptp(v[:, 1]), 4))
+    axis, length = cfg['fit']
+    me.transform(Matrix.Scale(length / np.ptp(v[:, 'xyz'.index(axis)]), 4))
     v = verts(ob)
     lo = v[:, 1].min()
+    c = (v.min(axis=0) + v.max(axis=0)) * 0.5
     if cfg['origin'] == 'bottom':
-        c = (v.min(axis=0) + v.max(axis=0)) * 0.5
         origin = Vector((c[0], lo, c[2]))
+    elif cfg['origin'] == 'front':
+        origin = Vector((c[0], lo, v[:, 2].max()))
     else:
         end = v[v[:, 1] < lo + 0.06 * np.ptp(v[:, 1])].mean(axis=0)
         origin = Vector((end[0], lo + cfg['origin'], end[2]))
@@ -156,24 +166,40 @@ def place(ob, cfg):
     print(f'[tripo]   크기 {np.round(np.ptp(v, axis=0), 3).tolist()} m, 범위 y {v[:, 1].min():.3f}~{v[:, 1].max():.3f}')
 
 
+def export(ob, name):
+    for o in bpy.context.scene.objects:
+        o.select_set(o == ob)
+    bpy.ops.export_scene.gltf(filepath=str(OUT / f'{name}.glb'), export_format='GLB', use_selection=True,
+                              export_vertex_color='ACTIVE', export_materials='NONE', export_normals=True,
+                              export_texcoords=False, export_apply=True)
+
+
 def build(asset_id, cfg):
     print(f'[tripo] {asset_id} ← {cfg["src"]}')
     ob = import_mesh(SRC / cfg['src'])
     bake_texture_colors(ob)
-    fit_budget(ob, cfg['budget'])
     place(ob, cfg)
-    smooth_with_creases(ob)
     ob.data.materials.clear()
     for name in [a.name for a in ob.data.color_attributes if a.name != 'Col']:
         ob.data.color_attributes.remove(ob.data.color_attributes[name])
     ob.data.transform(G2B)
     OUT.mkdir(parents=True, exist_ok=True)
-    for o in bpy.context.scene.objects:
-        o.select_set(o == ob)
-    bpy.ops.export_scene.gltf(filepath=str(OUT / f'{asset_id}.glb'), export_format='GLB', use_selection=True,
-                              export_vertex_color='ACTIVE', export_materials='NONE', export_normals=True,
-                              export_texcoords=False, export_apply=True)
-    print(f'[tripo] {asset_id}: {tri_count(ob)} / {cfg["budget"]} tri')
+    # 고화질: 원본 폴리곤 그대로.
+    full = tri_count(ob)
+    low_ob = ob.copy()
+    low_ob.data = ob.data.copy()
+    bpy.context.scene.collection.objects.link(low_ob)
+    smooth_with_creases(ob)
+    export(ob, asset_id)
+    # 절약: 예산까지 줄인다. 이미 예산 안이면 따로 내지 않는다 (게임이 고화질 파일을 같이 쓴다).
+    low_path = OUT / f'{asset_id}_low.glb'
+    for stale in (low_path, low_path.with_suffix('.glb.import')):
+        stale.unlink(missing_ok=True)
+    if full > cfg['budget']:
+        fit_budget(low_ob, cfg['budget'])
+        smooth_with_creases(low_ob)
+        export(low_ob, f'{asset_id}_low')
+    print(f'[tripo] {asset_id}: 고화질 {full} / 절약 {tri_count(low_ob)} (예산 {cfg["budget"]}) tri')
 
 
 def main():

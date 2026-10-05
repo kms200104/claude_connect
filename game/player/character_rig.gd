@@ -397,6 +397,11 @@ func _apply_look() -> void:
 	for mi: MeshInstance3D in _limbs:
 		var parent: Node = mi.get_parent()
 		mi.mesh = arm_mesh if parent == arm_left or parent == arm_right else leg_mesh
+	# 화질이 바뀌면 손에 든 도구도 그 화질의 모형으로 다시 끼운다.
+	if not _tool_id.is_empty():
+		var held_tool: String = _tool_id
+		_tool_id = ""
+		_set_tool(held_tool)
 
 
 func _set_outfit_part(part: String, item_id: String) -> void:

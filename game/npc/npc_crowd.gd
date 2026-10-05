@@ -23,6 +23,8 @@ const MOOD_GESTURES: Dictionary = {
 var _gesture_left: float = 6.0
 
 var _actors: Dictionary[String, NpcActor] = {}
+## Tripo 집 모형을 그리는 메시들 (화질이 바뀌면 그 화질의 모형으로 바꿔 끼운다).
+var _house_models: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
@@ -33,6 +35,7 @@ func _ready() -> void:
 		actor.setup(npc)
 		_actors[npc.id] = actor
 	Net.npcs_received.connect(_on_npcs_received)
+	Quality.changed.connect(_on_quality_changed)
 	Net.profile_updated.connect(_refresh_marks)
 	Net.inventory_updated.connect(func(_slots: Array[InventoryItem], _held: int) -> void: _refresh_marks())
 	_refresh_marks()
@@ -117,12 +120,19 @@ func _build_house(npc: NpcInfo) -> void:
 
 	if model != null:
 		_add_mesh(house, model, Vector3.ZERO, clay_material)
+		_house_models.append(house.get_child(house.get_child_count() - 1) as MeshInstance3D)
 		return
 	var key: String = npc.color.to_html(false)
 	if not _house_meshes.has(key):
 		_house_meshes[key] = _house_mesh(npc.color)
 	_add_mesh(house, _house_meshes[key], Vector3.ZERO, clay_material)
 	_add_mesh(house, _glass_mesh(), Vector3.ZERO, window_material)
+
+
+func _on_quality_changed() -> void:
+	var model: ArrayMesh = PartMesh.load_model("npc_house")
+	for mi: MeshInstance3D in _house_models:
+		mi.mesh = model
 
 
 static var _house_meshes: Dictionary[String, ArrayMesh] = {}

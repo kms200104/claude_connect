@@ -25,9 +25,9 @@ Tripo 는 사각형(quad) 기준으로 면 수를 보여 줄 수 있다. **게�
 | 도끼 | 길이 약 0.6 | 200 / 300 | 공용 도구 아틀라스 | |
 | 뜰채 | 길이 약 0.9, 그물 지름 0.4 | 300 / 400 | 공용 도구 아틀라스 | 그물은 알파 시저 텍스처 또는 통짜 반투명색 |
 | 삽 | 길이 약 0.9 | 200 / 300 | 공용 도구 아틀라스 | |
-| 식칼 | 길이 약 0.3 | 120 / 200 | 공용 도구 아틀라스 | |
-| 프라이팬 | 지름 약 0.4 + 손잡이, 길이 0.5 | 200 / 300 | 공용 도구 아틀라스 | 적용됨 (291) |
-| 국자 | 길이 약 0.4 | 200 / 300 | 공용 도구 아틀라스 | 적용됨 (290) |
+| 식칼 | 길이 약 0.32 | 120 / 200 | 공용 도구 아틀라스 | 적용됨 |
+| 프라이팬 | 지름 약 0.4 + 손잡이, 길이 0.5 | 200 / 300 | 공용 도구 아틀라스 | 적용됨 |
+| 국자 | 길이 약 0.4 | 200 / 300 | 공용 도구 아틀라스 | 적용됨 |
 
 공통 규칙
 - 노멀맵·러프니스·메탈릭 맵은 버린다. **Albedo(색) 텍스처 1장만**.
@@ -121,14 +121,21 @@ soup ladle, deep round bowl, curved handle with rounded end, warm wooden handle,
 
 ### 자동 변환 (적용된 방식)
 `art_source/tripo/<이름>.glb` 에 원본을 넣고 `tools/blender/import_tripo.py` 의 `ASSETS` 에 한 줄 더한 뒤
-`python3 tools/blender/import_tripo.py [id …]` (pip install bpy). 바탕색 텍스처를 정점 색으로 굽고, 예산까지 줄이고,
-방향·크기·원점을 맞춰 `assets/models/items/<id>.glb` 로 낸다. 코드 쪽 머티리얼은 그대로(흰 툰 머티리얼)라 아래 "주의 1" 의 A 방식이다.
+`python3 tools/blender/import_tripo.py [id …]` (pip install bpy). 바탕색 텍스처를 정점 색으로 굽고, 방향·크기·원점을 맞춰
+`assets/models/items/<id>.glb`(고화질 — **원본 폴리곤 그대로**)와 `<id>_low.glb`(절약 — 위 표의 상한까지 줄임, 이미 상한 안이면 만들지 않음)를 낸다.
+게임은 화질 설정(`presets.json` 의 `models`)에 따라 고르고, 화질을 바꾸면 집·상점·손에 든 도구가 바로 바뀐다.
+코드 쪽 머티리얼은 그대로(흰 툰 머티리얼)라 아래 "주의 1" 의 A 방식이다.
 
-| id | 원본 | 결과 | 쓰는 곳 |
-|---|---|---|---|
-| `tool_pan` | `pan.glb` (1,910) | 291 tri, 길이 0.5m | 요리할 때 손에 든 프라이팬 (`CharacterModel.pan`) |
-| `tool_ladle` | `ladle.glb` (1,796) | 290 tri, 길이 0.42m | 요리할 때 손에 든 국자 (`CharacterModel.ladle`) |
-| `npc_house` | `house.glb` (4,827) | 3,879 tri, 3.8×4.2×3.9m, 문 +Z | 주민 집 6채 전부 (`NpcCrowd._build_house`) |
+| id | 원본 | 고화질 / 절약 (tri) | 크기 | 쓰는 곳 |
+|---|---|---|---|---|
+| `tool_pan` | `pan.glb` | 1,910 / 291 | 길이 0.5m | 요리 프라이팬 (`CharacterModel.pan`) |
+| `tool_ladle` | `ladle.glb` | 1,796 / 290 | 길이 0.42m | 요리 국자 (`CharacterModel.ladle`) |
+| `tool_knife` | `knife.glb` | 1,896 / 193 | 길이 0.32m | 요리 식칼 (`CharacterModel.knife`) |
+| `npc_house` | `house.glb` | 4,827 / 3,879 | 3.8×4.2×3.9m, 문 +Z | 주민 집 6채 전부 (`NpcCrowd`) |
+| `shop_ext_1` | `shop_1.glb` | 3,692 / 같음 | 4.5×4.0×2.8m | 구멍가게 바깥 (`ShopController`) |
+| `shop_ext_2` | `shop_2.glb` | 3,798 / 같음 | 6.5×5.9×5.2m | 잡화점 바깥 |
+| `shop_ext_3` | `shop_3.glb` | 5,711 / 3,880 | 9.0×6.0×5.7m | 백화점 바깥 |
+| `shop_counter` | `shop_counter.glb` | 1,324 / 같음 | 2.0×1.2×1.7m | 상점 계산대 (모든 단계, `ShopBuilder.counter_model`) |
 
 ### 손으로 할 때
 
