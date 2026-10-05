@@ -2,7 +2,7 @@
  "version": 1,
  "_comment": "얼굴 부품: 눈·코·입 도형(머리 겉면 기준 미터 좌표), 피부·머리 색, 머리 모양. 눈 좌표 x는 바깥쪽이 +, 입·코는 캐릭터 오른쪽(+X)이 +.",
  "anchors": {"eye": [0.19, 0.35], "nose": [0.0, 0.29], "mouth": [0.0, 0.16], "cheek": [0.245, 0.262]},
- "colors": {"ink": "#4A2B1F", "white": "#FFFFFF", "sclera": "#FFFDF7", "mouth": "#5E3424", "mouth_dark": "#6B3528", "tongue": "#E8707A", "teeth": "#FFFFFF", "star": "#FFD866", "heart": "#EC5A78"},
+ "colors": {"ink": "#4A2B1F", "white": "#FFFFFF", "sclera": "#FFFDF7", "mouth": "#5E3424", "mouth_dark": "#6B3528", "tongue": "#E8707A", "teeth": "#FFFFFF", "star": "#FFD866", "heart": "#EC5A78", "tear": "#8CCFF0", "sweat": "#A8DDF7"},
  "eyes": [
   {"id": "round", "name": "동글눈", "layers": [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.0756, 0.0886], "color": "ink"}, {"shape": "ellipse", "c": [0.0, 0.0], "r": [0.0659, 0.0788], "color": "white"}, {"shape": "ellipse", "c": [-0.0162, -0.0022], "r": [0.0518, 0.0648], "color": "iris", "gaze": true}, {"shape": "ellipse", "c": [-0.0194, -0.0022], "r": [0.0281, 0.0367], "color": "pupil", "gaze": true}, {"shape": "ellipse", "c": [-0.0324, 0.0281], "r": [0.0086, 0.0097], "color": "white", "gaze": true}, {"shape": "arc", "c": [0.0, 0.0], "r": [0.0734, 0.0864], "a0": 28, "a1": 152, "w": 0.012, "color": "ink"}]},
   {"id": "dot", "name": "콩눈", "layers": [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.0389, 0.0713], "color": "iris"}, {"shape": "ellipse", "c": [-0.0108, 0.0324], "r": [0.0119, 0.014], "color": "white", "gaze": true}]},
@@ -86,6 +86,15 @@
   {"id": "blue", "name": "하늘", "color": "#6A9BDB"},
   {"id": "purple", "name": "보라", "color": "#8D6CC2"},
   {"id": "silver", "name": "은회색", "color": "#B9B7BD"}
+ ],
+ "_expressions": "감정표현 하는 동안 얼굴에 덧그리는 눈썹·눈물(얼굴 좌표, 캐릭터 오른쪽 +X, mirror 면 왼쪽에도). brow 색 = 머리 색보다 진하게. sweat 는 머리 옆에 떠 있는 3D 땀방울 (at = 몸 기준 좌표, s = 높이, tilt = 기울기 도).",
+ "expressions": [
+  {"id": "smile", "emotes": ["hello", "happy", "laugh", "clap", "love"], "layers": [{"shape": "arc", "c": [0.19, 0.448], "r": [0.05, 0.022], "a0": 25, "a1": 155, "w": 0.022, "color": "brow", "mirror": true}]},
+  {"id": "surprise", "emotes": ["surprise"], "layers": [{"shape": "arc", "c": [0.19, 0.462], "r": [0.048, 0.026], "a0": 20, "a1": 160, "w": 0.021, "color": "brow", "mirror": true}, {"shape": "sweat", "at": [0.42, 0.56, -0.3], "s": 0.17, "tilt": -20}]},
+  {"id": "angry", "emotes": ["angry"], "layers": [{"shape": "stroke", "pts": [[0.13, 0.448], [0.19, 0.464], [0.25, 0.486]], "w": 0.026, "color": "brow", "mirror": true}]},
+  {"id": "sad", "emotes": ["sad"], "layers": [{"shape": "stroke", "pts": [[0.13, 0.486], [0.19, 0.466], [0.25, 0.452]], "w": 0.022, "color": "brow", "mirror": true}, {"shape": "stroke", "pts": [[0.214, 0.264], [0.217, 0.236], [0.219, 0.214]], "w": 0.02, "color": "tear", "mirror": true}, {"shape": "ellipse", "c": [0.219, 0.202], "r": [0.02, 0.025], "color": "tear", "mirror": true}, {"shape": "ellipse", "c": [0.213, 0.209], "r": [0.0055, 0.0075], "color": "white", "mirror": true}]},
+  {"id": "think", "emotes": ["think"], "layers": [{"shape": "arc", "c": [0.19, 0.462], "r": [0.048, 0.024], "a0": 25, "a1": 155, "w": 0.021, "color": "brow"}, {"shape": "stroke", "pts": [[-0.25, 0.452], [-0.13, 0.456]], "w": 0.021, "color": "brow"}, {"shape": "sweat", "at": [-0.42, 0.56, -0.3], "s": 0.13, "tilt": 20}]},
+  {"id": "sleepy", "emotes": ["sleepy"], "layers": [{"shape": "stroke", "pts": [[0.13, 0.448], [0.19, 0.453], [0.25, 0.444]], "w": 0.019, "color": "brow", "mirror": true}]}
  ],
  "defaults": [
   {"eyes": "round", "eye_color": "cocoa", "nose": "button", "mouth": "smile", "skin": "peach", "hair": "bob", "hair_color": "brown"},

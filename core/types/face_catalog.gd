@@ -25,6 +25,8 @@ var skins: Array[Part] = []
 var hair_styles: Array[Part] = []
 var hair_colors: Array[Part] = []
 var defaults: Array[Dictionary] = []
+## 감정표현 id → 그동안 얼굴에 덧그리는 눈썹·눈물·땀방울 (id 는 표정 이름, 여러 감정표현이 같은 표정을 나눠 쓴다).
+var expressions: Dictionary[String, Part] = {}
 ## 거울 앞 이 거리 안에서 얼굴을 바꿀 수 있다 (서버와 같은 값).
 var mirror_range: float = 2.2
 
@@ -45,6 +47,12 @@ static func from_dict(data: Dictionary) -> FaceCatalog:
 	c.skins = _parts(data.get("skins", []))
 	c.hair_styles = _parts(data.get("hair_styles", []))
 	c.hair_colors = _parts(data.get("hair_colors", []))
+	for raw: Variant in data.get("expressions", []):
+		if not raw is Dictionary:
+			continue
+		var found: Array[Part] = _parts([raw])
+		for emote_id: Variant in (raw as Dictionary).get("emotes", []):
+			c.expressions[str(emote_id)] = found[0]
 	for d: Variant in data.get("defaults", []):
 		if d is Dictionary:
 			c.defaults.append(d)

@@ -64,6 +64,11 @@ var _tug: float = 0.0
 var _hold: Node3D = null
 var _held_before_show: String = ""
 var _eyes: MeshInstance3D = null
+## 감정표현 하는 동안만 보이는 눈썹·눈물·땀방울 (CharacterModel.expression).
+var _expression: MeshInstance3D = null
+var _expression_id: String = ""
+## 감정표현 요청 직후 애니메이션 트리가 아직 원샷을 시작하기 전에 표정을 감추지 않도록 잠깐 기다린다.
+var _expression_hold: float = 0.0
 var _eye_offset: Vector2 = Vector2.ZERO
 var _limbs: Array[MeshInstance3D] = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
@@ -155,6 +160,7 @@ func play_emote(emote_id: String) -> void:
 		return
 	tree.set("parameters/EmoteSwitch/transition_request", emote_id)
 	tree.set("parameters/EmoteShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	_show_expression(emote_id)
 
 
 func is_emoting() -> bool:
@@ -299,6 +305,10 @@ func get_eye_offset() -> Vector2:
 func _process(delta: float) -> void:
 	if tree == null:
 		return
+	if _expression != null and _expression.visible:
+		_expression_hold -= delta
+		if _expression_hold <= 0.0 and not is_emoting():
+			_show_expression("")
 	_move_value = lerpf(_move_value, _move_target, 1.0 - exp(-speed_smoothing * delta))
 	_fishing_value = lerpf(_fishing_value, _fishing_target, 1.0 - exp(-fishing_blend_speed * delta))
 	tree.set("parameters/Locomotion/blend_position", _move_value)
@@ -329,6 +339,12 @@ func _build_static_parts() -> void:
 	_eyes.material_override = clay_material
 	visual.add_child(_eyes)
 	_eyes.position = CharacterModel.HEAD_CENTER
+	_expression = MeshInstance3D.new()
+	_expression.name = "Expression"
+	_expression.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_expression.material_override = clay_material
+	_expression.visible = false
+	visual.add_child(_expression)
 	_add_tool_mesh(rod, CharacterModel.rod())
 	_add_tool_mesh(axe, CharacterModel.axe())
 	for limb: Node3D in [arm_left, arm_right, leg_left, leg_right]:
@@ -339,6 +355,17 @@ func _build_static_parts() -> void:
 		mi.material_override = clay_material
 		limb.add_child(mi)
 		_limbs.append(mi)
+
+
+## 감정표현의 표정 (빈 문자열 = 감춘다). 표정이 없는 감정표현도 감춘다.
+func _show_expression(emote_id: String) -> void:
+	if _expression == null:
+		return
+	_expression_id = emote_id
+	_expression_hold = 0.3
+	var mesh: ArrayMesh = CharacterModel.expression(look, emote_id) if not emote_id.is_empty() else null
+	_expression.mesh = mesh
+	_expression.visible = mesh != null
 
 
 func _add_tool_mesh(holder: Node3D, mesh: Mesh) -> void:
@@ -360,6 +387,8 @@ func _apply_look() -> void:
 		worn.top = top.tint
 	if _eyes != null:
 		_eyes.mesh = CharacterModel.eyes(worn)
+	if _expression != null and _expression.visible:
+		_expression.mesh = CharacterModel.expression(worn, _expression_id)
 	if body_mesh != null:
 		body_mesh.mesh = CharacterModel.body(worn)
 		body_mesh.material_override = clay_material

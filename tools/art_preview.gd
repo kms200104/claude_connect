@@ -5,6 +5,7 @@ extends Node3D
 ##           compare (--ids=tv,bed_double: 앞줄 = 절차 모형, 뒷줄 = Blender 모형 assets/models/items)
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 ##           portraits (표정 6가지를 정면에서, 얼굴 비율 비교용)
+##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
@@ -98,6 +99,20 @@ func _ready() -> void:
 				rig.tree.active = false
 			# 눈높이 정면, 멀리서 좁게 (원근 때문에 옆 머리가 돌아가 보이지 않게).
 			_camera(Vector3(0.0, 0.4, -24.0), Vector3(0.0, 0.4, 0.0), 6.0)
+		"expressions":
+			var emotes: PackedStringArray = ["happy", "surprise", "angry", "sad", "think", "sleepy"]
+			var hairs: PackedStringArray = ["short", "bob", "spiky", "long", "buzz", "pigtails"]
+			for i: int in emotes.size():
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				rig.position = Vector3((2.5 - float(i)) * 1.1, 0.0, 0.0)
+				rig.set_look(GameData.player_look(1, {"hair": hairs[i], "hair_color": "brown"}))
+				rig.set_held("")
+				rig.tree.active = false
+				rig.play_emote(emotes[i])
+				# 애니메이션 트리를 멈춰 두었으니 표정이 바로 감춰지지 않게 리그 갱신을 끈다.
+				rig.set_process(false)
+			_camera(Vector3(0.0, 0.5, -24.0), Vector3(0.0, 0.45, 0.0), 4.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():

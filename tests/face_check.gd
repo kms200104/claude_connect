@@ -1,6 +1,6 @@
 extends Node
 ## 얼굴 검사 (렌더러 없이): 모든 눈·코·입 도형의 꼭짓점이 머리 메시 겉면보다 바깥에 있는지(파묻혀 깨지지 않는지),
-## 캐릭터 하나 삼각형 수가 예산(8,000) 안인지, 절약·고화질 둘 다.
+## 감정표현 눈썹·눈물도 겉면 밖인지, 캐릭터 하나 삼각형 수(가장 무거운 표정 포함)가 예산(8,000) 안인지, 절약·고화질 둘 다.
 ## 사용: godot --headless --path . res://tests/face_check.tscn
 
 const BUDGET: int = 8000
@@ -31,6 +31,16 @@ func _ready() -> void:
 					if d < worst:
 						worst = d
 						worst_name = "%s/%s" % [key, part.id]
+		var expr_tris: int = 0
+		for emote_id: String in catalog.expressions:
+			var mesh: ArrayMesh = CharacterModel.expression(CharacterLook.new(), emote_id)
+			expr_tris = maxi(expr_tris, _tris(mesh))
+			for v: Vector3 in mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+				var d: float = _surface_distance(v)
+				if d < worst:
+					worst = d
+					worst_name = "expression/%s" % emote_id
+		_check(not catalog.expressions.is_empty(), "detail %d: 표정 %d개" % [detail, catalog.expressions.size()])
 		# 머리 메시의 면은 이상적인 겉면보다 안쪽이니, 이상적인 겉면 밖이면 면에 파묻히지 않는다.
 		_check(worst > 0.0, "detail %d: 얼굴 부품이 머리 겉면 밖 (가장 낮은 %s %.4fm, 면 깊이 %.4fm)" % [detail, worst_name, worst, sag])
 		var most: int = 0
@@ -41,7 +51,7 @@ func _ready() -> void:
 			look.eyes = "sparkle"
 			look.mouth = "laugh"
 			look.nose = "freckle"
-			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look))
+			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look)) + expr_tris
 			if tris > most:
 				most = tris
 				most_name = hair.id

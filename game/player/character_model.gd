@@ -139,6 +139,46 @@ static func eyes(look: CharacterLook = null) -> ArrayMesh:
 	return mesh
 
 
+## 감정표현 하는 동안 얼굴에 덧그리는 눈썹·눈물(머리 겉면에 붙인 판)과 머리 옆 땀방울 (face_parts.json 의 expressions).
+## 표정이 없는 감정표현이면 null. 정점은 리그(Visual) 기준이라 몸 메시와 같은 자리에 둔다.
+static func expression(look: CharacterLook, emote_id: String) -> ArrayMesh:
+	var catalog: FaceCatalog = _catalog()
+	var part: FaceCatalog.Part = catalog.expressions.get(emote_id) if catalog != null else null
+	if part == null:
+		return null
+	var key: String = "expr|%d|%s|%s" % [detail, part.id, look.hair.to_html(false)]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
+	var palette: Dictionary[String, Color] = face_palette(look)
+	_emit_face(st, part.layers, palette, Vector2.ZERO, false, Vector3.ZERO, FEATURE_LIFT)
+	for layer: Dictionary in part.layers:
+		if str(layer.get("shape", "")) == "sweat":
+			_add_sweat(st, layer, palette.get("sweat", Color("#A8DDF7")))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## 땀방울: 끝이 위로 뾰족한 물방울 회전체 + 작은 반짝임. at = 아래 둥근 부분의 중심, s = 전체 높이.
+static func _add_sweat(st: SurfaceTool, layer: Dictionary, color: Color) -> void:
+	var at_raw: Array = layer.get("at", [0.4, 0.62, -0.24])
+	var at: Vector3 = Vector3(float(at_raw[0]), float(at_raw[1]), float(at_raw[2]))
+	var radius: float = float(layer.get("s", 0.1)) * 0.32
+	var half: int = 3 + detail
+	var profile: PackedVector2Array = PackedVector2Array()
+	# 아래 반은 둥근 공, 위 반은 뾰족하게 모이는 고깔.
+	for i: int in half + 1:
+		var a: float = -PI * 0.5 + PI * 0.5 * float(i) / float(half)
+		profile.append(Vector2(cos(a), sin(a)) * radius)
+	for i: int in range(1, half + 1):
+		var t: float = float(i) / float(half)
+		profile.append(Vector2(radius * (1.0 - t) * (1.0 - t * 0.3), radius * 2.1 * t))
+	var basis: Basis = Basis(Vector3.BACK, deg_to_rad(float(layer.get("tilt", 0.0))))
+	ClayMesh.add_lathe(st, profile, 8 + 2 * detail, Transform3D(basis, at), color)
+	ClayMesh.add_ellipsoid(st, at + basis * Vector3(-radius * 0.4, radius * 0.35, -radius * 0.85), Vector3(radius * 0.2, radius * 0.3, radius * 0.12), Color.WHITE, 6, 4, basis)
+
+
 ## 낚싯대: 손잡이(감은 끈) · 릴 · 가늘어지는 대 · 줄 고리. 손에서 +Y 로 뻗는다.
 static func rod() -> ArrayMesh:
 	if _cache.has("rod"):
@@ -272,6 +312,8 @@ static func face_palette(look: CharacterLook) -> Dictionary[String, Color]:
 	# 눈동자 가운데 (눈동자 색보다 짙게).
 	palette["pupil"] = look.eye_color.darkened(0.45)
 	palette["lid"] = look.skin.darkened(0.07)
+	# 표정 눈썹: 머리 색보다 진하게 (밝은 머리에서도 보이게 잉크 쪽으로 조금).
+	palette["brow"] = look.hair.darkened(0.3).lerp(palette.get("ink", Color("#4A2B1F")), 0.25)
 	return palette
 
 
