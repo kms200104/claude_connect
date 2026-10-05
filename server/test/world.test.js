@@ -180,3 +180,17 @@ describe('부탁', () => {
     assert.deepEqual(pruneExpired([{ id: 'a', exp: 4 }, { id: 'b', exp: 5 }], 5), [{ id: 'b', exp: 5 }]);
   });
 });
+
+describe('v0.12 꾸밈 자리 (바위 · 선착장 · 울타리)', () => {
+  it('바위 위 · 선착장 위 · 울타리 줄 위에는 가구를 놓거나 심을 수 없고, 조금 떨어지면 된다', async () => {
+    const { groundProblem } = await import('../src/world.js');
+    const rock = data.layout.rocks[0];
+    assert.equal(groundProblem(data, rock.x, rock.z), 'building', '바위 위');
+    const dock = data.layout.dock;
+    assert.notEqual(groundProblem(data, dock.x, dock.z), null, '선착장 위 (물가라 water 이거나 building)');
+    const [a, b] = data.layout.fences[1];
+    const mid = { x: (a[0] + b[0]) / 2, z: (a[1] + b[1]) / 2 };
+    assert.equal(groundProblem(data, mid.x, mid.z), 'fence', '울타리 줄 위');
+    assert.equal(groundProblem(data, mid.x, mid.z + 1.5), null, '울타리에서 1.5m 떨어진 풀밭');
+  });
+});
