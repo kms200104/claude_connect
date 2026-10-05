@@ -5,7 +5,7 @@
 - 정적 타입 필수: 변수·인자·반환형 모두 명시 (`var hp: int`, `func f(a: float) -> void`). `:=`는 타입이 자명할 때만.
 - 타입 없는 `Variant`, 무분별한 `Dictionary`/`get_node` 문자열 경로 지양 → `@export`/`@onready var x: Type`, 데이터는 Resource 클래스.
 ## 3D 성능 (Mobile 렌더러, 60fps, 프레임 16.6ms, 기준 기기 갤럭시 S24 · Z 폴드7)
-- 폴리곤 예산: 캐릭터 ≤8,000tri(고화질 12,000), 나무 2,500, 집 4,000, 소형 소품 300, 가구 300/800/1,500, 방 합계 50k. 마을은 합계가 아니라 **화면 안** 기준 (그린 삼각형 ≤ 200k, `tools/art_preview.tscn -- --what=village --stats` 로 잰다).
+- 폴리곤 예산: 캐릭터 ≤8,000tri(중간 12,000 · 고화질 20,000 — 캐릭터 9명이 한 화면이어도 마을 포함 200k 안), 나무 2,500, 집 4,000, 소형 소품 300, 가구 300/800/1,500, 방 합계 50k. 마을은 합계가 아니라 **화면 안** 기준 (그린 삼각형 ≤ 200k, `tools/art_preview.tscn -- --what=village --stats` 로 잰다).
 - Tripo 모형(`tools/blender/import_tripo.py`)은 예외: 고화질은 원본 폴리곤 그대로(텍스처 + 임포트 자동 LOD), 절약 화질은 위 예산까지 줄인 `<id>_low.glb` 를 쓴다.
 - 반복 물체(풀·꽃·울타리·조약돌)는 반드시 `MultiMeshInstance3D` 이고, 마을 전체 한 덩어리가 아니라 12m 칸으로 나눠 visibility range 를 건다. 세트별 공용 아틀라스 머티리얼 1개, 투명 머티리얼은 화면 내 10개 이하(알파 블렌드 대신 알파 시저).
 - 노멀맵·블렌드셰이프·캐릭터 LOD 없음, 셰이더 8개 이하, 작은 소품은 visibility range 지정.

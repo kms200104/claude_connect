@@ -28,11 +28,11 @@ const EYE_LIFT: float = 0.0055
 ## 같은 부품 안에서 층마다 더 띄우는 거리 (깊이 겹침 방지).
 const LAYER_LIFT: float = 0.0009
 ## 머리 타원체 [둘레 칸, 위아래 칸] — 촘촘함 0 (절약) / 1 / 2 (고화질). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
-const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(32, 22), Vector2i(44, 30)]
+const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(38, 26), Vector2i(48, 32)]
 ## 머리카락 껍질 [둘레 칸, 위아래 칸].
-const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(28, 18), Vector2i(38, 24)]
+const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(34, 20), Vector2i(44, 26)]
 ## 머리카락 다발 [마디 수, 단면 꼭짓점 수].
-const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 5), Vector2i(8, 7), Vector2i(11, 9)]
+const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 5), Vector2i(9, 7), Vector2i(12, 9)]
 ## 다발 단면을 렌즈 모양으로 (가운데 도톰, 가장자리 얇게).
 const LOCK_LENS: float = 0.55
 ## 머리카락 껍질의 중심과 반지름 (머리보다 조금 크고 위·뒤로 치우친 타원체). 다발은 이 겉면을 따라 내려온다.
@@ -46,11 +46,41 @@ const EAR_RADII: Vector3 = Vector3(0.05, 0.08, 0.06)
 static var detail: int = 1
 const MAX_DETAIL: int = 2
 ## 촘촘함별 얼굴 도형 삼각형의 가장 긴 변 (m).
-const FACE_MAX_EDGE: Array[float] = [0.05, 0.035, 0.024]
+const FACE_MAX_EDGE: Array[float] = [0.05, 0.032, 0.022]
+## 몸통·팔·다리 둘레 칸 배율 (v0.11.2: 고화질은 소매·부츠·몸통도 매끈하게).
+const BODY_DETAIL: Array[float] = [1.0, 1.5, 2.0]
 static var _cache: Dictionary[String, ArrayMesh] = {}
 
 
 ## 화질이 바뀌었을 때: 만들어 둔 메시를 버린다 (리그는 set_look 을 다시 불러 새로 만든다).
+## 몸 부위 둘레 칸 수: 절약 화질의 칸 수 × BODY_DETAIL.
+static func _seg(base: int) -> int:
+	return int(round(float(base) * BODY_DETAIL[clampi(detail, 0, MAX_DETAIL)]))
+
+
+## 몸통 윤곽을 촘촘함만큼 곱게 (점 사이를 Catmull-Rom 으로 1~2번 더 나눈다). 절약 화질은 그대로.
+static func _smooth_profile(points: PackedVector2Array) -> PackedVector2Array:
+	var splits: int = clampi(detail, 0, MAX_DETAIL)
+	if splits == 0:
+		return points
+	var out: PackedVector2Array = PackedVector2Array()
+	var n: int = points.size()
+	for i: int in n - 1:
+		var p0: Vector2 = points[maxi(i - 1, 0)]
+		var p1: Vector2 = points[i]
+		var p2: Vector2 = points[i + 1]
+		var p3: Vector2 = points[mini(i + 2, n - 1)]
+		for k: int in splits + 1:
+			out.append(p1.cubic_interpolate(p2, p0, p3, float(k) / float(splits + 1)))
+	out.append(points[n - 1])
+	return out
+
+
+## 둥근 모서리를 나누는 칸 수 (고화질에서 한 칸씩 더).
+static func _round_steps(base: int) -> int:
+	return base + clampi(detail, 0, MAX_DETAIL)
+
+
 static func clear_cache() -> void:
 	_cache.clear()
 
@@ -65,14 +95,14 @@ static func body(look: CharacterLook) -> ArrayMesh:
 	var torso: PackedVector2Array = PackedVector2Array([
 		Vector2(0.0, -0.37), Vector2(0.2, -0.37), Vector2(0.225, -0.33), Vector2(0.215, -0.22), Vector2(0.225, -0.1),
 		Vector2(0.215, -0.02), Vector2(0.16, 0.03), Vector2(0.0, 0.05)])
-	ClayMesh.add_lathe(st, torso, 16, Transform3D(), knit)
-	ClayMesh.add_torus(st, Vector3(0.0, -0.345, 0.0), 0.205, 0.03, look.top.darkened(0.08), 16, 4)
-	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.125, 0.115, -0.01, 0.1, 0.03, 1), 12, Transform3D(), _knit(look.top.darkened(0.04)))
+	ClayMesh.add_lathe(st, _smooth_profile(torso), _seg(16), Transform3D(), knit)
+	ClayMesh.add_torus(st, Vector3(0.0, -0.345, 0.0), 0.205, 0.03, look.top.darkened(0.08), _seg(16), _seg(4))
+	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.125, 0.115, -0.01, 0.1, 0.03, _round_steps(1)), _seg(12), Transform3D(), _knit(look.top.darkened(0.04)))
 	# 반바지: 허리에서 두 다리 통으로 갈라지고, 끝단을 접어 올렸다.
-	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.205, 0.215, -0.47, -0.3, 0.05, 2), 14, Transform3D(), look.bottom)
+	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.205, 0.215, -0.47, -0.3, 0.05, _round_steps(2)), _seg(14), Transform3D(), look.bottom)
 	for side: float in [-1.0, 1.0]:
-		ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.1, 0.1, -0.53, -0.42, 0.03, 1), 8, Transform3D(Basis(), Vector3(HIP.x * side, 0.0, 0.0)), look.bottom)
-		ClayMesh.add_torus(st, Vector3(HIP.x * side, -0.525, 0.0), 0.095, 0.022, look.bottom.lightened(0.12), 8, 4)
+		ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.1, 0.1, -0.53, -0.42, 0.03, _round_steps(1)), _seg(8), Transform3D(Basis(), Vector3(HIP.x * side, 0.0, 0.0)), look.bottom)
+		ClayMesh.add_torus(st, Vector3(HIP.x * side, -0.525, 0.0), 0.095, 0.022, look.bottom.lightened(0.12), _seg(8), _seg(4))
 	# 머리: 볼·턱 쪽이 넓은 찹쌀떡 (높이마다 옆·앞뒤 반지름에 head_width 를 곱한 회전체). 둘레를 촘촘히 나눠
 	# 얼굴 부품과 겉면 사이가 벌어지거나 파묻히지 않게 한다. 얼굴 부품은 같은 겉면(face_point)에 붙는다.
 	var head: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
@@ -95,13 +125,13 @@ static func body(look: CharacterLook) -> ArrayMesh:
 
 ## 팔 하나 (어깨 기준): 소매 + 소매 끝단 + 손.
 static func arm(look: CharacterLook) -> ArrayMesh:
-	var key: String = "arm|" + look.key()
+	var key: String = "arm|%d|%s" % [detail, look.key()]
 	if _cache.has(key):
 		return _cache[key]
 	var st: SurfaceTool = ClayMesh.begin()
-	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, -0.21, 0.0), 0.068, _knit(look.top), 8, 2)
-	ClayMesh.add_torus(st, Vector3(0.0, -0.225, 0.0), 0.06, 0.022, look.top.darkened(0.08), 8, 4)
-	ClayMesh.add_ellipsoid(st, HAND_OFFSET + Vector3(0.0, 0.02, 0.0), Vector3(0.062, 0.066, 0.062), look.skin, 7, 4)
+	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, -0.21, 0.0), 0.068, _knit(look.top), _seg(8), _round_steps(2))
+	ClayMesh.add_torus(st, Vector3(0.0, -0.225, 0.0), 0.06, 0.022, look.top.darkened(0.08), _seg(8), _seg(4))
+	ClayMesh.add_ellipsoid(st, HAND_OFFSET + Vector3(0.0, 0.02, 0.0), Vector3(0.062, 0.066, 0.062), look.skin, _seg(7), _seg(4))
 	var mesh: ArrayMesh = ClayMesh.commit(st)
 	_cache[key] = mesh
 	return mesh
@@ -109,14 +139,14 @@ static func arm(look: CharacterLook) -> ArrayMesh:
 
 ## 다리 하나 (골반 기준): 짧은 다리 + 접은 단이 있는 부츠.
 static func leg(look: CharacterLook) -> ArrayMesh:
-	var key: String = "leg|" + look.key()
+	var key: String = "leg|%d|%s" % [detail, look.key()]
 	if _cache.has(key):
 		return _cache[key]
 	var st: SurfaceTool = ClayMesh.begin()
-	ClayMesh.add_capsule(st, Vector3(0.0, -0.02, 0.0), Vector3(0.0, -0.2, 0.0), 0.058, look.skin, 6, 1)
-	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.082, 0.078, -0.37, -0.17, 0.03, 1), 8, Transform3D(), look.shoes)
-	ClayMesh.add_torus(st, Vector3(0.0, -0.175, 0.0), 0.08, 0.024, look.shoes.lightened(0.1), 8, 4)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.335, -0.045), Vector3(0.155, 0.09, 0.24), 0.45, look.shoes, Basis(), 8, 4)
+	ClayMesh.add_capsule(st, Vector3(0.0, -0.02, 0.0), Vector3(0.0, -0.2, 0.0), 0.058, look.skin, _seg(6), _round_steps(1))
+	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.082, 0.078, -0.37, -0.17, 0.03, _round_steps(1)), _seg(8), Transform3D(), look.shoes)
+	ClayMesh.add_torus(st, Vector3(0.0, -0.175, 0.0), 0.08, 0.024, look.shoes.lightened(0.1), _seg(8), _seg(4))
+	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.335, -0.045), Vector3(0.155, 0.09, 0.24), 0.45, look.shoes, Basis(), _seg(8), _seg(4))
 	var mesh: ArrayMesh = ClayMesh.commit(st)
 	_cache[key] = mesh
 	return mesh

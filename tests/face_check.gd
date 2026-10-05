@@ -4,7 +4,7 @@ extends Node
 ## 사용: godot --headless --path . res://tests/face_check.tscn
 
 ## 촘촘함(0 절약 · 1 · 2 고화질)별 캐릭터 하나 삼각형 상한 (CLAUDE.md).
-const BUDGET: Array[int] = [8000, 8000, 12000]
+const BUDGET: Array[int] = [8000, 12000, 20000]
 var _failed: int = 0
 
 
