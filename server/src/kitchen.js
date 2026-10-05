@@ -24,6 +24,8 @@ export const TEAM = { patience: 1.25, spawn: 0.8, window: 1.15, bonus: 0.1 };
 
 export function createKitchen(deps) {
   const { data, cfg, random, now, send, sendTo, sendProfile, sendInventory } = deps;
+  /** 지금 계절·시각 (v0.12 제철·시간 메뉴). */
+  const when = () => deps.when?.() ?? {};
   const rest = data.restaurant;
   const steps = data.cookSteps;
 
@@ -56,7 +58,7 @@ export function createKitchen(deps) {
       served: room.restaurant.served,
       revenue: room.restaurant.revenue,
       regulars,
-      capacity: shift ? capacity(menuOf(data.recipes, tier), available(room), data) : 0,
+      capacity: shift ? capacity(menuOf(data.recipes, tier, when()), available(room), data) : 0,
       shift: shift ? { served: shift.served, revenue: shift.revenue } : null,
       orders: shift
         ? [...shift.orders.values()].map((o) => ({
@@ -277,7 +279,7 @@ export function createKitchen(deps) {
     const seated = new Set([...shift.orders.values()].map((o) => o.customer));
     const freeSeats = rest.seats.map((_, i) => i).filter((i) => ![...shift.orders.values()].some((o) => o.seat === i));
     if (freeSeats.length === 0) return;
-    const menu = menuOf(data.recipes, tierOf(rest, ratingOfRoom(room)));
+    const menu = menuOf(data.recipes, tierOf(rest, ratingOfRoom(room)), when());
     const avail = available(room);
     const pool = [...data.customers.values()].filter((c) => !seated.has(c.id));
     for (let i = pool.length - 1; i > 0; i--) {
@@ -286,7 +288,7 @@ export function createKitchen(deps) {
     }
     for (const c of pool) {
       const rec = room.restaurant.regulars[c.id];
-      const pick = chooseOrder({ menu, avail, data, taste: c, regularDish: rec?.regular ? rec.dish : null, random });
+      const pick = chooseOrder({ menu, avail, data, taste: c, regularDish: rec?.regular ? rec.dish : null, random, seasonWeight: data.recipeSeasonWeight ?? 1 });
       if (!pick) continue;
       shift.seq += 1;
       const seat = freeSeats[Math.floor(random() * freeSeats.length)];

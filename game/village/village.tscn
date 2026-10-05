@@ -1,4 +1,4 @@
-[gd_scene load_steps=71 format=3]
+[gd_scene load_steps=72 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -64,6 +64,7 @@
 [ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
 [ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
+[ext_resource type="Script" path="res://game/fishing/sea_spot.gd" id="71_sea"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -163,6 +164,10 @@ ground_mesh = NodePath("../Ground/Mesh")
 ground_shape = NodePath("../Ground/Shape")
 water_material = ExtResource("16_water")
 player = NodePath("../../Player")
+
+[node name="Sea" type="Node3D" parent="Terrain"]
+script = ExtResource("71_sea")
+spot_id = "sea"
 
 [node name="Lake" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")

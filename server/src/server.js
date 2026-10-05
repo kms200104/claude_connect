@@ -7,7 +7,7 @@ import { RoomStore } from './persistence.js';
 import { loadGameData, pickWeighted } from './gamedata.js';
 import { createFishing } from './fishing.js';
 import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
-import { createClock, isWeather, timeBand, weatherAt } from './clock.js';
+import { createClock, isWeather, seasonOf, timeBand, weatherAt } from './clock.js';
 import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
 import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
 import { createMessenger } from './messenger.js';
@@ -56,7 +56,7 @@ export function createServer(overrides = {}) {
   const roomOf = (player) => [...rooms.rooms.values()].find((r) => r.players.get(player.id) === player);
 
   const weatherOf = (room) => (isWeather(cfg.weatherForce) ? cfg.weatherForce : weatherAt(room.weatherSeed, clock.day(), clock.hour()));
-  const environment = (room) => ({ hour: clock.hour(), weather: room ? weatherOf(room) : 'clear' });
+  const environment = (room) => ({ hour: clock.hour(), weather: room ? weatherOf(room) : 'clear', season: cfg.seasonForce || seasonOf(clock.gameMs()) });
 
   const sendInventory = (player) => sendTo(player, { t: 'inventory', ...inventoryToWire(player.slots, cfg, player.profile.held) });
   const profileWire = (player) => {
@@ -82,7 +82,7 @@ export function createServer(overrides = {}) {
       if (live && live.uid === m.uid) sendTo(live, { t: 'profile', ...profileWire(live) });
     }
   };
-  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now() });
+  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now(), se: cfg.seasonForce || '' });
 
   // ---- 경제: 증권 · 아파트 · 은행 · 식당 (economy.js) ----
   const market = overrides.market ?? createMarket(data.market, { saveDir: cfg.saveDir, feedUrl: cfg.marketFeedUrl, random, gameMs: clock.gameMs, day: clock.day, forceHours: cfg.marketHours === 'krx' });
@@ -94,7 +94,7 @@ export function createServer(overrides = {}) {
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
   const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
-  const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory });
+  const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
@@ -556,11 +556,11 @@ export function createServer(overrides = {}) {
           reply.quest = questWire(active, player.slots, data);
           reply.ready = questReady(player.slots, active, data);
         } else if (shouldOffer({ rules: data.quests, profile, npcId: npc.id, today, random, chance: cfg.questChance })) {
-          const { hour, weather } = environment(room);
+          const { hour, weather, season } = environment(room);
           const only = data.quests.templates.filter((t) => t.id === cfg.questTemplate);
           const rules = only.length > 0 ? { ...data.quests, templates: only } : data.quests;
           profile.questSeq += 1;
-          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq, goodsPool: goodsPool(room) });
+          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, season, today, seq: profile.questSeq, goodsPool: goodsPool(room) });
           rel.offerDay = today;
           profile.lastQuestDay = today;
           reply.offer = player.offer;

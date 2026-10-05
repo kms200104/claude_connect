@@ -3,6 +3,8 @@
 // (그래서 재료가 모자란 주문은 들어오지 않는다) → 요리(동작별 박자 맞추기) → 서버가 박자·맛·시간으로 별점과 값을 매긴다.
 // 별점이 오르면 까다롭지만 남는 게 많은 요리가 열리고, 같은 요리에 만족한 손님은 단골이 되어 그것만 시킨다.
 
+import { inHours } from './clock.js';
+
 export const RARITY_RANK = { common: 0, uncommon: 1, rare: 2 };
 
 /** 가방 칸 → 재료 개수 { id: n }. */
@@ -77,9 +79,17 @@ export function tierOf(rules, rating) {
   return tier;
 }
 
-/** 열린 메뉴. */
-export function menuOf(recipes, tier) {
-  return recipes.filter((r) => r.tier <= tier);
+/**
+ * 열린 메뉴: 별점 단계 안, 그리고 (v0.12) 제철 메뉴는 그 계절에만 · 시간 메뉴(아침상 · 야식)는 그 시간에만.
+ * when = { season, hour } — 빠진 값은 보지 않는다.
+ */
+export function menuOf(recipes, tier, when = {}) {
+  return recipes.filter(
+    (r) =>
+      r.tier <= tier &&
+      (!when.season || !Array.isArray(r.seasons) || r.seasons.includes(when.season)) &&
+      (when.hour === undefined || inHours(r.hours, when.hour)),
+  );
 }
 
 /** 손님 취향과 요리의 맞음 (0~1). 좋아하는 맛 하나에 +, 싫어하는 맛 하나에 −. */
@@ -93,7 +103,7 @@ export function tasteMatch(taste, recipe) {
  * 손님이 무엇을 시킬지. 단골이면 그 요리(재료가 있을 때만), 아니면 열린 메뉴 중 재료가 있는 것을 취향 무게로.
  * 돌려주는 값: { recipe, used } 또는 null (시킬 게 없다).
  */
-export function chooseOrder({ menu, avail, data, taste, regularDish, random }) {
+export function chooseOrder({ menu, avail, data, taste, regularDish, random, seasonWeight = 1 }) {
   if (regularDish) {
     const r = menu.find((m) => m.id === regularDish);
     const used = r ? pickIngredients(r, avail, data) : null;
@@ -104,7 +114,9 @@ export function chooseOrder({ menu, avail, data, taste, regularDish, random }) {
     const used = pickIngredients(r, avail, data);
     if (!used) continue;
     // 좋아하는 맛일수록, 높은 단계일수록 조금 더 자주 시킨다.
-    options.push({ recipe: r, used, w: Math.max(0.05, tasteMatch(taste, r) ** 2) * (1 + 0.15 * (r.tier - 1)) });
+    // 제철 메뉴(v0.12)는 그 계절에만 메뉴에 오르고, 오르면 더 자주 시킨다.
+    const seasonal = Array.isArray(r.seasons) ? seasonWeight : 1;
+    options.push({ recipe: r, used, w: Math.max(0.05, tasteMatch(taste, r) ** 2) * (1 + 0.15 * (r.tier - 1)) * seasonal });
   }
   if (options.length === 0) return null;
   let roll = random() * options.reduce((a, o) => a + o.w, 0);

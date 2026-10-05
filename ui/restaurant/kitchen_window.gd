@@ -245,12 +245,15 @@ func _build_menu() -> void:
 	_list.add_child(_label("별점이 오르면 까다롭지만 남는 게 많은 요리가 열려요. (단계 기준 ★ %s)" % ", ".join(PackedStringArray(GameData.econ.tier_stars().slice(1).map(func(x: Variant) -> String: return "%.1f" % float(x)))), 24, SOFT))
 	for r: RecipeInfo in GameData.econ.recipe_order:
 		var open_tier: bool = r.tier <= tier
-		var can: bool = open_tier and r.can_make(pantry)
+		var in_time: bool = r.on_menu(Net.season(), Net.game_hour())
+		var can: bool = open_tier and in_time and r.can_make(pantry)
 		var steps: PackedStringArray = []
 		for s: String in r.steps:
 			steps.append(str(GameData.econ.step(s).get("label", s)))
-		var text: String = "%s %s · %s\n  %s\n  %s" % ["●" if can else ("○" if open_tier else "잠김"), r.display_name, Money.short(r.price), r.ingredients_text(), " → ".join(steps)]
-		var l: Label = _label("%d단계  %s" % [r.tier, text], 24, INK if open_tier else SOFT)
+		var when: String = r.when_text()
+		var mark: String = "●" if can else ("잠김" if not open_tier else ("쉬는 중" if not in_time else "○"))
+		var text: String = "%s %s · %s%s\n  %s\n  %s" % [mark, r.display_name, Money.short(r.price), "  [%s]" % when if not when.is_empty() else "", r.ingredients_text(), " → ".join(steps)]
+		var l: Label = _label("%d단계  %s" % [r.tier, text], 24, INK if open_tier and in_time else SOFT)
 		_list.add_child(l)
 	var back: Button = _button("주문 보기", 28)
 	back.pressed.connect(func() -> void:

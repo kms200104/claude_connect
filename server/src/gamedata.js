@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { inHours } from './clock.js';
-import { blockedAreas } from './world.js';
+import { SEASONS, inHours } from './clock.js';
+import { blockedAreas, islandShape } from './world.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
@@ -12,9 +12,18 @@ import { loadJobs } from './jobs.js';
 export function loadGameData(dataDir, cfg) {
   const read = (rel) => JSON.parse(readFileSync(path.join(dataDir, rel), 'utf8'));
   const fish = new Map(read('fish/fish.json').fish.map((f) => [f.id, f]));
+  for (const f of fish.values()) {
+    for (const s of f.seasons ?? []) if (!SEASONS.includes(s)) throw new Error(`fish ${f.id}: unknown season ${s}`);
+  }
   const spots = new Map();
+  // 바다 (v0.12, kind: sea): 수역 사각형이 아니라 섬 둘레 바닷가 어디서나. 사각형 낚시터 목록(spots)과 따로 둔다.
+  let seaSpot = null;
   for (const s of read('fish/spots.json').spots) {
     for (const id of s.fish) if (!fish.has(id)) throw new Error(`spot ${s.id}: unknown fish ${id}`);
+    if (s.kind === 'sea') {
+      seaSpot = s;
+      continue;
+    }
     // 여울(얕은 물, v0.9): 수역 안쪽 사각형. 들어가서 뜰채로 물고기를 몬다.
     for (const z of s.shallows ?? []) {
       if (Math.abs(z.x - s.x) + z.half_x > s.half_x + 1e-6 || Math.abs(z.z - s.z) + z.half_z > s.half_z + 1e-6) throw new Error(`spot ${s.id}: shallow ${z.id} 가 수역 밖`);
@@ -56,6 +65,7 @@ export function loadGameData(dataDir, cfg) {
   } catch {
     layout = null; // 꾸밈 배치는 없어도 된다 (선물이 바위 위에 떨어질 수 있을 뿐)
   }
+  if (seaSpot) seaSpot.island = layout?.island ?? null;
 
   const quests = read('quests/quests.json');
   for (const t of quests.templates) if (t.item && !items.has(t.item)) throw new Error(`quest ${t.id}: unknown item ${t.item}`);
@@ -127,6 +137,7 @@ export function loadGameData(dataDir, cfg) {
   const cookSteps = recipesFile.steps;
   for (const r of recipes) {
     for (const s of r.steps) if (!cookSteps[s]) throw new Error(`recipe ${r.id}: unknown step ${s}`);
+    for (const s of r.seasons ?? []) if (!SEASONS.includes(s)) throw new Error(`recipe ${r.id}: unknown season ${s}`);
     for (const ing of r.ingredients) {
       if (ing.item && !items.has(ing.item)) throw new Error(`recipe ${r.id}: unknown item ${ing.item}`);
       for (const id of ing.item_any ?? []) if (!fish.has(id) && !items.has(id)) throw new Error(`recipe ${r.id}: unknown ${id}`);
@@ -155,6 +166,11 @@ export function loadGameData(dataDir, cfg) {
   const data = {
     fish,
     spots,
+    seaSpot,
+    /** 낚시터 id → 사각형 낚시터 또는 바다. */
+    fishingSpot: (id) => spots.get(id) ?? (seaSpot && seaSpot.id === id ? seaSpot : null),
+    /** 사각형 낚시터 + 바다 (지금 낚을 수 있는 물고기를 모을 때). */
+    allSpots: () => (seaSpot ? [...spots.values(), seaSpot] : [...spots.values()]),
     items,
     chopDrops,
     trees,
@@ -194,6 +210,7 @@ export function loadGameData(dataDir, cfg) {
     jobs,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),
+    recipeSeasonWeight: recipesFile.season_weight ?? 1,
     cookSteps,
     restaurant,
     messenger,
@@ -214,21 +231,28 @@ export function loadGameData(dataDir, cfg) {
 
 /** 점과 낚시터 사각형 사이의 거리(안쪽이면 0). */
 export function distanceToSpot(spot, x, z) {
+  // 바다: 해안선까지의 거리 (바다 쪽이면 0). 섬 모양은 로드할 때 붙인다 (spot.island).
+  if (spot.kind === 'sea') return spot.island ? Math.max(0, (1 - islandShape(spot.island, x, z)) * spot.island.half) : Infinity;
   const dx = Math.max(Math.abs(x - spot.x) - spot.half_x, 0);
   const dz = Math.max(Math.abs(z - spot.z) - spot.half_z, 0);
   return Math.hypot(dx, dz);
 }
 
-/** 지금 시각·날씨에 이 낚시터에서 낚일 수 있는 물고기. */
-export function availableFish(spot, fishById, hour, weather) {
+/** 지금 시각·날씨·계절에 이 낚시터에서 낚일 수 있는 물고기 (season 이 null 이면 계절은 보지 않는다). */
+export function availableFish(spot, fishById, hour, weather, season = null) {
   return spot.fish
     .map((id) => fishById.get(id))
-    .filter((f) => inHours(f.hours, hour) && (!Array.isArray(f.weather) || f.weather.includes(weather)));
+    .filter(
+      (f) =>
+        inHours(f.hours, hour) &&
+        (!Array.isArray(f.weather) || f.weather.includes(weather)) &&
+        (season === null || !Array.isArray(f.seasons) || f.seasons.includes(season)),
+    );
 }
 
 /** 가중치 뽑기. 시각·날씨 조건에 맞는 물고기가 없으면 낚시터 전체에서 뽑는다. */
-export function pickFish(spot, fishById, random, hour = 12, weather = 'clear', weightOf = (f) => f.weight) {
-  let pool = availableFish(spot, fishById, hour, weather);
+export function pickFish(spot, fishById, random, hour = 12, weather = 'clear', weightOf = (f) => f.weight, season = null) {
+  let pool = availableFish(spot, fishById, hour, weather, season);
   if (pool.length === 0) pool = spot.fish.map((id) => fishById.get(id));
   return pickWeighted(pool, weightOf, random);
 }

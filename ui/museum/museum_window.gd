@@ -191,6 +191,14 @@ func _book_cell(fish: FishInfo) -> Control:
 ## 언제 잡히는지 슬쩍 알려 준다.
 static func _when_hint(fish: FishInfo) -> String:
 	var parts: PackedStringArray = []
+	var places: PackedStringArray = GameData.fish_places(fish.id)
+	if not places.is_empty():
+		parts.append(" · ".join(places))
+	if not fish.seasons.is_empty():
+		var names: PackedStringArray = []
+		for s: String in fish.seasons:
+			names.append(VillageClock.season_name(s))
+		parts.append(", ".join(names))
 	if fish.hours.size() == 2:
 		parts.append("%d시~%d시" % [fish.hours[0], fish.hours[1]])
 	if not fish.weathers.is_empty():

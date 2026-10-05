@@ -23,6 +23,8 @@ const PLAYER_NAMES: PackedStringArray = ["보리", "새미"]
 
 var fish: Dictionary[String, FishInfo] = {}
 var spots: Dictionary[String, SpotInfo] = {}
+## 바다 낚시터 (v0.12, 섬 둘레 바닷가 어디서나). 없으면 null.
+var sea_spot: SpotInfo = null
 ## 물고기를 포함한 인벤토리 아이템 전체.
 var items: Dictionary[String, ItemInfo] = {}
 var trees: Dictionary[String, TreeInfo] = {}
@@ -81,7 +83,11 @@ func _ready() -> void:
 	for entry: Variant in _read_json(SPOTS_PATH).get("spots", []):
 		if entry is Dictionary:
 			var spot: SpotInfo = SpotInfo.from_dict(entry)
-			spots[spot.id] = spot
+			# 바다(v0.12)는 사각형 낚시터 목록과 따로 둔다 (호수 둘레를 도는 코드가 바다를 사각형으로 보지 않게).
+			if spot.is_sea:
+				sea_spot = spot
+			else:
+				spots[spot.id] = spot
 	for entry: Variant in _read_json(ITEMS_PATH).get("items", []):
 		if entry is Dictionary:
 			var item: ItemInfo = ItemInfo.from_item_dict(entry)
@@ -106,6 +112,8 @@ func _ready() -> void:
 	_catch_shouts = dialogue_file.get("catch_shouts", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
+	if sea_spot != null:
+		sea_spot.island = layout
 	var plants_file: Dictionary = _read_json(PLANTS_PATH)
 	plant_range = float(plants_file.get("plant_range", plant_range))
 	tree_clearance = float(plants_file.get("tree_clearance", tree_clearance))
@@ -138,6 +146,27 @@ func _ready() -> void:
 func fish_name(id: String) -> String:
 	var info: FishInfo = fish.get(id)
 	return info.display_name if info != null else id
+
+
+## 이 물고기가 낚이는 곳 이름 (v0.12: 마을 호수 · 성성호수 · 바다).
+func fish_places(fish_id: String) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for spot: SpotInfo in spots.values():
+		if fish_id in spot.fish_ids:
+			out.append(spot.display_name)
+	if sea_spot != null and fish_id in sea_spot.fish_ids:
+		out.append(sea_spot.display_name)
+	return out
+
+
+## 바다에서만 낚이는 물고기인지.
+func is_sea_fish(fish_id: String) -> bool:
+	if sea_spot == null or not fish_id in sea_spot.fish_ids:
+		return false
+	for spot: SpotInfo in spots.values():
+		if fish_id in spot.fish_ids:
+			return false
+	return true
 
 
 func item(id: String) -> ItemInfo:

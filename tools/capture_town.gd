@@ -104,6 +104,21 @@ func _run() -> void:
 	await _wait(0.5)
 	camera.distance = base_distance
 	camera.pitch_degrees = base_pitch
+
+	# 바다 낚시 (v0.12): 동쪽 바닷가에서 바다로 던진다.
+	Economy.quit_job()
+	await _wait(0.4)
+	Net.equip(0)
+	var fishing: FishingController = _village.get_node("FishingController")
+	if econ.kitchen.is_open():
+		econ.kitchen.close()
+	await _put(Vector3(-20.0, 0.1, -(GameData.layout.island_half - 2.0)), 0.0)
+	camera.distance = base_distance + 2.0
+	await _wait(0.6)
+	fishing.call("_on_action_pressed")
+	await _wait(2.5)
+	await _shot("t19_sea_fishing")
+	camera.distance = base_distance
 	camera.snap_to_target()
 	await _shot("t06_kitchen_orders")
 	var first: String = ""

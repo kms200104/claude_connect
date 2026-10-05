@@ -496,6 +496,13 @@ func _fish_cast(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 	if pool.is_empty():
 		fail.call(NetProtocol.ERR_NOT_AT_SPOT)
 		return
+	# 제철 물고기만 (v0.12, 진짜 서버의 availableFish 처럼). 하나도 없으면 낚시터 전체에서.
+	var season: String = VillageClock.season_of(Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS)
+	var in_season: Array = pool.filter(func(id: Variant) -> bool:
+		var f: FishInfo = GameData.fish.get(str(id))
+		return f == null or f.seasons.is_empty() or season in f.seasons)
+	if not in_season.is_empty():
+		pool = in_season
 	var entries: Array = pool.map(func(id: Variant) -> Dictionary: return {"id": str(id), "weight": _fish_weights.get(str(id), 10.0)})
 	var fish: String = _weighted(entries)
 	var info: FishInfo = GameData.fish.get(fish)

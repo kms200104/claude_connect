@@ -296,17 +296,24 @@ func topic_lines(info: NpcInfo, topic: String, values: Dictionary) -> PackedStri
 static func fish_tip() -> FishInfo:
 	var now: Array[FishInfo] = []
 	for fish: FishInfo in GameData.fish.values():
-		if fish.available(Net.game_hour(), Net.weather) and fish.rarity != "common":
+		if fish.available(Net.game_hour(), Net.weather, Net.season()) and fish.rarity != "common":
 			now.append(fish)
 	if now.is_empty():
 		for fish: FishInfo in GameData.fish.values():
-			if fish.available(Net.game_hour(), Net.weather):
+			if fish.available(Net.game_hour(), Net.weather, Net.season()):
 				now.append(fish)
 	return now[randi() % now.size()] if not now.is_empty() else null
 
 
-## "밤에", "비 오는 날에", "아무 때나" 처럼 짧게.
+## "밤에", "비 오는 날에", "아무 때나" 처럼 짧게. 바다 물고기는 "바닷가에서 …" (v0.12).
 static func fish_when(fish: FishInfo) -> String:
+	var when: String = _fish_time(fish)
+	if GameData.is_sea_fish(fish.id):
+		return "바닷가에서 " + when
+	return when
+
+
+static func _fish_time(fish: FishInfo) -> String:
 	if not fish.weathers.is_empty() and not "clear" in fish.weathers:
 		return "비 오는 날에" if "rain" in fish.weathers else "흐린 날에"
 	if fish.hours.size() == 2:

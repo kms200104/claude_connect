@@ -77,6 +77,8 @@ export const defaultConfig = {
   clockOffsetMin: num('CLOCK_OFFSET_MIN', 0),
   // 날씨를 고정한다 (clear | cloudy | rain | thunder). 비우면 마을 시드로 정한다.
   weatherForce: process.env.WEATHER_FORCE || '',
+  // 계절 고정 (v0.12, 테스트·시연용): spring | summer | autumn | winter. 비우면 마을 날짜의 달로 정한다.
+  seasonForce: process.env.SEASON_FORCE || '',
   // 뇌우일 때 번개 간격(ms).
   lightningMinMs: num('LIGHTNING_MIN_MS', 6000),
   lightningMaxMs: num('LIGHTNING_MAX_MS', 18000),

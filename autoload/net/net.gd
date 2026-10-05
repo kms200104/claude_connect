@@ -193,6 +193,8 @@ var _pending: Dictionary[String, String] = {}  # rid → 요청 종류 (거부�
 var _clock_game_ms: float = 0.0
 var _clock_scale: float = 1.0
 var _clock_server_ms: float = 0.0
+## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
+var _season_force: String = ""
 
 
 func _ready() -> void:
@@ -461,6 +463,11 @@ func held_item_id() -> String:
 ## 마을 시계 (게임 시각 ms). 서버가 보낸 기준값에서 서버 시계 추정치로 흘려 쓴다.
 func game_ms() -> float:
 	return _clock_game_ms + (server_time_ms() - _clock_server_ms) * _clock_scale
+
+
+## 지금 계절 (v0.12): spring / summer / autumn / winter.
+func season() -> String:
+	return _season_force if not _season_force.is_empty() else VillageClock.season_of(game_ms())
 
 
 func game_hour() -> float:
@@ -1006,6 +1013,7 @@ func _apply_clock(data: Variant) -> void:
 	_clock_game_ms = float(data.get("g", 0.0))
 	_clock_scale = float(data.get("s", 1.0))
 	_clock_server_ms = float(data.get("st", 0.0))
+	_season_force = str(data.get("se", ""))
 
 
 func _parse_npcs(entries: Variant) -> Array[NetNpcState]:

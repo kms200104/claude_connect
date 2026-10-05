@@ -51,7 +51,7 @@ export function createFishing({
   onInventoryChanged,
   onFishingChanged,
   heldItem = () => 'rod',
-  environment = () => ({ hour: 12, weather: 'clear' }),
+  environment = () => ({ hour: 12, weather: 'clear', season: null }),
   // 낚시 대회가 열려 있으면 그 이벤트 ({ def }) — 희귀한 물고기가 더 잘 잡히고, 낚을 때마다 상금.
   derby = () => null,
   // 같은 낚시터에서 함께 낚고 있는 다른 사람 수 (같이 낚시 보너스).
@@ -87,19 +87,19 @@ export function createFishing({
   function cast(player, rid, spotId) {
     if (player.fishing) return ErrorCode.alreadyFishing;
     if (heldItem(player) !== 'rod') return ErrorCode.noTool;
-    const spot = typeof spotId === 'string' ? data.spots.get(spotId) : null;
+    const spot = typeof spotId === 'string' ? (data.fishingSpot?.(spotId) ?? data.spots.get(spotId)) : null;
     if (!spot) return ErrorCode.notAtSpot;
     if (distanceToSpot(spot, player.x, player.z) > spot.cast_range) return ErrorCode.notAtSpot;
     if (!hasFreeSpace(player.slots, data.isFish, data.limitOf)) return ErrorCode.inventoryFull;
 
-    const { hour, weather } = environment(player);
+    const { hour, weather, season = null } = environment(player);
     const contest = derby(player);
     const coop = companions(player, spot) > 0;
     const boost = (contest ? contest.def.rare_boost ?? 1 : 1) * (coop ? COOP_FISHING.rare : 1);
     const zone = shallowAt(spot, player.x, player.z) ? 'shallow' : 'deep';
     const weight = (f) => f.weight * (f.rarity === 'rare' ? boost : 1) * zoneWeight(zone, f);
-    let fish = pickFish(spot, data.fish, random, hour, weather, weight);
-    if (weight(fish) <= 0) fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.size === 'L' ? 0.0001 : 1));
+    let fish = pickFish(spot, data.fish, random, hour, weather, weight, season);
+    if (weight(fish) <= 0) fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.size === 'L' ? 0.0001 : 1), season);
     const pace = coop ? COOP_FISHING.wait : 1;
     const session = {
       rid,
