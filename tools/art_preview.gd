@@ -6,6 +6,7 @@ extends Node3D
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 ##           portraits (표정 6가지를 정면에서, 얼굴 비율 비교용)
 ##   --stats: 찍은 프레임의 그린 삼각형·드로우콜·물체 수를 함께 출력 (village 는 --at 자리에서 게임 카메라 구도: 거리 7.5m · 48° · FOV 55)
+##           grips (손에 드는 아이템 × 대기·걷기·사용 자세를 옆에서 — 쥐는 방향 확인용, --side=front 면 앞에서)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 
 var _what: String = "trees"
@@ -109,6 +110,40 @@ func _ready() -> void:
 				rig.tree.active = false
 			# 눈높이 정면, 멀리서 좁게 (원근 때문에 옆 머리가 돌아가 보이지 않게).
 			_camera(Vector3(0.0, 0.4, -24.0), Vector3(0.0, 0.4, 0.0), 6.0)
+		"grips":
+			# 줄 = 아이템, 칸 = 대기 · 걷기 · 사용(가장 힘을 준 순간). 캐릭터 정면은 -Z, 기본 카메라는 오른쪽(+X)에서 본다.
+			var rows: Array[Array] = [
+				["rod", "fishing", 1.0], ["rod", "cast", 0.36], ["axe", "chop", 0.42], ["fishing_net", "chop", 0.42],
+				["shovel", "dig", 0.36], ["knife", "cook_chop", 0.16], ["pan", "cook_flip", 0.2], ["ladle", "cook_stir", 0.2]]
+			var cols: Array[Array] = [["idle", 0.4], ["walk", 0.15], ["use", 0.0]]
+			var front: bool = "--side=front" in OS.get_cmdline_user_args()
+			if not _ids.is_empty():
+				rows = rows.filter(func(row: Array) -> bool: return str(row[0]) in _ids)
+			for r: int in rows.size():
+				for c: int in cols.size():
+					var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+					add_child(rig)
+					rig.position = Vector3(0.0, 1.0 - float(r) * 1.9, (float(c) - 1.0) * 1.6) if not front else Vector3((float(c) - 1.0) * 1.6, 1.0 - float(r) * 1.9, 0.0)
+					rig.set_look(CharacterLook.for_player(1))
+					var item: String = rows[r][0]
+					var cooking: bool = item in ["knife", "pan", "ladle"]
+					var anim: String = cols[c][0] if c < 2 else rows[r][1]
+					var t: float = float(cols[c][1]) if c < 2 else float(rows[r][2])
+					rig.set_held(item if not cooking else "")
+					if cooking:
+						rig.set_cooking(rows[r][1], item)
+					rig.tree.active = false
+					var player: AnimationPlayer = rig.get_node("AnimationPlayer")
+					player.play(anim)
+					player.seek(t, true)
+					player.pause()
+					rig.set_process(false)
+			var mid_y: float = 1.0 - float(rows.size() - 1) * 0.95
+			var fov: float = 3.2 * float(rows.size()) + 2.0
+			if front:
+				_camera(Vector3(0.0, mid_y, -40.0), Vector3(0.0, mid_y, 0.0), fov)
+			else:
+				_camera(Vector3(40.0, mid_y, 0.0), Vector3(0.0, mid_y, 0.0), fov)
 		"expressions":
 			var emotes: PackedStringArray = ["happy", "surprise", "angry", "sad", "think", "sleepy"]
 			var hairs: PackedStringArray = ["short", "bob", "spiky", "long", "buzz", "pigtails"]

@@ -36,7 +36,7 @@ B2G = G2B.inverted()
 # origin: 'bottom'(바닥 가운데) · 'front'(바닥, 앞면이 z=0 — 상점처럼 문 자리에 맞추는 건물) · 쥐는 곳(자루 끝에서 위로 m).
 ASSETS = {
     'tool_pan': {'src': 'pan.glb', 'budget': 300, 'turn': [('X', 90.0)], 'fit': ('y', 0.5), 'origin': 0.06},
-    'tool_ladle': {'src': 'ladle.glb', 'budget': 300, 'turn': 'tip_to_bowl', 'fit': ('y', 0.42), 'origin': 0.05},
+    'tool_ladle': {'src': 'ladle.glb', 'budget': 300, 'turn': 'tip_to_bowl', 'fit': ('y', 0.34), 'origin': 0.04},
     'tool_knife': {'src': 'knife.glb', 'budget': 200, 'turn': [('Z', 90.0)], 'fit': ('y', 0.32), 'origin': 0.05},
     'npc_house': {'src': 'house.glb', 'budget': 4000, 'turn': [('Y', -90.0)], 'fit': ('y', 4.2), 'origin': 'bottom'},
     'shop_ext_1': {'src': 'shop_1.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 4.5), 'origin': 'front'},

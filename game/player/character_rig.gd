@@ -122,14 +122,23 @@ func set_fishing(active: bool) -> void:
 
 
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
-## 손에 든 도구 가운데 Tool 자리에 끼우는 것 (v9 뜰채 · 삽). 요리 중이면 요리 도구가 먼저다.
-const HAND_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
+## 손에 든 도구 가운데 Tool 자리(손에 고정)에 끼우는 것. 요리 중이면 요리 도구가 먼저다.
+const HAND_TOOLS: PackedStringArray = []
+## 휘둘러 쓰는 도구 — 도끼 자리(Axe)에 끼워, 사용 동작이 손목(Axe 트랙)을 돌리는 대로 따라간다
+## (뜰채: 도끼질 chop 으로 떠 올리기, 삽: dig 가 날을 뒤집어 꽂고 퍼 올린다). 들고 다닐 땐 도끼처럼 위·앞으로 세운다.
+const SWING_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
 ## Tripo 모형이 있는 도구 (텍스처 머티리얼 이름, tools/blender/import_tripo.py).
 const TOOL_MODELS: Dictionary[String, String] = {"knife": "tool_knife", "pan": "tool_pan", "ladle": "tool_ladle"}
-## 뜰채를 도구 자리 안에서 돌리는 각도 (X축) — 손에서 위·조금 앞으로 뻗게.
-const NET_PITCH_DEG: float = -163.0
-## 얼굴을 가리지 않게 바깥(오른쪽)으로 기울이는 각도 (Z축).
-const NET_ROLL_DEG: float = -24.0
+## Tool 자리 도구를 쥐는 각도 (도): x = 팔 끝에서 앞(-Z)으로 숙이는 각도, y = 자루를 축으로 돌리는 각도.
+## 도구 메시는 손에서 +Y 로 뻗으니 180° + x 만큼 X 축으로 돌려 팔이 뻗은 방향(-Y)으로 잇는다.
+## 사용 동작에서 팔은 앞으로 0.8~1.3 rad 들리므로, x 를 더하면 칼·팬은 거의 수평(날·바닥이 아래), 국자는 냄비 쪽 아래를 향한다.
+## 팔을 내린 대기·걷기에서는 같은 각도라 몸 앞쪽 아래로 든다 (예전엔 126° 고정이라 몸 뒤로 뻗었다).
+const TOOL_GRIPS: Dictionary[String, Vector2] = {
+	"knife": Vector2(50.0, 0.0), "pan": Vector2(30.0, 0.0), "ladle": Vector2(15.0, 0.0),
+}
+## 도끼 자리 도구의 각도 (도): x = 앞뒤로 숙임, y = 자루를 축으로 돌림 (뜰채 입구가 휘두르는 쪽을 보게),
+## z = 바깥(캐릭터 오른쪽)으로 눕힘 — 1m 가까운 뜰채·삽을 세워 들면 망·날이 얼굴을 가린다.
+const SWING_GRIPS: Dictionary[String, Vector3] = {"fishing_net": Vector3(0.0, 180.0, -25.0), "shovel": Vector3(0.0, 0.0, -25.0)}
 
 
 func set_held(item_id: String) -> void:
@@ -140,7 +149,8 @@ func set_held(item_id: String) -> void:
 	if rod != null:
 		rod.visible = item_id == "rod" and _cook_target < 0.5
 	if axe != null:
-		axe.visible = item_id == "axe" and _cook_target < 0.5
+		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and _cook_target < 0.5
+	_set_swing(item_id if item_id in SWING_TOOLS else "")
 	if _cook_target < 0.5:
 		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
@@ -201,7 +211,7 @@ func set_cooking(anim: String, tool_id: String = "") -> void:
 	if rod != null:
 		rod.visible = not active and held_item == "rod" and _show_target < 0.5
 	if axe != null:
-		axe.visible = not active and held_item == "axe" and _show_target < 0.5
+		axe.visible = not active and (held_item == "axe" or held_item in SWING_TOOLS) and _show_target < 0.5
 
 
 func is_cooking() -> bool:
@@ -214,7 +224,10 @@ func set_sitting(active: bool) -> void:
 
 
 func _set_tool(tool_id: String) -> void:
-	if tool == null or tool_id == _tool_id:
+	if tool == null:
+		return
+	if tool_id == _tool_id:
+		tool.visible = tool.get_node_or_null("Mesh") != null and (tool.get_node("Mesh") as MeshInstance3D).mesh != null and _show_target < 0.5
 		return
 	_tool_id = tool_id
 	var mi: MeshInstance3D = tool.get_node_or_null("Mesh")
@@ -237,10 +250,33 @@ func _set_tool(tool_id: String) -> void:
 		"shovel":
 			mesh = CharacterModel.shovel()
 	mi.mesh = mesh
-	# 도구 자리(Tool)는 칼·국자처럼 손 아래 앞으로 향한다. 긴 뜰채는 그대로면 몸 뒤 물속으로 꽂히므로
-	# 위로 세워 들고(살짝 앞으로), 휘두르면(도끼질 동작) 앞으로 떠 올리는 모양이 된다.
-	mi.rotation = Vector3(deg_to_rad(NET_PITCH_DEG), 0.0, deg_to_rad(NET_ROLL_DEG)) if tool_id == "fishing_net" else Vector3.ZERO
-	tool.visible = mesh != null
+	var grip: Vector2 = TOOL_GRIPS.get(tool_id, Vector2.ZERO)
+	mi.basis = Basis(Vector3.RIGHT, deg_to_rad(180.0 + grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
+	tool.visible = mesh != null and _show_target < 0.5
+
+
+## 도끼 자리에 끼우는 휘두르는 도구 (빈 문자열 = 없음). 그동안 도끼 메시는 숨긴다.
+func _set_swing(tool_id: String) -> void:
+	if axe == null:
+		return
+	var axe_mesh: MeshInstance3D = axe.get_node_or_null("Mesh")
+	if axe_mesh != null:
+		axe_mesh.visible = tool_id.is_empty()
+	var swing: MeshInstance3D = axe.get_node_or_null("Swing")
+	if swing == null:
+		swing = MeshInstance3D.new()
+		swing.name = "Swing"
+		swing.material_override = clay_material
+		axe.add_child(swing)
+	match tool_id:
+		"fishing_net":
+			swing.mesh = CharacterModel.landing_net()
+		"shovel":
+			swing.mesh = CharacterModel.shovel()
+		_:
+			swing.mesh = null
+	var grip: Vector3 = SWING_GRIPS.get(tool_id, Vector3.ZERO)
+	swing.basis = Basis(Vector3.BACK, deg_to_rad(grip.z)) * Basis(Vector3.RIGHT, deg_to_rad(grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
 
 
 ## 잡은 물건을 두 손으로 앞으로 쭉 내밀어 들고 자랑한다. mesh 가 null 이면 내려놓는다. 드는 동안 도구는 숨긴다.
@@ -275,6 +311,8 @@ func show_off(mesh: Mesh, mesh_scale: float = 1.0, material: Material = null) ->
 		rod.visible = false
 	if axe != null:
 		axe.visible = false
+	if tool != null:
+		tool.visible = false
 
 
 func is_showing_off() -> bool:
