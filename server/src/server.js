@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { defaultConfig } from './config.js';
-import { CloseCode, ErrorCode, MOTIONS, PROTOCOL_VERSION, TOPICS } from './protocol.js';
+import { CloseCode, ErrorCode, MOTIONS, PROTOCOL_VERSION, SAY_GAP_MS, SAY_MAX_CHARS, TOPICS } from './protocol.js';
 import { RoomManager } from './rooms.js';
 import { RoomStore } from './persistence.js';
 import { loadGameData, pickWeighted } from './gamedata.js';
@@ -233,7 +233,35 @@ export function createServer(overrides = {}) {
     sendInventory(player);
     sendProfile(player);
     room.broadcast({ t: 'drop_gone', id: d.id, by: player.id });
+    act(room, player, 'pick');
     rooms.save(room);
+  }
+
+  /** v0.12: 다른 사람 화면에 보일 몸짓 (줍기·심기·놓기·건네기 등). 판정과 상관없는 연출용 알림. */
+  function act(room, player, kind, e = '') {
+    room.broadcast({ t: 'act', id: player.id, kind, e }, player.id);
+  }
+
+  /**
+   * v0.12: 말풍선. 대화하는 사람의 화면에 뜬 대사(주민 말 · 내가 고른 말)를 둘레 사람에게도 머리 위 말풍선으로 보여 준다.
+   * 대사는 클라이언트가 고른 꾸밈 글자라 판정에 쓰지 않는다. 대화 중인 주민 것만, 길이·간격을 제한한다.
+   */
+  // 클라이언트에서만 대화가 이어지는 가게 사람들 (상점 주인 · 박물관 관장 · 조종사 · 떠돌이 상인) — 서버는 대화 중인지 모른다.
+  const SAY_KEEPERS = new Set(
+    [data.shop?.keeper?.id, data.museum?.curator?.id, data.airport?.pilot?.id, ...(data.events?.daily ?? []).map((e) => e?.npc?.id)].filter(Boolean),
+  );
+
+  function handleSay(ctx, msg, fail) {
+    const { player, room } = ctx;
+    const who = msg.who === 'npc' ? 'npc' : 'me';
+    const keeper = who === 'npc' && SAY_KEEPERS.has(msg.npc);
+    if (!keeper && (player.talkingTo === null || (who === 'npc' && msg.npc !== player.talkingTo))) return fail(ErrorCode.notTalking);
+    const t = now();
+    if (t - (player.lastSayAt ?? -Infinity) < SAY_GAP_MS) return fail(ErrorCode.tooFast);
+    const text = typeof msg.tx === 'string' ? msg.tx.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, SAY_MAX_CHARS) : '';
+    if (!text) return fail(ErrorCode.badMessage);
+    player.lastSayAt = t;
+    room.broadcast({ t: 'say', id: player.id, npc: who === 'npc' ? msg.npc : '', tx: text }, player.id);
   }
 
   const fishing = createFishing({
@@ -254,6 +282,7 @@ export function createServer(overrides = {}) {
       const room = roomOf(player);
       if (room) room.dirty = true; // 스냅샷에 fishing 플래그를 실어 보낸다
     },
+    publish: (player, ev) => roomOf(player)?.broadcast({ t: 'act', id: player.id, kind: 'fish', ...ev }, player.id),
     onInventoryChanged: (player, fishId) => {
       const room = roomOf(player);
       sendInventory(player);
@@ -271,6 +300,7 @@ export function createServer(overrides = {}) {
     const npc = player.talkingTo !== null ? room.npcs.get(player.talkingTo) : null;
     if (npc && npc.talkingWith === player.id) endTalk(npc, now());
     if (npc && notify) sendTo(player, { t: 'talk_closed', npc: npc.id });
+    if (npc) room.broadcast({ t: 'act', id: player.id, kind: 'talk_end', e: npc.id }, player.id);
     player.talkingTo = null;
     player.offer = null;
     room.npcsDirty = true;
@@ -491,6 +521,7 @@ export function createServer(overrides = {}) {
         beginTalk(npc, player, now());
         player.talkingTo = npc.id;
         room.npcsDirty = true;
+        room.broadcast({ t: 'act', id: player.id, kind: 'talk', e: npc.id }, player.id);
 
         const today = clock.day();
         const profile = player.profile;
@@ -732,6 +763,7 @@ export function createServer(overrides = {}) {
       sendInventory(player);
       sendProfile(player);
       room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
+      act(room, player, 'pick');
       rooms.save(room);
       return;
     }
@@ -765,6 +797,7 @@ export function createServer(overrides = {}) {
       room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
     }
     send(ctx.ws, { t: 'plant_result', rid: msg.rid, id, kind, x, z });
+    act(room, player, 'plant');
     sendInventory(player);
     sendProfile(player);
     rooms.save(room);
@@ -854,6 +887,7 @@ export function createServer(overrides = {}) {
     sendInventory(player);
     sendProfile(player);
     room.broadcast({ t: 'museum', ...museumWire(room), id: slot.id, by: player.id });
+    act(room, player, 'give', slot.id);
     rooms.save(room);
   }
 
@@ -913,6 +947,7 @@ export function createServer(overrides = {}) {
         sendInventory(player);
         sendProfile(player);
         room.broadcast({ t: 'placed', rid: msg.rid, by: player.id, f: placedWire(f, (uid) => room.slotOfUid(uid)) });
+        act(room, player, 'place');
         rooms.save(room);
         return;
       }
@@ -925,6 +960,7 @@ export function createServer(overrides = {}) {
         sendInventory(player);
         sendProfile(player);
         room.broadcast({ t: 'unplaced', rid: msg.rid, id: f.id });
+        act(room, player, 'place');
         rooms.save(room);
         return;
       }
@@ -1123,6 +1159,7 @@ export function createServer(overrides = {}) {
         return fail(ErrorCode.badMessage);
     }
     broadcastHomeFurniture(room, unitId, player, msg.rid);
+    act(room, player, 'place');
     rooms.save(room);
   }
 
@@ -1269,6 +1306,8 @@ export function createServer(overrides = {}) {
       }
       case 'fish_cancel':
         return fishing.cancel(player);
+      case 'say':
+        return handleSay(ctx, msg, fail);
       case 'equip':
       case 'inv_move':
       case 'inv_discard':
@@ -1421,6 +1460,7 @@ export function createServer(overrides = {}) {
       case 'msg_send':
       case 'msg_read':
       case 'fish_cancel':
+      case 'say':
       case 'equip':
       case 'inv_move':
       case 'inv_discard':
@@ -1567,6 +1607,8 @@ export function createServer(overrides = {}) {
           p.approachedAt ??= {};
           p.approachedAt[npc.id] = t;
           sendTo(p, { t: 'npc_greet', npc: npc.id });
+          // 둘레 사람에게도 이 주민이 그 사람에게 손을 흔들며 말을 거는 모습이 보인다 (인사받은 사람은 npc_greet 로 따로 그린다).
+          room.broadcast({ t: 'npc_emote', npc: npc.id, e: 'hello', to: p.id, m: npc.mood, from: '' }, p.id);
         },
       });
       if (approached) room.npcsDirty = true;

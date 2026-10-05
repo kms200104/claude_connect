@@ -62,6 +62,8 @@ export function unlinkWallet(profile, sol) {
 
 /** schema 4 → 5 화폐 단위 배율. */
 export const MONEY_SCALE_V5 = 100;
+/** schema 5 → 6: 아파트 평면도를 가로·세로 1.4배로 키웠다 (floorplans.json size_scale). 그 전 저장의 집 가구 자리도 같이 옮긴다. */
+export const HOME_SCALE_V6 = 1.4;
 
 /** 한 사람(uid)의 저장되는 상태. 접속이 끊겨도 방 파일에 남는다. */
 function newProfile(uid, slot, cfg, data) {
@@ -95,6 +97,22 @@ function newProfile(uid, slot, cfg, data) {
     age: data?.civic?.player_age?.[(slot - 1) % (data.civic.player_age.length || 1)] ?? 29,
     chats: {}, // 마을톡 대화방 (v0.11, messenger.js)
   };
+}
+
+/** 집 가구 자리(평면도 기준 미터)를 k 배로 (평면도를 키운 버전의 저장을 옮길 때). */
+function scaleHomeItems(raw, k) {
+  if (k === 1 || !raw || typeof raw !== 'object') return raw;
+  const out = {};
+  for (const [unitId, list] of Object.entries(raw)) {
+    out[unitId] = Array.isArray(list) ? list.map((f) => (f && Number.isFinite(f.x) && Number.isFinite(f.z) ? { ...f, x: f.x * k, z: f.z * k } : f)) : list;
+  }
+  return out;
+}
+
+/** 마을톡 하루 기록 { day, n, from: [주민 id] } (messenger.js). 모양이 틀리면 없는 것으로. */
+function sanitizeMsgDay(raw) {
+  if (!raw || typeof raw !== 'object' || !Number.isInteger(raw.day)) return undefined;
+  return { day: raw.day, n: Math.max(0, intOr(raw.n, 0)), from: Array.isArray(raw.from) ? raw.from.filter((id) => typeof id === 'string').slice(0, 32) : [] };
 }
 
 /** 배운 감정표현 (모르는 id 는 버리고, 기본 감정표현은 항상 안다) 과 퀵슬롯. */
@@ -280,7 +298,7 @@ export class Room {
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
     room.homes = sanitizeHomes(world.homes, data.units);
-    room.homeItems = sanitizeHomeItems(world.homeItems, data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
+    room.homeItems = sanitizeHomeItems(scaleHomeItems(world.homeItems, Number.isInteger(saved.schema) && saved.schema < 6 ? HOME_SCALE_V6 : 1), data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
     room.homeItemSeq = Math.max(0, intOr(world.homeItemSeq, 0));
     if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
     if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
@@ -318,6 +336,8 @@ export class Room {
         income: { amount: Math.max(0, Math.trunc(finite(p.income?.amount, 0))), history: Array.isArray(p.income?.history) ? p.income.history.filter(Number.isFinite).slice(-8) : [] },
         civic: sanitizeCivic(p.civic),
         chats: data.messenger ? sanitizeChats(p.chats, data.messenger) : {},
+        // 오늘 먼저 온 마을톡 수 (하루 상한). 빠뜨리면 서버를 다시 켤 때마다 같은 날 연락이 또 온다.
+        msgDay: sanitizeMsgDay(p.msgDay),
       });
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);

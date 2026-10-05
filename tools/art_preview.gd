@@ -15,6 +15,8 @@ var _cam: Vector3 = Vector3(0.0, 30.0, 30.0)
 var _at: Vector3 = Vector3.ZERO
 var _ids: PackedStringArray = []
 var _stats: bool = false
+## 장면을 세운 뒤 찍기까지 기다리는 시간 (--wait=초, 감정표현 효과처럼 움직이는 것을 볼 때).
+var _wait: float = 0.5
 
 
 func _ready() -> void:
@@ -31,6 +33,8 @@ func _ready() -> void:
 			_ids = arg.trim_prefix("--ids=").split(",")
 		elif arg == "--stats":
 			_stats = true
+		elif arg.begins_with("--wait="):
+			_wait = float(arg.trim_prefix("--wait="))
 	if _what == "village":
 		var village: Node = load("res://game/village/village.tscn").instantiate()
 		add_child(village)
@@ -145,19 +149,19 @@ func _ready() -> void:
 			else:
 				_camera(Vector3(40.0, mid_y, 0.0), Vector3(0.0, mid_y, 0.0), fov)
 		"expressions":
-			var emotes: PackedStringArray = ["happy", "surprise", "angry", "sad", "think", "sleepy"]
-			var hairs: PackedStringArray = ["short", "bob", "spiky", "long", "buzz", "pigtails"]
+			var emotes: PackedStringArray = ["happy", "surprise", "angry", "sad", "think", "sleepy", "love"]
+			var hairs: PackedStringArray = ["short", "bob", "spiky", "long", "buzz", "pigtails", "curly"]
 			for i: int in emotes.size():
 				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
 				add_child(rig)
-				rig.position = Vector3((2.5 - float(i)) * 1.1, 0.0, 0.0)
+				rig.position = Vector3((3.0 - float(i)) * 1.1, 0.0, 0.0)
 				rig.set_look(GameData.player_look(1, {"hair": hairs[i], "hair_color": "brown"}))
 				rig.set_held("")
 				rig.tree.active = false
 				rig.play_emote(emotes[i])
 				# 애니메이션 트리를 멈춰 두었으니 표정이 바로 감춰지지 않게 리그 갱신을 끈다.
 				rig.set_process(false)
-			_camera(Vector3(0.0, 0.5, -24.0), Vector3(0.0, 0.45, 0.0), 4.0)
+			_camera(Vector3(0.0, 0.6, -24.0), Vector3(0.0, 0.55, 0.0), 5.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():
@@ -202,7 +206,7 @@ func _ready() -> void:
 					meshes.append(PartMesh.get_mesh(info.id, info.model))
 			_grid_meshes(meshes, 2.0, 5)
 			_camera(Vector3(0.0, 7.5, 9.5), Vector3(0.0, 0.0, 0.5), 45.0)
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(_wait).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(_out)
 	print("[preview] %s" % _out)

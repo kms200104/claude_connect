@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
+import { SAVE_SCHEMA_VERSION } from '../src/persistence.js';
 import { Client, sleep, uid } from './helpers.js';
 
 // random=0 → 항상 첫 물고기(붕어, 창 700ms), 가짜 입질 0번, 최소 대기. 시간은 1/100로 줄인다.
@@ -85,7 +86,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
 
     await server.rooms.flushAll();
     const saved = JSON.parse(readFileSync(path.join(saveDir, `${welcome.code}.json`), 'utf8'));
-    assert.equal(saved.schema, 5);
+    assert.equal(saved.schema, SAVE_SCHEMA_VERSION);
     assert.deepEqual(saved.profiles[Object.keys(saved.profiles)[0]].slots[5], { id: 'crucian', n: 1 });
     assert.equal(saved.world.totalCatches, 1);
     assert.equal(saved.world.species.crucian, 1);

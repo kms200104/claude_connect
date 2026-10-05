@@ -173,6 +173,10 @@ func play_emote(emote_id: String) -> void:
 	tree.set("parameters/EmoteSwitch/transition_request", emote_id)
 	tree.set("parameters/EmoteShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 	_show_expression(emote_id)
+	# 머리 둘레 효과 (눈물 · Zzz · 하트 …) — 감정표현 동작 길이만큼.
+	var anims: AnimationPlayer = get_node_or_null("AnimationPlayer")
+	var length: float = anims.get_animation(emote_id).length if anims != null and anims.has_animation(emote_id) else 1.5
+	EmoteFx.play(visual, emote_id, length)
 
 
 func is_emoting() -> bool:

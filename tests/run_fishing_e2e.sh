@@ -11,7 +11,10 @@ cleanup() { [ -n "${KEEP_LOGS:-}" ] && cp -r "$DIR" "$KEEP_LOGS" 2>/dev/null; ki
 trap cleanup EXIT
 
 start_server() {
-  (cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" FISH_TIME_SCALE=0.25 MOVE_SLACK_M=100 RECONNECT_GRACE_MS=5000 exec node src/index.js >>"$DIR/server.log" 2>&1) &
+  # 마을 시계를 정오로 맞춘다 (밤에는 주민이 집 앞에 머물러 다가오지 않고, 물고기도 시간대마다 다르다).
+NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
+OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
+(cd "$ROOT/server" && CLOCK_OFFSET_MIN="$OFFSET" PORT="$PORT" SAVE_DIR="$DIR/saves" FISH_TIME_SCALE=0.25 MOVE_SLACK_M=100 RECONNECT_GRACE_MS=5000 exec node src/index.js >>"$DIR/server.log" 2>&1) &
   SERVER_PID=$!
 }
 

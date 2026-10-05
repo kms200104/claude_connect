@@ -56,6 +56,8 @@ export function createFishing({
   derby = () => null,
   // 같은 낚시터에서 함께 낚고 있는 다른 사람 수 (같이 낚시 보너스).
   companions = () => 0,
+  // v0.12: 다른 사람 화면에 보일 낚시 장면 (던지기 · 톡 · 입질 · 끌어올리기 · 낚음/놓침). 판정과는 상관없는 연출용.
+  publish = () => {},
 }) {
   const scaled = (ms) => ms * cfg.fishTimeScale;
   const rand = (min, max) => min + random() * (max - min);
@@ -77,6 +79,7 @@ export function createFishing({
     clearTimers(session);
     player.fishing = null;
     notify(player, { t: 'fish_result', rid: session.rid, ...result });
+    publish(player, result.ok ? { e: 'land', fish: result.fish } : { e: 'end', reason: result.reason });
     onFishingChanged(player);
   }
 
@@ -110,13 +113,18 @@ export function createFishing({
     };
     player.fishing = session;
     notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop, shadow: shadowSize(fish) });
+    publish(player, { e: 'cast', spot: spot.id });
     onFishingChanged(player);
 
     // 입질 일정: 가짜 입질 0~N번 뒤에 진짜 입질.
     const fakes = Math.floor(random() * (cfg.fishMaxFakeNibbles + 1));
     let at = rand(cfg.fishFirstNibbleMinMs, cfg.fishFirstNibbleMaxMs) * pace;
     for (let i = 0; i < fakes; i++) {
-      schedule(session, at, () => player.fishing === session && notify(player, { t: 'fish_nibble', rid }));
+      schedule(session, at, () => {
+        if (player.fishing !== session) return;
+        notify(player, { t: 'fish_nibble', rid });
+        publish(player, { e: 'nibble' });
+      });
       at += rand(cfg.fishGapMinMs, cfg.fishGapMaxMs) * pace;
     }
     schedule(session, at, () => {
@@ -124,6 +132,7 @@ export function createFishing({
       session.phase = 'bite';
       session.biteAt = now();
       notify(player, { t: 'fish_bite', rid, windowMs: fish.hook_window_ms });
+      publish(player, { e: 'bite' });
       // 허용 창 + 네트워크 여유 안에 아무 응답이 없으면 도망간다.
       session.timers.push(
         setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.escaped }), fish.hook_window_ms + cfg.fishHookGraceMs),
@@ -168,6 +177,7 @@ export function createFishing({
     session.phase = 'reel';
     session.reel = { ...need, at: now() };
     notify(player, { t: 'fish_reel', rid, taps: need.taps, ms: need.ms });
+    publish(player, { e: 'reel' });
     session.timers.push(
       setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.snapped }), need.ms + cfg.fishHookGraceMs),
     );

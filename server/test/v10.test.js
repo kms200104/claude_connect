@@ -1,22 +1,27 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
+import { Room } from '../src/rooms.js';
 import { defaultFurniture, interiorOrigin, lobbyOf, onFloor, planIdOf, roomAt } from '../src/homes.js';
 import { Client, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
 
+const floorplans = JSON.parse(readFileSync(new URL('../../data/realestate/floorplans.json', import.meta.url), 'utf8'));
+
 describe('v0.10 집 안 계산', () => {
   it('평면도 다섯 가지: 26평 A/B · 27평 · 34평 · 35평, 크기가 평형에 맞다', () => {
     assert.deepEqual([...data.plans.keys()].sort(), ['26a', '26b', '27', '34', '35']);
     for (const p of data.plans.values()) {
-      const area = p.rooms.reduce((a, r) => a + r.rects.reduce((b, [x0, z0, x1, z1]) => b + (x1 - x0) * (z1 - z0), 0), 0);
+      // v0.12: 게임 안 집은 가로·세로 size_scale 배 (넓이 size_scale² 배) 로 키웠다. 평면도 자체의 넓이는 그 배율을 나눠 본다.
+      const k = floorplans.size_scale ?? 1;
+      const area = p.rooms.reduce((a, r) => a + r.rects.reduce((b, [x0, z0, x1, z1]) => b + (x1 - x0) * (z1 - z0), 0), 0) / (k * k);
       const small = p.pyeong < 30;
       // 전용 59㎡ 는 발코니 확장 포함 70~90㎡, 84㎡ 는 95~125㎡ 정도.
       assert.ok(small ? area > 65 && area < 92 : area > 92 && area < 128, `${p.id} 바닥 ${area.toFixed(1)}㎡`);
@@ -156,5 +161,18 @@ describe('v0.10 집 안 서버 연동', () => {
     assert.equal(model.plan, '35');
     assert.equal(model.edit, false);
     assert.equal(model.owner, 0);
+  });
+
+  it('v0.12: 집을 1.4배로 키우기 전(schema 5) 저장의 집 가구는 같은 배율로 옮겨진다', () => {
+    const unit = data.units[0];
+    const plan = data.plans.get(planIdOf(data.realestate, unit));
+    const def = defaultFurniture(plan)[0];
+    const k = floorplans.size_scale;
+    const old = { id: 'h1', item: def.item, x: def.x / k, z: def.z / k, rot: 0 };
+    const saved = (schema) => ({ schema, code: 'ABCDEF', createdAt: 1, profiles: {}, world: { homeItems: { [unit.id]: [old] } } });
+    const moved = Room.fromSave(saved(5), 2, defaultConfig, data).homeItems[unit.id][0];
+    assert.ok(Math.abs(moved.x - def.x) < 1e-9 && Math.abs(moved.z - def.z) < 1e-9, `옛 자리 ×${k}: ${moved.x}, ${moved.z}`);
+    const kept = Room.fromSave(saved(6), 2, defaultConfig, data).homeItems[unit.id]?.[0];
+    assert.ok(!kept || (kept.x === old.x && kept.z === old.z), '새 저장은 그대로');
   });
 });

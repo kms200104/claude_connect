@@ -2,7 +2,11 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 11
+const VERSION: int = 12
+
+## v12 말풍선(say): 대사 간격(ms)과 최대 글자 수 (서버와 같다).
+const SAY_GAP_MS: int = 250
+const SAY_MAX_CHARS: int = 90
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"

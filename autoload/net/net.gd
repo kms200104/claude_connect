@@ -28,6 +28,10 @@ signal npcs_received(server_time_ms: float, states: Array[NetNpcState])
 signal chop_succeeded(tree_id: String, item_id: String, felled: bool)
 ## 상대가 한 동작 (지금은 도끼질만). target = 나무 id.
 signal peer_action(id: int, kind: String, target: String)
+## v12: 상대의 동작 알림 전체 (낚시 장면처럼 추가 값이 있는 것: kind = fish 면 e = cast|nibble|bite|reel|land|end, spot, fish).
+signal peer_act(id: int, kind: String, msg: Dictionary)
+## v12: 상대가 대화 중에 화면에 띄운 대사 (npc 가 비면 상대 자신의 말).
+signal peer_said(id: int, npc_id: String, text: String)
 signal talk_opened(reply: TalkReply)
 ## 서버가 대화를 끝냄 (멀어졌거나 시간 초과).
 signal talk_closed(npc_id: String)
@@ -183,6 +187,8 @@ var _user_closed: bool = false
 var _join_fallback_tried: bool = false
 var _rid_counter: int = 0
 var _fishing_rid: String = ""
+## 마지막으로 보낸 말풍선 대사 시각 (SAY_GAP_MS 거르기).
+var _last_say_ms: int = -100000
 var _pending: Dictionary[String, String] = {}  # rid → 요청 종류 (거부됐을 때 어떤 요청인지 알리려고)
 var _clock_game_ms: float = 0.0
 var _clock_scale: float = 1.0
@@ -381,6 +387,22 @@ func pick_flower(flower_id: String) -> void:
 ## 감정표현·몸짓을 한다 (근처 주민이 반응한다). 결과를 기다리지 않는다.
 func send_emote(emote_id: String) -> void:
 	_send({"t": "emote", "e": emote_id})
+
+
+## 대화 중 화면에 띄운 대사를 둘레 사람에게 말풍선으로 (npc_id = 주민의 말, 빈 문자열 = 내 말). 결과를 기다리지 않는다.
+## 서버는 SAY_GAP_MS 보다 잦은 대사를 버리니, 잇달아 오면 버리지 않고 간격(+여유)을 두고 차례로 보낸다.
+func send_say(npc_id: String, text: String) -> void:
+	var line: String = text.strip_edges().left(NetProtocol.SAY_MAX_CHARS)
+	if line.is_empty() or state != State.ONLINE:
+		return
+	var now: int = Time.get_ticks_msec()
+	var at: int = maxi(now, _last_say_ms + NetProtocol.SAY_GAP_MS + 60)
+	_last_say_ms = at
+	if at > now:
+		await get_tree().create_timer(float(at - now) / 1000.0).timeout
+		if state != State.ONLINE:
+			return
+	_send({"t": "say", "who": "npc" if not npc_id.is_empty() else "me", "npc": npc_id, "tx": line})
 
 
 ## 감정표현 퀵슬롯 (배운 것만, 최대 GameData.emote_quick_slots 개).
@@ -716,6 +738,9 @@ func _handle_text(text: String) -> void:
 			if str(msg.get("kind", "")) == "emote":
 				peer_emoted.emit(int(msg.get("id", 0)), str(msg.get("e", "")))
 			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", msg.get("e", ""))))
+			peer_act.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), msg)
+		"say":
+			peer_said.emit(int(msg.get("id", 0)), str(msg.get("npc", "")), str(msg.get("tx", "")))
 		"chop_result":
 			_pending.erase(str(msg.get("rid", "")))
 			last_chop_count = int(msg.get("n", 1))

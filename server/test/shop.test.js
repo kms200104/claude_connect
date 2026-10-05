@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { levelFor, sellValue, stockFor } from '../src/shop.js';
+import { SAVE_SCHEMA_VERSION } from '../src/persistence.js';
 import { Client, uid } from './helpers.js';
 
 const fakeClock = () => ({ hour: () => 12, day: () => 100, gameMs: () => 0, scale: 1 });
@@ -196,7 +197,7 @@ describe('상점 · 가구 설치 · 옷', () => {
         const back = await a2.next((m) => m.t === 'inventory' && m.slots.some((x) => x?.id === 'wood_chair'));
         assert.ok(back);
         const saved = JSON.parse(readFileSync(path.join(dir, `${w.code}.json`), 'utf8'));
-        assert.equal(saved.schema, 5);
+        assert.equal(saved.schema, SAVE_SCHEMA_VERSION);
       } finally {
         await s2.close();
       }

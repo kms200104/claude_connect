@@ -23,6 +23,11 @@ const TARGET_EXIT: String = "exit"
 const DECOR_BUTTON_Y: float = 340.0
 
 var interior: HomeInterior = null
+## 창밖 풍경을 찍는 곳 (마을의 아파트 동). 없으면 창은 하늘색.
+@export var apartments: ApartmentSite
+## 그 집 발코니에서 바깥으로 이만큼 나간 자리에서 찍는다 (자기 동 벽이 가리지 않게).
+@export_range(0.0, 10.0, 0.5, "suffix:m") var view_step_out: float = 2.5
+var _view: HomeView = null
 var window: HomeWindow = null
 var editor: HomeEditor = null
 var _decor_button: Button = null
@@ -31,6 +36,9 @@ var _outdoor_distance: float = 7.5
 
 
 func _ready() -> void:
+	_view = HomeView.new()
+	_view.name = "HomeView"
+	add_child(_view)
 	interior = HomeInterior.new()
 	interior.name = "Interior"
 	interior.clay_material = clay_material
@@ -119,6 +127,8 @@ func _on_door(unit: String, position: Vector3) -> void:
 		interior.build(Home.plan)
 		interior.visible = true
 		interior.sync_furniture(Home.furniture)
+		interior.set_view(null)
+		_capture_view(unit)
 		# 현관에 들어서면 집 안(남쪽, 발코니 쪽)을 바라본다.
 		player.body.rotation.y = PI
 		if sky != null:
@@ -141,6 +151,15 @@ func _on_door(unit: String, position: Vector3) -> void:
 			camera_rig.distance = _outdoor_distance
 	if camera_rig != null:
 		camera_rig.snap_to_target()
+
+
+## 창밖 풍경: 마을의 이 집 발코니 앞에서 여섯 방향을 찍어 창유리에 넣는다 (여섯 프레임쯤, 그동안은 하늘색 유리).
+func _capture_view(unit: String) -> void:
+	if apartments == null:
+		return
+	var view: HomeView.View = await _view.capture(apartments.unit_position(unit) + Vector3(0.0, 0.4, view_step_out))
+	if view != null and Home.unit == unit:
+		interior.set_view(view)
 
 
 func _on_failed(kind: String, code: String) -> void:

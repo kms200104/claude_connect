@@ -84,6 +84,20 @@ func _run() -> void:
 		await _put(Home.to_world(living.main_rect().get_center()) + Vector3(0.0, 0.1, 0.0), Vector3.FORWARD)
 		await _wait(0.8)
 		await _shot("h_%s_living" % plan_id)
+		# 창밖 (v0.12): 남쪽 큰 창을 낮게 바라본다 — 마을의 그 집 자리에서 찍은 풍경이 유리 너머로 보여야 한다.
+		var rig: FollowCamera = _village.get_node("CameraRig")
+		var keep: Vector3 = Vector3(rig.yaw_degrees, rig.pitch_degrees, rig.distance)
+		rig.yaw_degrees = 180.0
+		rig.pitch_degrees = 18.0
+		rig.distance = 5.0
+		var south: Rect2 = living.main_rect()
+		await _put(Home.to_world(Vector2(south.get_center().x, south.end.y - 1.2)) + Vector3(0.0, 0.1, 0.0), Vector3.BACK)
+		rig.snap_to_target()
+		await _wait(0.8)
+		await _shot("h_%s_window" % plan_id)
+		rig.yaw_degrees = keep.x
+		rig.pitch_degrees = keep.y
+		rig.distance = keep.z
 		home.editor.start()
 		await _wait(1.0)
 		await _shot("h_%s_top" % plan_id)

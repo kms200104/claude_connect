@@ -270,7 +270,7 @@ toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 interaction = NodePath("../InteractionController")
 
-[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud")]
+[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud", "apartments")]
 script = ExtResource("69_home")
 player = NodePath("../Player")
 camera_rig = NodePath("../CameraRig")
@@ -279,6 +279,7 @@ hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
+apartments = NodePath("../Apartments")
 
 [node name="Mirrors" type="Node3D" parent="."]
 script = ExtResource("62_mirror_site")

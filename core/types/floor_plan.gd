@@ -43,12 +43,13 @@ var spawn: Vector2 = Vector2.ZERO
 var defaults: Array[Default] = []
 
 
-static func from_dict(plan_id: String, raw: Dictionary) -> FloorPlan:
+## size_scale (v0.12, floorplans.json): 평면도 모두를 가로·세로 이만큼 키운다 (서버 planInMeters 와 같다).
+static func from_dict(plan_id: String, raw: Dictionary, size_scale: float = 1.0) -> FloorPlan:
 	var p: FloorPlan = FloorPlan.new()
 	p.id = plan_id
 	p.display_name = str(raw.get("name", plan_id))
 	p.pyeong = int(raw.get("pyeong", 0))
-	var s: float = float(raw.get("scale", 0.02))
+	var s: float = float(raw.get("scale", 0.02)) * size_scale
 	var lo: Vector2 = Vector2(INF, INF)
 	var hi: Vector2 = Vector2(-INF, -INF)
 	for room: Variant in raw.get("rooms", []):

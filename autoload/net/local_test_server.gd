@@ -307,7 +307,7 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_save()
 		"talk_end":
 			_talking = ""
-		"bank_quote", "civic_info", "emote", "emote_quick":
+		"bank_quote", "civic_info", "emote", "emote_quick", "say":
 			pass
 		_:
 			if rid != null:
