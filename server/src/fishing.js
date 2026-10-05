@@ -3,6 +3,19 @@ import { ErrorCode, FishFail } from './protocol.js';
 import { distanceToSpot, pickFish } from './gamedata.js';
 import { addItem, canAdd, hasFreeSpace } from './inventory.js';
 import { earn } from './economy.js';
+import { shallowAt } from './shoal.js';
+
+/** 같이 낚시 (v0.9): 같은 낚시터에서 친구가 함께 낚고 있으면 입질이 빨라지고(×0.7) 귀한 물고기가 1.35배 잘 문다. */
+export const COOP_FISHING = { wait: 0.7, rare: 1.35, range: 9 };
+
+/**
+ * 얕은 곳·깊은 곳 (v0.9): 가장 가까운 물이 여울이면 작은 물고기(S·M)만, 깊은 물이면 큰 물고기(L)가 1.6배 잘 문다.
+ * 돌려주는 값: 물고기 → 가중치 배율.
+ */
+export function zoneWeight(zone, f) {
+  if (zone === 'shallow') return f.size === 'L' ? 0 : f.size === 'S' ? 1.4 : 1;
+  return f.size === 'L' ? 1.6 : 1;
+}
 
 /**
  * 낚시 판정(서버 권위).
@@ -24,6 +37,8 @@ export function createFishing({
   environment = () => ({ hour: 12, weather: 'clear' }),
   // 낚시 대회가 열려 있으면 그 이벤트 ({ def }) — 희귀한 물고기가 더 잘 잡히고, 낚을 때마다 상금.
   derby = () => null,
+  // 같은 낚시터에서 함께 낚고 있는 다른 사람 수 (같이 낚시 보너스).
+  companions = () => 0,
 }) {
   const scaled = (ms) => ms * cfg.fishTimeScale;
   const rand = (min, max) => min + random() * (max - min);
@@ -59,8 +74,13 @@ export function createFishing({
 
     const { hour, weather } = environment(player);
     const contest = derby(player);
-    const boost = contest ? contest.def.rare_boost ?? 1 : 1;
-    const fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.rarity === 'rare' ? boost : 1));
+    const coop = companions(player, spot) > 0;
+    const boost = (contest ? contest.def.rare_boost ?? 1 : 1) * (coop ? COOP_FISHING.rare : 1);
+    const zone = shallowAt(spot, player.x, player.z) ? 'shallow' : 'deep';
+    const weight = (f) => f.weight * (f.rarity === 'rare' ? boost : 1) * zoneWeight(zone, f);
+    let fish = pickFish(spot, data.fish, random, hour, weather, weight);
+    if (weight(fish) <= 0) fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.size === 'L' ? 0.0001 : 1));
+    const pace = coop ? COOP_FISHING.wait : 1;
     const session = {
       rid,
       spot,
@@ -72,15 +92,15 @@ export function createFishing({
       biteAt: 0,
     };
     player.fishing = session;
-    notify(player, { t: 'fish_started', rid, spot: spot.id });
+    notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop });
     onFishingChanged(player);
 
     // 입질 일정: 가짜 입질 0~N번 뒤에 진짜 입질.
     const fakes = Math.floor(random() * (cfg.fishMaxFakeNibbles + 1));
-    let at = rand(cfg.fishFirstNibbleMinMs, cfg.fishFirstNibbleMaxMs);
+    let at = rand(cfg.fishFirstNibbleMinMs, cfg.fishFirstNibbleMaxMs) * pace;
     for (let i = 0; i < fakes; i++) {
       schedule(session, at, () => player.fishing === session && notify(player, { t: 'fish_nibble', rid }));
-      at += rand(cfg.fishGapMinMs, cfg.fishGapMaxMs);
+      at += rand(cfg.fishGapMinMs, cfg.fishGapMaxMs) * pace;
     }
     schedule(session, at, () => {
       if (player.fishing !== session) return;

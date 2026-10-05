@@ -58,6 +58,11 @@ var running: bool = false
 var move_intent: Vector3 = Vector3.ZERO
 ## 브레이크를 잡고 미끄러지는 중.
 var braking: bool = false
+## 여울(얕은 물)에 들어가 있는지 (v9): 걸음이 느려지고 물을 첨벙인다.
+var wading: bool = false
+## 물속에서 걷는 빠르기 배율.
+const WADE_SPEED: float = 0.55
+var _splash_left: float = 0.0
 
 var _input_locks: Dictionary[StringName, bool] = {}
 var _look_yaw: float = 0.0
@@ -73,6 +78,9 @@ func _physics_process(delta: float) -> void:
 	var move_dir: Vector3 = _input_to_world(input)
 	move_intent = move_dir * minf(input.length(), 1.0)
 	var top_speed: float = run_speed if running else max_speed
+	wading = not Field.zone_at(global_position, 0.1).is_empty()
+	if wading:
+		top_speed *= WADE_SPEED
 	var target_velocity: Vector3 = move_dir * top_speed * minf(input.length(), 1.0)
 
 	var horizontal: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
@@ -101,8 +109,14 @@ func _physics_process(delta: float) -> void:
 	var before: Vector3 = global_position
 	move_and_slide()
 	if not braking:
-		_footsteps.advance(Vector2(global_position.x - before.x, global_position.z - before.z).length(), running, global_position, false)
+		var step: float = Vector2(global_position.x - before.x, global_position.z - before.z).length()
+		_footsteps.advance(step, running, global_position, false)
 		_turn_body(move_dir, input.length(), delta)
+		if wading and step > 0.0:
+			_splash_left -= delta
+			if _splash_left <= 0.0 and is_inside_tree():
+				_splash_left = 0.28
+				Puff.burst(get_parent(), global_position + Vector3(0.0, 0.25, 0.0), Color(0.85, 0.95, 1.0, 0.8), 3, 0.35, 0.3, 0.06, 0.4)
 	if rig != null:
 		var reference: float = walk_speed_reference if walk_speed_reference > 0.0 else max_speed
 		rig.set_move_speed(CharacterRig.speed_to_blend(Vector3(velocity.x, 0.0, velocity.z).length(), reference, run_speed))
@@ -162,6 +176,12 @@ func rod_tip() -> Vector3:
 func play_chop() -> void:
 	if rig != null:
 		rig.play_chop()
+
+
+## 삽질 한 번.
+func play_dig() -> void:
+	if rig != null:
+		rig.play_dig()
 
 
 ## 쪼그려 앉아 흙을 토닥이는 동작 (씨앗 심기·꽃 따기).

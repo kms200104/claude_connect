@@ -165,7 +165,7 @@ func _on_peer_action(id: int, kind: String, target: String) -> void:
 	if kind == "emote":
 		remote.play_emote(target)
 	else:
-		remote.play_action(kind)
+		remote.play_action(kind, target)
 
 
 ## 다른 사람 캐릭터 (없으면 null).

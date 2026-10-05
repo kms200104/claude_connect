@@ -344,12 +344,19 @@ describe('경제 (서버 연동)', () => {
     assert.ok(orders.every((o) => o.dish === 'rice_ball'));
     await assert.rejects(a.type('rest_order', 800), '재료가 떨어지면 더는 주문이 없다');
     const o = orders[0];
-    const r = newRid();
-    a.send({ t: 'rest_cook', order: o.order });
-    a.send({ t: 'rest_serve', rid: newRid(), order: o.order, taps: [[0], [0]] });
+    // 요리 동작마다 맡고(rest_cook) 다 하면 보낸다(rest_step). 주먹밥 = 섞기 → 담기.
+    a.send({ t: 'rest_cook', rid: newRid(), order: o.order, step: 0 });
+    assert.equal((await a.type('rest_claim')).step, 0);
+    a.send({ t: 'rest_step', rid: newRid(), order: o.order, step: 0, taps: [0] });
     assert.equal((await a.type('error')).code, 'cook_too_fast');
-    await sleep(1900);
-    a.send({ t: 'rest_serve', rid: r, order: o.order, taps: [Array.from({ length: 12 }, (_, i) => i * 150), [1300]] });
+    await sleep(1300);
+    a.send({ t: 'rest_step', rid: newRid(), order: o.order, step: 0, taps: Array.from({ length: 12 }, (_, i) => i * 150) });
+    await a.type('rest_stepped');
+    a.send({ t: 'rest_cook', rid: newRid(), order: o.order, step: 1 });
+    await a.type('rest_claim');
+    await sleep(900);
+    const r = newRid();
+    a.send({ t: 'rest_step', rid: r, order: o.order, step: 1, taps: [1300] });
     const res = await a.type('rest_result');
     assert.equal(res.rid, r);
     assert.ok(res.stars >= 4, `별점 ${res.stars}`);

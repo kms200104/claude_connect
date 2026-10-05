@@ -80,10 +80,25 @@ func set_online(value: bool) -> void:
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
-## 상대의 동작 이벤트 (도끼질).
-func play_action(kind: String) -> void:
-	if kind == "chop" and rig != null:
-		rig.play_chop()
+## 상대의 동작 이벤트: 도끼질 · 뜰채질 · 삽질 · 요리 동작(같이 요리할 때 친구 손이 보이게).
+const COOK_TOOLS: Dictionary = {"cook_chop": "knife", "cook_stir": "pan", "cook_flip": "pan", "cook_mix": "", "cook_plate": ""}
+
+
+func play_action(kind: String, target: String = "") -> void:
+	if rig == null:
+		return
+	match kind:
+		"chop", "net":
+			rig.play_chop()
+			if kind == "net":
+				Audio.play_at("fish_plop", global_position, -6.0, 1.2)
+		"dig":
+			rig.play_dig()
+			Audio.play_at("dig", global_position, -4.0)
+		"cook":
+			rig.set_cooking(target, str(COOK_TOOLS.get(target, "")))
+		"cook_end":
+			rig.set_cooking("")
 
 
 ## 상대의 감정표현·몸짓. 브레이크는 몸을 젖히고 끼이익 미끄러지며 흙먼지를 일으킨다.

@@ -40,7 +40,7 @@
       "name": "솔바람 구멍가게",
       "points": 0,
       "sell_bonus": 0,
-      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "standing_mirror", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos", "rice", "flour", "egg", "scallion", "radish", "chili", "soy_sauce", "doenjang", "tofu", "laver", "garlic", "sesame_oil", "sugar"]
+      "stock": ["tea_leaves", "letter_set", "honey_jar", "log_stool", "flower_pot", "wood_chair", "standing_mirror", "straw_hat", "striped_tee", "wooden_bucket", "picnic_basket", "mailbox", "bucket_hat", "hoodie", "seed_tulip", "seed_cosmos", "rice", "flour", "egg", "scallion", "radish", "chili", "soy_sauce", "doenjang", "tofu", "laver", "garlic", "sesame_oil", "sugar", "fishing_net", "shovel"]
     },
     {
       "level": 2,

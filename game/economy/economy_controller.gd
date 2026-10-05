@@ -1,11 +1,14 @@
 class_name EconomyController
 extends Node
-## 마을 경제 연결 (v0.8): HUD 의 휴대폰 단추와 휴대폰 창, 식당 주방 창, 상황 버튼(식당 열기 · 주방 · 부동산),
-## 그리고 거래·주간 정산·식당 소식 알림. 판정은 서버(Economy)가 하고 여기서는 화면과 연출만 맡는다.
+## 마을 경제 연결 (v0.8~0.9): HUD 의 휴대폰 단추와 휴대폰 창, 식당 주방 창, 동사무소 창,
+## 상황 버튼(식당 열기 · 같이 일하기 · 주방 · 부동산 · 동사무소 창구 셋), 그리고 거래·주간 정산·식당·혼인신고·같이 하기 알림.
+## 판정은 서버(Economy)가 하고 여기서는 화면과 연출만 맡는다.
 
 @export var player: Player
 @export var apartments: ApartmentSite
 @export var restaurant: RestaurantSite
+## 동사무소 (v0.9, 없어도 된다).
+@export var civic_site: CivicSite
 ## 휴대폰 단추와 창을 붙일 곳.
 @export var hud: CanvasLayer
 ## 결과 문구 (낚시 HUD 의 토스트).
@@ -18,12 +21,17 @@ extends Node
 const TARGET_OPEN: String = "rest_open"
 const TARGET_KITCHEN: String = "kitchen"
 const TARGET_ESTATE: String = "estate"
+const TARGET_JOIN: String = "rest_join"
+## 동사무소 창구: "civic:civil" · "civic:welfare" · "civic:finance"
+const TARGET_CIVIC: String = "civic:"
 
 var phone: PhoneWindow = null
 var kitchen: KitchenWindow = null
+var civic: CivicWindow = null
 var _phone_button: Button = null
 ## 이번 영업에 주방 창을 저절로 한 번 열었는지.
 var _kitchen_opened_for_shift: bool = false
+var _join_pending: bool = false
 
 
 func _ready() -> void:
@@ -33,6 +41,8 @@ func _ready() -> void:
 	kitchen.name = "KitchenWindow"
 	kitchen.player = player
 	kitchen.site = restaurant
+	civic = CivicWindow.new()
+	civic.name = "CivicWindow"
 	_phone_button = Button.new()
 	_phone_button.name = "PhoneButton"
 	_phone_button.tooltip_text = "휴대폰"
@@ -48,6 +58,7 @@ func _ready() -> void:
 	if hud != null:
 		hud.add_child.call_deferred(_phone_button)
 		hud.add_child.call_deferred(kitchen)
+		hud.add_child.call_deferred(civic)
 		hud.add_child.call_deferred(phone)
 	Economy.trade_done.connect(_on_trade)
 	Economy.apt_done.connect(_on_apt)
@@ -61,14 +72,26 @@ func _ready() -> void:
 			toast_hud.show_toast("%s 님이 %s 단골이 됐어요! (그 메뉴만 시켜요)" % [_customer_name(str(info.get("customer", ""))), _dish_name(str(info.get("dish", "")))], true)
 		elif bool(info.get("lost", false)):
 			toast_hud.show_toast("%s 님이 더는 단골이 아니에요…" % _customer_name(str(info.get("customer", ""))), false))
+	Economy.marry_proposed.connect(func(from_id: int) -> void: civic.ask_proposal(from_id))
+	Economy.marry_declined.connect(func(_by: int) -> void: toast_hud.show_toast("다음에 하기로 했대요.", false))
+	Economy.household_formed.connect(func(info: Dictionary) -> void:
+		if Net.my_id in Array(info.get("members", [])).map(func(x: Variant) -> int: return int(x)):
+			Audio.play_sfx("fanfare_big", -4.0)
+			toast_hud.show_toast("혼인신고 완료! 이제 솔을 같이 써요 (%s)" % Money.short(int(info.get("sol", 0))), true))
+	Economy.staff_changed.connect(func(id: int, joined: bool) -> void:
+		if id != Net.my_id and (Economy.is_rest_staff() or Economy.is_rest_owner()):
+			toast_hud.show_toast("%s 님이 %s" % [GameData.player_name(id), "같이 일해요! 재료를 합치고 요리를 나눠요 (팀 보너스)" if joined else "일을 그만뒀어요"], joined))
+	Economy.coop_bonus.connect(func(info: Dictionary) -> void:
+		toast_hud.show_toast("같이 해서 %s 하나 더! (%s 님과)" % [GameData.item_name(str(info.get("item", ""))), GameData.player_name(int(info.get("with", 0)))], true))
+	Net.message_received.connect(_on_coop_message)
 	Economy.customer_left.connect(func(info: Dictionary) -> void:
 		if Economy.is_rest_owner() or int(Economy.rest.get("owner", 0)) == Net.my_id:
 			toast_hud.show_toast("%s 님이 기다리다 떠났어요 (★1)" % _customer_name(str(info.get("customer", ""))), false))
 
 
-## 휴대폰·주방 창이 열려 있는지 (열려 있으면 다른 상황 버튼을 숨긴다).
+## 휴대폰·주방·동사무소 창이 열려 있는지 (열려 있으면 다른 상황 버튼을 숨긴다).
 func is_busy() -> bool:
-	return (phone != null and phone.is_open()) or (kitchen != null and kitchen.is_open())
+	return (phone != null and phone.is_open()) or (kitchen != null and kitchen.is_open()) or (civic != null and civic.is_open())
 
 
 ## 지금 position 에서 할 수 있는 경제 행동 (InteractionController 가 묻는다). 없으면 빈 문자열.
@@ -76,8 +99,13 @@ func pick_target(position: Vector3, max_distance: float) -> String:
 	if restaurant != null and restaurant.near_counter(position, max_distance):
 		if not bool(Economy.rest.get("open", false)):
 			return TARGET_OPEN
-		if Economy.is_rest_owner():
+		if Economy.is_rest_staff():
 			return TARGET_KITCHEN
+		return TARGET_JOIN
+	if civic_site != null:
+		var desk: String = civic_site.nearest_desk(position, max_distance)
+		if not desk.is_empty():
+			return TARGET_CIVIC + desk
 	if apartments != null and apartments.near_office(position, max_distance):
 		return TARGET_ESTATE
 	return ""
@@ -91,6 +119,10 @@ func target_label(target: String) -> String:
 			return "주방"
 		TARGET_ESTATE:
 			return "부동산"
+		TARGET_JOIN:
+			return "같이 일하기"
+	if target.begins_with(TARGET_CIVIC):
+		return str(GameData.econ.staff_of(target.trim_prefix(TARGET_CIVIC)).get("desk_name", "창구"))
 	return ""
 
 
@@ -102,9 +134,23 @@ func activate(target: String) -> void:
 			kitchen.open()
 		TARGET_ESTATE:
 			phone.open(PhoneWindow.Tab.HOMES)
+		TARGET_JOIN:
+			Economy.join_restaurant()
+			_join_pending = true
+		_:
+			if target.begins_with(TARGET_CIVIC):
+				var desk: String = target.trim_prefix(TARGET_CIVIC)
+				if civic_site != null and civic_site.staff_actor(desk) != null:
+					civic_site.staff_actor(desk).play_emote("hello")
+				civic.open(desk)
 
 
 func _on_restaurant_changed() -> void:
+	# 같이 일하기를 눌렀으면 주방 창을 바로 연다.
+	if _join_pending and Economy.is_rest_staff() and not kitchen.is_open():
+		_join_pending = false
+		kitchen.open()
+		toast_hud.show_toast("같이 일해요! 재료를 합치고, 요리 동작을 나눠 동시에 해요.", true)
 	# 내가 문을 열었으면 주방 창을 바로 연다.
 	if Economy.is_rest_owner() and not kitchen.is_open() and restaurant != null and player != null and restaurant.near_counter(player.global_position, 4.0) and not _kitchen_opened_for_shift:
 		_kitchen_opened_for_shift = true
@@ -113,6 +159,17 @@ func _on_restaurant_changed() -> void:
 	if not bool(Economy.rest.get("open", false)):
 		_kitchen_opened_for_shift = false
 
+
+
+## 같이 베기 · 같이 낚시 같은 덤을 알린다.
+func _on_coop_message(msg: Dictionary) -> void:
+	match str(msg.get("t", "")):
+		"chop_result":
+			if bool(msg.get("coop", false)):
+				toast_hud.show_toast("같이 베니까 두 배로 찍혀요!" + (" 쓰러뜨려서 하나씩 더!" if bool(msg.get("felled", false)) else ""), true)
+		"fish_started":
+			if bool(msg.get("coop", false)):
+				toast_hud.show_toast("같이 낚시: 입질이 빨라지고 귀한 물고기가 잘 와요.", true)
 
 
 func _on_shift_closed(reason: String) -> void:

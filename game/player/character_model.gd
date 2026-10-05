@@ -188,6 +188,33 @@ static func ladle() -> ArrayMesh:
 	return mesh
 
 
+## 뜰채: 긴 자루 끝에 둥근 테와 그물 주머니. 손에서 +Y 로 뻗는다.
+static func landing_net() -> ArrayMesh:
+	if _cache.has("landing_net"):
+		return _cache["landing_net"]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_rod(st, Vector3(0.0, -0.1, 0.0), Vector3(0.0, 0.85, 0.0), 0.022, 0.018, Color("#B07A45"), 7)
+	ClayMesh.add_torus(st, Vector3(0.0, 1.05, 0.0), 0.2, 0.018, Color("#5A6A7A"), 14, 4, Basis(Vector3.RIGHT, PI * 0.5))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 1.05, 0.1), Vector3(0.18, 0.18, 0.12), ClayMesh.vertical_gradient(Color("#9CC8E0"), Color("#D8EEF8"), 1.0), 10, 6)
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["landing_net"] = mesh
+	return mesh
+
+
+## 삽: 나무 자루 + 손잡이 + 은빛 날. 손에서 +Y 로 뻗는다.
+static func shovel() -> ArrayMesh:
+	if _cache.has("shovel"):
+		return _cache["shovel"]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_rod(st, Vector3(0.0, -0.15, 0.0), Vector3(0.0, 0.72, 0.0), 0.024, 0.022, Color("#B07A45"), 7)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.17, 0.0), Vector3(0.16, 0.05, 0.05), 0.4, Color("#7C5A3C"), Basis(), 6, 3)
+	var blade: Callable = ClayMesh.vertical_gradient(Color("#8E9BA6"), Color("#D3DCE2"), 1.0)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.85, 0.0), Vector3(0.2, 0.26, 0.035), 0.35, blade, Basis(), 6, 4)
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["shovel"] = mesh
+	return mesh
+
+
 ## 얼굴: 볼터치, 코, 입 (눈은 따로 움직이는 메시). 모두 머리 겉면에 붙인 얇은 판이라 머리 속으로 파묻히지 않는다.
 static func _add_face(st: SurfaceTool, look: CharacterLook) -> void:
 	var catalog: FaceCatalog = _catalog()

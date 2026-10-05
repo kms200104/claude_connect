@@ -8,6 +8,8 @@ const APARTMENTS_PATH: String = "res://data/realestate/apartments.json"
 const BANK_PATH: String = "res://data/bank/bank.json"
 const RECIPES_PATH: String = "res://data/restaurant/recipes.json"
 const RESTAURANT_PATH: String = "res://data/restaurant/restaurant.json"
+const CIVIC_PATH: String = "res://data/civic/civic.json"
+const DIG_PATH: String = "res://data/world/dig.json"
 
 const RARITY_RANK: Dictionary = {"common": 0, "uncommon": 1, "rare": 2}
 const RARITY_NAMES: Dictionary = {"common": "흔한", "uncommon": "드문", "rare": "귀한"}
@@ -43,6 +45,10 @@ var recipes: Dictionary[String, RecipeInfo] = {}
 ## 메뉴판 순서 (단계 → 값).
 var recipe_order: Array[RecipeInfo] = []
 var customers: Dictionary[String, Customer] = {}
+## 동사무소 (v9): 건물 · 직원 · 민원 · 정책 (data/civic/civic.json).
+var civic: Dictionary = {}
+## 삽 · 뜰채 규칙 (data/world/dig.json).
+var dig: Dictionary = {}
 
 
 static func load_all() -> EconData:
@@ -51,6 +57,8 @@ static func load_all() -> EconData:
 	e.apartments = _read(APARTMENTS_PATH)
 	e.bank = _read(BANK_PATH)
 	e.restaurant = _read(RESTAURANT_PATH)
+	e.civic = _read(CIVIC_PATH)
+	e.dig = _read(DIG_PATH)
 	var recipes_file: Dictionary = _read(RECIPES_PATH)
 	e.cook_steps = recipes_file.get("steps", {})
 	for entry: Variant in recipes_file.get("recipes", []):
@@ -179,6 +187,29 @@ func weekly_rent(price: int) -> int:
 
 func mortgage_limit(price: int) -> int:
 	return floori(float(price) * float(apartments.get("ltv", 0.7)) / 10000.0) * 10000
+
+
+# ---- 동사무소 ----
+
+func program_def(id: String) -> Dictionary:
+	for p: Variant in civic.get("programs", []):
+		if p is Dictionary and str(p.get("id", "")) == id:
+			return p
+	return {}
+
+
+func civil_service(id: String) -> Dictionary:
+	for s: Variant in civic.get("civil", []):
+		if s is Dictionary and str(s.get("id", "")) == id:
+			return s
+	return {}
+
+
+func staff_of(desk: String) -> Dictionary:
+	for s: Variant in civic.get("staff", []):
+		if s is Dictionary and str(s.get("desk", "")) == desk:
+			return s
+	return {}
 
 
 # ---- 식당 ----

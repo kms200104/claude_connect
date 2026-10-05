@@ -36,10 +36,10 @@ export function refreshTree(state, today, nowMs, minutes, scale = 1) {
   return before !== `${state.s}/${state.c}`;
 }
 
-/** 한 번 찍는다. 다 자란 나무가 아니면 null, 아니면 { felled } */
-export function chopTree(state, today, nowMs, chopsToFell) {
+/** 찍는다 (hits = 이번에 들어가는 도끼질 수, 둘이 같이 찍으면 2). 다 자란 나무가 아니면 null, 아니면 { felled } */
+export function chopTree(state, today, nowMs, chopsToFell, hits = 1) {
   if (state.s !== TreeStage.grown) return null;
-  state.c += 1;
+  state.c += hits;
   state.d = today;
   if (state.c >= chopsToFell) {
     Object.assign(state, { s: TreeStage.stump, c: 0, t: nowMs });

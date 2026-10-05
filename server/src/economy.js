@@ -1,11 +1,11 @@
-// 마을 경제 서비스: 증권(주문), 아파트(사고팔기·월세), 은행(대출·주간 이자·신용), 식당(영업·주문·요리 판정), 채집.
-// server.js 가 메시지를 넘기고, 방 상태·소켓 도우미는 deps 로 받는다. 판정은 전부 서버가 한다.
+// 마을 경제 서비스: 증권(주문), 아파트(사고팔기·월세), 은행(대출·주간 이자·신용), 동사무소(민원·지원금·정책대출·혼인신고).
+// 식당은 kitchen.js. server.js 가 메시지를 넘기고, 방 상태·소켓 도우미는 deps 로 받는다. 판정은 전부 서버가 한다.
+// v0.9: 혼인신고한 두 사람은 한 세대 — 지갑(솔)이 하나이고(rooms.js linkWallet), 소득·자산·빚·집을 세대 단위로 본다.
 import { ErrorCode } from './protocol.js';
 import { buyCost, sellProceeds } from './market.js';
-import { homesValue, purchaseCost, saleProceeds, stepIndex, unitPrice, weeklyRent } from './realestate.js';
+import { purchaseCost, saleProceeds, stepIndex, unitPrice, weeklyRent } from './realestate.js';
 import { annualIncome, chargeWeek, creditLimit, creditScore, dsrOk, gradeOf, mortgageLimit, rateFor, stepBaseRate, weekOf, weeklyInterest } from './bank.js';
-import { capacity, chooseOrder, cookQuality, menuOf, minCookMs, pantryOf, payFor, ratingOf, starsFor, tasteMatch, tierOf, updateRegular } from './restaurant.js';
-import { addItem, countWhere, removeWhere } from './inventory.js';
+import { cardCashback, didimdolTerms, eligibility, sunshineRate } from './civic.js';
 
 /** 번 돈 기록 (대출 한도·신용점수의 소득). */
 export function earn(profile, amount) {
@@ -13,53 +13,102 @@ export function earn(profile, amount) {
   if (amount > 0) profile.income.amount += amount;
 }
 
+/** 여러 사람의 소득 기록을 합친다 (부부합산): 주별로 끝에서부터 더한다. */
+export function combineIncome(list) {
+  const len = Math.max(0, ...list.map((i) => i?.history?.length ?? 0));
+  const history = [];
+  for (let k = len; k > 0; k--) history.push(list.reduce((a, i) => a + (i?.history?.[i.history.length - k] ?? 0), 0));
+  return { amount: list.reduce((a, i) => a + (i?.amount ?? 0), 0), history };
+}
+
 export function createEconomy(deps) {
-  const { data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms } = deps;
-  const rest = data.restaurant;
-  const steps = data.cookSteps;
+  const { data, clock, random, market, send, sendTo, sendProfile, rooms } = deps;
+  const civicRules = data.civic;
 
-  // ---- 자산 · 신용 ----
+  // ---- 세대 · 자산 · 신용 ----
 
-  const debtOf = (profile) => profile.loans.reduce((a, l) => a + l.principal, 0);
-  const homesOf = (room, uid) => data.units.filter((u) => room.homes[u.id]?.owner === uid);
-  const assetsOf = (room, profile) => profile.sol + market.holdingsValue(profile.stocks) + homesValue(data.realestate, data.units, room.homes, profile.uid, room.aptIndex);
+  const membersOf = (room, profile) => (room ? room.householdOf(profile) : [profile]);
+  const uidsOf = (room, profile) => membersOf(room, profile).map((p) => p.uid);
+  const debtOf = (room, profile) => membersOf(room, profile).reduce((a, p) => a + p.loans.reduce((b, l) => b + l.principal, 0), 0);
+  const homesOfUids = (room, uids) => data.units.filter((u) => uids.includes(room.homes[u.id]?.owner));
+  const homesValueOf = (room, profile) => homesOfUids(room, uidsOf(room, profile)).reduce((a, u) => a + unitPrice(data.realestate, u, room.aptIndex), 0);
+  /** 세대 소득 (혼자면 자기 것). */
+  const incomeOf = (room, profile) => {
+    const list = membersOf(room, profile);
+    return list.length > 1 ? combineIncome(list.map((p) => p.income)) : profile.income;
+  };
+  /** 세대 자산 = 지갑(하나) + 세대원 주식 + 세대원 집. */
+  const assetsOf = (room, profile) => profile.sol + membersOf(room, profile).reduce((a, p) => a + market.holdingsValue(p.stocks), 0) + (room ? homesValueOf(room, profile) : 0);
 
   function creditOf(room, profile) {
-    const score = creditScore(data.bank, { credit: profile.credit, income: profile.income, debt: debtOf(profile), assets: assetsOf(room, profile) });
+    const score = creditScore(data.bank, { credit: profile.credit, income: incomeOf(room, profile), debt: debtOf(room, profile), assets: assetsOf(room, profile) });
     return { score, grade: gradeOf(data.bank, score) };
   }
 
   /** 은행 창구에 보이는 것: 신용·금리·한도·내 대출. */
   function bankWire(room, profile) {
     const { score, grade } = creditOf(room, profile);
-    const creditDebt = profile.loans.filter((l) => l.kind === 'credit').reduce((a, l) => a + l.principal, 0);
+    const creditDebt = profile.loans.filter((l) => l.kind === 'credit' && !l.product).reduce((a, l) => a + l.principal, 0);
+    const income = incomeOf(room, profile);
     return {
       base: room.baseRate,
       score,
       grade,
       rate_credit: rateFor(data.bank, room.baseRate, grade, 'credit'),
       rate_mortgage: rateFor(data.bank, room.baseRate, grade, 'mortgage'),
-      credit_limit: creditLimit(data.bank, grade, profile.income, creditDebt),
+      credit_limit: creditLimit(data.bank, grade, income, creditDebt),
       ltv: data.realestate.ltv,
       dsr: data.bank.dsr,
-      income_year: annualIncome(profile.income),
-      income_week: profile.income?.amount ?? 0,
+      income_year: annualIncome(income),
+      income_week: income?.amount ?? 0,
       week: weekOf(clock.day()),
+      joint: membersOf(room, profile).length > 1,
       loans: profile.loans.map((l) => ({ ...l, weekly: weeklyInterest(l.principal, l.rate) })),
+    };
+  }
+
+  /** 동사무소 판단에 쓰는 이 사람(세대)의 상황. */
+  function civicContext(room, profile) {
+    const members = membersOf(room, profile);
+    const income = incomeOf(room, profile);
+    return {
+      age: profile.age ?? 29,
+      resident: !!profile.civic?.resident,
+      married: members.length > 1,
+      homes: homesOfUids(room, uidsOf(room, profile)).length,
+      homesEver: members.some((p) => p.loans.some((l) => l.kind === 'mortgage')),
+      income: annualIncome(income),
+      weekIncome: income?.amount ?? 0,
+      sol: profile.sol,
+      liquid: profile.sol + members.reduce((a, p) => a + market.holdingsValue(p.stocks), 0),
+      received: profile.civic?.received ?? {},
+      week: weekOf(clock.day()),
     };
   }
 
   /** 프로필에 덧붙는 경제 정보 (profile 메시지). */
   function profileWire(room, profile) {
     const assets = room ? assetsOf(room, profile) : profile.sol;
-    const debt = debtOf(profile);
+    const debt = room ? debtOf(room, profile) : 0;
+    const members = membersOf(room, profile);
+    const partner = members.find((p) => p.uid !== profile.uid);
+    const income = room ? incomeOf(room, profile) : profile.income;
     return {
       stocks: Object.fromEntries(Object.entries(profile.stocks).map(([id, h]) => [id, { ...h }])),
       trades: profile.trades.slice(-10),
       loans: profile.loans.map((l) => ({ ...l, weekly: weeklyInterest(l.principal, l.rate) })),
       credit: room ? creditOf(room, profile) : { score: data.bank.credit.start_score, grade: gradeOf(data.bank, data.bank.credit.start_score) },
-      income: { week: profile.income?.amount ?? 0, year: annualIncome(profile.income) },
+      income: { week: income?.amount ?? 0, year: annualIncome(income) },
       worth: { assets, debt, net: assets - debt },
+      civ: {
+        age: profile.age ?? 29,
+        resident: !!profile.civic?.resident,
+        card: !!profile.civic?.card,
+        partner: partner ? partner.slot : 0,
+        household: profile.household ?? '',
+        since: profile.household && room ? room.households.get(profile.household)?.since ?? 0 : 0,
+        approvals: Object.fromEntries(Object.entries(profile.civic?.approvals ?? {}).map(([id, a]) => [id, { ...a }])),
+      },
     };
   }
 
@@ -122,32 +171,51 @@ export function createEconomy(deps) {
     if (msg.t === 'apt_buy') {
       if (room.homes[unit.id]) return fail(ErrorCode.unitTaken);
       const loan = Number.isInteger(msg.loan) ? msg.loan : 0;
-      if (loan < 0 || loan > mortgageLimit(data.realestate.ltv, price)) return fail(ErrorCode.loanLimit);
+      if (loan < 0) return fail(ErrorCode.loanLimit);
       const cost = purchaseCost(data.realestate, price);
-      const { grade } = creditOf(room, p);
-      const rate = rateFor(data.bank, room.baseRate, grade, 'mortgage');
-      if (loan > 0 && (!dsrOk(data.bank, p.income, p.loans, { kind: 'mortgage', principal: loan, rate }) || p.loans.length >= data.bank.max_loans)) return fail(ErrorCode.loanLimit);
+      let record = null;
+      if (loan > 0 && msg.policy === 'didimdol') {
+        // 디딤돌대출: 동사무소에서 받은 승인(기한·한도·고정금리) 안에서. DSR 대신 승인 때 소득·무주택을 봤다.
+        const approval = p.civic?.approvals?.didimdol;
+        if (!approval || approval.until < weekOf(clock.day())) return fail(ErrorCode.notEligible);
+        if (price > approval.priceMax || loan > Math.min(approval.limit, mortgageLimit(approval.ltv, price))) return fail(ErrorCode.loanLimit);
+        if (p.loans.length >= data.bank.max_loans) return fail(ErrorCode.loanLimit);
+        record = { kind: 'mortgage', principal: loan, rate: approval.rate, unit: unit.id, product: 'didimdol', fixed: true };
+      } else if (loan > 0) {
+        if (loan > mortgageLimit(data.realestate.ltv, price)) return fail(ErrorCode.loanLimit);
+        const { grade } = creditOf(room, p);
+        const rate = rateFor(data.bank, room.baseRate, grade, 'mortgage');
+        const householdLoans = membersOf(room, p).flatMap((m) => m.loans);
+        if (!dsrOk(data.bank, incomeOf(room, p), householdLoans, { kind: 'mortgage', principal: loan, rate }) || p.loans.length >= data.bank.max_loans) return fail(ErrorCode.loanLimit);
+        record = { kind: 'mortgage', principal: loan, rate, unit: unit.id, product: '', fixed: false };
+      }
       if (p.sol + loan < cost.total) return fail(ErrorCode.notEnoughSol);
-      if (loan > 0) {
+      if (record) {
+        if (record.product === 'didimdol') delete p.civic.approvals.didimdol;
         p.loanSeq += 1;
-        p.loans.push({ id: `L${p.loanSeq}`, kind: 'mortgage', principal: loan, rate, unit: unit.id, since: clock.day() });
+        p.loans.push({ id: `L${p.loanSeq}`, since: clock.day(), ...record });
       }
       p.sol += loan - cost.total;
       room.homes[unit.id] = { owner: p.uid, price, day: clock.day() };
-      send(ctx.ws, { t: 'apt_result', rid: msg.rid, kind: 'buy', unit: unit.id, price, tax: cost.tax, fee: cost.fee, loan, sol: p.sol });
+      send(ctx.ws, { t: 'apt_result', rid: msg.rid, kind: 'buy', unit: unit.id, price, tax: cost.tax, fee: cost.fee, loan, policy: record?.product ?? '', rate: record?.rate ?? 0, sol: p.sol });
     } else {
-      if (room.homes[unit.id]?.owner !== p.uid) return fail(ErrorCode.notYourUnit);
+      // 세대원이 가진 집이면 팔 수 있다 (같은 지갑).
+      if (!uidsOf(room, p).includes(room.homes[unit.id]?.owner)) return fail(ErrorCode.notYourUnit);
       const sale = saleProceeds(data.realestate, price);
       // 이 집을 담보로 빌린 돈부터 갚는다. 모자라면 남은 빚은 신용대출로 바뀐다.
       let cash = sale.total;
-      for (const l of p.loans.filter((x) => x.unit === unit.id)) {
-        const pay = Math.min(cash, l.principal);
-        cash -= pay;
-        l.principal -= pay;
-        l.unit = '';
-        l.kind = 'credit';
+      for (const m of membersOf(room, p)) {
+        for (const l of m.loans.filter((x) => x.unit === unit.id)) {
+          const pay = Math.min(cash, l.principal);
+          cash -= pay;
+          l.principal -= pay;
+          l.unit = '';
+          l.kind = 'credit';
+          l.product = '';
+          l.fixed = false;
+        }
+        m.loans = m.loans.filter((l) => l.principal > 0);
       }
-      p.loans = p.loans.filter((l) => l.principal > 0);
       p.sol += cash;
       delete room.homes[unit.id];
       send(ctx.ws, { t: 'apt_result', rid: msg.rid, kind: 'sell', unit: unit.id, price, fee: sale.fee, repaid: sale.total - cash, sol: p.sol });
@@ -170,16 +238,31 @@ export function createEconomy(deps) {
     if (msg.t === 'loan_take') {
       const amount = msg.amount;
       if (!Number.isInteger(amount) || amount < data.bank.min_loan) return fail(ErrorCode.badLoan);
-      const { grade } = creditOf(room, p);
-      const creditDebt = p.loans.filter((l) => l.kind === 'credit').reduce((a, l) => a + l.principal, 0);
-      const rate = rateFor(data.bank, room.baseRate, grade, 'credit');
-      if (amount > creditLimit(data.bank, grade, p.income, creditDebt) || p.loans.length >= data.bank.max_loans) return fail(ErrorCode.loanLimit);
-      if (!dsrOk(data.bank, p.income, p.loans, { kind: 'credit', principal: amount, rate })) return fail(ErrorCode.loanLimit);
+      if (p.loans.length >= data.bank.max_loans) return fail(ErrorCode.loanLimit);
+      let loan;
+      if (msg.product === 'sunshine_youth') {
+        // 햇살론유스: 동사무소 서민금융 창구에서만, 자격(나이·소득) 안에서, 고정금리.
+        if (!deps.nearDesk(player, 'finance')) return fail(ErrorCode.notAtCivic);
+        const program = data.programs.get('sunshine_youth');
+        const c = civicContext(room, p);
+        if (!eligibility(program, c).ok) return fail(ErrorCode.notEligible);
+        const used = p.loans.filter((l) => l.product === 'sunshine_youth').reduce((a, l) => a + l.principal, 0);
+        if (amount > program.limit - used) return fail(ErrorCode.loanLimit);
+        loan = { kind: 'credit', principal: amount, rate: sunshineRate(program, c), unit: '', product: 'sunshine_youth', fixed: true };
+      } else {
+        const { grade } = creditOf(room, p);
+        const income = incomeOf(room, p);
+        const creditDebt = p.loans.filter((l) => l.kind === 'credit' && !l.product).reduce((a, l) => a + l.principal, 0);
+        const rate = rateFor(data.bank, room.baseRate, grade, 'credit');
+        if (amount > creditLimit(data.bank, grade, income, creditDebt)) return fail(ErrorCode.loanLimit);
+        if (!dsrOk(data.bank, income, membersOf(room, p).flatMap((m) => m.loans), { kind: 'credit', principal: amount, rate })) return fail(ErrorCode.loanLimit);
+        loan = { kind: 'credit', principal: amount, rate, unit: '', product: '', fixed: false };
+      }
       p.loanSeq += 1;
-      const loan = { id: `L${p.loanSeq}`, kind: 'credit', principal: amount, rate, unit: '', since: clock.day() };
+      loan = { id: `L${p.loanSeq}`, since: clock.day(), ...loan };
       p.loans.push(loan);
       p.sol += amount;
-      send(ctx.ws, { t: 'loan_result', rid: msg.rid, kind: 'take', loan: { ...loan, weekly: weeklyInterest(amount, rate) }, sol: p.sol });
+      send(ctx.ws, { t: 'loan_result', rid: msg.rid, kind: 'take', loan: { ...loan, weekly: weeklyInterest(amount, loan.rate) }, sol: p.sol });
     } else {
       const loan = p.loans.find((l) => l.id === msg.id);
       const amount = msg.amount;
@@ -197,8 +280,8 @@ export function createEconomy(deps) {
   }
 
   /**
-   * 마을 시계로 한 주가 지나면: 집마다 월세, 대출마다 이자(새 신용점수로 금리를 다시 매겨서), 소득 기록,
-   * 그리고 기준금리·집값 지수가 한 걸음. 오래 비웠던 마을은 최대 4주까지만 몰아서 계산한다.
+   * 마을 시계로 한 주가 지나면: 집마다 월세, 대출마다 이자(변동금리는 새 신용점수로 다시 매겨서, 정책대출은 고정),
+   * 청년월세 지원 지급, 소득 기록, 그리고 기준금리·집값 지수가 한 걸음. 오래 비웠던 마을은 최대 4주까지만 몰아서 계산한다.
    */
   function tickWeek(room) {
     const week = weekOf(clock.day());
@@ -211,13 +294,20 @@ export function createEconomy(deps) {
     const weeks = Math.min(4, week - room.week);
     room.week = week;
     const reports = new Map();
+    const rentProgram = data.programs.get('youth_rent');
     for (let w = 0; w < weeks; w++) {
       for (const p of room.profiles.values()) {
-        const r = reports.get(p.uid) ?? { rent: 0, paid: 0, capitalized: 0, missed: false };
+        const r = reports.get(p.uid) ?? { rent: 0, paid: 0, capitalized: 0, missed: false, grant: 0 };
         let rent = 0;
-        for (const u of homesOf(room, p.uid)) rent += weeklyRent(data.realestate, unitPrice(data.realestate, u, room.aptIndex));
+        for (const u of homesOfUids(room, [p.uid])) rent += weeklyRent(data.realestate, unitPrice(data.realestate, u, room.aptIndex));
         p.sol += rent;
         earn(p, rent);
+        const got = p.civic?.received?.youth_rent;
+        if (got?.weeksLeft > 0 && rentProgram) {
+          p.sol += rentProgram.amount;
+          got.weeksLeft -= 1;
+          r.grant += rentProgram.amount;
+        }
         const { grade } = creditOf(room, p);
         const charged = chargeWeek(data.bank, p, room.baseRate, grade);
         r.rent += rent;
@@ -227,6 +317,7 @@ export function createEconomy(deps) {
         p.income.history.push(p.income.amount);
         if (p.income.history.length > 8) p.income.history.shift();
         p.income.amount = 0;
+        for (const [id, a] of Object.entries(p.civic?.approvals ?? {})) if (a.until < week) delete p.civic.approvals[id];
         reports.set(p.uid, r);
       }
       room.baseRate = stepBaseRate(data.bank, room.baseRate, random);
@@ -235,191 +326,219 @@ export function createEconomy(deps) {
     for (const player of room.players.values()) {
       const r = reports.get(player.uid);
       if (!r) continue;
-      sendTo(player, { t: 'week', week, rent: r.rent, interest: r.paid, capitalized: r.capitalized, missed: r.missed, base: room.baseRate, index: room.aptIndex, sol: player.profile.sol });
+      sendTo(player, { t: 'week', week, rent: r.rent, interest: r.paid, capitalized: r.capitalized, missed: r.missed, grant: r.grant, base: room.baseRate, index: room.aptIndex, sol: player.profile.sol });
       sendProfile(player);
     }
     room.broadcast({ t: 'homes', ...homesWire(room) });
     rooms.save(room);
   }
 
-  // ---- 식당 ----
+  // ---- 동사무소 ----
 
-  const ratingOfRoom = (room) => ratingOf(rest, room.restaurant.history);
-  const ownerOf = (room) => (room.shift ? room.players.get(room.shift.owner) : null);
-  /** 문을 연 사람 가방 재료 − 이미 주문에 떼어 둔 재료. */
-  function available(room) {
-    const owner = ownerOf(room);
-    const avail = owner ? pantryOf(owner.slots) : {};
-    for (const [id, n] of Object.entries(room.shift?.reserved ?? {})) avail[id] = (avail[id] ?? 0) - n;
-    return avail;
-  }
-
-  function restWire(room) {
-    const rating = ratingOfRoom(room);
-    const tier = tierOf(rest, rating);
-    const shift = room.shift;
-    const t = now();
-    const regulars = {};
-    for (const [c, rec] of Object.entries(room.restaurant.regulars)) if (rec.regular) regulars[c] = rec.dish;
+  /** 동사무소 창구 정보: 전입·카드·세대, 프로그램마다 자격과 조건. */
+  function civicWire(room, profile) {
+    const c = civicContext(room, profile);
+    const programs = civicRules.programs.map((program) => {
+      const e = eligibility(program, c);
+      const out = { id: program.id, ok: e.ok, reasons: e.reasons };
+      if (program.kind === 'policy_mortgage') out.terms = didimdolTerms(program, c);
+      if (program.kind === 'policy_credit') {
+        const used = profile.loans.filter((l) => l.product === program.id).reduce((a, l) => a + l.principal, 0);
+        out.terms = { rate: sunshineRate(program, c), limit: program.limit, left: Math.max(0, program.limit - used), fixed: true };
+      }
+      const got = profile.civic.received[program.id];
+      if (got) out.got = { ...got };
+      return out;
+    });
+    const members = membersOf(room, profile);
     return {
-      open: !!shift,
-      owner: shift?.owner ?? 0,
-      rating,
-      tier,
-      served: room.restaurant.served,
-      revenue: room.restaurant.revenue,
-      regulars,
-      capacity: shift ? capacity(menuOf(data.recipes, tier), available(room), data) : 0,
-      shift: shift ? { served: shift.served, revenue: shift.revenue } : null,
-      orders: shift
-        ? [...shift.orders.values()].map((o) => ({ id: o.id, customer: o.customer, dish: o.dish, seat: o.seat, left: Math.max(0, o.at + o.patience - t), patience: o.patience, cooking: o.cookStart !== null, regular: o.regular }))
-        : [],
+      resident: c.resident,
+      movedIn: profile.civic.movedIn,
+      age: c.age,
+      married: c.married,
+      partner: members.find((m) => m.uid !== profile.uid)?.slot ?? 0,
+      income_year: c.income,
+      homes: c.homes,
+      card: profile.civic.card ? { ...profile.civic.card } : null,
+      approvals: Object.fromEntries(Object.entries(profile.civic.approvals).map(([id, a]) => [id, { ...a }])),
+      programs,
     };
   }
 
-  const broadcastRest = (room) => room.broadcast({ t: 'rest', ...restWire(room) });
-
-  function closeShift(room, reason) {
-    if (!room.shift) return;
-    room.shift = null;
-    room.broadcast({ t: 'rest_closed', reason });
-    broadcastRest(room);
-    room.saveDirty = true;
+  function sendCivic(player, room) {
+    sendTo(player, { t: 'civic', ...civicWire(room, player.profile) });
   }
 
-  function handleRestaurant(ctx, msg, fail) {
+  /** 서류 내용 (등본·가족관계증명서). */
+  function documentOf(room, profile, kind) {
+    const members = membersOf(room, profile);
+    const homes = homesOfUids(room, uidsOf(room, profile)).map((u) => u.id);
+    const address = homes.length ? `솔바람동 ${data.realestate.complex.short} ${homes[0]}호` : '솔바람동 섬마을 1길';
+    if (kind === 'resident_copy') {
+      return { kind, title: '주민등록표 등본', address, movedIn: profile.civic.movedIn, members: members.map((m) => ({ slot: m.slot, relation: m.uid === profile.uid ? '본인' : '배우자', age: m.age })) };
+    }
+    const partner = members.find((m) => m.uid !== profile.uid);
+    return { kind, title: '가족관계증명서', self: profile.slot, spouse: partner?.slot ?? 0, since: profile.household ? room.households.get(profile.household)?.since ?? 0 : 0 };
+  }
+
+  /** 혼인신고 뒤 세대원 모두에게 프로필·동사무소 정보를 다시 보낸다. */
+  function refreshHousehold(room, profile) {
+    for (const m of membersOf(room, profile)) {
+      const live = room.players.get(m.slot);
+      if (live && live.uid === m.uid) sendProfile(live);
+    }
+  }
+
+  /**
+   * 동사무소 메시지: civic_info · civic_civil{service} · civic_apply{program} · marry_propose{to} · marry_answer{accept}.
+   * 창구마다 그 직원 곁(service_range)에서만 한다.
+   */
+  function handleCivic(ctx, msg, fail) {
     const { player, room } = ctx;
-    const t = now();
-    const shift = room.shift;
-    if (msg.t === 'rest_open') {
-      if (!player.acceptRid(msg.rid)) return;
-      if (Math.hypot(player.x - rest.counter.x, player.z - rest.counter.z) > rest.open_range + 0.5) return fail(ErrorCode.notAtRestaurant);
-      if (shift && shift.owner !== player.id) return fail(ErrorCode.restBusy);
-      if (!shift) {
-        room.shift = { owner: player.id, openedAt: t, nextSpawnAt: t + rest.first_customer_s * 1000 * cfg.restSpawnScale, lastActivity: t, orders: new Map(), seq: 0, reserved: {}, served: 0, revenue: 0 };
-      }
-      send(ctx.ws, { t: 'rest_opened', rid: msg.rid });
-      broadcastRest(room);
+    const p = player.profile;
+    const week = weekOf(clock.day());
+    if (msg.t === 'civic_info') {
+      sendCivic(player, room);
       return;
     }
-    if (!shift) return fail(ErrorCode.restClosed);
-    if (shift.owner !== player.id) return fail(ErrorCode.restBusy);
-    if (msg.t === 'rest_close') {
-      closeShift(room, 'closed');
-      return;
-    }
-    const order = typeof msg.order === 'string' ? shift.orders.get(msg.order) : null;
-    if (!order) return fail(ErrorCode.orderGone);
-    const recipe = data.recipeById.get(order.dish);
-    if (msg.t === 'rest_cook') {
-      if (order.cookStart === null) order.cookStart = t;
-      broadcastRest(room);
-      return;
-    }
-    // rest_serve: 요리를 냈다.
     if (!player.acceptRid(msg.rid)) return;
-    if (order.cookStart === null || t - order.cookStart < minCookMs(recipe, steps) * 0.9) return fail(ErrorCode.cookTooFast);
-    // 떼어 둔 재료를 가방에서 꺼낸다 (그새 팔았으면 주문이 취소된다).
-    for (const [id, n] of Object.entries(order.used)) {
-      if (countWhere(player.slots, (x) => x === id) < n) {
-        dropOrder(room, order, 'missing');
-        return fail(ErrorCode.missingIngredient);
+    if (msg.t === 'civic_civil') {
+      const service = civicRules.civil.find((s) => s.id === msg.service);
+      if (!service || service.id === 'marriage') return fail(ErrorCode.badProgram);
+      if (!deps.nearDesk(player, 'civil')) return fail(ErrorCode.notAtCivic);
+      if (p.sol < service.fee) return fail(ErrorCode.notEnoughSol);
+      if (service.id === 'family_cert' && !p.household) return fail(ErrorCode.notEligible);
+      if (service.id === 'move_in' && p.civic.resident) return fail(ErrorCode.notEligible);
+      p.sol -= service.fee;
+      let doc = null;
+      if (service.id === 'move_in') {
+        // 세대원도 함께 전입된다.
+        for (const m of membersOf(room, p)) {
+          m.civic.resident = true;
+          m.civic.movedIn = clock.day();
+        }
+      } else {
+        p.civic.docs += 1;
+        doc = documentOf(room, p, service.id);
       }
-    }
-    for (const [id, n] of Object.entries(order.used)) removeWhere(player.slots, (x) => x === id, n);
-    release(shift, order);
-    shift.orders.delete(order.id);
-    const customer = data.customers.get(order.customer);
-    const quality = cookQuality(recipe, steps, msg.taps);
-    const taste = tasteMatch(customer, recipe);
-    const timeLeft = (order.at + order.patience - t) / order.patience;
-    const stars = starsFor(rest, { quality, taste, timeLeft, mbti: customer.mbti });
-    const pay = payFor(rest, recipe, stars, order.regular);
-    player.profile.sol += pay;
-    earn(player.profile, pay);
-    room.restaurant.history.push(stars);
-    if (room.restaurant.history.length > 100) room.restaurant.history.shift();
-    room.restaurant.served += 1;
-    room.restaurant.revenue += pay;
-    shift.served += 1;
-    shift.revenue += pay;
-    shift.lastActivity = t;
-    const reg = updateRegular(rest, room.restaurant.regulars[order.customer], order.dish, stars);
-    room.restaurant.regulars[order.customer] = reg.rec;
-    send(ctx.ws, { t: 'rest_result', rid: msg.rid, order: order.id, stars, pay, quality: Math.round(quality * 100) / 100, taste: Math.round(taste * 100) / 100, sol: player.profile.sol });
-    room.broadcast({ t: 'rest_served', order: order.id, customer: order.customer, dish: order.dish, stars, pay, regular: reg.rec.regular, became: reg.became, lost: reg.lost, by: player.id });
-    sendInventory(player);
-    sendProfile(player);
-    broadcastRest(room);
-    room.saveDirty = true;
-  }
-
-  function release(shift, order) {
-    for (const [id, n] of Object.entries(order.used)) {
-      shift.reserved[id] = (shift.reserved[id] ?? 0) - n;
-      if (shift.reserved[id] <= 0) delete shift.reserved[id];
-    }
-  }
-
-  /** 손님이 떠났다 (기다리다 지침 / 재료가 사라짐): 별 하나, 단골이면 풀릴 수도. */
-  function dropOrder(room, order, reason) {
-    const shift = room.shift;
-    release(shift, order);
-    shift.orders.delete(order.id);
-    room.restaurant.history.push(1);
-    if (room.restaurant.history.length > 100) room.restaurant.history.shift();
-    const reg = updateRegular(rest, room.restaurant.regulars[order.customer], order.dish, 1);
-    room.restaurant.regulars[order.customer] = reg.rec;
-    room.broadcast({ t: 'rest_left', order: order.id, customer: order.customer, dish: order.dish, reason, lost: reg.lost });
-    broadcastRest(room);
-    room.saveDirty = true;
-  }
-
-  /** 1초마다: 주인이 떠났으면 닫기, 지친 손님 보내기, 새 손님 받기 (재료로 만들 수 있는 요리만). */
-  function tickRestaurant(room) {
-    const shift = room.shift;
-    if (!shift) return;
-    const t = now();
-    const owner = ownerOf(room);
-    if (!owner || !owner.online) return closeShift(room, 'owner_left');
-    for (const o of [...shift.orders.values()]) if (t > o.at + o.patience) dropOrder(room, o, 'late');
-    if (shift.orders.size === 0 && t - shift.lastActivity > rest.idle_close_s * 1000) return closeShift(room, 'idle');
-    if (t < shift.nextSpawnAt || shift.orders.size >= rest.max_customers) return;
-    const [lo, hi] = rest.spawn_every_s;
-    shift.nextSpawnAt = t + (lo + random() * (hi - lo)) * 1000 * cfg.restSpawnScale;
-    const seated = new Set([...shift.orders.values()].map((o) => o.customer));
-    const freeSeats = rest.seats.map((_, i) => i).filter((i) => ![...shift.orders.values()].some((o) => o.seat === i));
-    if (freeSeats.length === 0) return;
-    const menu = menuOf(data.recipes, tierOf(rest, ratingOfRoom(room)));
-    const avail = available(room);
-    const pool = [...data.customers.values()].filter((c) => !seated.has(c.id));
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    for (const c of pool) {
-      const rec = room.restaurant.regulars[c.id];
-      const pick = chooseOrder({ menu, avail, data, taste: c, regularDish: rec?.regular ? rec.dish : null, random });
-      if (!pick) continue;
-      shift.seq += 1;
-      const seat = freeSeats[Math.floor(random() * freeSeats.length)];
-      const order = { id: `o${shift.seq}`, customer: c.id, dish: pick.recipe.id, seat, at: t, patience: rest.patience_s[pick.recipe.tier] * 1000, cookStart: null, used: pick.used, regular: pick.regular };
-      for (const [id, n] of Object.entries(pick.used)) shift.reserved[id] = (shift.reserved[id] ?? 0) + n;
-      shift.orders.set(order.id, order);
-      shift.lastActivity = t;
-      room.broadcast({ t: 'rest_order', order: order.id, customer: c.id, dish: order.dish, seat, regular: order.regular });
-      broadcastRest(room);
+      send(ctx.ws, { t: 'civic_result', rid: msg.rid, service: service.id, fee: service.fee, doc, sol: p.sol });
+      refreshHousehold(room, p);
+      sendCivic(player, room);
+      rooms.save(room);
       return;
     }
-    // 아무도 시킬 게 없다 = 재료가 떨어졌다. 남은 손님까지 다 대접하면 문을 닫는다.
-    if (shift.orders.size === 0) closeShift(room, 'no_ingredients');
+    if (msg.t === 'civic_apply') {
+      const program = data.programs.get(msg.program);
+      if (!program || program.kind === 'policy_credit') return fail(ErrorCode.badProgram);
+      if (!deps.nearDesk(player, program.desk)) return fail(ErrorCode.notAtCivic);
+      const c = civicContext(room, p);
+      if (!eligibility(program, c).ok) return fail(ErrorCode.notEligible);
+      const result = { t: 'civic_result', rid: msg.rid, program: program.id };
+      if (program.kind === 'grant_weekly') {
+        p.civic.received[program.id] = { times: (p.civic.received[program.id]?.times ?? 0) + 1, lastWeek: week, weeksLeft: program.weeks };
+        result.weekly = program.amount;
+        result.weeks = program.weeks;
+      } else if (program.kind === 'grant_once') {
+        const got = p.civic.received[program.id] ?? { times: 0, lastWeek: -99, weeksLeft: 0 };
+        p.civic.received[program.id] = { times: got.times + 1, lastWeek: week, weeksLeft: 0 };
+        p.sol += program.amount;
+        result.amount = program.amount;
+      } else if (program.kind === 'card') {
+        p.civic.card = { week, back: 0, total: 0 };
+        p.civic.received[program.id] = { times: 1, lastWeek: week, weeksLeft: 0 };
+      } else if (program.kind === 'policy_mortgage') {
+        const terms = didimdolTerms(program, c);
+        p.civic.approvals[program.id] = { rate: terms.rate, limit: terms.limit, priceMax: terms.priceMax, ltv: terms.ltv, until: week + (program.approval_weeks ?? 2) };
+        result.approval = { ...p.civic.approvals[program.id] };
+      }
+      result.sol = p.sol;
+      send(ctx.ws, result);
+      refreshHousehold(room, p);
+      sendCivic(player, room);
+      rooms.save(room);
+      return;
+    }
+    if (msg.t === 'marry_propose') {
+      // 혼인신고: 두 사람 모두 민원 창구 곁에서. 한 사람이 신청하면 상대에게 묻는다.
+      const other = Number.isInteger(msg.to) ? room.players.get(msg.to) : null;
+      if (!other || other === player || !other.online) return fail(ErrorCode.noPartner);
+      if (p.household || other.profile.household) return fail(ErrorCode.alreadyMarried);
+      if (!deps.nearDesk(player, 'civil', 2.5) || !deps.nearDesk(other, 'civil', 2.5)) return fail(ErrorCode.notAtCivic);
+      room.proposal = { from: player.id, to: other.id, at: deps.now() };
+      send(ctx.ws, { t: 'civic_result', rid: msg.rid, service: 'marriage_asked', to: other.id, sol: p.sol });
+      sendTo(other, { t: 'marry_proposal', from: player.id });
+      return;
+    }
+    if (msg.t === 'marry_answer') {
+      const prop = room.proposal;
+      if (!prop || prop.to !== player.id || deps.now() - prop.at > 120000) return fail(ErrorCode.noPartner);
+      const from = room.players.get(prop.from);
+      room.proposal = null;
+      if (!from || !from.online) return fail(ErrorCode.noPartner);
+      if (!msg.accept) {
+        sendTo(from, { t: 'marry_declined', by: player.id });
+        send(ctx.ws, { t: 'civic_result', rid: msg.rid, service: 'marriage_declined', sol: p.sol });
+        return;
+      }
+      if (p.household || from.profile.household) return fail(ErrorCode.alreadyMarried);
+      if (!deps.nearDesk(player, 'civil', 2.5) || !deps.nearDesk(from, 'civil', 2.5)) return fail(ErrorCode.notAtCivic);
+      // 두 지갑을 합치고 한 세대가 된다. 전입은 한 사람이라도 했으면 둘 다.
+      room.householdSeq += 1;
+      const id = `h${room.householdSeq}`;
+      const sol = from.profile.sol + p.sol;
+      const resident = from.profile.civic.resident || p.civic.resident;
+      room.linkHousehold(id, [from.uid, player.uid], sol, clock.day());
+      for (const m of [from.profile, p]) {
+        if (resident && !m.civic.resident) {
+          m.civic.resident = true;
+          m.civic.movedIn = clock.day();
+        }
+      }
+      room.broadcast({ t: 'household', id, members: [from.id, player.id], since: clock.day(), sol });
+      send(ctx.ws, { t: 'civic_result', rid: msg.rid, service: 'marriage', partner: from.id, sol });
+      for (const pl of [from, player]) {
+        sendProfile(pl);
+        sendCivic(pl, room);
+      }
+      rooms.save(room);
+    }
   }
 
-  /** 시연·테스트용: 처음 별점 기록. */
-  function seedRestaurant(room) {
-    if (!cfg.restStartHistory || room.restaurant.history.length > 0) return;
-    room.restaurant.history = cfg.restStartHistory.split(',').map(Number).filter((s) => Number.isInteger(s) && s >= 1 && s <= 5);
+  /** 천안사랑카드 캐시백 (상점·상인·공항에서 산 뒤). 돌려준 솔. */
+  function cashback(room, player, spent) {
+    const program = data.programs.get('local_card');
+    const card = player.profile.civic?.card;
+    if (!program || !card || spent <= 0) return 0;
+    const week = weekOf(clock.day());
+    const back = cardCashback(program, card, week, spent);
+    if (card.week !== week) {
+      card.week = week;
+      card.back = 0;
+    }
+    if (back <= 0) return 0;
+    card.back += back;
+    card.total += back;
+    player.profile.sol += back;
+    return back;
   }
 
-  return { earn, debtOf, assetsOf, creditOf, bankWire, profileWire, homesWire, restWire, handleStock, broadcastMarket, handleHome, handleBank, tickWeek, handleRestaurant, tickRestaurant, seedRestaurant, closeShift, addItem };
+  return {
+    earn,
+    membersOf,
+    debtOf,
+    assetsOf,
+    creditOf,
+    incomeOf,
+    bankWire,
+    profileWire,
+    homesWire,
+    handleStock,
+    broadcastMarket,
+    handleHome,
+    handleBank,
+    tickWeek,
+    handleCivic,
+    civicWire,
+    cashback,
+  };
 }

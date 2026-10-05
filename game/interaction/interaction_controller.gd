@@ -21,8 +21,10 @@ extends Node
 @export var dialogue: DialogueController
 @export var fishing: FishingController
 @export var action_hud: ActionHud
-## 식당 열기 · 주방 · 부동산 (v0.8, 없어도 된다).
+## 식당 열기 · 주방 · 부동산 · 동사무소 (v0.8~0.9, 없어도 된다).
 @export var economy: EconomyController
+## 뜰채질 · 조개 캐기 · 구덩이·흙길 (v0.9, 없어도 된다).
+@export var field: FieldController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -37,7 +39,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD }
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -92,6 +94,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action("거울 보기")
 		Target.ECONOMY:
 			action_hud.show_action(economy.target_label(target_id))
+		Target.FIELD:
+			action_hud.show_action(field.target_label(target_id))
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
@@ -143,6 +147,12 @@ func _pick_target() -> void:
 		if not drop_id.is_empty():
 			target = Target.COLLECT
 			target_id = drop_id
+			return
+	if field != null:
+		var field_target: String = field.pick_target(pos)
+		if not field_target.is_empty():
+			target = Target.FIELD
+			target_id = field_target
 			return
 	if flowers != null:
 		var flower_id: String = flowers.nearest_bloom(pos, GameData.plant_range - safety_margin)
@@ -203,6 +213,8 @@ func _on_action_pressed() -> void:
 			_plant(plant_spot)
 		Target.ECONOMY:
 			economy.activate(target_id)
+		Target.FIELD:
+			field.activate(target_id)
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))

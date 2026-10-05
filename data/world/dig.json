@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "_comment": "삽 (v0.9). 바닷가 모래밭과 호숫가에는 조개 숨구멍(뽀글뽀글)이 돋아나고, 삽으로 hp 번 파면 조개가 나온다 — 둘이 같이 파면 한 번에 두 번 판 셈이고, 판 사람 모두 하나씩 받는다. 풀밭을 파면 구덩이(가끔 조약돌·옛날 동전·화석), 구덩이는 메울 수 있고, 흙길을 깔거나 걷을 수 있다.",
+  "dig_range": 2.2,
+  "spot_range": 1.4,
+  "cooldown_ms": 420,
+  "coop_window_ms": 3000,
+  "beach": { "max": 8, "spawn_every_s": 45, "hp": 3,
+    "items": [ { "id": "clam_manila", "weight": 50 }, { "id": "surf_clam", "weight": 28 }, { "id": "razor_clam", "weight": 18 }, { "id": "pen_shell", "weight": 4 } ] },
+  "lake": { "max_per_spot": 2, "spawn_every_s": 60, "hp": 2,
+    "items": [ { "id": "corbicula", "weight": 85 }, { "id": "spiral_shell", "weight": 15 } ] },
+  "hole_finds": { "chance": 0.3, "items": [ { "id": "round_pebble", "weight": 62 }, { "id": "old_coin", "weight": 28 }, { "id": "fossil", "weight": 10 } ] },
+  "max_tiles": 400,
+  "net": { "range": 0.9, "radius": 1.1, "coop_radius": 1.45, "cooldown_ms": 650, "max_catch": 3,
+    "flee_radius": 3.4, "flee_speed": 3.6, "panic_speed": 2.4, "wander_speed": 0.55, "respawn_s": 14 }
+}

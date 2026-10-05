@@ -85,6 +85,11 @@ static func surface_of(position: Vector3) -> String:
 			return "stone"
 	if layout.on_path(p, 0.1):
 		return "dirt"
+	# 여울(얕은 물)에 들어가 있으면 첨벙첨벙 (v9).
+	if not Field.zone_at(Vector3(p.x, 0.0, p.y), 0.1).is_empty():
+		return "water"
+	if not Field.tile_at(roundi(p.x), roundi(p.y)).is_empty():
+		return "dirt"
 	for spot: SpotInfo in GameData.spots.values():
 		var q: Vector2 = (p - spot.center).abs() / (spot.half_extent + Vector2.ONE * layout.lake_shore)
 		if pow(q.x, layout.lake_shape_power) + pow(q.y, layout.lake_shape_power) < 1.0:

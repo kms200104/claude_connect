@@ -60,7 +60,8 @@ func _refresh_weather() -> void:
 
 
 func _refresh_profile() -> void:
-	_sol.text = Money.short(Net.sol)
+	# 혼인신고를 하면 지갑을 같이 쓴다 (v9).
+	_sol.text = ("부부 " if Economy.is_married() else "") + Money.short(Net.sol)
 	_quest_button.text = "부탁 %d" % Net.quests.size()
 	for child: Node in _list.get_children():
 		child.queue_free()

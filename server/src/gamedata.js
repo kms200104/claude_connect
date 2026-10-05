@@ -12,6 +12,11 @@ export function loadGameData(dataDir, cfg) {
   const spots = new Map();
   for (const s of read('fish/spots.json').spots) {
     for (const id of s.fish) if (!fish.has(id)) throw new Error(`spot ${s.id}: unknown fish ${id}`);
+    // 여울(얕은 물, v0.9): 수역 안쪽 사각형. 들어가서 뜰채로 물고기를 몬다.
+    for (const z of s.shallows ?? []) {
+      if (Math.abs(z.x - s.x) + z.half_x > s.half_x + 1e-6 || Math.abs(z.z - s.z) + z.half_z > s.half_z + 1e-6) throw new Error(`spot ${s.id}: shallow ${z.id} 가 수역 밖`);
+      for (const id of z.fish) if (!fish.has(id)) throw new Error(`shallow ${z.id}: unknown fish ${id}`);
+    }
     spots.set(s.id, s);
   }
 
@@ -111,6 +116,12 @@ export function loadGameData(dataDir, cfg) {
     }
   }
   for (const f of restaurant.forage.items) if (!items.has(f.id)) throw new Error(`forage: unknown item ${f.id}`);
+
+  // 동사무소 (v0.9) · 삽
+  const civic = read('civic/civic.json');
+  const programs = new Map(civic.programs.map((p) => [p.id, p]));
+  const dig = read('world/dig.json');
+  for (const list of [dig.beach.items, dig.lake.items, dig.hole_finds.items]) for (const it of list) if (!items.has(it.id)) throw new Error(`dig: unknown item ${it.id}`);
   // 손님: 주민(취향은 restaurant.json 의 tastes) + 지나가는 손님(visitors).
   const customers = new Map();
   for (const n of npcs.values()) customers.set(n.id, { id: n.id, name: n.name, mbti: n.mbti ?? '', villager: true, ...(restaurant.tastes[n.id] ?? { likes: [], dislikes: [] }) });
@@ -163,6 +174,9 @@ export function loadGameData(dataDir, cfg) {
     cookSteps,
     restaurant,
     customers,
+    civic,
+    programs,
+    dig,
     kindOf,
     priceOf,
     isFish,

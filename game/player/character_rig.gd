@@ -116,6 +116,10 @@ func set_fishing(active: bool) -> void:
 
 
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
+## 손에 든 도구 가운데 Tool 자리에 끼우는 것 (v9 뜰채 · 삽). 요리 중이면 요리 도구가 먼저다.
+const HAND_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
+
+
 func set_held(item_id: String) -> void:
 	held_item = item_id
 	if _show_target > 0.5:
@@ -125,6 +129,8 @@ func set_held(item_id: String) -> void:
 		rod.visible = item_id == "rod" and _cook_target < 0.5
 	if axe != null:
 		axe.visible = item_id == "axe" and _cook_target < 0.5
+	if _cook_target < 0.5:
+		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
 
 func play_chop() -> void:
@@ -150,6 +156,12 @@ func is_emoting() -> bool:
 	return tree != null and bool(tree.get("parameters/EmoteShot/active"))
 
 
+## 삽질 한 번 (삽을 땅에 꽂고 흙을 퍼 올린다).
+func play_dig() -> void:
+	if tree != null:
+		tree.set("parameters/DigShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
 ## 쪼그려 앉아 흙을 토닥이는 동작 (씨앗 심기).
 func play_plant() -> void:
 	if tree != null:
@@ -172,7 +184,7 @@ func set_cooking(anim: String, tool_id: String = "") -> void:
 	_cook_target = 1.0 if active else 0.0
 	if active and tree != null:
 		tree.set("parameters/CookSwitch/transition_request", anim)
-	_set_tool(tool_id if active else "")
+	_set_tool(tool_id if active else (held_item if held_item in HAND_TOOLS else ""))
 	if rod != null:
 		rod.visible = not active and held_item == "rod" and _show_target < 0.5
 	if axe != null:
@@ -206,6 +218,10 @@ func _set_tool(tool_id: String) -> void:
 			mesh = CharacterModel.pan()
 		"ladle":
 			mesh = CharacterModel.ladle()
+		"fishing_net":
+			mesh = CharacterModel.landing_net()
+		"shovel":
+			mesh = CharacterModel.shovel()
 	mi.mesh = mesh
 	tool.visible = mesh != null
 

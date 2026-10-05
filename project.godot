@@ -15,6 +15,7 @@ GameData="*res://autoload/game_data/game_data.gd"
 Audio="*res://autoload/audio/audio.gd"
 Quality="*res://autoload/quality/quality.gd"
 Economy="*res://autoload/economy/economy.gd"
+Field="*res://autoload/field/field.gd"
 
 [debug]
 

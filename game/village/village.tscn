@@ -1,4 +1,4 @@
-[gd_scene load_steps=67 format=3]
+[gd_scene load_steps=69 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -60,6 +60,8 @@
 [ext_resource type="Script" path="res://game/places/apartment_site.gd" id="64_apartments"]
 [ext_resource type="Script" path="res://game/places/restaurant_site.gd" id="65_restaurant"]
 [ext_resource type="Script" path="res://game/economy/economy_controller.gd" id="66_economy"]
+[ext_resource type="Script" path="res://game/places/civic_site.gd" id="67_civic"]
+[ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -253,6 +255,20 @@ clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
 npcs = NodePath("../Npcs")
 
+[node name="Civic" type="Node3D" parent="."]
+script = ExtResource("67_civic")
+actor_scene = ExtResource("25_actor")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
+
+[node name="Field" type="Node3D" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud", "interaction")]
+script = ExtResource("68_field")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
+toast_hud = NodePath("../HUD/FishingHud")
+clay_material = ExtResource("23_foliage")
+interaction = NodePath("../InteractionController")
+
 [node name="Mirrors" type="Node3D" parent="."]
 script = ExtResource("62_mirror_site")
 clay_material = ExtResource("23_foliage")
@@ -368,9 +384,10 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field")]
 script = ExtResource("34_interaction")
 economy = NodePath("../EconomyController")
+field = NodePath("../Field")
 mirrors = NodePath("../Mirrors")
 mirror_window = NodePath("../HUD/MirrorWindow")
 museum = NodePath("../Museum")
@@ -388,8 +405,9 @@ fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "hud", "toast_hud")]
+[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
 script = ExtResource("66_economy")
+civic_site = NodePath("../Civic")
 player = NodePath("../Player")
 apartments = NodePath("../Apartments")
 restaurant = NodePath("../Restaurant")

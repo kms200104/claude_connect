@@ -4,6 +4,8 @@ extends Control
 ##   썰기(beats): 똑딱 박자에 맞춰 "탁!"   굽기·끓이기·담기(timing): 눈금이 초록 칸에 왔을 때 "지금!"   섞기(mash): 시간 안에 마구 누르기
 ## 누른 시각(동작 시작부터 ms)만 서버로 보내고, 솜씨·맛·시간·손님 MBTI 로 별점을 매기는 건 서버다.
 ## 요리하는 동안 캐릭터는 칼·팬·국자를 들고 그 동작을 한다.
+## v9 같이 요리: 동작을 하나씩 맡아서(rest_cook) 한다 — 친구가 다른 동작을 맡고 있으면 그 동작은 건너뛰고 내 몫만 한다.
+## 마지막 동작이 들어오면 서버가 판정해 같이 만든 사람 모두에게 결과를 준다 (팀 보너스 10%, 판정 창 15% 넓게).
 
 signal closed
 
@@ -15,7 +17,7 @@ const CARD: Color = Color(1.0, 1.0, 1.0, 0.75)
 const GOOD: Color = Color("#5AAE5A")
 const WARN: Color = Color("#E8604A")
 
-enum Mode { ORDERS, COOKING, RESULT, MENU }
+enum Mode { ORDERS, COOKING, RESULT, MENU, WAITING }
 
 var player: Player = null
 var site: RestaurantSite = null
@@ -72,6 +74,19 @@ func _ready() -> void:
 	scroll.add_child(_list)
 	Economy.restaurant_changed.connect(func() -> void: _dirty = true)
 	Economy.cook_judged.connect(_on_judged)
+	Economy.step_claimed.connect(_on_step_claimed)
+	Economy.step_done.connect(func(order_id: String, _step: int) -> void:
+		if order_id == _order_id and _mode == Mode.RESULT:
+			_next_step())
+	Economy.served.connect(func(info: Dictionary) -> void:
+		# 친구가 마지막 동작을 냈다 (내가 거든 요리면 내 결과는 cook_judged 로 따로 온다).
+		if str(info.get("order", "")) == _order_id and _mode == Mode.WAITING:
+			_back_to_orders())
+	Economy.customer_left.connect(func(info: Dictionary) -> void:
+		if str(info.get("order", "")) == _order_id and _mode in [Mode.COOKING, Mode.WAITING, Mode.RESULT]:
+			_stop_cooking_pose()
+			_back_to_orders()
+			_list.add_child(_label("손님이 떠났어요…", 30, WARN)))
 	Economy.shift_closed.connect(func(_reason: String) -> void:
 		if visible:
 			close())
@@ -104,7 +119,9 @@ func _process(_delta: float) -> void:
 		return
 	var rating: float = float(Economy.rest.get("rating", 2.0))
 	var shift: Dictionary = Economy.rest.get("shift", {}) if Economy.rest.get("shift") is Dictionary else {}
-	_header.text = "%s ★%.1f · %d단계 메뉴 · 오늘 %d그릇 %s" % [str(GameData.econ.restaurant.get("name", "식당")), rating, int(Economy.rest.get("tier", 1)), int(shift.get("served", 0)), Money.short(int(shift.get("revenue", 0)))]
+	var staff: int = Array(Economy.rest.get("staff", [])).size()
+	_header.text = "%s ★%.1f · %d단계 · 오늘 %d그릇 %s%s" % [str(GameData.econ.restaurant.get("name", "식당")), rating, int(Economy.rest.get("tier", 1)), int(shift.get("served", 0)), Money.short(int(shift.get("revenue", 0))),
+		" · 직원 %d명 팀 보너스!" % staff if Economy.is_team() else ""]
 	match _mode:
 		Mode.ORDERS:
 			if _dirty:
@@ -126,7 +143,9 @@ func _rebuild() -> void:
 	if _mode != Mode.ORDERS:
 		return
 	var capacity: int = int(Economy.rest.get("capacity", 0))
-	_list.add_child(_label("가방 재료로 %d그릇쯤 더 만들 수 있어요. 손님은 재료가 있는 요리만 주문해요 (주문이 들어오면 재료를 떼어 둬요)." % capacity, 24, SOFT))
+	_list.add_child(_label("직원 가방 재료로 %d그릇쯤 더 만들 수 있어요. 손님은 재료가 있는 요리만 주문해요 (주문이 들어오면 재료를 떼어 둬요)." % capacity, 24, SOFT))
+	if not Economy.is_team():
+		_list.add_child(_label("친구가 카운터에서 '같이 일하기'를 하면 재료를 합치고, 요리 동작을 나눠 동시에 해요 (손님이 더 기다려 주고 팀 보너스 +10%).", 22, SOFT))
 	if Economy.orders.is_empty():
 		_list.add_child(_label("손님을 기다리는 중…" if capacity > 0 else "재료가 없어요! 상점에서 사거나 들판에서 채집해 오세요.", 30, INK))
 	var ids: Array[String] = []
@@ -144,7 +163,7 @@ func _rebuild() -> void:
 		_mode = Mode.MENU
 		_rebuild())
 	row.add_child(menu)
-	var shut: Button = _button("문 닫기", 28)
+	var shut: Button = _button("문 닫기" if Economy.is_rest_owner() else "일 그만하기", 28)
 	shut.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	shut.pressed.connect(Economy.close_restaurant)
 	row.add_child(shut)
@@ -184,7 +203,23 @@ func _order_card(o: Dictionary) -> Control:
 	bar.add_theme_stylebox_override("background", EventHud._box(Color(0.85, 0.8, 0.72), Color(0.75, 0.66, 0.54), 10, 1, 0))
 	bar.add_theme_stylebox_override("fill", EventHud._box(Color.WHITE, Color.WHITE, 10, 0, 0))
 	info.add_child(bar)
-	var cook: Button = _button("요리하기", 30)
+	# 동작마다 누가 맡았는지: ✓ 끝 · 이름 맡는 중 · 빈칸.
+	var chips: PackedStringArray = []
+	var st_list: Array = o.get("steps", [])
+	for i: int in st_list.size():
+		var st: Array = st_list[i]
+		var label: String = str(GameData.econ.step(recipe.steps[i] if recipe != null and i < recipe.steps.size() else "").get("label", "?"))
+		var by: int = int(st[0])
+		if int(st[1]) == 1:
+			chips.append("%s ✓" % label)
+		elif by > 0:
+			chips.append("%s(%s)" % [label, "나" if by == Net.my_id else GameData.player_name(by)])
+		else:
+			chips.append(label)
+	if not chips.is_empty():
+		info.add_child(_label(" → ".join(chips), 22, SOFT))
+	var cook: Button = _button("요리하기" if Economy.free_step(str(o.get("id", ""))) >= 0 else "동료가 하는 중", 30)
+	cook.disabled = Economy.free_step(str(o.get("id", ""))) < 0
 	cook.custom_minimum_size = Vector2(200, 110)
 	cook.pressed.connect(_start_cooking.bind(str(o.get("id", ""))))
 	row.add_child(cook)
@@ -235,7 +270,6 @@ func _start_cooking(order_id: String) -> void:
 	_order_id = order_id
 	_taps = []
 	_mode = Mode.COOKING
-	Economy.start_cooking(order_id)
 	if player != null:
 		player.set_input_lock(&"cooking", true)
 		player.look_toward(site.counter_facing() if site != null else Vector3.BACK)
@@ -254,14 +288,48 @@ func _start_cooking(order_id: String) -> void:
 	_tap_button.custom_minimum_size = Vector2(0, 200)
 	_tap_button.button_down.connect(_on_tap)
 	_list.add_child(_tap_button)
-	_begin_step(0)
+	_next_step()
+
+
+## 아직 아무도 안 맡은 다음 동작을 맡는다. 없으면 친구가 마무리하기를 기다린다.
+func _next_step() -> void:
+	if _recipe == null:
+		return
+	var free: int = Economy.free_step(_order_id)
+	if free < 0:
+		_wait_for_partner()
+		return
+	_mode = Mode.RESULT
+	_step = {}
+	_prompt.text = "다음 동작 맡는 중…"
+	Economy.claim_step(_order_id, free)
+
+
+func _on_step_claimed(order_id: String, step: int) -> void:
+	if order_id != _order_id or _recipe == null:
+		return
+	_mode = Mode.COOKING
+	_begin_step(step)
+
+
+## 내 몫은 다 했고 친구가 남은 동작을 하는 중.
+func _wait_for_partner() -> void:
+	_mode = Mode.WAITING
+	_stop_cooking_pose()
+	for c: Node in _list.get_children():
+		c.queue_free()
+	_list.add_child(_label("내 몫은 끝! 동료가 남은 동작을 마무리하는 중…", 30, INK))
+	_gauge = null
+
+
+func _back_to_orders() -> void:
+	_mode = Mode.ORDERS
+	_order_id = ""
+	_rebuild()
 
 
 func _begin_step(i: int) -> void:
-	if _recipe == null:
-		return
-	if i >= _recipe.steps.size():
-		_finish()
+	if _recipe == null or i >= _recipe.steps.size():
 		return
 	_step_index = i
 	_step = GameData.econ.step(_recipe.steps[i])
@@ -307,8 +375,7 @@ func _tick_step() -> void:
 		var earliest: float = _step_start_ms + float(_step.get("ideal_ms", 2000)) - float(_step.get("window_ms", 300)) * 1.5
 		done = done or now >= maxf(_step_start_ms + _step_taps[0] + 350.0, earliest)
 	if done:
-		_taps.append(_step_taps.duplicate())
-		_begin_step(_step_index + 1)
+		_finish_step()
 
 
 func _on_tap() -> void:
@@ -368,16 +435,25 @@ func _draw_gauge() -> void:
 	_gauge.draw_string(_gauge.get_theme_default_font(), Vector2(10.0, 30.0), "%d / %d" % [_step_index + 1, _recipe.steps.size() if _recipe != null else 1], HORIZONTAL_ALIGNMENT_LEFT, -1, 26, SOFT)
 
 
-func _finish() -> void:
+## 맡은 동작을 끝냈다: 서버로 보내고 (rest_stepped → 다음 동작, 마지막이면 rest_result) 기다린다.
+func _finish_step() -> void:
 	_mode = Mode.RESULT
-	_stop_cooking_pose()
-	if player != null and player.rig != null:
-		player.rig.set_cooking("cook_plate", "")
-	Audio.play_sfx("order_bell", -4.0)
-	Economy.serve(_order_id, _taps)
-	for c: Node in _list.get_children():
-		c.queue_free()
-	_list.add_child(_label("요리를 냈어요! 손님이 맛보는 중…", 32, INK))
+	_taps.append(_step_taps.duplicate())
+	Economy.finish_step(_order_id, _step_index, _step_taps.duplicate())
+	if _prompt != null:
+		_prompt.text = "좋아요! 다음은…"
+	if Economy.free_step(_order_id) < 0 and _is_last_step():
+		Audio.play_sfx("order_bell", -4.0)
+
+
+## 이 동작이 남은 마지막 동작인지 (다른 동작은 다 끝났다).
+func _is_last_step() -> bool:
+	var o: Dictionary = Economy.orders.get(_order_id, {})
+	var list: Array = o.get("steps", [])
+	for i: int in list.size():
+		if i != _step_index and int((list[i] as Array)[1]) == 0:
+			return false
+	return true
 
 
 func _on_judged(result: Dictionary) -> void:
@@ -388,24 +464,28 @@ func _on_judged(result: Dictionary) -> void:
 	for c: Node in _list.get_children():
 		c.queue_free()
 	_list.add_child(_label("★".repeat(stars) + "☆".repeat(5 - stars), 72, Color("#E8A820")))
-	_list.add_child(_label("솜씨 %d%% · 입맛 %d%% · 받은 돈 %s" % [roundi(float(result.get("quality", 0.0)) * 100.0), roundi(float(result.get("taste", 0.0)) * 100.0), Money.delta(int(result.get("pay", 0)))], 30, INK))
+	var team: bool = bool(result.get("team", false))
+	_list.add_child(_label("솜씨 %d%% · 입맛 %d%% · 받은 돈 %s%s" % [roundi(float(result.get("quality", 0.0)) * 100.0), roundi(float(result.get("taste", 0.0)) * 100.0),
+		Money.delta(int(result.get("share", result.get("pay", 0)))), " (같이 만들어 팀 보너스, 나눠 받음)" if team else ""], 30, INK))
 	Audio.play_sfx("cash_in", -2.0)
 	_order_id = ""
 	await get_tree().create_timer(1.6).timeout
-	if visible and _mode == Mode.RESULT:
-		_mode = Mode.ORDERS
-		_rebuild()
+	if visible and _mode in [Mode.RESULT, Mode.WAITING]:
+		_back_to_orders()
 
 
 func _on_failed(kind: String, code: String) -> void:
 	if not visible:
 		return
-	if kind == "rest_serve":
+	if kind == "rest_cook" and code == NetProtocol.ERR_STEP_TAKEN and _mode == Mode.RESULT:
+		# 그새 친구가 맡았다: 다른 동작을 찾는다 (식당 상태가 갱신되길 잠깐 기다린다).
+		await get_tree().create_timer(0.25).timeout
+		_next_step()
+		return
+	if kind in ["rest_step", "rest_cook"]:
 		_stop_cooking_pose()
-		_mode = Mode.ORDERS
-		_order_id = ""
-		_rebuild()
-		var msg: String = {"cook_too_fast": "너무 서둘렀어요!", "order_gone": "손님이 떠났어요…", "missing_ingredient": "떼어 둔 재료가 가방에 없어요!"}.get(code, code)
+		_back_to_orders()
+		var msg: String = {"cook_too_fast": "너무 서둘렀어요!", "order_gone": "손님이 떠났어요…", "missing_ingredient": "떼어 둔 재료가 가방에 없어요!", "step_taken": "친구가 이미 맡은 동작이에요."}.get(code, code)
 		_list.add_child(_label(msg, 30, WARN))
 
 

@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -69,6 +69,16 @@ export const ErrorCode = Object.freeze({
   orderGone: 'order_gone', // 손님이 떠났거나 없는 주문
   missingIngredient: 'missing_ingredient', // 떼어 둔 재료가 가방에 없다
   cookTooFast: 'cook_too_fast', // 요리를 너무 빨리 냈다
+  // v0.9 같이 하기 · 동사무소 · 여울 · 삽
+  notStaff: 'not_staff', // 식당 직원이 아니다 (같이 일하기 먼저)
+  stepTaken: 'step_taken', // 다른 사람이 맡은(또는 끝낸) 요리 동작
+  notAtCivic: 'not_at_civic', // 동사무소 그 창구에서 멀다
+  notEligible: 'not_eligible', // 지원·대출 자격이 안 된다 (이유는 civic 에)
+  badProgram: 'bad_program', // 모르는 민원·정책
+  noPartner: 'no_partner', // 혼인신고 상대가 없거나 곁에 없다
+  alreadyMarried: 'already_married', // 이미 혼인신고한 세대
+  notInShallow: 'not_in_shallow', // 여울(얕은 물) 안이 아니다
+  badDig: 'bad_dig', // 팔 수 없는 자리 (물·건물·길·나무 곁 …)
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
   // 대화 주제

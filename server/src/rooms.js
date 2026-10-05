@@ -11,6 +11,9 @@ import { sanitizeHoldings } from './market.js';
 import { sanitizeHomes } from './realestate.js';
 import { newCredit, sanitizeLoans } from './bank.js';
 import { sanitizeRestaurant } from './restaurant.js';
+import { sanitizeCivic } from './civic.js';
+import { sanitizeTiles } from './dig.js';
+import { shallowZones, newShoal } from './shoal.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
@@ -33,6 +36,26 @@ function ensureStarterTools(slots, cfg) {
     slots[index] = { id, n: 1 };
   }
   return slots;
+}
+
+/**
+ * 혼인한 두 사람의 지갑을 하나로 (v0.9): 두 프로필의 sol 이 같은 지갑을 읽고 쓴다.
+ * 그래서 누가 벌든 쓰든 그대로 함께 늘고 준다 (코드 곳곳의 profile.sol += … 이 그대로 세대 지갑에 닿는다).
+ */
+export function linkWallet(profile, wallet) {
+  Object.defineProperty(profile, 'sol', {
+    get: () => wallet.sol,
+    set: (v) => {
+      wallet.sol = v;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/** 혼인 해소 등으로 지갑을 떼어 낼 때: 지금 값을 가진 보통 속성으로 되돌린다. */
+export function unlinkWallet(profile, sol) {
+  Object.defineProperty(profile, 'sol', { value: sol, writable: true, enumerable: true, configurable: true });
 }
 
 /** schema 4 → 5 화폐 단위 배율. */
@@ -65,6 +88,9 @@ function newProfile(uid, slot, cfg, data) {
     loanSeq: 0,
     credit: { paid: 0, missed: 0, weeks: 0 }, // 이자 낸 기록 (신용점수)
     income: { amount: 0, history: [] }, // 이번 주 번 돈과 지난 주들 (대출 한도·신용)
+    household: null, // 혼인신고한 세대 id (v0.9, 지갑을 같이 쓴다)
+    civic: sanitizeCivic(null), // 동사무소 기록: 전입 · 받은 지원금 · 천안사랑카드 · 정책대출 승인
+    age: data?.civic?.player_age?.[(slot - 1) % (data.civic.player_age.length || 1)] ?? 29,
   };
 }
 
@@ -211,6 +237,16 @@ export class Room {
     // 식당: 별점 기록 · 단골 (저장) / 지금 영업 (저장 안 함)
     this.restaurant = sanitizeRestaurant(null, data.recipes ?? []);
     this.shift = null;
+    // v0.9: 혼인신고한 세대 (id → { id, members: [uid, uid], wallet: { sol }, since }), 삽으로 고친 땅 칸 (저장),
+    // 조개 숨구멍 · 여울 물고기 떼 · 같이 찍은 나무 기록 (저장 안 함).
+    this.households = new Map();
+    this.householdSeq = 0;
+    this.tiles = new Map();
+    this.digSpots = new Map();
+    this.digSeq = 0;
+    this.nextDigAt = { beach: 0, lake: 0 };
+    this.shoals = new Map(shallowZones(data.spots ?? new Map()).map((z) => [z.id, newShoal(z)]));
+    this.treeHits = new Map();
     this.dirty = false; // 위치 스냅샷 방송 필요
     this.saveDirty = false; // 파일 저장 필요
   }
@@ -271,7 +307,15 @@ export class Room {
         loanSeq: Math.max(0, intOr(p.loanSeq, 0)),
         credit: { ...newCredit(data.bank), ...(p.credit && typeof p.credit === 'object' ? { paid: intOr(p.credit.paid, 0), missed: intOr(p.credit.missed, 0), weeks: intOr(p.credit.weeks, 0) } : {}) },
         income: { amount: Math.max(0, Math.trunc(finite(p.income?.amount, 0))), history: Array.isArray(p.income?.history) ? p.income.history.filter(Number.isFinite).slice(-8) : [] },
+        civic: sanitizeCivic(p.civic),
       });
+    }
+    room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);
+    room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
+    for (const h of Array.isArray(world.households) ? world.households : []) {
+      const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
+      if (typeof h.id !== 'string' || members.length !== 2 || members.some((uid) => room.profiles.get(uid).household)) continue;
+      room.linkHousehold(h.id, members, Math.max(0, Math.trunc(finite(h.sol, 0) * money)), intOr(h.since, 0));
     }
     return room;
   }
@@ -309,6 +353,9 @@ export class Room {
         baseRate: this.baseRate,
         week: this.week,
         restaurant: structuredClone(this.restaurant),
+        tiles: [...this.tiles.values()].map((t) => [t.x, t.z, t.s]),
+        households: [...this.households.values()].map((h) => ({ id: h.id, members: [...h.members], sol: h.wallet.sol, since: h.since })),
+        householdSeq: this.householdSeq,
       },
       profiles,
     };
@@ -322,6 +369,25 @@ export class Room {
   /** 모든 나무 자리 (설치·심기 간격 검사용). */
   allTreeSpots(data) {
     return [...data.trees.values(), ...this.plantedTrees.values()];
+  }
+
+  /** 두 사람을 한 세대로 묶고 지갑을 합친다 (sol = 합친 돈). */
+  linkHousehold(id, members, sol, since) {
+    const wallet = { sol };
+    const h = { id, members: [...members], wallet, since };
+    this.households.set(id, h);
+    for (const uid of members) {
+      const p = this.profiles.get(uid);
+      p.household = id;
+      linkWallet(p, wallet);
+    }
+    return h;
+  }
+
+  /** 이 사람의 세대원 프로필 (혼자면 자기만). */
+  householdOf(profile) {
+    const h = profile.household ? this.households.get(profile.household) : null;
+    return h ? h.members.map((uid) => this.profiles.get(uid)).filter(Boolean) : [profile];
   }
 
   /** 저장된 사람 uid → 자리 번호 (없으면 0). */

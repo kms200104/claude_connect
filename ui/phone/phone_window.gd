@@ -32,6 +32,8 @@ var _qty: int = 1
 var _unit_id: String = ""
 var _building: String = ""
 var _loan_ratio: float = 0.0
+## 동사무소에서 승인받은 디딤돌대출로 살지 (v9).
+var _use_didimdol: bool = false
 var _dirty: bool = false
 var _week_reports: Array[Dictionary] = []
 
@@ -331,13 +333,30 @@ func _build_unit_detail(u: EconData.Unit) -> void:
 				Economy.ask_bank()
 			_rebuild())
 		ratio_row.add_child(b)
+	# 디딤돌대출 (동사무소 승인을 받았을 때): 고정금리, 승인 한도·LTV 안에서.
+	var didim: Dictionary = Economy.approvals.get("didimdol", {}) if Economy.approvals.get("didimdol") is Dictionary else {}
+	if not didim.is_empty():
+		var d_btn: Button = _button("디딤돌대출로 (고정 연 %s · 한도 %s)" % [Money.percent(float(didim.get("rate", 0.0))), Money.short(int(didim.get("limit", 0)))], 26, GOOD, _use_didimdol)
+		d_btn.disabled = price > int(didim.get("priceMax", 0))
+		d_btn.pressed.connect(func() -> void:
+			_use_didimdol = not _use_didimdol
+			_rebuild())
+		card.add_child(d_btn)
+	var policy: String = ""
+	if _use_didimdol and not didim.is_empty() and loan > 0:
+		var cap: int = mini(int(didim.get("limit", 0)), floori(float(price) * float(didim.get("ltv", 0.7)) / 10000.0) * 10000)
+		# 고른 비율(최대 대비)만큼 디딤돌 한도에서 빌린다.
+		loan = floori(float(cap) * clampf(_loan_ratio, 0.0, 1.0) / 10000.0) * 10000
+		rate = float(didim.get("rate", 0.0))
+		policy = "didimdol"
 	if loan > 0:
-		card.add_child(_label("담보대출 %s · 금리 연 %s (변동) · 주 이자 약 %s" % [Money.short(loan), Money.percent(rate) if rate > 0.0 else "?", Money.short(ceili(float(loan) * rate / 52.0))], 26, SOFT))
-		card.add_child(_label("소득이 없으면 은행이 빌려주지 않아요 (DSR 40%).", 22, SOFT))
+		card.add_child(_label("담보대출 %s · 금리 연 %s (%s) · 주 이자 약 %s" % [Money.short(loan), Money.percent(rate) if rate > 0.0 else "?", "고정, 디딤돌" if policy == "didimdol" else "변동", Money.short(ceili(float(loan) * rate / 52.0))], 26, SOFT))
+		if policy.is_empty():
+			card.add_child(_label("소득이 없으면 은행이 빌려주지 않아요 (DSR 40%). 무주택이면 동사무소에서 디딤돌대출 승인을 받아 보세요.", 22, SOFT))
 	var need: int = total - loan
 	var buy: Button = _button("사기 (내 돈 %s)" % Money.short(need), 32, UP)
 	buy.disabled = need > Net.sol
-	buy.pressed.connect(Economy.buy_home.bind(u.id, loan))
+	buy.pressed.connect(Economy.buy_home.bind(u.id, loan, policy))
 	card.add_child(buy)
 
 
@@ -379,10 +398,15 @@ func _build_bank() -> void:
 		_body.add_child(_label("빌린 돈이 없어요.", 26, SOFT))
 	for l: Dictionary in Economy.loans:
 		var lc: VBoxContainer = _card()
+		var product: String = str(l.get("product", ""))
 		var kind: String = "주택담보 (%s)" % str(l.get("unit", "")) if str(l.get("kind", "")) == "mortgage" else "신용대출"
+		if product == "didimdol":
+			kind = "디딤돌대출 (%s)" % str(l.get("unit", ""))
+		elif product == "sunshine_youth":
+			kind = "햇살론유스"
 		var principal: int = int(l.get("principal", 0))
 		lc.add_child(_label("%s · %s" % [kind, Money.short(principal)], 30, INK))
-		lc.add_child(_label("금리 연 %s · 주 이자 %s (매주 솔에서 빠져나가요)" % [Money.percent(float(l.get("rate", 0.0))), Money.short(int(l.get("weekly", 0)))], 24, SOFT))
+		lc.add_child(_label("금리 연 %s (%s) · 주 이자 %s (매주 솔에서 빠져나가요)" % [Money.percent(float(l.get("rate", 0.0))), "고정" if bool(l.get("fixed", false)) else "변동", Money.short(int(l.get("weekly", 0)))], 24, SOFT))
 		var rr: HBoxContainer = HBoxContainer.new()
 		rr.add_theme_constant_override("separation", 8)
 		lc.add_child(rr)
@@ -399,13 +423,13 @@ func _build_bank() -> void:
 
 func _build_assets() -> void:
 	var card: VBoxContainer = _card()
-	card.add_child(_label("순자산 %s" % Money.short(Economy.net_worth), 42, INK))
+	card.add_child(_label("순자산 %s%s" % [Money.short(Economy.net_worth), (" (%s 님과 한 세대)" % GameData.player_name(Economy.partner)) if Economy.is_married() else ""], 42, INK))
 	var homes_value: int = 0
 	for id: String in Economy.my_homes():
 		var u: EconData.Unit = GameData.econ.unit(id)
 		if u != null:
 			homes_value += GameData.econ.unit_price(u, Economy.apt_index)
-	for row: Array in [["현금(솔)", Net.sol], ["주식 평가액", Economy.stocks_value()], ["아파트 시세", homes_value], ["빚", -Economy.debt]]:
+	for row: Array in [["현금(솔)" + (" · 같이 쓰는 지갑" if Economy.is_married() else ""), Net.sol], ["주식 평가액 (내 것)", Economy.stocks_value()], ["아파트 시세", homes_value], ["빚 (세대)", -Economy.debt]]:
 		var line: HBoxContainer = HBoxContainer.new()
 		card.add_child(line)
 		var name_label: Label = _label(str(row[0]), 30, INK)

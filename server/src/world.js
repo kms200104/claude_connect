@@ -40,6 +40,14 @@ export function blockedAreas(data) {
     circles.push({ x: data.airport.pilot.x, z: data.airport.pilot.z, r: 1.6 });
   }
   for (const n of data.npcs.values()) if (n.house) circles.push({ x: n.house.x, z: n.house.z, r: 4.2 });
+  // v0.8~0.9 건물: 식당(앞 테라스까지), 아파트 동, 부동산 부스, 동사무소.
+  const rest = data.restaurant?.building;
+  if (rest) rects.push({ x0: rest.x - rest.width / 2 - 1, x1: rest.x + rest.width / 2 + 1, z0: rest.z - rest.depth / 2 - 1, z1: rest.z + rest.depth / 2 + 12 });
+  for (const b of data.realestate?.buildings ?? []) rects.push({ x0: b.x - 5.5, x1: b.x + 5.5, z0: b.z - 4, z1: b.z + 4.5 });
+  const office = data.realestate?.office;
+  if (office) circles.push({ x: office.x, z: office.z - 1, r: 2.2 });
+  const civic = data.civic?.building;
+  if (civic) rects.push(buildingRect(civic, 1.5));
   for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
   return { rects, circles };
 }

@@ -77,7 +77,17 @@ export function sanitizeLoans(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((l) => l && (l.kind === 'credit' || l.kind === 'mortgage') && Number.isFinite(l.principal) && l.principal > 0)
-    .map((l) => ({ id: String(l.id), kind: l.kind, principal: Math.trunc(l.principal), rate: Number(l.rate) || 0, unit: typeof l.unit === 'string' ? l.unit : '', since: Number.isInteger(l.since) ? l.since : 0 }));
+    .map((l) => ({
+      id: String(l.id),
+      kind: l.kind,
+      principal: Math.trunc(l.principal),
+      rate: Number(l.rate) || 0,
+      unit: typeof l.unit === 'string' ? l.unit : '',
+      since: Number.isInteger(l.since) ? l.since : 0,
+      // v0.9 정책대출: product = 'didimdol' | 'sunshine_youth' (고정금리 — 매주 다시 매기지 않는다)
+      product: typeof l.product === 'string' ? l.product : '',
+      fixed: !!l.fixed,
+    }));
 }
 
 /**
@@ -89,7 +99,7 @@ export function chargeWeek(rules, profile, baseRate, grade) {
   let capitalized = 0;
   let missed = false;
   for (const loan of profile.loans) {
-    loan.rate = rateFor(rules, baseRate, grade, loan.kind);
+    if (!loan.fixed) loan.rate = rateFor(rules, baseRate, grade, loan.kind);
     const interest = weeklyInterest(loan.principal, loan.rate);
     const pay = Math.min(interest, Math.max(0, profile.sol));
     profile.sol -= pay;
