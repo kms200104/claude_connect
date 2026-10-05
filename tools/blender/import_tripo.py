@@ -79,11 +79,16 @@ def extract_base_color(src, dest):
     view = gltf['bufferViews'][image['bufferView']]
     start = bin_start + view.get('byteOffset', 0)
     ext = '.png' if image.get('mimeType') == 'image/png' else '.jpg'
-    for old in ('.png', '.jpg'):
-        for stale in (dest.with_suffix(old), dest.with_suffix(old + '.import')):
-            stale.unlink(missing_ok=True)
+    other = '.jpg' if ext == '.png' else '.png'
+    for stale in (dest.with_suffix(other), dest.with_suffix(other + '.import')):
+        stale.unlink(missing_ok=True)
     out = dest.with_suffix(ext)
     out.write_bytes(data[start:start + view['byteLength']])
+    # 3D 텍스처 가져오기 설정: 밉맵 켬(멀리서 반짝이지 않게), 무손실(압축 얼룩 없이). 이미 있으면 그대로 둔다.
+    settings = dest.with_suffix(ext + '.import')
+    if not settings.exists():
+        settings.write_text('[remap]\n\nimporter="texture"\ntype="CompressedTexture2D"\n\n[params]\n\n'
+                            'compress/mode=0\nmipmaps/generate=true\ndetect_3d/compress_to=0\n', encoding='utf-8')
     return out
 
 
