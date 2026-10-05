@@ -62,6 +62,8 @@ var mbti: Dictionary = {}
 var airport: KeeperPlace = null
 ## 경제 (v8): 증권 종목 · 아파트 · 은행 · 식당 요리와 손님.
 var econ: EconData = null
+## 일거리 (v0.12): 배달 알바 거리.
+var jobs: JobRules = JobRules.new()
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
@@ -122,6 +124,7 @@ func _ready() -> void:
 	mbti = _read_json(MBTI_PATH)
 	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
 	econ = EconData.load_all()
+	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
 	econ.build_customers(npcs)
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))

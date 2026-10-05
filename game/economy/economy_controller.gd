@@ -195,6 +195,11 @@ func _on_apt(r: Dictionary) -> void:
 	Audio.play_sfx("fanfare_small" if str(r.get("kind", "")) == "buy" else "cash_in", -4.0)
 	if str(r.get("kind", "")) == "buy":
 		toast_hud.show_toast("%s 를 샀어요! 세를 놓아 매주 월세가 들어와요." % str(r.get("unit", "")), true)
+	elif str(r.get("kind", "")) == "lease":
+		if str(r.get("lease", "")) == "jeonse":
+			toast_hud.show_toast("%s 전세 계약! 보증금 %s을 받았어요 (만기에 돌려줘요)." % [str(r.get("unit", "")), Money.short(int(r.get("deposit", 0)))], true)
+		else:
+			toast_hud.show_toast("%s 보증금 %s을 돌려주고 월세로 바꿨어요." % [str(r.get("unit", "")), Money.short(int(r.get("deposit", 0)))], true)
 	else:
 		toast_hud.show_toast("%s 를 팔았어요 (대출 상환 %s)" % [str(r.get("unit", "")), Money.short(int(r.get("repaid", 0)))], true)
 
@@ -229,6 +234,8 @@ func _on_week(r: Dictionary) -> void:
 		parts.append("이자 -%s" % Money.short(int(r.get("interest", 0))))
 	if bool(r.get("missed", false)):
 		parts.append("연체! 남은 이자 %s 가 원금에 붙었어요" % Money.short(int(r.get("capitalized", 0))))
+	for j: Dictionary in r.get("jeonse", []):
+		parts.append("%s 전세 만기 · 보증금 %s 반환" % [str(j.get("unit", "")), Money.short(int(j.get("deposit", 0)))])
 	for m: Dictionary in r.get("matured", []):
 		parts.append("%s 만기 +%s" % [str(m.get("name", "")), Money.short(int(m.get("net", 0)))])
 	parts.append("기준금리 %s" % Money.percent(float(r.get("base", 0.0))))
@@ -249,6 +256,7 @@ func _on_failed(kind: String, code: String) -> void:
 		NetProtocol.ERR_BAD_ACCOUNT: "없는 계좌예요.",
 		NetProtocol.ERR_ACCOUNT_LIMIT: "예적금은 8개까지 들 수 있어요.",
 		NetProtocol.ERR_NOT_ELIGIBLE: "가입 조건이 안 돼요.",
+		NetProtocol.ERR_BAD_LEASE: "이미 그 임대 방식이에요.",
 		NetProtocol.ERR_REST_BUSY: "다른 사람이 식당을 열었어요.",
 		NetProtocol.ERR_NOT_AT_RESTAURANT: "식당 카운터에서 열 수 있어요.",
 		NetProtocol.ERR_REST_CLOSED: "식당이 닫혀 있어요.",

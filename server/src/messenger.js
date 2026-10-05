@@ -107,6 +107,12 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
       if (names.length > 0 && rules.bank.matured_bonus) line += ` ${fillLine(rules.bank.matured_bonus, { bonus: names.join(' · ') })}`;
       if (line) push(room, profile, 'sys:bank', 'bank', line);
     }
+    // v0.12 전세 만기: 보증금을 세입자에게 돌려줬다 (모자란 만큼은 전세금 반환 대출).
+    for (const j of report.jeonse ?? []) {
+      let line = fillLine(rules.bank.jeonse_end ?? '', { unit: j.unit, sol: sol(j.deposit) });
+      if (j.loan > 0 && rules.bank.jeonse_loan) line += ` ${fillLine(rules.bank.jeonse_loan, { sol: sol(j.loan) })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
   }
 
   function handle(ctx, msg, fail) {

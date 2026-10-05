@@ -26,6 +26,7 @@ import { createKitchen } from './kitchen.js';
 import { inZone, netCatch, refillShoal, shoalWire, stepShoal } from './shoal.js';
 import { TileKind, beachSpot, digSpotWire, diggers, hitSpot, lakeShoreSpot, onBeach, snapTile, tileKey } from './dig.js';
 import { distanceToSpot } from './gamedata.js';
+import { createJobs } from './jobs.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -92,6 +93,7 @@ export function createServer(overrides = {}) {
   };
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
+  const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
@@ -1340,11 +1342,18 @@ export function createServer(overrides = {}) {
         return economy.handleStock(ctx, msg, fail);
       case 'apt_buy':
       case 'apt_sell':
+      case 'apt_lease':
         return economy.handleHome(ctx, msg, fail);
       case 'dep_open':
       case 'dep_close':
       case 'park_move':
         return economy.handleSavings(ctx, msg, fail);
+      case 'job_info':
+      case 'job_take':
+      case 'job_pick':
+      case 'job_drop':
+      case 'job_quit':
+        return jobs.handle(ctx, msg, fail);
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1493,9 +1502,15 @@ export function createServer(overrides = {}) {
       case 'stock_order':
       case 'apt_buy':
       case 'apt_sell':
+      case 'apt_lease':
       case 'dep_open':
       case 'dep_close':
       case 'park_move':
+      case 'job_info':
+      case 'job_take':
+      case 'job_pick':
+      case 'job_drop':
+      case 'job_quit':
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1569,7 +1584,7 @@ export function createServer(overrides = {}) {
         p: [...room.players.values()].map((p) => ({
           id: p.id,
           fishing: p.fishing !== null,
-          held: p.heldItem,
+          held: jobs.carried(p) ?? p.heldItem,
           hat: p.profile.outfit.hat,
           top: p.profile.outfit.top,
           x: p.x,

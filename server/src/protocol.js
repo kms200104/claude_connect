@@ -94,6 +94,12 @@ export const ErrorCode = Object.freeze({
   homeFull: 'home_full', // 집 안 가구가 너무 많음
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
+  // v12: 일거리 (배달 알바)
+  jobBusy: 'job_busy', // 이미 하던 배달이 있다
+  jobLimit: 'job_limit', // 오늘 일거리를 다 했다
+  noJob: 'no_job', // 받은(또는 그 단계의) 배달이 없다
+  notAtJob: 'not_at_job', // 받을 곳·갖다줄 집 곁이 아니다
+  badLease: 'bad_lease', // 이미 전세(또는 월세)이거나 모르는 임대 방식
   // 대화 주제
   badTopic: 'bad_topic',
 });

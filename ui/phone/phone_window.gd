@@ -6,7 +6,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -17,7 +17,7 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리"]
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")
 const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
@@ -86,7 +86,7 @@ func _ready() -> void:
 	tabs.add_theme_constant_override("separation", 10)
 	col.add_child(tabs)
 	for i: int in TAB_NAMES.size():
-		var b: Button = _button(TAB_NAMES[i], 34)
+		var b: Button = _button(TAB_NAMES[i], 30)
 		b.custom_minimum_size = Vector2(0, 92)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(open.bind(i))
@@ -100,7 +100,7 @@ func _ready() -> void:
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body.add_theme_constant_override("separation", 12)
 	_scroll.add_child(_body)
-	for sig: Signal in [Economy.market_changed, Economy.portfolio_changed, Economy.homes_changed, Economy.bank_changed]:
+	for sig: Signal in [Economy.market_changed, Economy.portfolio_changed, Economy.homes_changed, Economy.bank_changed, Economy.job_changed]:
 		sig.connect(func() -> void: _dirty = true)
 	Talk.changed.connect(func() -> void:
 		_update_talk_badge()
@@ -130,6 +130,8 @@ func open(tab: int = -1) -> void:
 	visible = true
 	if _tab == Tab.BANK:
 		Economy.ask_bank()
+	elif _tab == Tab.JOBS:
+		Economy.ask_jobs()
 	for i: int in _tab_buttons.size():
 		_tab_buttons[i].add_theme_stylebox_override("normal", EventHud._box(PICKED if i == _tab else CARD, EDGE, 26, 3, 10))
 	_rebuild()
@@ -168,6 +170,8 @@ func _rebuild() -> void:
 			_build_bank()
 		Tab.ASSETS:
 			_build_assets()
+		Tab.JOBS:
+			_build_jobs()
 		Tab.TALK:
 			_build_talk()
 			if not _thread.is_empty():
@@ -324,6 +328,32 @@ func _build_homes() -> void:
 		grid.add_child(b)
 
 
+## 임대 방식 (v0.12): 월세(매주 수입) ↔ 전세(보증금을 한 번에 받고, 만기에 돌려준다).
+func _build_lease(card: VBoxContainer, u: EconData.Unit, price: int, lease: Dictionary) -> void:
+	var rules: Dictionary = Economy.jeonse_rules
+	var ratio: float = float(rules.get("ratio", 0.6))
+	var weeks: int = int(rules.get("weeks", 24))
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	card.add_child(box)
+	if lease.is_empty():
+		var deposit: int = roundi(float(price) * ratio / 10000.0) * 10000
+		box.add_child(_label("임대: 월세 · 매주 %s 들어와요" % Money.short(GameData.econ.weekly_rent(price)), 28, GOOD))
+		box.add_child(_label("전세로 돌리면 보증금 %s을 지금 받고 %d주 동안 월세가 없어요. 만기에 돌려줘야 하는 빚이라 그 돈으로 다른 집을 사거나 예금해 둘 수 있어요 (모자라면 전세금 반환 대출)." % [Money.short(deposit), weeks], 22, SOFT))
+		var jb: Button = _button("전세로 놓기 (+%s)" % Money.short(deposit), 28)
+		jb.pressed.connect(Economy.lease_home.bind(u.id, "jeonse"))
+		box.add_child(jb)
+		return
+	var deposit_now: int = int(lease.get("deposit", 0))
+	var left: int = maxi(0, int(lease.get("until", 0)) - Economy.home_week)
+	box.add_child(_label("임대: 전세 · 보증금 %s · 만기까지 %d주" % [Money.short(deposit_now), left], 28, DOWN))
+	box.add_child(_label("만기에 보증금을 지갑에서 돌려주고 다시 월세로 바뀌어요. 지금 월세로 돌리려면 보증금을 바로 돌려줘야 해요.", 22, SOFT))
+	var rb: Button = _button("보증금 돌려주고 월세로 (-%s)" % Money.short(deposit_now), 26)
+	rb.disabled = Net.sol < deposit_now
+	rb.pressed.connect(Economy.lease_home.bind(u.id, "rent"))
+	box.add_child(rb)
+
+
 func _build_unit_detail(u: EconData.Unit) -> void:
 	var econ: EconData = GameData.econ
 	var card: VBoxContainer = _card()
@@ -340,7 +370,10 @@ func _build_unit_detail(u: EconData.Unit) -> void:
 			if str(l.get("unit", "")) == u.id:
 				mortgage += int(l.get("principal", 0))
 		card.add_child(_label("산 값 %s → 지금 %s (%s)" % [Money.short(bought), Money.short(price), Money.delta(price - bought)], 28, UP if price >= bought else DOWN))
-		card.add_child(_label("팔면 %s 받고, 이 집 담보대출 %s 부터 갚는다" % [Money.short(price - fee), Money.short(mortgage)], 26, SOFT))
+		var lease: Dictionary = Economy.home_leases.get(u.id, {})
+		var deposit: int = int(lease.get("deposit", 0))
+		card.add_child(_label("팔면 %s 받고, %s이 집 담보대출 %s 부터 갚는다" % [Money.short(price - fee - deposit), "전세 보증금 %s을 빼고, " % Money.short(deposit) if deposit > 0 else "", Money.short(mortgage)], 26, SOFT))
+		_build_lease(card, u, price, lease)
 		var sell: Button = _button("팔기", 32, DOWN)
 		sell.pressed.connect(Economy.sell_home.bind(u.id))
 		card.add_child(sell)
@@ -666,6 +699,59 @@ func _build_my_accounts(accounts: Array, insts: Array, products: Array, exposure
 		var cb: Button = _button("중도해지 (이자 손해)" if bool(a.get("early", true)) else "해지", 24, UP if bool(a.get("early", true)) else INK)
 		cb.pressed.connect(Economy.close_deposit.bind(str(a.get("id", ""))))
 		card.add_child(cb)
+
+
+# ---- 일거리 ----
+
+func _build_jobs() -> void:
+	var info: Dictionary = Economy.jobs
+	var done: int = int(info.get("done", 0))
+	var most: int = int(info.get("max", GameData.jobs.daily_max))
+	_body.add_child(_label("마을 일거리 · 오늘 %d / %d 건" % [done, most], 32, INK))
+	_body.add_child(_label("물건을 받아 주민 집까지 갖다주면 삯을 받아요. 멀수록 많이, 빨리 가면 팁, 친구와 같이 가면 두 사람 모두 보너스!", 24, SOFT))
+	var j: Dictionary = Economy.job()
+	if not j.is_empty():
+		var card: VBoxContainer = _card()
+		var carry: bool = str(j.get("stage", "")) == "carry"
+		card.add_child(_label("하는 중 · %s" % str(j.get("name", "")), 30, INK))
+		card.add_child(_label("%s → %s네 집 (%dm)" % [str(j.get("from", {}).get("name", "")), GameData.npc_name(str(j.get("to", {}).get("npc", ""))), int(j.get("dist", 0))], 26, INK))
+		card.add_child(_label("삯 %s · 팁 %s (받고 나서 %d초 안에)" % [Money.short(int(j.get("pay", 0))), Money.short(int(j.get("tip", 0))), int(j.get("limit_s", 0))], 24, GOOD))
+		card.add_child(_label("들고 가는 중이에요. 빛기둥이 선 집으로!" if carry else "노란 빛기둥이 선 곳에서 물건을 받아요.", 24, SOFT))
+		var quit: Button = _button("그만두기", 26, UP)
+		quit.pressed.connect(Economy.quit_job)
+		card.add_child(quit)
+	else:
+		var any: Button = _button("아무 일거리나 받기", 30, GOOD)
+		any.disabled = done >= most
+		any.pressed.connect(func() -> void:
+			Economy.take_job()
+			close())
+		_body.add_child(any)
+		for k: Variant in info.get("kinds", []):
+			if not k is Dictionary:
+				continue
+			var kd: Dictionary = k
+			var card: VBoxContainer = _card()
+			card.add_child(_label(str(kd.get("name", "")), 30, INK))
+			card.add_child(_label(str(kd.get("about", "")), 24, SOFT))
+			var take: Button = _button("이 일 받기", 26)
+			take.disabled = done >= most
+			take.pressed.connect(func() -> void:
+				Economy.take_job(str(kd.get("id", "")))
+				close())
+			card.add_child(take)
+		if done >= most:
+			_body.add_child(_label("오늘 일거리는 다 했어요. 내일 또 와요!", 26, UP))
+	_body.add_child(_label("다른 돈벌이", 32, INK))
+	var tips: VBoxContainer = _card()
+	for line: String in [
+		"식당 알바: 식당이 열려 있으면 카운터에서 '같이 일하기' — 요리를 나눠 하면 팀 보너스.",
+		"주민 부탁: 말을 걸다 보면 부탁을 해요. 물건·물고기를 갖다주면 사례와 친밀도.",
+		"임대: 부동산 앱에서 산 집을 월세(매주 수입) 또는 전세(큰 보증금을 한 번에, 만기에 돌려줌)로 놓아요.",
+		"예금·적금: 은행 앱에서 금리·기간을 비교해 넣어 두면 이자가 붙어요.",
+	]:
+		tips.add_child(_label("· " + line, 24, SOFT))
+
 
 # ---- 자산 ----
 

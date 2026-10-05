@@ -123,7 +123,7 @@ func set_fishing(active: bool) -> void:
 
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
 ## 손에 든 도구 가운데 Tool 자리(손에 고정)에 끼우는 것. 요리 중이면 요리 도구가 먼저다.
-const HAND_TOOLS: PackedStringArray = []
+const HAND_TOOLS: PackedStringArray = ["parcel", "lunchbox", "envelope"]
 ## 휘둘러 쓰는 도구 — 도끼 자리(Axe)에 끼워, 사용 동작이 손목(Axe 트랙)을 돌리는 대로 따라간다
 ## (뜰채: 도끼질 chop 으로 떠 올리기, 삽: dig 가 날을 뒤집어 꽂고 퍼 올린다). 들고 다닐 땐 도끼처럼 위·앞으로 세운다.
 const SWING_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
@@ -135,6 +135,7 @@ const TOOL_MODELS: Dictionary[String, String] = {"knife": "tool_knife", "pan": "
 ## 팔을 내린 대기·걷기에서는 같은 각도라 몸 앞쪽 아래로 든다 (예전엔 126° 고정이라 몸 뒤로 뻗었다).
 const TOOL_GRIPS: Dictionary[String, Vector2] = {
 	"knife": Vector2(50.0, 0.0), "pan": Vector2(30.0, 0.0), "ladle": Vector2(15.0, 0.0),
+	"parcel": Vector2(-10.0, 0.0), "lunchbox": Vector2(-10.0, 0.0), "envelope": Vector2(-10.0, 90.0),
 }
 ## 도끼 자리 도구의 각도 (도): x = 앞뒤로 숙임, y = 자루를 축으로 돌림 (뜰채 입구가 휘두르는 쪽을 보게),
 ## z = 바깥(캐릭터 오른쪽)으로 눕힘 — 1m 가까운 뜰채·삽을 세워 들면 망·날이 얼굴을 가린다.
@@ -253,6 +254,8 @@ func _set_tool(tool_id: String) -> void:
 			mesh = CharacterModel.landing_net()
 		"shovel":
 			mesh = CharacterModel.shovel()
+		"parcel", "lunchbox", "envelope":
+			mesh = CharacterModel.carry_prop(tool_id)
 	mi.mesh = mesh
 	var grip: Vector2 = TOOL_GRIPS.get(tool_id, Vector2.ZERO)
 	mi.basis = Basis(Vector3.RIGHT, deg_to_rad(180.0 + grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))

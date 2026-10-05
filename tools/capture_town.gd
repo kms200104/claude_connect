@@ -186,6 +186,37 @@ func _run() -> void:
 	await _shot("t15_seongseong")
 	player.rig.set_sitting(false)
 
+	# 일거리 (v0.12): 일거리 앱 → 받을 곳 빛기둥 → 도시락을 들고 가는 모습.
+	hud.visible = true
+	econ.phone.open(PhoneWindow.Tab.JOBS)
+	await _wait(0.8)
+	await _shot("t16_phone_jobs")
+	econ.phone.close()
+	Economy.take_job("lunchbox")
+	await _wait_until(func() -> bool: return not Economy.job().is_empty(), 3.0)
+	var from: Dictionary = Economy.job().get("from", {})
+	var pickup: Vector3 = Vector3(float(from.get("x", 0.0)), 0.1, float(from.get("z", 0.0)))
+	camera.distance = base_distance + 6.0
+	await _put(pickup + Vector3(0.0, 0.0, 6.0), PI)
+	await _wait(0.6)
+	await _shot("t17_job_beacon")
+	await _put(pickup + Vector3(0.0, 0.0, 0.5), PI)
+	Economy.pick_job()
+	await _wait_until(func() -> bool: return Economy.carry_item() == "lunchbox", 3.0)
+	camera.distance = base_distance - 3.0
+	camera.pitch_degrees = base_pitch - 10.0
+	await _put(pickup + Vector3(0.0, 0.0, 3.0), 0.0)
+	await _wait(0.8)
+	await _shot("t18_job_carry")
+	player.rig.set_held("parcel")
+	await _wait(0.3)
+	await _shot("t18b_job_parcel")
+	player.rig.set_held("envelope")
+	await _wait(0.3)
+	await _shot("t18c_job_envelope")
+	camera.distance = base_distance
+	camera.pitch_degrees = base_pitch
+
 
 ## 미니게임을 솜씨 좋게 친다 (상차림·별점 장면이 높은 별로 나오게).
 func _play_minigame(kitchen: KitchenWindow) -> void:

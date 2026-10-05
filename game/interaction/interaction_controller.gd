@@ -27,6 +27,8 @@ extends Node
 @export var field: FieldController
 ## 아파트 집 구경 · 집 안 나가기 (v0.10, 없어도 된다).
 @export var home: HomeController
+## 배달 알바 받을 곳 · 갖다줄 집 (v0.12, 없어도 된다).
+@export var jobs: JobController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -43,7 +45,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB }
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -103,6 +105,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action(field.target_label(target_id))
 		Target.HOME:
 			action_hud.show_action(home.target_label(target_id))
+		Target.JOB:
+			action_hud.show_action(jobs.target_label(target_id))
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
@@ -120,6 +124,13 @@ func _pick_target() -> void:
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
 	var pos: Vector3 = player.global_position
+	# 배달 중이면 받을 곳·집 앞 버튼이 먼저다 (집 앞에 주민이 서 있어도 배달부터).
+	if jobs != null:
+		var job_target: String = jobs.pick_target(pos)
+		if not job_target.is_empty():
+			target = Target.JOB
+			target_id = job_target
+			return
 	var npc_id: String = npcs.nearest_talkable(pos, GameData.talk_range - safety_margin)
 	if not npc_id.is_empty():
 		target = Target.TALK
@@ -235,6 +246,8 @@ func _on_action_pressed() -> void:
 			field.activate(target_id)
 		Target.HOME:
 			home.activate(target_id)
+		Target.JOB:
+			jobs.activate(target_id)
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))

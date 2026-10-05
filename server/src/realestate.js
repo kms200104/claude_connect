@@ -49,6 +49,11 @@ export function weeklyRent(rules, price) {
   return Math.round((price * rules.rent_yield) / 52);
 }
 
+/** 전세 보증금 (v0.12): 지금 시세 × ratio, 만 원 단위. */
+export function jeonseDeposit(rules, price) {
+  return Math.round((price * (rules.jeonse?.ratio ?? 0.6)) / 10000) * 10000;
+}
+
 /** 집값 지수를 한 주 움직인다 (로그 정규 + 범위 제한). */
 export function stepIndex(rules, index, random) {
   const u = Math.max(random(), 1e-12);
@@ -63,7 +68,10 @@ export function sanitizeHomes(raw, units) {
   if (!raw || typeof raw !== 'object') return out;
   const ids = new Set(units.map((u) => u.id));
   for (const [id, h] of Object.entries(raw)) {
-    if (ids.has(id) && typeof h?.owner === 'string' && Number.isFinite(h.price)) out[id] = { owner: h.owner, price: Math.trunc(h.price), day: Number.isInteger(h.day) ? h.day : 0 };
+    if (!ids.has(id) || typeof h?.owner !== 'string' || !Number.isFinite(h.price)) continue;
+    out[id] = { owner: h.owner, price: Math.trunc(h.price), day: Number.isInteger(h.day) ? h.day : 0 };
+    const l = h.lease;
+    if (l?.kind === 'jeonse' && Number.isInteger(l.deposit) && l.deposit > 0 && Number.isInteger(l.until)) out[id].lease = { kind: 'jeonse', deposit: l.deposit, until: l.until };
   }
   return out;
 }

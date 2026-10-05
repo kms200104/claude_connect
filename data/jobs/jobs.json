@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "_comment": "일거리 (v0.12). 휴대폰 '일거리' 앱에서 배달 알바를 받는다. 서버가 받을 곳(pickups)과 갖다줄 주민 집(npcs.json house)을 고르고, 가까이 갔는지(range)만 본다. 삯 = base + per_m × 받을 곳~집 거리. 넉넉한 시간(grace_s + 거리 ÷ pace_mps) 안에 갖다주면 팁(tip). 시간이 지나도 실패하지 않는다 (팁만 없다). 친구가 together_m 안에 같이 오면 두 사람 모두 together 비율만큼 더 받는다. 하루(마을 날짜)에 daily_max 건까지. 받을 곳 좌표는 각 장소 데이터(shop.door · restaurant.counter · airport.pilot · museum.curator · civic.building · apartments.office)와 맞춘다.",
+  "daily_max": 8,
+  "range": 3.2,
+  "house_range": 5.0,
+  "together_m": 8.0,
+  "together": 0.25,
+  "pace_mps": 2.6,
+  "grace_s": 25,
+  "friend": 2,
+  "kinds": [
+    {
+      "id": "parcel",
+      "name": "택배 배달",
+      "about": "잡화점 앞에 쌓인 택배를 주민 집까지.",
+      "item": "parcel",
+      "base": 6000,
+      "per_m": 90,
+      "tip": 0.4,
+      "pickups": ["shop"],
+      "weight": 3
+    },
+    {
+      "id": "lunchbox",
+      "name": "도시락 배달",
+      "about": "식당에서 갓 싼 도시락을 따뜻할 때 주민 집까지. 시간이 빠듯한 대신 팁이 크다.",
+      "item": "lunchbox",
+      "base": 5000,
+      "per_m": 110,
+      "tip": 0.7,
+      "time_scale": 0.75,
+      "pickups": ["restaurant"],
+      "weight": 2
+    },
+    {
+      "id": "airmail",
+      "name": "항공 우편",
+      "about": "수상비행기로 온 우편 꾸러미. 공항에서 받아 주민 집까지 — 멀어서 삯이 많다.",
+      "item": "parcel",
+      "base": 9000,
+      "per_m": 100,
+      "tip": 0.4,
+      "pickups": ["airport"],
+      "weight": 1
+    },
+    {
+      "id": "documents",
+      "name": "서류 심부름",
+      "about": "동사무소·부동산·박물관 서류 봉투를 주민 집까지.",
+      "item": "envelope",
+      "base": 5000,
+      "per_m": 80,
+      "tip": 0.5,
+      "pickups": ["civic", "estate", "museum"],
+      "weight": 2
+    }
+  ],
+  "pickups": [
+    { "id": "shop", "name": "잡화점 앞", "x": 1.6, "z": -5.4 },
+    { "id": "restaurant", "name": "식당 카운터", "x": 36.0, "z": 28.4 },
+    { "id": "airport", "name": "공항 (조종사 곁)", "x": -3.4, "z": -71.0 },
+    { "id": "museum", "name": "박물관 앞", "x": 48.0, "z": -13.0 },
+    { "id": "civic", "name": "동사무소 앞", "x": -28.0, "z": -23.0 },
+    { "id": "estate", "name": "부동산 부스", "x": 58.5, "z": 36.2 }
+  ]
+}

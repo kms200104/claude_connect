@@ -101,6 +101,7 @@ function newProfile(uid, slot, cfg, data) {
     depSeq: 0,
     banksUsed: [], // 상품을 든 적이 있는 금융기관 (첫 거래 우대)
     coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
+    jobDay: null, // 일거리: { day: 마을 날짜, done: 그날 한 배달 수 }
   };
 }
 
@@ -170,6 +171,8 @@ export class Player {
     this.fishing = null; // 낚시 세션 (fishing.js)
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
+    this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
+    this.lastJobNpc = null; // 바로 전에 배달한 집 (연달아 같은 집이 안 나오게)
     this.handledRids = new Set(); // 이미 처리한 요청 ID (중복 방지)
   }
 
@@ -347,6 +350,7 @@ export class Room {
         depSeq: Math.max(0, intOr(p.depSeq, 0)),
         banksUsed: Array.isArray(p.banksUsed) ? p.banksUsed.filter((b) => data.savings?.institutions.has(b)) : [],
         coopMember: !!p.coopMember,
+        jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
       });
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);

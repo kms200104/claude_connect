@@ -25,6 +25,9 @@ signal apt_done(result: Dictionary)
 signal loan_done(result: Dictionary)
 ## 예적금 가입 · 해지 · 파킹통장 넣고 빼기 결과 (dep_result: kind, id, product, net, gross, tax, early, got, fee, balance, sol).
 signal deposit_done(result: Dictionary)
+## 일거리 (v0.12): 하던 배달이 바뀜 (Economy.job) · 배달 끝 (job_result: pay, tip, bonus, total, onTime, with, helper, npc).
+signal job_changed
+signal job_done(result: Dictionary)
 ## 경제 요청이 거절됐다 (kind = 보낸 메시지 종류, code = 서버 에러 코드).
 signal failed(kind: String, code: String)
 ## 요리 동작을 맡았다 / 다 했다 (v9 같이 요리).
@@ -43,7 +46,7 @@ signal marry_proposed(from_id: int)
 signal marry_declined(by_id: int)
 signal household_formed(info: Dictionary)
 
-const KINDS: PackedStringArray = ["stock_order", "apt_buy", "apt_sell", "loan_take", "loan_repay", "dep_open", "dep_close", "park_move", "rest_open", "rest_join", "rest_close", "rest_cook", "rest_step",
+const KINDS: PackedStringArray = ["stock_order", "apt_buy", "apt_sell", "apt_lease", "loan_take", "loan_repay", "dep_open", "dep_close", "park_move", "job_take", "job_pick", "job_drop", "rest_open", "rest_join", "rest_close", "rest_cook", "rest_step",
 	"civic_civil", "civic_apply", "marry_propose", "marry_answer"]
 
 var market_open: bool = true
@@ -71,9 +74,19 @@ var apt_index: float = 1.0
 var home_owners: Dictionary[String, int] = {}
 ## 호수 → 산 값.
 var home_bought: Dictionary[String, int] = {}
+## 호수 → 전세 { kind, deposit, until(주) } (v0.12, 없으면 월세).
+var home_leases: Dictionary[String, Dictionary] = {}
+## 지금 마을 주 번호와 전세 규칙 { ratio, weeks } (homes 메시지).
+var home_week: int = 0
+var jeonse_rules: Dictionary = {}
 
 ## 은행 창구 정보 (bank_quote 의 답): base, score, grade, rate_credit, rate_mortgage, credit_limit, ltv, dsr, income_year, week, loans
 var bank: Dictionary = {}
+
+## 일거리: { done, max, kinds[{id, name, about}], job: { kind, name, item, stage(pickup|carry), from{id,name,x,z}, to{npc,name,x,z}, pay, tip, dist, limit_s, left_ms } 또는 null }
+var jobs: Dictionary = {}
+## 지금 배달의 마감 (Time.get_ticks_msec 기준, 0 = 아직 물건을 안 받음).
+var job_due_ms: float = 0.0
 
 ## 식당: open, owner, rating, tier, served, revenue, regulars{손님: 요리}, capacity, shift{served, revenue}
 var rest: Dictionary = {"open": false, "owner": 0, "rating": 2.0, "tier": 1, "served": 0, "revenue": 0, "regulars": {}, "capacity": 0}
@@ -174,6 +187,11 @@ func sell_home(unit_id: String) -> void:
 	Net.request("apt_sell", {"unit": unit_id})
 
 
+## 임대 방식: "jeonse" (보증금을 받고 전세로) · "rent" (보증금을 돌려주고 월세로).
+func lease_home(unit_id: String, kind: String) -> void:
+	Net.request("apt_lease", {"unit": unit_id, "kind": kind})
+
+
 func ask_bank() -> void:
 	Net.send_message({"t": "bank_quote"})
 
@@ -201,6 +219,39 @@ func close_deposit(account_id: String) -> void:
 ## 파킹통장: amount > 0 넣기, < 0 빼기.
 func park_move(amount: int) -> void:
 	Net.request("park_move", {"amount": amount})
+
+
+func ask_jobs() -> void:
+	Net.send_message({"t": "job_info"})
+
+
+## kind = "" 이면 서버가 골라 준다.
+func take_job(kind: String = "") -> void:
+	Net.request("job_take", {"kind": kind} if not kind.is_empty() else {})
+
+
+func pick_job() -> void:
+	Net.request("job_pick")
+
+
+func drop_job() -> void:
+	Net.request("job_drop")
+
+
+func quit_job() -> void:
+	Net.send_message({"t": "job_quit"})
+
+
+## 하던 배달 (없으면 빈 Dictionary).
+func job() -> Dictionary:
+	var j: Variant = jobs.get("job")
+	return j if j is Dictionary else {}
+
+
+## 배달 물건을 들고 있으면 그 물건 id (손에 든 것으로 보인다).
+func carry_item() -> String:
+	var j: Dictionary = job()
+	return str(j.get("item", "")) if str(j.get("stage", "")) == "carry" else ""
 
 
 func open_restaurant() -> void:
@@ -300,6 +351,13 @@ func _on_message(msg: Dictionary) -> void:
 			loan_done.emit(msg)
 		"dep_result":
 			deposit_done.emit(msg)
+		"job":
+			jobs = msg
+			var j: Dictionary = job()
+			job_due_ms = Time.get_ticks_msec() + float(j.get("left_ms", 0)) if str(j.get("stage", "")) == "carry" else 0.0
+			job_changed.emit()
+		"job_result":
+			job_done.emit(msg)
 		"week":
 			apt_index = float(msg.get("index", apt_index))
 			week_passed.emit(msg)
@@ -410,6 +468,16 @@ func _apply_homes(data: Variant) -> void:
 	if b is Dictionary:
 		for id: Variant in b:
 			home_bought[str(id)] = int(b[id])
+	home_leases.clear()
+	var ls: Variant = data.get("leases", {})
+	if ls is Dictionary:
+		for id: Variant in ls:
+			if ls[id] is Dictionary:
+				home_leases[str(id)] = ls[id]
+	home_week = int(data.get("week", home_week))
+	var jr: Variant = data.get("jeonse")
+	if jr is Dictionary:
+		jeonse_rules = jr
 	homes_changed.emit()
 
 

@@ -231,6 +231,40 @@ static func knife() -> ArrayMesh:
 	return mesh
 
 
+## 배달 물건 (v0.12 일거리): 손에 매달아 드는 꼴이라 손잡이가 원점, 물건은 +Y 쪽(팔 아래)으로 늘어진다.
+## parcel = 노끈으로 묶은 갈색 상자, lunchbox = 보자기로 싼 도시락(매듭이 손잡이), envelope = 노란 서류 봉투.
+static func carry_prop(prop_id: String) -> ArrayMesh:
+	if _cache.has("carry_" + prop_id):
+		return _cache["carry_" + prop_id]
+	var st: SurfaceTool = ClayMesh.begin()
+	match prop_id:
+		"parcel":
+			var kraft: Color = Color("#C49A62")
+			var twine: Color = Color("#F1E6CC")
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.17, 0.0), Vector3(0.24, 0.18, 0.2), 0.12, kraft, Basis(), 8, 6)
+			ClayMesh.add_box(st, Vector3(0.0, 0.17, 0.0), Vector3(0.245, 0.185, 0.025), twine)
+			ClayMesh.add_box(st, Vector3(0.0, 0.17, 0.0), Vector3(0.025, 0.185, 0.205), twine)
+			ClayMesh.add_torus(st, Vector3(0.0, 0.035, 0.0), 0.045, 0.008, twine, 10, 4, Basis(Vector3.RIGHT, PI * 0.5))
+			ClayMesh.add_box(st, Vector3(0.06, 0.255, 0.05), Vector3(0.06, 0.004, 0.045), Color("#FFFFFF"), Basis(Vector3.RIGHT, PI * 0.5))
+		"lunchbox":
+			var cloth: Color = Color("#E05A63")
+			var dots: Color = Color("#FFE7C8")
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.2, 0.0), Vector3(0.24, 0.13, 0.17), 0.35, cloth, Basis(), 10, 6)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.11, 0.0), Vector3(0.045, 0.04, 0.035), cloth, 8, 5)
+			ClayMesh.add_ellipsoid(st, Vector3(-0.055, 0.075, 0.0), Vector3(0.04, 0.025, 0.02), cloth, 6, 4, Basis(Vector3.BACK, 0.7))
+			ClayMesh.add_ellipsoid(st, Vector3(0.055, 0.075, 0.0), Vector3(0.04, 0.025, 0.02), cloth, 6, 4, Basis(Vector3.BACK, -0.7))
+			for d: Vector2 in [Vector2(-0.07, 0.17), Vector2(0.05, 0.22), Vector2(-0.02, 0.25), Vector2(0.08, 0.16)]:
+				ClayMesh.add_ellipsoid(st, Vector3(d.x, d.y, 0.086), Vector3(0.012, 0.012, 0.004), dots, 6, 3)
+		_:
+			var paper: Color = Color("#E8C877")
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.13, 0.0), Vector3(0.2, 0.26, 0.018), 0.15, paper, Basis(), 6, 4)
+			ClayMesh.add_box(st, Vector3(0.0, 0.035, 0.0), Vector3(0.18, 0.05, 0.022), paper.darkened(0.12))
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.05, 0.012), Vector3(0.016, 0.016, 0.005), Color("#B23A32"), 8, 3)
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache["carry_" + prop_id] = mesh
+	return mesh
+
+
 ## 프라이팬: 손잡이 끝에 둥근 팬 (팬 바닥은 손잡이와 직각).
 static func pan() -> ArrayMesh:
 	if _cache.has("pan"):

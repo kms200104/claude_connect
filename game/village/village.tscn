@@ -1,4 +1,4 @@
-[gd_scene load_steps=70 format=3]
+[gd_scene load_steps=71 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -63,6 +63,7 @@
 [ext_resource type="Script" path="res://game/places/civic_site.gd" id="67_civic"]
 [ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
+[ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -396,8 +397,9 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs")]
 script = ExtResource("34_interaction")
+jobs = NodePath("../Jobs")
 economy = NodePath("../EconomyController")
 field = NodePath("../Field")
 home = NodePath("../Home")
@@ -416,6 +418,12 @@ furniture = NodePath("../Furniture")
 dialogue = NodePath("../DialogueController")
 fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
+toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="Jobs" type="Node" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud")]
+script = ExtResource("70_jobs")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 
 [node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]

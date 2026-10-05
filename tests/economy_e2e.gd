@@ -148,6 +148,39 @@ func _run() -> void:
 	await get_tree().process_frame
 	_check(apartments.get_node("Flags").get_child_count() == 1, "발코니에 금빛 깃발")
 	_check(apartments.unit_position("101-1001").y > apartments.unit_position("101-101").y + 10.0, "10층짜리 동")
+	var sol_before_lease: int = Net.sol
+	Economy.lease_home("101-501", "jeonse")
+	_check(await _wait_until(func() -> bool: return apts.size() == 2 and Economy.home_leases.has("101-501"), 3.0), "전세로 놓기 → 보증금")
+	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_lease == int(Economy.home_leases.get("101-501", {}).get("deposit", -1)), 2.0), "보증금만큼 솔이 늘었다")
+	Economy.lease_home("101-501", "rent")
+	_check(await _wait_until(func() -> bool: return apts.size() == 3 and not Economy.home_leases.has("101-501"), 3.0), "보증금 돌려주고 월세로")
+
+	# ---- 일거리: 배달 알바 ----
+	var jobs: JobController = _village.get_node("Jobs")
+	var job_done: Array[Dictionary] = []
+	Economy.job_done.connect(func(r: Dictionary) -> void: job_done.append(r))
+	Economy.take_job("parcel")
+	_check(await _wait_until(func() -> bool: return not Economy.job().is_empty(), 2.0), "배달 알바를 받았다")
+	_check(await _wait_until(func() -> bool: return jobs.chip_text().contains("받기"), 2.0), "칩: %s" % jobs.chip_text())
+	var job: Dictionary = Economy.job()
+	var from: Dictionary = job.get("from", {})
+	await _teleport(Vector3(float(from.get("x", 0.0)), 0.1, float(from.get("z", 0.0)) + 0.6))
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.JOB and interaction.target_id == JobController.TARGET_PICK, 2.0), "받을 곳에서 '물건 받기'")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return Economy.carry_item() == "parcel", 2.0), "택배 상자를 들었다")
+	_check(await _wait_until(func() -> bool: return (_village.get_node("Player") as Player).held_item == "parcel", 1.0), "손에 상자가 보인다")
+	var to: Dictionary = Economy.job().get("to", {})
+	await _teleport(Vector3(float(to.get("x", 0.0)) + 3.0, 0.1, float(to.get("z", 0.0)) + 2.5))
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.JOB and interaction.target_id == JobController.TARGET_DROP, 2.0), "주민 집 앞에서 '배달하기'")
+	var sol_before_job: int = Net.sol
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return job_done.size() == 1, 3.0), "배달 완료")
+	_check(int(job_done[0].get("tip", 0)) > 0 if not job_done.is_empty() else false, "빨리 와서 팁")
+	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_job == int(job_done[0].get("total", 0)) and Economy.job().is_empty(), 2.0), "삯이 지갑에 · 일거리 끝")
+	econ.phone.open(PhoneWindow.Tab.JOBS)
+	await get_tree().process_frame
+	_check(econ.phone.is_open() and int(Economy.jobs.get("done", 0)) == 1, "일거리 앱: 오늘 1건")
+	econ.phone.close()
 
 	# ---- 식당 ----
 	var counter: Vector3 = restaurant.counter_position()
