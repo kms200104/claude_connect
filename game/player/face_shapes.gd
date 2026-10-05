@@ -9,15 +9,24 @@ extends RefCounted
 ## gaze: true 인 층(눈동자·하이라이트)은 왼쪽 눈에서도 좌우를 뒤집지 않는다 — 두 눈이 같은 쪽을 본다 (x 양수 = 캐릭터 오른쪽).
 ## 긴 변은 max_edge 보다 짧아질 때까지 반으로 나눈다 — 둥근 머리에 붙여도 평평한 삼각형이 머리 속으로 파묻히지 않게.
 
+## 가장 적은 칸 수 (작은 도형도 이만큼은 둥글게).
 const CIRCLE_STEPS: int = 16
 const ARC_STEPS: int = 14
 const JOINT_STEPS: int = 8
+const HEART_STEPS: int = 28
+## 둘레를 나누는 한 칸의 길이 (m, outline = 1 일 때). 큰 원일수록 칸이 많아져 화면에서 각이 보이지 않는다.
+const OUTLINE_SEGMENT: float = 0.03
+const MAX_STEPS: int = 96
+
+## 지금 만드는 도형의 둘레 촘촘함 배율 (triangles 가 정한다). 1 = 기본, 2 = 두 배 촘촘.
+static var _outline: float = 1.0
 ## 이 각도(도)보다 덜 꺾인 마디는 둥근 마디를 생략한다 (틈이 선 굵기에 비해 아주 작다).
 const JOINT_MIN_TURN: float = 25.0
 
 
 ## 층 하나를 삼각형으로: {"tris": PackedVector2Array(3개씩), "color": Color, "dome": Vector3(높이, 반지름 x, 반지름 y) 또는 ZERO, "center": Vector2, "gaze": bool}.
-static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color], max_edge: float = 0.0) -> Dictionary:
+static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color], max_edge: float = 0.0, outline: float = 1.0) -> Dictionary:
+	_outline = maxf(outline, 0.1)
 	var tris: PackedVector2Array = PackedVector2Array()
 	var shape: String = str(layer.get("shape", ""))
 	var c: Vector2 = _vec(layer.get("c", [0.0, 0.0]))
@@ -25,10 +34,10 @@ static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color
 	var dome: Vector3 = Vector3.ZERO
 	match shape:
 		"ellipse":
-			tris = _fan(_ellipse_points(c, r, deg_to_rad(float(layer.get("rot", 0.0))), CIRCLE_STEPS), c)
+			tris = _fan(_ellipse_points(c, r, deg_to_rad(float(layer.get("rot", 0.0))), _steps(_ellipse_length(r), CIRCLE_STEPS)), c)
 		"dome":
 			# 가운데에서 바깥으로 고리를 여러 겹 — 솟은 높이를 고르게 나누려고 부채꼴 대신 동심원 격자.
-			tris = _rings(c, r, 3, CIRCLE_STEPS)
+			tris = _rings(c, r, 3, _steps(_ellipse_length(r), CIRCLE_STEPS))
 			dome = Vector3(float(layer.get("h", 0.01)), r.x, r.y)
 		"poly":
 			tris = _polygon(_points(layer.get("pts", [])))
@@ -58,10 +67,11 @@ static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color
 
 
 ## 모든 층 (아래 → 위).
-static func triangles(layers: Array[Dictionary], palette: Dictionary[String, Color], max_edge: float = 0.0) -> Array[Dictionary]:
+## outline: 둥근 둘레(원·호·하트·선 끝)의 촘촘함 배율 (캐릭터 화질별, 아이콘은 크게 그리니 촘촘하게).
+static func triangles(layers: Array[Dictionary], palette: Dictionary[String, Color], max_edge: float = 0.0, outline: float = 1.0) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for layer: Dictionary in layers:
-		var entry: Dictionary = layer_triangles(layer, palette, max_edge)
+		var entry: Dictionary = layer_triangles(layer, palette, max_edge, outline)
 		if not (entry["tris"] as PackedVector2Array).is_empty():
 			out.append(entry)
 	return out
@@ -120,6 +130,18 @@ static func _points(list: Variant) -> PackedVector2Array:
 	return out
 
 
+## 둘레 길이 length 를 OUTLINE_SEGMENT / 배율 칸으로 (최소 least, 최대 MAX_STEPS).
+static func _steps(length: float, least: int) -> int:
+	return clampi(ceili(length * _outline / OUTLINE_SEGMENT), least, MAX_STEPS)
+
+
+## 타원 둘레 (라마누잔 근사).
+static func _ellipse_length(r: Vector2) -> float:
+	var a: float = absf(r.x)
+	var b: float = absf(r.y)
+	return PI * (3.0 * (a + b) - sqrt((3.0 * a + b) * (a + 3.0 * b)))
+
+
 static func _ellipse_points(c: Vector2, r: Vector2, rot: float, steps: int) -> PackedVector2Array:
 	var out: PackedVector2Array = PackedVector2Array()
 	for i: int in steps:
@@ -130,8 +152,9 @@ static func _ellipse_points(c: Vector2, r: Vector2, rot: float, steps: int) -> P
 
 static func _arc_points(c: Vector2, r: Vector2, a0: float, a1: float) -> PackedVector2Array:
 	var out: PackedVector2Array = PackedVector2Array()
-	for i: int in ARC_STEPS + 1:
-		var a: float = deg_to_rad(lerpf(a0, a1, float(i) / float(ARC_STEPS)))
+	var steps: int = _steps(_ellipse_length(r) * absf(a1 - a0) / 360.0, ARC_STEPS)
+	for i: int in steps + 1:
+		var a: float = deg_to_rad(lerpf(a0, a1, float(i) / float(steps)))
 		out.append(c + Vector2(cos(a) * r.x, sin(a) * r.y))
 	return out
 
@@ -146,8 +169,9 @@ static func _star_points(c: Vector2, r: float, inner: float, n: int, rot: float)
 
 static func _heart_points(c: Vector2, s: float) -> PackedVector2Array:
 	var out: PackedVector2Array = PackedVector2Array()
-	for i: int in 28:
-		var t: float = TAU * float(i) / 28.0
+	var steps: int = _steps(s * 3.3, HEART_STEPS)
+	for i: int in steps:
+		var t: float = TAU * float(i) / float(steps)
 		var x: float = 16.0 * pow(sin(t), 3.0)
 		var y: float = 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
 		out.append(c + Vector2(x, y) * (s / 32.0))
@@ -209,5 +233,5 @@ static func _stroke(points: PackedVector2Array, width: float) -> PackedVector2Ar
 			var turn: float = absf(rad_to_deg((points[i] - points[i - 1]).angle_to(points[i + 1] - points[i])))
 			round_here = turn > JOINT_MIN_TURN
 		if round_here:
-			out.append_array(_fan(_ellipse_points(points[i], Vector2(half, half), 0.0, JOINT_STEPS), points[i]))
+			out.append_array(_fan(_ellipse_points(points[i], Vector2(half, half), 0.0, _steps(TAU * half, JOINT_STEPS)), points[i]))
 	return out

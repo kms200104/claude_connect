@@ -66,7 +66,7 @@ func _draw() -> void:
 				anchors = [catalog.anchors.get(key, Vector2(0.0, view.x))]
 				mirrors = [false]
 			for i: int in anchors.size():
-				for entry: Dictionary in FaceShapes.triangles(part.layers, palette):
+				for entry: Dictionary in FaceShapes.triangles(part.layers, palette, 0.0, 3.5):
 					var tris: PackedVector2Array = entry["tris"]
 					var color: Color = entry["color"]
 					var flip: bool = mirrors[i] and not bool(entry["gaze"])

@@ -47,6 +47,8 @@ static var detail: int = 1
 const MAX_DETAIL: int = 2
 ## 촘촘함별 얼굴 도형 삼각형의 가장 긴 변 (m).
 const FACE_MAX_EDGE: Array[float] = [0.05, 0.032, 0.022]
+## 촘촘함별 얼굴 도형 둘레(눈·눈동자·입·표정의 원과 호) 배율 — 크게 보이는 고화질일수록 둥글게 (FaceShapes).
+const FACE_OUTLINE: Array[float] = [1.0, 2.0, 3.5]
 ## 몸통·팔·다리 둘레 칸 배율 (v0.11.2: 고화질은 소매·부츠·몸통도 매끈하게).
 const BODY_DETAIL: Array[float] = [1.0, 1.5, 2.0]
 static var _cache: Dictionary[String, ArrayMesh] = {}
@@ -402,7 +404,7 @@ static func face_palette(look: CharacterLook) -> Dictionary[String, Color]:
 ## 도형 층들을 머리 겉면에 붙인다. anchor = 부품 자리(얼굴 x, y), mirror = 좌우 뒤집기(왼쪽 눈, gaze 층은 빼고),
 ## origin = 정점 좌표의 원점(눈은 머리 중심), lift = 겉면에서 띄우는 거리 (층마다 LAYER_LIFT 씩 더 띄운다).
 static func _emit_face(st: SurfaceTool, layers: Array[Dictionary], palette: Dictionary[String, Color], anchor: Vector2, mirror: bool, origin: Vector3, lift: float) -> void:
-	var entries: Array[Dictionary] = FaceShapes.triangles(layers, palette, _face_max_edge())
+	var entries: Array[Dictionary] = FaceShapes.triangles(layers, palette, _face_max_edge(), FACE_OUTLINE[clampi(detail, 0, MAX_DETAIL)])
 	for i: int in entries.size():
 		var entry: Dictionary = entries[i]
 		var tris: PackedVector2Array = entry["tris"]
