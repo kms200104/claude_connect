@@ -132,7 +132,7 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 	_viewport.add_child(eyes)
 	var center: Vector3 = CharacterModel.HEAD_CENTER + Vector3(0.0, 0.02, 0.0)
 	# 캐릭터 앞 = -Z. 살짝 옆에서.
-	_camera.look_at_from_position(center + Vector3(0.45, 0.25, -1.0).normalized() * 2.15, center)
+	_camera.look_at_from_position(center + Vector3(0.45, 0.25, -1.0).normalized() * 2.5, center)
 	for i: int in 3:
 		await RenderingServer.frame_post_draw
 	var image: Image = _viewport.get_texture().get_image()

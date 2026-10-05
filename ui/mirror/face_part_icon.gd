@@ -5,7 +5,7 @@ extends Control
 
 const HAIR_ICON_DIR: String = "res://assets/ui/face"
 ## 항목별로 보여 줄 얼굴 부분: (가운데 y, 반쪽 너비) — 얼굴 좌표(m).
-const VIEW: Dictionary[String, Vector2] = {"eyes": Vector2(0.39, 0.22), "nose": Vector2(0.315, 0.12), "mouth": Vector2(0.255, 0.09)}
+const VIEW: Dictionary[String, Vector2] = {"eyes": Vector2(0.385, 0.27), "nose": Vector2(0.35, 0.1), "mouth": Vector2(0.215, 0.09)}
 
 var key: String = "eyes"
 var part_id: String = ""
@@ -59,7 +59,7 @@ func _draw() -> void:
 			var anchors: Array[Vector2] = []
 			var mirrors: Array[bool] = []
 			if key == "eyes":
-				var eye: Vector2 = catalog.anchors.get("eye", Vector2(0.125, 0.39))
+				var eye: Vector2 = catalog.anchors.get("eye", Vector2(0.17, 0.385))
 				anchors = [Vector2(eye.x, eye.y), Vector2(-eye.x, eye.y)]
 				mirrors = [false, true]
 			else:

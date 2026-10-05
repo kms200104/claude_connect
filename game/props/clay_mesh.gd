@@ -144,6 +144,27 @@ static func add_shell(st: SurfaceTool, center: Vector3, radii: Vector3, color: V
 	_emit_grid(st, points, rows, cols, Transform3D(), color, skip)
 
 
+## 점들을 따라가는 납작한 관 (머리카락 다발·땋은 머리). 단면은 옆으로 width, 바깥(out_center 반대쪽)으로 thickness 반지름.
+## profile 은 Callable(u: float) -> float, 굵기 배율 (u: 0 = 첫 점, 1 = 끝 점). 0 이면 끝이 뾰족하게 모인다.
+static func add_strand(st: SurfaceTool, points: PackedVector3Array, width: float, thickness: float, out_center: Vector3, color: Variant, profile: Callable, sides: int = 5) -> void:
+	var rows: int = points.size()
+	if rows < 2:
+		return
+	var ring: PackedVector3Array = PackedVector3Array()
+	ring.resize(rows * sides)
+	for r: int in rows:
+		var t: Vector3 = (points[mini(r + 1, rows - 1)] - points[maxi(r - 1, 0)]).normalized()
+		var out: Vector3 = points[r] - out_center
+		var n: Vector3 = (out - t * out.dot(t)).normalized()
+		# (b, t, n) 이 회전체의 (X, 축, Z) 와 같은 손 방향이라 감김이 add_lathe 와 같다.
+		var b: Vector3 = t.cross(n)
+		var s: float = float(profile.call(float(r) / float(rows - 1)))
+		for c: int in sides:
+			var a: float = TAU * float(c) / float(sides)
+			ring[r * sides + c] = points[r] + b * cos(a) * width * s + n * sin(a) * thickness * s
+	_emit_grid(st, ring, rows, sides, Transform3D(), color)
+
+
 ## 평평한 상자 (각진 판자·책·창틀).
 static func add_box(st: SurfaceTool, center: Vector3, size: Vector3, color: Color, basis: Basis = Basis()) -> void:
 	var box: BoxMesh = BoxMesh.new()
