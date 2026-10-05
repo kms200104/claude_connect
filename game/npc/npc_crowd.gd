@@ -104,13 +104,20 @@ func _build_house(npc: NpcInfo) -> void:
 	house.global_position = npc.house_position
 	house.rotation.y = npc.house_yaw
 
+	# Tripo 로 만든 집 모형(tools/blender/import_tripo.py)이 있으면 모든 주민이 그 집을 쓴다. 창문은 정점 색이라 밤에 빛나지 않는다.
+	var model: ArrayMesh = PartMesh.load_model("npc_house")
 	var shape: CollisionShape3D = CollisionShape3D.new()
 	var box: BoxShape3D = BoxShape3D.new()
 	box.size = HOUSE_SIZE
+	if model != null:
+		box.size = Vector3(model.get_aabb().size.x, HOUSE_SIZE.y, model.get_aabb().size.z) - Vector3(0.3, 0.0, 0.3)
 	shape.shape = box
 	shape.position.y = HOUSE_SIZE.y * 0.5
 	house.add_child(shape)
 
+	if model != null:
+		_add_mesh(house, model, Vector3.ZERO, clay_material)
+		return
 	var key: String = npc.color.to_html(false)
 	if not _house_meshes.has(key):
 		_house_meshes[key] = _house_mesh(npc.color)

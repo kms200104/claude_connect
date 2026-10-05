@@ -228,6 +228,11 @@ static func knife() -> ArrayMesh:
 static func pan() -> ArrayMesh:
 	if _cache.has("pan"):
 		return _cache["pan"]
+	# Tripo 로 만든 모형이 있으면 그것을 쓴다 (tools/blender/import_tripo.py).
+	var model: ArrayMesh = PartMesh.load_model("tool_pan")
+	if model != null:
+		_cache["pan"] = model
+		return model
 	var st: SurfaceTool = ClayMesh.begin()
 	ClayMesh.add_rod(st, Vector3(0.0, -0.06, 0.0), Vector3(0.0, 0.16, 0.0), 0.022, 0.02, Color("#3A2E28"), 8)
 	var dish: PackedVector2Array = PackedVector2Array([Vector2(0.0, -0.02), Vector2(0.15, -0.02), Vector2(0.17, 0.03), Vector2(0.155, 0.035), Vector2(0.14, -0.005), Vector2(0.0, -0.005)])
@@ -241,6 +246,10 @@ static func pan() -> ArrayMesh:
 static func ladle() -> ArrayMesh:
 	if _cache.has("ladle"):
 		return _cache["ladle"]
+	var model: ArrayMesh = PartMesh.load_model("tool_ladle")
+	if model != null:
+		_cache["ladle"] = model
+		return model
 	var st: SurfaceTool = ClayMesh.begin()
 	ClayMesh.add_rod(st, Vector3(0.0, -0.05, 0.0), Vector3(0.0, 0.3, 0.0), 0.016, 0.013, Color("#C9CED3"), 7)
 	var cup: PackedVector2Array = PackedVector2Array([Vector2(0.0, -0.05), Vector2(0.05, -0.04), Vector2(0.07, 0.0), Vector2(0.06, 0.01), Vector2(0.0, -0.035)])
