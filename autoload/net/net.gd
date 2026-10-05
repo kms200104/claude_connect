@@ -166,6 +166,8 @@ var emotes_known: PackedStringArray = ["hello"]
 var emotes_quick: PackedStringArray = ["hello"]
 ## 주민 id → 지금 기분.
 var npc_moods: Dictionary[String, String] = {}
+## 버전이 맞지 않을 때 서버가 알려 준 서버의 프로토콜 버전 (0 = 모름).
+var server_version: int = 0
 ## 자리 번호 → 거울에서 고른 얼굴 (FaceCatalog id 사전). 없으면 자리 기본 얼굴.
 var faces: Dictionary[int, Dictionary] = {}
 
@@ -1103,6 +1105,9 @@ func _on_pong(msg: Dictionary) -> void:
 
 
 func _on_server_error(code: String, msg: Dictionary = {}) -> void:
+	if code == NetProtocol.ERR_BAD_VERSION:
+		# 서버가 알려 준 프로토콜 버전 (옛 서버는 msg 글에만 "server protocol N").
+		server_version = int(msg.get("server_v", str(msg.get("msg", "")).get_slice("protocol ", 1).to_int()))
 	if code == NetProtocol.ERR_RATE_LIMITED:
 		push_warning("Net: 서버가 요청 속도 제한을 알림")
 		return

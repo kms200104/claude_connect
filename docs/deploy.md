@@ -28,6 +28,14 @@
 - 에뮬레이터라면 `ws://10.0.2.2:8080` 이 PC 를 가리킨다.
 - PC 방화벽에서 8080 포트를 열어야 한다.
 
+### "앱 버전이 서버와 달라요" 가 뜨면
+- 앱과 서버의 프로토콜 버전(`core/protocol/net_protocol.gd` 의 `VERSION` = `server/src/protocol.js` 의 `PROTOCOL_VERSION`)이 다르다는 뜻이다. 앱은 이제 어느 쪽이 옛날 것인지 함께 보여 준다 (`앱 v11 · 서버 v12`).
+  - **앱이 옛날 것**: 서버와 같은 커밋에서 APK 를 다시 만들어 설치한다.
+  - **서버가 옛날 것**: 서버 폴더에서 `git pull` 뒤 다시 켠다 (termux: `cd claude_connect && git pull && cd server && npm install && npm start`).
+- APK 를 SDK 없이 만들기: `GODOT=/path/to/godot tools/android/build_apk.sh` → `build/solbaram.apk`.
+  - 필요한 것: 같은 버전의 Godot 내보내기 템플릿, java.
+  - 패키지 이름은 `com.solbaram.village` 이고 디버그 키로 서명한다. 다른 키로 서명한 옛 앱이 같은 이름으로 깔려 있으면 먼저 지운다.
+
 ### 안드로이드 내보내기 설정 (Godot 의 Project → Export → Android)
 - **Permissions → Internet 을 켠다.** 꺼져 있으면 진짜 서버는 물론, 앱 안 테스트 서버(127.0.0.1)에도 소켓을 열 수 없다.
   - 안드로이드는 같은 기기 안의 연결에도 이 권한을 요구한다. "연결이 안 된다"의 가장 흔한 원인이다.

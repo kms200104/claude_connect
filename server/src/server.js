@@ -395,7 +395,8 @@ export function createServer(overrides = {}) {
 
   function checkVersion(ctx, msg) {
     if (msg.v !== PROTOCOL_VERSION) {
-      sendError(ctx.ws, ErrorCode.badVersion, `server protocol ${PROTOCOL_VERSION}`);
+      // 앱이 어느 쪽이 옛날 것인지 알려 줄 수 있게 서버 버전을 같이 보낸다.
+      send(ctx.ws, { t: 'error', code: ErrorCode.badVersion, msg: `server protocol ${PROTOCOL_VERSION}`, server_v: PROTOCOL_VERSION });
       return false;
     }
     return true;
