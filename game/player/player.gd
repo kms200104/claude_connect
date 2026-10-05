@@ -60,8 +60,12 @@ var move_intent: Vector3 = Vector3.ZERO
 var braking: bool = false
 ## 여울(얕은 물)에 들어가 있는지 (v9): 걸음이 느려지고 물을 첨벙인다.
 var wading: bool = false
+## 몸(Body)의 원래 높이 — 여울에서는 여기서 WADE_SINK 만큼 내려간다.
+var _body_rest_y: float = NAN
 ## 물속에서 걷는 빠르기 배율.
 const WADE_SPEED: float = 0.55
+## 여울에 들어가면 몸이 이만큼 물에 잠긴다 (바닥 아래로 내려 발목·정강이가 물에 들어간 것처럼).
+const WADE_SINK: float = 0.09
 var _splash_left: float = 0.0
 
 var _input_locks: Dictionary[StringName, bool] = {}
@@ -117,6 +121,10 @@ func _physics_process(delta: float) -> void:
 			if _splash_left <= 0.0 and is_inside_tree():
 				_splash_left = 0.28
 				Puff.burst(get_parent(), global_position + Vector3(0.0, 0.25, 0.0), Color(0.85, 0.95, 1.0, 0.8), 3, 0.35, 0.3, 0.06, 0.4)
+	if body != null:
+		if is_nan(_body_rest_y):
+			_body_rest_y = body.position.y
+		body.position.y = move_toward(body.position.y, _body_rest_y - (WADE_SINK if wading else 0.0), delta * 1.2)
 	if rig != null:
 		var reference: float = walk_speed_reference if walk_speed_reference > 0.0 else max_speed
 		rig.set_move_speed(CharacterRig.speed_to_blend(Vector3(velocity.x, 0.0, velocity.z).length(), reference, run_speed))

@@ -1,6 +1,7 @@
 shader_type spatial;
 // 호수 물: 둥근 사각(초타원) 모양으로 잘라 내고, 물가는 옅은 청록 → 가운데는 깊은 파랑, 물가에 흔들리는 거품 띠,
-// 잔물결 반짝임. 비가 오면(world_wetness) 빗방울 동심원이 퍼진다. 텍스처 없음, 알파 블렌드 없음(가장자리만 discard).
+// 잔물결 반짝임. v0.9: 여울(얕은 물, 최대 2곳)은 모래 바닥이 비치는 맑은 물빛 + 햇빛 무늬, 그 밖의 가운데는 더 짙은 깊은 물.
+// 비가 오면(world_wetness) 빗방울 동심원이 퍼진다. 텍스처 없음, 알파 블렌드 없음(가장자리만 discard).
 render_mode diffuse_toon, specular_disabled;
 
 #include "res://assets/shaders/include/world_curve.gdshaderinc"
@@ -15,11 +16,26 @@ uniform float shape_power = 4.0;
 uniform vec4 shallow_color : source_color = vec4(0.55, 0.85, 0.84, 1.0);
 uniform vec4 deep_color : source_color = vec4(0.24, 0.55, 0.74, 1.0);
 uniform vec4 foam_color : source_color = vec4(0.96, 0.99, 1.0, 1.0);
+// 여울: (가운데 x, z, 절반 x, 절반 z) — 수면 원점 기준. 절반이 0 이면 없음.
+uniform vec4 shallow_a = vec4(0.0);
+uniform vec4 shallow_b = vec4(0.0);
+uniform vec4 sand_color : source_color = vec4(0.86, 0.9, 0.72, 1.0);
+uniform vec4 abyss_color : source_color = vec4(0.1, 0.32, 0.52, 1.0);
 
 varying vec2 local_xz;
 
 float hash2(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// 여울 안이면 1, 가장자리에서 1.4m 에 걸쳐 0 으로.
+float shallow_of(vec4 rect, vec2 p) {
+	if (rect.z <= 0.0) {
+		return 0.0;
+	}
+	vec2 d = abs(p - rect.xy) - rect.zw;
+	float outside = length(max(d, vec2(0.0))) + min(max(d.x, d.y), 0.0);
+	return 1.0 - smoothstep(-0.6, 1.4, outside);
 }
 
 void vertex() {
@@ -33,9 +49,20 @@ void fragment() {
 	if (r > 1.0) {
 		discard;
 	}
-	float depth = smoothstep(0.0, 0.55, 1.0 - r);
-	vec3 color = mix(shallow_color.rgb, deep_color.rgb, depth);
 	float t = TIME;
+	float shallow = max(shallow_of(shallow_a, local_xz), shallow_of(shallow_b, local_xz));
+	float depth = smoothstep(0.0, 0.55, 1.0 - r) * (1.0 - shallow);
+	vec3 color = mix(shallow_color.rgb, deep_color.rgb, depth);
+	// 깊은 물: 여울이 있는 호수는 가운데를 더 짙게 (얕은 곳과 한눈에 구분).
+	float has_shallow = step(0.001, shallow_a.z + shallow_b.z);
+	color = mix(color, abyss_color.rgb, smoothstep(0.25, 0.75, 1.0 - r) * (1.0 - shallow) * has_shallow * 0.75);
+	// 여울: 모래 바닥이 비치고, 햇빛이 물결에 꺾여 바닥에 그물 무늬(코스틱)를 그린다.
+	if (shallow > 0.001) {
+		vec2 c = local_xz * 1.7;
+		float caustic = abs(sin(c.x + sin(c.y * 1.3 + t * 0.9)) * sin(c.y + sin(c.x * 1.1 - t * 0.7)));
+		vec3 bed = sand_color.rgb + vec3(0.1) * smoothstep(0.75, 0.98, caustic);
+		color = mix(color, mix(shallow_color.rgb, bed, 0.6), shallow * 0.85);
+	}
 	// 잔물결: 서로 다른 방향의 사인 물결 둘을 곱해 반짝이는 줄무늬.
 	float wave = sin(local_xz.x * 1.6 + local_xz.y * 0.7 + t * 1.3) * sin(local_xz.y * 1.9 - local_xz.x * 0.4 - t * 1.05);
 	color += vec3(0.08, 0.1, 0.1) * smoothstep(0.55, 0.95, wave);

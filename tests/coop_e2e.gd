@@ -385,6 +385,11 @@ func _terrain() -> void:
 	var field: FieldController = _village.get_node("Field")
 	# 마을 서쪽 풀밭 (길·건물 없는 곳).
 	var at: Vector3 = Vector3(-40.0 if _role == "a" else -44.0, 0.1, 22.0)
+	# 바닥에 채집물이 있으면 '줍기'가 먼저라 조금 비켜 선다.
+	for i: int in 6:
+		if not Net.drops.values().any(func(d: DropInfo) -> bool: return d.position.distance_to(at) < 3.5):
+			break
+		at.z += 3.0
 	await _teleport(at)
 	await _hold("shovel")
 	field.shovel_mode = FieldController.ShovelMode.HOLE

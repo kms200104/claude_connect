@@ -261,13 +261,13 @@ func _fill(mmi: MultiMeshInstance3D, points: Array[Vector3]) -> void:
 func _on_net(r: Dictionary) -> void:
 	var fish: Array = r.get("fish", [])
 	if fish.is_empty():
-		toast_hud.show_toast("놓쳤어요! 구석으로 몰거나 친구와 양쪽에서 막아 보세요." if not bool(r.get("coop", false)) else "아깝다! 조금만 더 가까이.", false)
+		toast_hud.show_toast("놓쳤어요! 구석으로 몰아 보세요 (둘이면 쉬워요)" if not bool(r.get("coop", false)) else "아깝다! 조금만 더 가까이.", false)
 		return
 	var names: PackedStringArray = []
 	for id: Variant in fish:
 		names.append(GameData.fish_name(str(id)))
 	Audio.play_sfx("fish_catch", -4.0)
-	toast_hud.show_toast("뜰채로 %s 을(를) 떴어요!%s" % [", ".join(names), " (둘이 몰아서 넓게!)" if bool(r.get("coop", false)) else ""], true)
+	toast_hud.show_toast("%s 을(를) 떴어요!%s" % [", ".join(names), " (같이 몰기!)" if bool(r.get("coop", false)) else ""], true)
 
 
 func _on_dig(r: Dictionary) -> void:

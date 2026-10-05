@@ -84,57 +84,19 @@ func _build_blocker() -> void:
 func _build_depth() -> void:
 	if info.shallows.is_empty():
 		return
-	var shallow_mat: StandardMaterial3D = StandardMaterial3D.new()
-	shallow_mat.albedo_color = Color(0.62, 0.9, 0.92, 0.42)
-	shallow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	shallow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	shallow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var deep_mat: StandardMaterial3D = shallow_mat.duplicate()
-	deep_mat.albedo_color = Color(0.05, 0.22, 0.38, 0.32)
-	for z: Dictionary in info.shallows:
-		var center: Vector3 = Vector3(float(z["x"]), 0.22, float(z["z"]))
-		var plane: PlaneMesh = PlaneMesh.new()
-		plane.size = Vector2(float(z["half_x"]) * 2.0, float(z["half_z"]) * 2.0)
-		var mi: MeshInstance3D = MeshInstance3D.new()
-		mi.mesh = plane
-		mi.material_override = shallow_mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mi)
-		mi.global_position = center
-		# 여울 바닥: 밝은 모래 (맑은 물 아래로 비친다).
-		var bed: MeshInstance3D = MeshInstance3D.new()
-		var bed_plane: PlaneMesh = PlaneMesh.new()
-		bed_plane.size = plane.size
-		bed.mesh = bed_plane
-		var bed_mat: StandardMaterial3D = StandardMaterial3D.new()
-		bed_mat.albedo_color = Color("#C8D8B0")
-		bed.material_override = bed_mat
-		add_child(bed)
-		bed.global_position = Vector3(center.x, water_height + 0.01, center.z)
+	# 물빛은 물 셰이더가 칠한다 (여울 = 모래가 비치는 맑은 물, 나머지 가운데 = 짙은 물) — 호수 둥근 모양을 그대로 따른다.
+	var mat: ShaderMaterial = null
+	if water != null:
+		if water.material_override is ShaderMaterial:
+			mat = water.material_override
+		elif water.get_surface_override_material(0) is ShaderMaterial:
+			mat = water.get_surface_override_material(0)
+	var names: PackedStringArray = ["shallow_a", "shallow_b"]
+	for i: int in mini(info.shallows.size(), names.size()):
+		var z: Dictionary = info.shallows[i]
+		if mat != null:
+			mat.set_shader_parameter(names[i], Vector4(float(z["x"]) - info.center.x, float(z["z"]) - info.center.y, float(z["half_x"]), float(z["half_z"])))
 		_add_sign(str(z.get("name", "얕은 물")) + " · 들어갈 수 있어요", _shore_point(z))
-	# 깊은 곳: 여울을 뺀 가운데를 짙게.
-	var deep: Rect2 = Rect2(info.center - info.half_extent + Vector2(1.5, 1.5), info.half_extent * 2.0 - Vector2(3.0, 3.0))
-	var pieces: Array[Rect2] = [deep]
-	for z: Dictionary in info.shallows:
-		var gap: Rect2 = Rect2(float(z["x"]) - float(z["half_x"]) - 1.0, float(z["z"]) - float(z["half_z"]) - 1.0, float(z["half_x"]) * 2.0 + 2.0, float(z["half_z"]) * 2.0 + 2.0)
-		var next: Array[Rect2] = []
-		for piece: Rect2 in pieces:
-			if piece.intersects(gap):
-				next.append_array(_subtract(piece, gap.intersection(piece)))
-			else:
-				next.append(piece)
-		pieces = next
-	for r: Rect2 in pieces:
-		if r.size.x < 1.0 or r.size.y < 1.0:
-			continue
-		var dm: MeshInstance3D = MeshInstance3D.new()
-		var dp: PlaneMesh = PlaneMesh.new()
-		dp.size = r.size
-		dm.mesh = dp
-		dm.material_override = deep_mat
-		dm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(dm)
-		dm.global_position = Vector3(r.get_center().x, water_height + 0.03, r.get_center().y)
 
 
 ## 여울 쪽 물가 (팻말 자리): 여울에서 수역 가장자리로 가장 가까운 바깥.

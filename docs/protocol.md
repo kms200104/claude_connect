@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v8
+# 네트워크 프로토콜 v9
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -9,6 +9,7 @@ v4 → v5: 마을 이벤트(`ev`), 바닥의 선물·별 조각(`drop` `drop_gon
 v5 → v6: 섬 생활 — 씨앗 심기(`plant`)·심은 나무(`tree` 의 `k x z`)·꽃(`flower`, `pick`), 나무가 게임 시간으로 자람(`sprout`·`young` 단계), 감정표현(`emote` `emote_quick`, `act` 의 `kind: emote`)과 주민 반응(`npc_emote`), 주민 기분(`npcs` 의 `m`, `talk_open.m`), 대화 주제(`talk_topic`), 감정표현 배우기·주민 선물(`talk_open.teach` `gift`), 박물관 기증(`donate`, `museum`), 공항 기념품(`shop_buy` 의 `at: "airport"`). 저장 파일 schema 4.
 v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` → `face`), 프로필·플레이어 정보의 `face`, 에러 `not_near_mirror` `bad_face`. 저장 파일은 schema 4 그대로 (프로필에 `face` 가 없으면 자리 기본 얼굴).
 v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 값 ×100), 증권(`stock_order`, `market_tick`), 아파트(`apt_buy` `apt_sell`, `homes`), 은행(`bank_quote` `loan_take` `loan_repay`, `bank`, 주간 정산 `week`), 식당(`rest_open` `rest_close` `rest_cook` `rest_serve`, `rest` `rest_order` `rest_served` `rest_left` `rest_closed` `rest_result`), 들판 채집물(`drop.kind: "forage"`), 성성호수 낚시터(`fish_cast.spot: "seongseong"`), 대화 주제 `worry` `mbti`. `profile` 에 `stocks trades loans credit income worth`, `welcome` 에 `market homes rest`. 저장 파일 schema 5 (schema 4 이하의 솔·상점 포인트·부탁 보상은 읽을 때 ×100).
+v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`rest_join`, 직원의 `rest_close` = 그만두기, `rest_staff`)·동작 나눠 맡기(`rest_cook{order, step}` → `rest_claim`, `rest_step` → `rest_stepped`, 마지막 동작에 서버가 `rest_result` — `rest_serve` 없어짐), `rest` 의 `staff team orders[].steps`, 같이 베기(`chop_result.coop`, `coop_bonus`), 같이 낚시·얕은/깊은 물(`fish_started.zone coop`), 동사무소(`civic_info` `civic_civil` `civic_apply` `marry_propose` `marry_answer`, `civic` `civic_result` `marry_proposal` `marry_declined` `household`), 정책대출(`apt_buy.policy: "didimdol"`, `loan_take.product: "sunshine_youth"`, 대출의 `product fixed`), 카드 캐시백(`shop_result.back`), 주간 지원금(`week.grant`), 여울 뜰채(`net` → `net_result`, `shoal`), 삽(`dig` → `dig_result`, `tile` `digspot` `digspot_gone`). `profile` 에 `civ`, `welcome` 에 `civic tiles digspots shoals`. 저장 파일은 schema 5 그대로 (world 에 `tiles households householdSeq`, 프로필에 `household civic age` — 없으면 기본값).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
@@ -48,15 +49,23 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 | `talk_topic` | `topic` | 대화 중인 주민과 주제 수다 (v6): `mood hobby gossip fish past dream food you` + v8 `worry`(고민 상담 — F 주민은 공감해 주고 친밀도 +1 더) `mbti`. 하루 3번까지 친밀도 +1 → `talk_topic` |
 | `donate` | `rid slot` | 박물관 관장 곁(`donate_range`)에서 칸의 물고기 기증 (v6). 한 종에 한 마리(`already_donated`), 물고기만(`not_fish`) |
 | `stock_order` | `rid id side qty` | 주식 시장가 주문 (v8). `side` = `buy`/`sell`, `qty` 1~`max_order_qty`. 지금 가격으로 바로 체결, 수수료 0.015%, 매도는 증권거래세 0.18%. 모르는 종목·수량은 `bad_order`, 장이 닫히면(`MARKET_HOURS=krx`) `market_closed`, 보유보다 많이 팔면 `not_enough_shares` → `stock_result` |
-| `apt_buy` | `rid unit loan` | 아파트 사기 (v8). `unit` = `"101-803"`(동-층호). 시세 + 취득세 1.1% + 중개보수 0.4% 를 솔 + 주택담보대출(`loan`, 시세 × LTV 70% 이하, DSR 40% 이하, 대출 6건까지)로 낸다. 이미 누가 가졌으면 `unit_taken`, 한도 초과 `loan_limit` → `apt_result`, 방 전체에 `homes` |
+| `apt_buy` | `rid unit loan` | 아파트 사기 (v8). `unit` = `"101-803"`(동-층호). 시세 + 취득세 1.1% + 중개보수 0.4% 를 솔 + 주택담보대출(`loan`, 시세 × LTV 70% 이하, DSR 40% 이하, 대출 6건까지)로 낸다. 이미 누가 가졌으면 `unit_taken`, 한도 초과 `loan_limit` → `apt_result`, 방 전체에 `homes`. v9: `policy: "didimdol"` 이면 동사무소에서 받은 승인(2주)으로 디딤돌대출 — 승인 금리 **고정**, 승인 한도·집값 상한·LTV(생애최초 80%), 승인이 없거나 지났으면 `not_eligible`. 세대(부부) 가 이미 집이 있으면 받을 수 없다 |
 | `apt_sell` | `rid unit` | 내 집 팔기 (v8). 시세 − 중개보수, 그 집 담보대출부터 갚고(모자라면 남은 빚은 신용대출로) 나머지가 솔로 → `apt_result`, `homes` |
 | `bank_quote` | | 은행 창구 정보 요청 (v8) → `bank` |
-| `loan_take` | `rid amount` | 신용대출 (v8). 10만 솔 이상(`bad_loan`), 남은 신용 한도·DSR·건수(`loan_limit`) 안에서 → `loan_result`, `bank` |
+| `loan_take` | `rid amount product` | 신용대출 (v8). 10만 솔 이상(`bad_loan`), 남은 신용 한도·DSR·건수(`loan_limit`) 안에서 → `loan_result`, `bank`. v9: `product: "sunshine_youth"` 는 서민금융 창구 곁에서만(`not_at_civic`), 만 34세 이하·연 소득 3,500만 이하(`not_eligible`), 1,200만까지, 소득 없으면 4.0% · 있으면 4.5% **고정** |
 | `loan_repay` | `rid id amount` | 대출 갚기 (v8, 원금에서 빠진다. 다 갚으면 목록에서 사라짐) → `loan_result`, `bank` |
 | `rest_open` | `rid` | 식당 문 열기 (v8). 카운터(`restaurant.json` 의 `counter`) `open_range` 2.6m(+0.5) 안(`not_at_restaurant`), 다른 사람이 열었으면 `rest_busy`. 문을 연 사람 가방의 재료로 장사한다 → `rest_opened`, `rest` |
-| `rest_close` | `rid` | 문 닫기 (연 사람만) → `rest_closed{reason: "closed"}` |
-| `rest_cook` | `order` | 이 주문 요리 시작 (v8). 서버가 시작 시각을 잰다 (결과 메시지 없음, `rest` 의 `cooking`) |
-| `rest_serve` | `rid order taps[][]` | 요리 내기 (v8). `taps[i]` = i번째 요리 동작을 시작하고 누른 시각들(ms). 요리 시작부터 가장 짧은 시간의 90% 보다 빠르면 `cook_too_fast`, 떠난 손님은 `order_gone`, 떼어 둔 재료가 가방에 없으면 `missing_ingredient`(손님이 떠난다) → `rest_result`, 방 전체에 `rest_served` |
+| `rest_close` | `rid` | 문 닫기 (연 사람만) → `rest_closed{reason: "closed"}`. v9: 직원이 보내면 일을 그만둔다 → 방 전체에 `rest_staff{joined: false}` |
+| `rest_join` | `rid` | 열린 식당에 직원으로 들어가기 (v9). 카운터 곁(`not_at_restaurant`), 이미 직원이면 무시 → `rest_joined`, 방 전체에 `rest_staff{joined: true}`, `rest`. 직원들 가방 재료를 합쳐 주문을 받는다 |
+| `rest_cook` | `rid order step` | 이 주문의 `step` 번째 동작을 맡는다 (v9, 직원만). 서버가 그 동작 시작 시각을 잰다. 다른 사람이 맡았으면 `step_taken` → `rest_claim`, `rest` 의 `orders[].steps` |
+| `rest_step` | `rid order step taps[]` | 맡은 동작 끝 (v9). `taps` = 동작을 시작하고 누른 시각들(ms). 동작의 가장 짧은 시간 90% 보다 빠르면 `cook_too_fast`, 떠난 손님 `order_gone` → `rest_stepped`. 마지막 동작이 들어오면 서버가 판정해 함께 만든 사람 모두에게 `rest_result`, 방 전체에 `rest_served` (떼어 둔 재료가 없으면 `missing_ingredient`) |
+| `civic_info` | | 동사무소 창구 정보 요청 (v9) → `civic` |
+| `civic_civil` | `rid service` | 민원 (v9, 민원 창구 `service_range` 2.6m(+0.5) 안, `not_at_civic`). `move_in`(무료, 이미 전입이면 `not_eligible`) · `resident_copy`(400솔) · `family_cert`(1,000솔, 혼인한 사람만) → `civic_result{service, fee, doc}` |
+| `civic_apply` | `rid program` | 정책 신청 (v9, 그 정책 창구 곁). `youth_rent` · `emergency_living` · `local_card` · `didimdol`(승인). 자격이 안 되면 `not_eligible`, 모르는 정책 `bad_program` → `civic_result{program, weekly weeks / amount / approval}`, `civic` |
+| `marry_propose` | `rid to` | 혼인신고 제안 (v9). 두 사람 모두 민원 창구 곁(+2.5m), 상대가 접속 중(`no_partner`), 둘 다 미혼(`already_married`) → `civic_result{service: "marriage_asked"}`, 상대에게 `marry_proposal` |
+| `marry_answer` | `rid accept` | 제안에 답하기 (2분 안). 수락하면 두 지갑을 합쳐 한 세대 → 방 전체에 `household`, 둘에게 `profile`·`civic`. 거절하면 제안한 사람에게 `marry_declined` |
+| `net` | `rid` | 뜰채질 (v9). **뜰채를 들고**(`no_tool`) 여울 안(+0.6m, `not_in_shallow`), 650ms 마다(`too_fast`). 캐릭터 앞 0.9m 둘레 1.1m(여울에 두 사람이면 1.45m) 안 물고기를 3마리까지 → `net_result`, 방 전체에 `shoal` |
+| `dig` | `rid x z mode` | 삽질 (v9). **삽을 들고**(`no_tool`), (x, z) 가 2.2m(+0.5) 안(`bad_dig`), 420ms 마다(`too_fast`). 조개 숨구멍 1.4m 안이면 조개 캐기, 아니면 `mode` = `dig`(풀밭 → 구덩이) / `fill`(구덩이 메우기) / `path`(흙길 깔기·걷기). 길·건물·물·모래밭·나무 곁은 `bad_dig` → `dig_result`, 방 전체에 `tile` 또는 `digspot`·`digspot_gone` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
 
 ## 서버 → 클라이언트
@@ -79,16 +88,29 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 | `rest` | `open owner rating tier served revenue regulars{손님: 요리} capacity shift{served, revenue} orders[]` | 식당 상태 (v8). `orders[]` = `{id, customer, dish, seat, left(ms), patience(ms), cooking, regular}`, `capacity` = 남은 재료로 더 만들 수 있는 그릇 수(예상) |
 | `rest_opened` / `rest_closed` | `rid` / `reason` | 문 열림 / 닫힘 (`closed` `owner_left` `idle` `no_ingredients`) |
 | `rest_order` | `order customer dish seat regular` | 손님이 앉아 주문 (v8) |
-| `rest_result` | `rid order stars pay quality taste sol` | 내가 낸 요리의 판정 (v8) |
+| `rest_result` | `rid order stars pay share team quality taste sol` | 함께 만든 요리의 판정 (v8, v9 에서 만든 사람 모두에게). `share` = 내 몫(팀이면 값 +10% 를 나눔), `rid` 는 마지막 동작을 낸 사람에게만 |
 | `rest_served` | `order customer dish stars pay regular became lost by` | 누가 요리를 냈다 — 단골이 됐는지(`became`)·풀렸는지(`lost`) |
 | `rest_left` | `order customer dish reason lost` | 손님이 떠났다 (`late` 기다리다 지침 / `missing` 재료가 사라짐) — 별 1개 |
+| `rest_joined` / `rest_staff` | `rid` / `id joined` | 직원으로 들어감 (v9) / 누가 들어오거나 나감 |
+| `rest_claim` | `rid order step` | 그 동작을 맡음 (v9, 지금부터 시간을 잰다) |
+| `rest_stepped` | `rid order step` | 그 동작을 받음 (v9) |
+| `civic` | `resident movedIn age married partner income_year homes card approvals programs[{id, ok, reasons[], terms, got}]` | 동사무소 창구 정보 (v9). `reasons` 는 안 되는 이유("만 34세 이하" 등), 디딤돌·햇살론은 `terms`(금리·한도·집값 상한·LTV) |
+| `civic_result` | `rid service fee doc sol` / `rid program …` | 민원·정책 결과 (v9). `doc` = 등본·증명서 내용(`{kind, title, self, spouse, since, …}`) |
+| `marry_proposal` / `marry_declined` | `from` / `by` | 혼인신고 제안 받음 / 거절됨 (v9) |
+| `household` | `id members[] since sol` | 한 세대가 됐다 (v9, 방 전체). 이제부터 두 사람의 `profile.sol` 은 같은 지갑 |
+| `net_result` | `rid fish[] coop lost` | 뜰채질 결과 (v9). `fish` = 가방에 들어간 물고기, `lost` = 가방이 차서 놓친 수, `coop` = 여울에 둘 이상 |
+| `shoal` | `id panic f[[id, x, z, size]]` | 여울 물고기 떼 (v9, 움직일 때마다 방 전체). `panic` = 둘 이상이 들어와 허둥댐 |
+| `dig_result` | `rid kind …` | 삽질 결과 (v9). `kind: "spot"`(숨구멍 hp 줄어듦, `coop`) / `"clam"`(다 팠다 — 판 사람 모두에게, `item full coop`) / `"dig" "fill" "path"`(`x z s item`, 구덩이에서 나온 것) |
+| `tile` | `x z s` | 땅 칸이 바뀜 (v9, 방 전체). `s` = `hole` / `path` / `""`(원래대로) |
+| `digspot` / `digspot_gone` | `d{id, kind, x, z, hp}` / `id by` | 조개 숨구멍이 돋았거나 hp 가 줄었다 / 다 파서 사라졌다 (v9) |
+| `coop_bonus` | `kind item n with` | 같이 해서 받은 덤 (v9, 지금은 같이 쓰러뜨린 나무 — 상대가 마지막에 찍었을 때) |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
 | `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
-| `fish_started` | `rid spot` | 던지기 수락 |
+| `fish_started` | `rid spot zone coop` | 던지기 수락. v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
 | `fish_nibble` | `rid` | 가짜 입질 (0~3번). 아직 당기면 안 된다 |
 | `fish_bite` | `rid windowMs` | 진짜 입질. 물고기 종류는 알리지 않는다 |
 | `fish_result` | `rid ok fish? reason? bonus?` | 서버가 확정한 결과. 실패 사유: `early late escaped moved cancelled inventory_full`. 낚시 대회 중이면 `bonus` 솔을 더 받았다 |
-| `chop_result` | `rid ok item n tree felled` | 도끼질 성공. `item` `n`개(나무꾼의 날 2개)가 인벤토리에 들어갔고, `felled`면 나무가 쓰러졌다 |
+| `chop_result` | `rid ok item n tree felled coop` | 도끼질 성공. `item` `n`개(나무꾼의 날 2개)가 인벤토리에 들어갔고, `felled`면 나무가 쓰러졌다. v9: `coop` = 4초 안에 다른 사람이 찍은 나무라 두 번 찍은 셈 (같이 쓰러뜨리면 둘 다 +1) |
 | `tree` | `id s c k? x? z? by?` | 나무 상태 변화 (방 전체). `s` = `grown` / `stump` / `sprout` / `sapling` / `young` (v6: 게임 시간으로 자람), `c` = 오늘 찍힌 횟수. 씨앗을 심은 나무(`id` = `p…`)는 `k`(종류) `x z`도 실린다 |
 | `act` | `id kind tree? e?` | 상대의 동작: `kind: chop`(도끼질, `tree`), `kind: emote`(감정표현·몸짓 `e`, v6) |
 | `npcs` | `st n[]` | 주민 위치 (방 전체, 움직이거나 기분이 바뀔 때 10Hz). `n[]`: `{id, x, z, yaw, talk, m}` (`talk` = 대화 중인 플레이어 id, 0 = 없음, `m` = 기분 `happy calm sad grumpy sleepy excited`, v6) |
@@ -106,7 +128,7 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 | `quest_done` | `rid quest npc reward sol` | 부탁 완료. 아이템을 가져가고 `reward`솔을 줬다 |
 | `weather` | `w` | 날씨 변화: `clear` / `cloudy` / `rain` / `thunder` |
 | `shop_door` | `inside x y z shop` | 서버가 나를 상점 안/밖으로 옮겼다 (클라이언트는 그 자리로 순간이동) |
-| `shop_result` | `rid kind item n sol amount` | 사고팔기 성공 (`kind` = `buy`/`sell`, `amount` = 오간 솔) |
+| `shop_result` | `rid kind item n sol amount back` | 사고팔기 성공 (`kind` = `buy`/`sell`, `amount` = 오간 솔, v9 `back` = 천안사랑카드 캐시백) |
 | `shop` | `level points next up` | 상점 단계·포인트 (방 전체). `next` = 다음 단계 문턱(마지막이면 null), `up` = 방금 커졌다 |
 | `placed` | `rid by f` | 가구가 놓였다 (방 전체). `f` = `{id, item, x, z, rot, owner}` (`owner` = 놓은 사람 자리 번호) |
 | `unplaced` | `rid id` | 가구가 치워졌다 (방 전체) |
@@ -122,7 +144,7 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast`
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig`
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
@@ -130,6 +152,7 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 - `w` = 지금 날씨, `trees[]` = `{id, s, c}` 전체, `npcs[]` = 주민 위치 전체, `shop` = `shop` 메시지와 같은 모양, `placed[]` = 설치된 가구 전체.
 - `ev` = `ev` 메시지와 같은 모양(지금 열린 이벤트), `drops[]` = 바닥의 선물·별 조각·채집물 전체.
 - `market` (v8) = `{minute, open, source, fee, tax, stocks[{id, name, sector, about, price, ref, hist[]}]}` — `ref` 는 오늘 기준가(어제 마지막 가격), `hist` 는 최근 120분 가격. `homes` = `homes` 메시지, `rest` = `rest` 메시지와 같은 모양.
+- v9: `civic` = `civic` 메시지, `tiles[[x, z, s]]` = 고친 땅 칸 전체, `digspots[]` = 조개 숨구멍 전체, `shoals[]` = 여울 물고기 떼 전체. `prof.civ` = `{age, resident, card, partner, household, since, approvals}`, `prof.loans[]` 에 `product fixed`.
 - `prof` 의 경제 정보 (v8): `stocks{id: {q, cost}}`, `trades[]`(최근 10건), `loans[{id, kind, principal, rate, unit, since, weekly}]`, `credit{score, grade}`, `income{week, year}`, `worth{assets, debt, net}`.
 
 ## 마을 이벤트 (서버 판정, `data/events/events.json`)
@@ -214,7 +237,7 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 - 소득 = 번 돈(팔기·부탁 보상·박물관·낚시 대회·월세·식당) 기록, 연 소득 = 최근 4주 평균 × 52. 신용대출 한도 = max(300만, 연 소득 × 1.5) × 등급 배수 (최대 1.5억) − 이미 빌린 신용대출. DSR: (원금 × 금리 + 원금/30) 합 / 연 소득 ≤ 40%. 소득이 없으면 300만 솔까지 신용대출만.
 
 ## 식당 (서버 판정, v8)
-- 솔바람 식당 (`data/restaurant/restaurant.json`, 요리는 `recipes.json`). 한 마을에 한 사람이 문을 연다 — 손님은 **문을 연 사람 가방의 재료로 만들 수 있는 요리만** 주문하고, 주문이 들어오는 순간 그 재료를 떼어 둔다(다른 주문이 같은 재료를 겹쳐 쓰지 않는다). 그래서 재료가 모자란 주문은 들어오지 않는다. 시킬 게 없고 앉은 손님도 없으면 `no_ingredients` 로 닫는다.
+- 솔바람 식당 (`data/restaurant/restaurant.json`, 요리는 `recipes.json`). 한 마을에 한 사람이 문을 연다(v9: 다른 사람은 직원으로 같이 일한다 — 아래 "같이 하기") — 손님은 **문을 연 사람(v9: 직원 모두) 가방의 재료로 만들 수 있는 요리만** 주문하고, 주문이 들어오는 순간 그 재료를 떼어 둔다(다른 주문이 같은 재료를 겹쳐 쓰지 않는다). 그래서 재료가 모자란 주문은 들어오지 않는다. 시킬 게 없고 앉은 손님도 없으면 `no_ingredients` 로 닫는다.
 - 재료: 상점 식재료(1단계 13종, 2단계 감자·버터·레몬), 들판 채집물(산나물·쑥·표고·산딸기·달래, 75초마다 섬 곳곳에 돋아남, 최대 14개), 물고기. `fish: common` 은 그 희귀도 이하 아무 물고기(싼 것부터), `item_any` 는 목록 중 하나.
 - 별점 = 최근 20명의 별점 평균(처음엔 2.0 으로 기운다, 가중치 3). 별점이 2.5 · 3.3 · 4.0 · 4.6 을 넘으면 2~5단계 요리가 열린다 — 높은 단계일수록 비싸지만 동작이 많고 판정 창이 좁다. 1단계는 물고기 한 마리 구이처럼 쉽고 마진이 적다.
 - 요리 동작: `beats`(박자마다 가장 가까운 누름과의 차이), `timing`(한 번 누른 시각과 딱 좋은 때의 차이), `mash`(시간 안에 누른 횟수, 50ms 보다 촘촘한 누름은 세지 않음). 솜씨 = 동작 평균.
@@ -222,6 +245,25 @@ v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 �
 - 단골: 같은 요리에 4점 이상을 3번 연속 주면 단골 — 그 손님은 그 요리만 시킨다(재료가 없으면 시키지 않는다). 3점 아래를 주면 풀린다. 기다리다 떠나면 별 1개.
 - 손님 = 주민 6명(각자 입맛) + 섬 밖 손님 6명(등산객·학생·직장인·낚시꾼·미식가·여행객). 기다림은 단계마다 70~140초. 주인이 접속을 끊으면 닫는다, 3분 동안 손님이 없어도 닫는다.
 - 시연·테스트: `REST_SPAWN_SCALE=0.05`(손님 빨리), `REST_START_HISTORY=5,5,4`(처음 별점 기록).
+
+## 같이 하기 (서버 판정, v9)
+- **식당**: 문을 연 사람이 주인, `rest_join` 한 사람이 직원. 주문은 직원 모두의 가방을 합친 재료로 받고, 떼어 둔 재료는 가진 사람 가방에서 빠진다. 한 주문의 동작은 아무 직원이나 하나씩 맡는다(동시에 가능) — 동작마다 서버가 맡은 시각을 재고, 그 동작의 최소 시간 90% 보다 빨리 끝내면 `cook_too_fast`. 직원이 둘 이상이면 팀(`TEAM`): 손님 인내 ×1.25, 손님이 오는 간격 ×0.8, 판정 창 ×1.15, 값 +10% 를 함께 만든 사람 수로 나눈다(`share`). 주인이 끊기거나 나가면 남은 직원이 주인이 되고, 아무도 없으면 닫는다.
+- **나무**: 같은 나무를 다른 사람이 4초 안에 찍었으면 이번 도끼질은 2번으로 센다. 그렇게 쓰러뜨리면 둘 다 +1 (`coop_bonus`).
+- **낚시**: 같은 낚시터에서 9m 안에 다른 사람이 낚시 중이면 입질까지 기다림 ×0.7, 희귀(rare) 가중치 ×1.35.
+- **여울**: 여울 안에 둘 이상이면 `panic` — 물고기가 2.4m/s 로 느려지고 방향이 흔들리며, 뜰채 반지름이 1.45m.
+- **조개**: 같은 숨구멍을 3초 안에 다른 사람이 팠으면 hp 를 2 줄인다. 다 파면 그 숨구멍을 판 사람 모두에게 하나씩.
+
+## 동사무소 · 세대 (서버 판정, v9)
+- `data/civic/civic.json`: 건물·창구 직원 3명(`civil` `welfare` `finance`)·민원·정책. 창구 곁 = 직원 자리에서 `service_range` 2.6m(+0.5).
+- **세대**: 혼인신고하면 `room.households` 에 `{id, members[uid], wallet{sol}, since}` 가 생기고, 두 프로필의 `sol` 은 같은 `wallet` 을 읽고 쓴다(저장할 때는 세대 지갑만 한 번). 소득은 부부합산(주마다 더함), 자산·빚·집은 세대 전체로 본다. 신용점수는 각자.
+- **정책** (한 주 = 한 달): `youth_rent` 주 20만 × 24주(만 19~34세 · 전입 · 무주택 · 연 소득 1,846만 이하, 주간 정산 `week.grant`) / `emergency_living` 78.3만 한 번(솔 10만 이하 · 이번 주 소득 0 · 유동 자산 100만 이하 · 무주택, 4주마다 최대 6번) / `local_card` 상점·상인·공항에서 산 값의 10% 캐시백, 주 4.6만까지(전입) / `didimdol` 승인 2주 — 금리는 세대 연 소득 구간(2천만 이하 2.85% · 4천만 3.15% · 6천만 3.45% · 7천만 3.75% · 8,500만 4.05%), 신혼 −0.2%p, 한도 2.5억(신혼 3.2억), 집값 5억(신혼 6억) 이하, 소득 6천만(신혼 8,500만) 이하, LTV 70%(첫 집 80%), 무주택 세대 / `sunshine_youth` 1,200만, 4.0~4.5% 고정.
+- 대출의 `fixed: true` 는 주마다 금리를 다시 매기지 않는다.
+
+## 여울 · 삽 (서버 판정, v9)
+- 여울 = `data/fish/spots.json` 의 낚시터마다 `shallows[{id, x, z, half_x, half_z, max, fish[]}]`. 여울 안은 들어갈 수 있고(이동 검사가 물로 막지 않음), 낚시 찌가 여울에 떨어지면 `zone: shallow`.
+- 물고기 떼(`server/src/shoal.js`, 규칙은 `data/world/dig.json` 의 `net`): 여울마다 최대 `max` 마리, 14초마다 한 마리씩 다시 참. 3.4m 안의 사람에게서 멀어지는 쪽으로 3.6m/s(허둥대면 2.4m/s), 여울 벽에 막히면 그 방향 속도를 잃고 1.5초 동안 지쳐서 ×0.35. 아무도 없으면 0.55m/s 로 어슬렁. 근처(14m)에 사람이 있을 때만 움직이고 그때마다 `shoal` 을 보낸다.
+- 조개 숨구멍(`server/src/dig.js`): 바닷가(섬 가장자리 모래밭) 최대 8곳, 처음엔 반을 한꺼번에, 그 뒤 45초마다 하나. hp 3, 바지락·개조개·맛조개·키조개. 호숫가는 낚시터마다 2곳, 60초마다, hp 2, 재첩·다슬기.
+- 땅 칸: 1m 격자(`round(x)`, `round(z)`), `hole`(30% 로 조약돌·옛날 동전·화석) / `path`. 최대 400칸, 방 저장 파일의 `world.tiles`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).

@@ -147,7 +147,17 @@ func _apply_held(item_id: String) -> void:
 		rig.set_held(item_id)
 
 
+## 몸(Body)의 원래 높이 (여울에서 잠길 때 기준).
+var _body_rest_y: float = NAN
+
+
 func _process(delta: float) -> void:
+	# 여울에 들어간 친구도 물에 잠겨 보인다 (Player.WADE_SINK).
+	if body != null:
+		if is_nan(_body_rest_y):
+			_body_rest_y = body.position.y
+		var sink: float = Player.WADE_SINK if not Field.zone_at(global_position, 0.1).is_empty() else 0.0
+		body.position.y = move_toward(body.position.y, _body_rest_y - sink, delta * 1.2)
 	if _samples.is_empty():
 		return
 	var render_time: float = Net.server_time_ms() - interpolation_delay_ms

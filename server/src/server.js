@@ -202,6 +202,8 @@ export function createServer(overrides = {}) {
       { x: data.airport.building.x, z: data.airport.building.z, r: 11 },
       ...data.realestate.buildings.map((b) => ({ x: b.x, z: b.z, r: 9 })),
       { x: data.realestate.office.x, z: data.realestate.office.z, r: 4 },
+      // 동사무소 건물(앞면 기준 뒤로 depth) + 앞 창구·광장.
+      ...(data.civic?.building ? [{ x: data.civic.building.x, z: data.civic.building.z - (data.civic.building.depth ?? 8) * 0.5, r: 10 }] : []),
       { x: 0, z: 0, r: 8 },
     ];
     for (let i = 0; i < 10; i++) {

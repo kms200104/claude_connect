@@ -118,6 +118,10 @@ func set_fishing(active: bool) -> void:
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
 ## 손에 든 도구 가운데 Tool 자리에 끼우는 것 (v9 뜰채 · 삽). 요리 중이면 요리 도구가 먼저다.
 const HAND_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
+## 뜰채를 도구 자리 안에서 돌리는 각도 (X축) — 손에서 위·조금 앞으로 뻗게.
+const NET_PITCH_DEG: float = -163.0
+## 얼굴을 가리지 않게 바깥(오른쪽)으로 기울이는 각도 (Z축).
+const NET_ROLL_DEG: float = -24.0
 
 
 func set_held(item_id: String) -> void:
@@ -223,6 +227,9 @@ func _set_tool(tool_id: String) -> void:
 		"shovel":
 			mesh = CharacterModel.shovel()
 	mi.mesh = mesh
+	# 도구 자리(Tool)는 칼·국자처럼 손 아래 앞으로 향한다. 긴 뜰채는 그대로면 몸 뒤 물속으로 꽂히므로
+	# 위로 세워 들고(살짝 앞으로), 휘두르면(도끼질 동작) 앞으로 떠 올리는 모양이 된다.
+	mi.rotation = Vector3(deg_to_rad(NET_PITCH_DEG), 0.0, deg_to_rad(NET_ROLL_DEG)) if tool_id == "fishing_net" else Vector3.ZERO
 	tool.visible = mesh != null
 
 
