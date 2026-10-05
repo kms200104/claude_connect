@@ -5,7 +5,7 @@ extends Control
 
 const HAIR_ICON_DIR: String = "res://assets/ui/face"
 ## 항목별로 보여 줄 얼굴 부분: (가운데 y, 반쪽 너비) — 얼굴 좌표(m).
-const VIEW: Dictionary[String, Vector2] = {"eyes": Vector2(0.385, 0.27), "nose": Vector2(0.35, 0.1), "mouth": Vector2(0.215, 0.09)}
+const VIEW: Dictionary[String, Vector2] = {"eyes": Vector2(0.35, 0.32), "nose": Vector2(0.29, 0.1), "mouth": Vector2(0.16, 0.1)}
 
 var key: String = "eyes"
 var part_id: String = ""
@@ -59,7 +59,7 @@ func _draw() -> void:
 			var anchors: Array[Vector2] = []
 			var mirrors: Array[bool] = []
 			if key == "eyes":
-				var eye: Vector2 = catalog.anchors.get("eye", Vector2(0.17, 0.385))
+				var eye: Vector2 = catalog.anchors.get("eye", Vector2(0.19, 0.35))
 				anchors = [Vector2(eye.x, eye.y), Vector2(-eye.x, eye.y)]
 				mirrors = [false, true]
 			else:
@@ -69,11 +69,12 @@ func _draw() -> void:
 				for entry: Dictionary in FaceShapes.triangles(part.layers, palette):
 					var tris: PackedVector2Array = entry["tris"]
 					var color: Color = entry["color"]
+					var flip: bool = mirrors[i] and not bool(entry["gaze"])
 					for t: int in range(0, tris.size(), 3):
 						var pts: PackedVector2Array = PackedVector2Array()
 						for k: int in 3:
 							var q: Vector2 = tris[t + k]
-							var fx: float = anchors[i].x + (-q.x if mirrors[i] else q.x)
+							var fx: float = anchors[i].x + (-q.x if flip else q.x)
 							var fy: float = anchors[i].y + q.y
 							# 화면 x 는 캐릭터를 마주 본 모습 (캐릭터 오른쪽 = 화면 왼쪽), y 는 아래로.
 							pts.append(center + Vector2(-fx, -(fy - view.x)) * scale_px)

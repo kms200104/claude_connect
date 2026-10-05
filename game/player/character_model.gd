@@ -7,13 +7,17 @@ extends RefCounted
 ## 정점 색만 쓰므로 머티리얼은 흰 툰 머티리얼 하나 (캐릭터 하나 = 드로우콜 6: 몸, 눈, 팔 2, 다리 2).
 
 const HEAD_CENTER: Vector3 = Vector3(0.0, 0.4, 0.0)
-const HEAD_RADII: Vector3 = Vector3(0.375, 0.34, 0.33)
+## 옆으로 넓고 앞뒤로 살짝 납작한 찹쌀떡 머리 (얼굴이 덜 휘어 눈코입이 평평하게 보인다). x·z 는 정수리 쪽 반지름이고
+## 볼·턱 쪽은 head_width 만큼 넓어진다.
+const HEAD_RADII: Vector3 = Vector3(0.37, 0.37, 0.3)
+## 볼·턱 쪽이 정수리 쪽보다 넓은 비율.
+const HEAD_JOWL: float = 0.11
 ## 팔·다리 관절 (Visual 기준). 리그 씬의 ArmL/ArmR/LegL/LegR 노드 위치와 같아야 한다.
 const SHOULDER: Vector3 = Vector3(0.23, -0.05, 0.0)
 const HIP: Vector3 = Vector3(0.1, -0.42, 0.0)
 ## 어깨에서 손(도구를 쥐는 곳)까지.
 const HAND_OFFSET: Vector3 = Vector3(0.0, -0.3, 0.0)
-const EYE_CENTER: Vector3 = Vector3(0.0, 0.385, -0.3)
+const EYE_CENTER: Vector3 = Vector3(0.0, 0.35, -0.3)
 
 const MOUTH_COLOR: Color = Color("#5A3326")
 
@@ -24,17 +28,17 @@ const EYE_LIFT: float = 0.0055
 ## 같은 부품 안에서 층마다 더 띄우는 거리 (깊이 겹침 방지).
 const LAYER_LIFT: float = 0.0009
 ## 머리 타원체 [둘레 칸, 위아래 칸] — 절약(0) / 고화질(1). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
-const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(22, 14), Vector2i(26, 18)]
+const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(32, 22)]
 ## 머리카락 껍질 [둘레 칸, 위아래 칸].
-const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(18, 11), Vector2i(22, 13)]
+const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(28, 18)]
 ## 머리카락 다발 [마디 수, 단면 꼭짓점 수].
-const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(4, 4), Vector2i(6, 5)]
+const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 4), Vector2i(8, 6)]
 ## 머리카락 껍질의 중심과 반지름 (머리보다 조금 크고 위·뒤로 치우친 타원체). 다발은 이 겉면을 따라 내려온다.
 const HAIR_CENTER: Vector3 = Vector3(0.0, 0.43, 0.02)
-const HAIR_RADII: Vector3 = Vector3(0.4, 0.365, 0.37)
-## 귀 (머리 옆, 눈높이보다 조금 아래).
-const EAR_CENTER: Vector3 = Vector3(0.368, 0.355, 0.02)
-const EAR_RADII: Vector3 = Vector3(0.034, 0.058, 0.044)
+const HAIR_RADII: Vector3 = Vector3(0.44, 0.39, 0.36)
+## 귀 (머리 옆, 눈 아래쪽 높이에 도톰하게 반쯤 묻힌다).
+const EAR_CENTER: Vector3 = Vector3(0.4, 0.33, 0.03)
+const EAR_RADII: Vector3 = Vector3(0.05, 0.08, 0.06)
 
 ## 0 = 절약, 1 = 고화질 (Quality 가 정한다). 바꾸면 clear_cache() 로 메시를 다시 만든다.
 static var detail: int = 1
@@ -64,20 +68,19 @@ static func body(look: CharacterLook) -> ArrayMesh:
 	for side: float in [-1.0, 1.0]:
 		ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.1, 0.1, -0.53, -0.42, 0.03, 1), 8, Transform3D(Basis(), Vector3(HIP.x * side, 0.0, 0.0)), look.bottom)
 		ClayMesh.add_torus(st, Vector3(HIP.x * side, -0.525, 0.0), 0.095, 0.022, look.bottom.lightened(0.12), 8, 4)
-	# 머리: 옆으로 살짝 넓은 큰 공. 둘레를 촘촘히 나눠 얼굴 부품과 겉면 사이가 벌어지거나 파묻히지 않게 하고,
-	# 어떤 머리 모양이든 덮는 정수리·뒤통수는 비우고, 긴 머리가 덮는 뒤쪽·옆쪽은 더 비운다 (머리카락 껍질이 그 위를 넉넉히 덮는다).
+	# 머리: 볼·턱 쪽이 넓은 찹쌀떡 (높이마다 옆·앞뒤 반지름에 head_width 를 곱한 회전체). 둘레를 촘촘히 나눠
+	# 얼굴 부품과 겉면 사이가 벌어지거나 파묻히지 않게 한다. 얼굴 부품은 같은 겉면(face_point)에 붙는다.
 	var head: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, 1)]
-	var one: Callable = func(_d: Vector3) -> float: return 1.0
 	var cover: float = _hair_cover_bottom(look.hair_style)
-	var bare: Callable = func(dir: Vector3) -> bool:
-		if dir.y > 0.62 or (dir.z > 0.5 and dir.y > -0.1):
-			return false
-		return not (dir.y > cover and (dir.z > 0.05 or absf(dir.x) > 0.9))
-	ClayMesh.add_shell(st, HEAD_CENTER, HEAD_RADII, look.skin, bare, one, head.x, head.y)
+	var head_profile: PackedVector2Array = PackedVector2Array()
+	for i: int in head.y + 1:
+		var a: float = -PI * 0.5 + PI * float(i) / float(head.y)
+		head_profile.append(Vector2(cos(a) * head_width(sin(a)), sin(a) * HEAD_RADII.y))
+	ClayMesh.add_lathe(st, head_profile, head.x, Transform3D(Basis.from_scale(Vector3(HEAD_RADII.x, 1.0, HEAD_RADII.z)), HEAD_CENTER), look.skin)
 	# 귀: 머리카락이 옆을 다 덮는 긴 머리에서는 만들지 않는다.
 	if cover > -0.4:
 		for side: float in [-1.0, 1.0]:
-			ClayMesh.add_ellipsoid(st, Vector3(EAR_CENTER.x * side, EAR_CENTER.y, EAR_CENTER.z), EAR_RADII, look.skin.darkened(0.03), 7, 4, Basis(Vector3.UP, 0.35 * side))
+			ClayMesh.add_ellipsoid(st, Vector3(EAR_CENTER.x * side, EAR_CENTER.y, EAR_CENTER.z), EAR_RADII, look.skin.darkened(0.03), 8 + 2 * detail, 5 + detail, Basis(Vector3.UP, 0.3 * side))
 	_add_face(st, look)
 	_add_hair(st, look)
 	var mesh: ArrayMesh = ClayMesh.commit(st)
@@ -127,7 +130,7 @@ static func eyes(look: CharacterLook = null) -> ArrayMesh:
 	if part == null and catalog != null and not catalog.eyes.is_empty():
 		part = catalog.eyes[0]
 	if part != null:
-		var anchor: Vector2 = catalog.anchors.get("eye", Vector2(0.17, 0.385))
+		var anchor: Vector2 = catalog.anchors.get("eye", Vector2(0.19, 0.35))
 		var palette: Dictionary[String, Color] = face_palette(l)
 		for side: float in [-1.0, 1.0]:
 			_emit_face(st, part.layers, palette, Vector2(anchor.x * side, anchor.y), side < 0.0, HEAD_CENTER, EYE_LIFT)
@@ -240,14 +243,10 @@ static func _add_face(st: SurfaceTool, look: CharacterLook) -> void:
 	if catalog == null:
 		return
 	var palette: Dictionary[String, Color] = face_palette(look)
-	var cheek: Vector2 = catalog.anchors.get("cheek", Vector2(0.215, 0.32))
-	var blush: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.048, 0.03], "color": "cheek"}]
-	var brow_at: Vector2 = catalog.anchors.get("brow", Vector2(0.17, 0.47))
-	# 눈썹: 머리색보다 짙은 도톰한 선, 바깥 끝이 살짝 내려온다 (x 는 바깥쪽이 +).
-	var brow: Array[Dictionary] = [{"shape": "stroke", "pts": [[-0.036, -0.002], [-0.006, 0.007], [0.034, 0.0]], "w": 0.017, "color": "brow"}]
+	var cheek: Vector2 = catalog.anchors.get("cheek", Vector2(0.245, 0.262))
+	var blush: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.056, 0.034], "color": "cheek"}]
 	for side: float in [-1.0, 1.0]:
 		_emit_face(st, blush, palette, Vector2(cheek.x * side, cheek.y), side < 0.0, Vector3.ZERO, CHEEK_LIFT)
-		_emit_face(st, brow, palette, Vector2(brow_at.x * side, brow_at.y), side < 0.0, Vector3.ZERO, FEATURE_LIFT)
 	var nose_part: FaceCatalog.Part = catalog.part("nose", look.nose)
 	if nose_part != null:
 		_emit_face(st, nose_part.layers, palette, catalog.anchors.get("nose", Vector2(0.0, 0.315)), false, Vector3.ZERO, FEATURE_LIFT)
@@ -268,12 +267,15 @@ static func face_palette(look: CharacterLook) -> Dictionary[String, Color]:
 	palette["nose"] = look.skin.lerp(look.cheeks, 0.6).darkened(0.03)
 	palette["nose_dark"] = look.skin.darkened(0.42).lerp(MOUTH_COLOR, 0.35)
 	palette["nose_ball"] = look.cheeks.darkened(0.08)
+	# 세모 코: 볼보다 진한 살구색.
+	palette["nose_tri"] = look.cheeks.lerp(Color("#E8794F"), 0.6)
+	# 눈동자 가운데 (눈동자 색보다 짙게).
+	palette["pupil"] = look.eye_color.darkened(0.45)
 	palette["lid"] = look.skin.darkened(0.07)
-	palette["brow"] = look.hair.darkened(0.3)
 	return palette
 
 
-## 도형 층들을 머리 겉면에 붙인다. anchor = 부품 자리(얼굴 x, y), mirror = 좌우 뒤집기(왼쪽 눈),
+## 도형 층들을 머리 겉면에 붙인다. anchor = 부품 자리(얼굴 x, y), mirror = 좌우 뒤집기(왼쪽 눈, gaze 층은 빼고),
 ## origin = 정점 좌표의 원점(눈은 머리 중심), lift = 겉면에서 띄우는 거리 (층마다 LAYER_LIFT 씩 더 띄운다).
 static func _emit_face(st: SurfaceTool, layers: Array[Dictionary], palette: Dictionary[String, Color], anchor: Vector2, mirror: bool, origin: Vector3, lift: float) -> void:
 	var entries: Array[Dictionary] = FaceShapes.triangles(layers, palette, _face_max_edge())
@@ -284,13 +286,14 @@ static func _emit_face(st: SurfaceTool, layers: Array[Dictionary], palette: Dict
 		var dome: Vector3 = entry["dome"]
 		var center: Vector2 = entry["center"]
 		var layer_lift: float = lift + LAYER_LIFT * float(i)
+		var flip: bool = mirror and not bool(entry["gaze"])
 		for t: int in range(0, tris.size(), 3):
 			var pos: Array[Vector3] = []
 			var nrm: Array[Vector3] = []
 			for k: int in 3:
 				var q: Vector2 = tris[t + k]
-				pos.append(_feature_point(q, anchor, mirror, layer_lift, center, dome))
-				nrm.append(_feature_normal(q, anchor, mirror, layer_lift, center, dome))
+				pos.append(_feature_point(q, anchor, flip, layer_lift, center, dome))
+				nrm.append(_feature_normal(q, anchor, flip, layer_lift, center, dome))
 			# 앞면 = 안쪽을 향하는 외적 (ClayMesh 와 같은 감김). 뒤집혔으면 두 점을 맞바꾼다.
 			var outward: Vector3 = head_normal((pos[0] + pos[1] + pos[2]) / 3.0)
 			if (pos[1] - pos[0]).cross(pos[2] - pos[0]).dot(outward) > 0.0:
@@ -327,17 +330,28 @@ static func _feature_normal(q: Vector2, anchor: Vector2, mirror: bool, lift: flo
 
 ## 머리(타원체) 앞쪽 겉면에서 (x, y) 자리의 점을 바깥 법선 방향으로 lift 만큼 띄운 점.
 static func face_point(x: float, y: float, lift: float) -> Vector3:
-	var nx: float = x / HEAD_RADII.x
 	var ny: float = (y - HEAD_CENTER.y) / HEAD_RADII.y
+	var w: float = head_width(ny)
+	var nx: float = x / (HEAD_RADII.x * w)
 	var nz: float = sqrt(maxf(1.0 - nx * nx - ny * ny, 0.0))
-	var surface: Vector3 = Vector3(x, y, -nz * HEAD_RADII.z)
+	var surface: Vector3 = Vector3(x, y, -nz * HEAD_RADII.z * w)
 	return surface + head_normal(surface) * lift
 
 
-## 머리 타원체의 바깥 법선 (p 는 Visual 좌표).
+## 높이(ny: 머리 중심 -1 ~ 정수리 1)마다 옆·앞뒤 반지름 배율: 눈 위로는 1, 볼·턱으로 갈수록 1 + HEAD_JOWL.
+static func head_width(ny: float) -> float:
+	return 1.0 + HEAD_JOWL * _ramp(0.5, -0.3, ny)
+
+
+## 머리 겉면의 바깥 법선 (p 는 Visual 좌표). 겉면 F = (x / (rx·w))² + ny² + (z / (rz·w))² = 1 의 기울기.
 static func head_normal(p: Vector3) -> Vector3:
 	var d: Vector3 = p - HEAD_CENTER
-	return Vector3(d.x / (HEAD_RADII.x * HEAD_RADII.x), d.y / (HEAD_RADII.y * HEAD_RADII.y), d.z / (HEAD_RADII.z * HEAD_RADII.z)).normalized()
+	var ny: float = d.y / HEAD_RADII.y
+	var w: float = head_width(ny)
+	var dw: float = (head_width(ny + 0.001) - head_width(ny - 0.001)) / 0.002
+	var a: float = d.x / (HEAD_RADII.x * w)
+	var c: float = d.z / (HEAD_RADII.z * w)
+	return Vector3(a / (HEAD_RADII.x * w), ny / HEAD_RADII.y - (a * a + c * c) * dw / (w * HEAD_RADII.y), c / (HEAD_RADII.z * w)).normalized()
 
 
 ## 머리 겉면 위의 점 (x, y 를 주면 z 를 얼굴 표면에 맞춘다). lift 만큼 바깥으로.
@@ -349,9 +363,9 @@ static func _catalog() -> FaceCatalog:
 	return GameData.face if GameData != null else null
 
 
-## 얼굴 도형 삼각형의 가장 긴 변 (머리 반지름 0.33m 에서 0.045m 변은 가운데가 겉면보다 0.8mm 안쪽).
+## 얼굴 도형 삼각형의 가장 긴 변 (머리 반지름 0.32m 에서 0.035m 변은 가운데가 겉면보다 0.5mm 안쪽).
 static func _face_max_edge() -> float:
-	return 0.045 if detail >= 1 else 0.055
+	return 0.035 if detail >= 1 else 0.05
 
 
 ## 머리카락: 머리보다 조금 큰 껍질(얼굴 자리는 머리 속으로 눌러 넣고, 결을 따라 살짝 골이 진다) 위에 끝이 모이는 도톰한 다발을 얹는다.
@@ -368,7 +382,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 	match look.hair_style:
 		"short":
 			# 분홍 삐죽 숏컷: 끝이 뾰족한 앞머리가 이리저리 뻗치고, 귀 옆과 목덜미도 뾰족하게.
-			_hair_shell(st, color, 0.42, 0.66, -0.05, -0.3, grooves)
+			_hair_shell(st, color, 0.42, 0.7, -0.05, -0.3, grooves)
 			for b: Vector3 in [Vector3(-50.0, 6.0, 12.0), Vector3(-25.0, -10.0, 8.0), Vector3(0.0, 8.0, 6.0), Vector3(25.0, -8.0, 9.0), Vector3(50.0, 10.0, 13.0)]:
 				_lock(st, color, b.x, 60.0, b.z, 0.08, 0.04, b.y, 0.0, 0.03, 0.06)
 			for side: float in [-1.0, 1.0]:
@@ -377,7 +391,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 				_lock(st, color, yaw, 10.0, -36.0, 0.09, 0.04, 0.0, 0.03, 0.02, 0.06)
 		"bun":
 			# 금발 똥머리: 옆으로 넘긴 앞머리, 얼굴 옆에 흘러내린 두 가닥, 정수리 위 동그란 올림머리.
-			_hair_shell(st, color, 0.42, 0.66, -0.05, -0.3, grooves)
+			_hair_shell(st, color, 0.42, 0.7, -0.05, -0.3, grooves)
 			_side_bangs(st, color, 1.0)
 			for side: float in [-1.0, 1.0]:
 				_lock(st, color, 60.0 * side, 30.0, -24.0, 0.056, 0.03, 6.0 * side, 0.12, 0.02, 0.05, 1.0)
@@ -409,7 +423,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 				ClayMesh.add_ellipsoid(st, braid[rows - 1] + Vector3(0.0, -0.01, 0.0), Vector3(0.04, 0.03, 0.04), tie, 6, 4)
 		"ponytail":
 			# 검정 포니테일: 매끈하게 빗어 넘기고 옆으로 넘긴 앞머리, 뒤통수 위에서 묶어 크게 휘어 내린 꼬리.
-			_hair_shell(st, color, 0.42, 0.66, -0.05, -0.3, one)
+			_hair_shell(st, color, 0.42, 0.7, -0.05, -0.3, one)
 			_side_bangs(st, color, -1.0)
 			for side: float in [-1.0, 1.0]:
 				_lock(st, color, 78.0 * side, 30.0, -18.0, 0.056, 0.03, 4.0 * side, 0.04, 0.02, 0.05)
@@ -434,7 +448,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 				_lock(st, color, 150.0 * side, 0.0, -46.0, 0.12, 0.055, 0.0, 0.14, 0.04, 0.08, 1.0)
 		"spiky":
 			# 빨강 부스스 숏: 정수리부터 사방으로 뻗친 뾰족한 다발.
-			_hair_shell(st, color, 0.42, 0.66, -0.05, -0.3, grooves)
+			_hair_shell(st, color, 0.42, 0.7, -0.05, -0.3, grooves)
 			for b: Vector3 in [Vector3(-42.0, -14.0, 12.0), Vector3(-14.0, 10.0, 6.0), Vector3(16.0, -8.0, 8.0), Vector3(44.0, 12.0, 14.0)]:
 				_lock(st, color, b.x, 62.0, b.z, 0.084, 0.045, b.y, 0.0, 0.05, 0.12)
 			for yaw: float in [-120.0, -60.0, 0.0, 60.0, 120.0, 180.0]:
@@ -453,7 +467,7 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 				_lock(st, color, 150.0 * side, 0.0, -46.0, 0.12, 0.05, 0.0, 0.12, 0.02, 0.08)
 		"buzz":
 			# 회색 짧은 남자 머리: 짧게 친 껍질, 이마에 짧은 앞머리 몇 가닥과 구레나룻.
-			_hair_shell(st, color, 0.46, 0.66, -0.02, -0.3, grooves, Vector3(0.97, 0.95, 0.97))
+			_hair_shell(st, color, 0.46, 0.7, -0.02, -0.3, grooves, Vector3(0.97, 0.95, 0.97))
 			for b: Vector2 in [Vector2(-26.0, 6.0), Vector2(0.0, -6.0), Vector2(26.0, 8.0)]:
 				_lock(st, color, b.x, 56.0, 24.0, 0.084, 0.035, b.y, 0.0, 0.0, 0.03)
 			for side: float in [-1.0, 1.0]:
@@ -483,7 +497,8 @@ static func _hair_shell(st: SurfaceTool, color: Variant, face_top: float, face_h
 	var keep: Callable = func(dir: Vector3) -> bool:
 		return float(face.call(dir)) < 0.99 and dir.y > lerpf(bottom, bottom_back, _ramp(-0.05, 0.25, dir.z))
 	var flare: Callable = func(dir: Vector3) -> float:
-		return lerpf(float(shape.call(dir)), 0.74, float(face.call(dir)))
+		var jowl: float = 1.0 + HEAD_JOWL * _ramp(0.3, -0.5, dir.y)
+		return lerpf(float(shape.call(dir)) * jowl, 0.72, float(face.call(dir)))
 	ClayMesh.add_shell(st, HAIR_CENTER, HAIR_RADII * scale, color, keep, flare, seg.x, seg.y)
 
 
@@ -505,12 +520,12 @@ static func _hair_cover_bottom(style: String) -> float:
 ## 일자 앞머리: 이마를 덮고 눈썹 위에서 똑 자른 다섯 다발.
 static func _blunt_bangs(st: SurfaceTool, color: Variant) -> void:
 	for yaw: float in [-46.0, -23.0, 0.0, 23.0, 46.0]:
-		_lock(st, color, yaw, 62.0, 13.0 + absf(yaw) * 0.08, 0.095, 0.04, 0.0, 0.0, 0.03, 0.0, 0.0, 1.0)
+		_lock(st, color, yaw, 62.0, 17.0 + absf(yaw) * 0.08, 0.095, 0.04, 0.0, 0.0, 0.03, 0.0, 0.0, 1.0)
 
 
 ## 옆으로 넘긴 앞머리 (direction 1 = 캐릭터 오른쪽 가르마에서 왼쪽으로 넘긴다).
 static func _side_bangs(st: SurfaceTool, color: Variant, direction: float) -> void:
-	for b: Vector3 in [Vector3(36.0, 18.0, -40.0), Vector3(12.0, 12.0, -32.0), Vector3(-14.0, 14.0, -22.0), Vector3(-40.0, 10.0, -10.0)]:
+	for b: Vector3 in [Vector3(36.0, 22.0, -40.0), Vector3(12.0, 16.0, -32.0), Vector3(-14.0, 18.0, -22.0), Vector3(-40.0, 14.0, -10.0)]:
 		_lock(st, color, b.x * direction, 60.0, b.y, 0.09, 0.04, b.z * direction, 0.0, 0.03, 0.04)
 
 

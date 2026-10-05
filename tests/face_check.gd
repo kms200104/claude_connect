@@ -1,9 +1,9 @@
 extends Node
 ## 얼굴 검사 (렌더러 없이): 모든 눈·코·입 도형의 꼭짓점이 머리 메시 겉면보다 바깥에 있는지(파묻혀 깨지지 않는지),
-## 캐릭터 하나 삼각형 수가 예산(4,000) 안인지, 절약·고화질 둘 다.
+## 캐릭터 하나 삼각형 수가 예산(8,000) 안인지, 절약·고화질 둘 다.
 ## 사용: godot --headless --path . res://tests/face_check.tscn
 
-const BUDGET: int = 4000
+const BUDGET: int = 8000
 var _failed: int = 0
 
 
@@ -61,7 +61,8 @@ func _face_only(look: CharacterLook) -> ArrayMesh:
 func _surface_distance(p: Vector3) -> float:
 	var d: Vector3 = p - CharacterModel.HEAD_CENTER
 	var r: Vector3 = CharacterModel.HEAD_RADII
-	var k: float = sqrt(pow(d.x / r.x, 2.0) + pow(d.y / r.y, 2.0) + pow(d.z / r.z, 2.0))
+	var w: float = CharacterModel.head_width(d.y / r.y)
+	var k: float = sqrt(pow(d.x / (r.x * w), 2.0) + pow(d.y / r.y, 2.0) + pow(d.z / (r.z * w), 2.0))
 	return d.length() * (1.0 - 1.0 / maxf(k, 0.0001))
 
 

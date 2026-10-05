@@ -4,6 +4,7 @@ extends Node3D
 ##   --what: trees / characters / outfits / furniture / clothes / shop / village (--cam=x,y,z --at=x,y,z, 서버 없이 마을 전체)
 ##           compare (--ids=tv,bed_double: 앞줄 = 절차 모형, 뒷줄 = Blender 모형 assets/models/items)
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
+##           portraits (표정 6가지를 정면에서, 얼굴 비율 비교용)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
@@ -79,6 +80,24 @@ func _ready() -> void:
 				elif _what == "hairs":
 					rig.rotation.y = 0.5 if row == 0 else PI - 0.5
 			_camera(Vector3(0.0, 1.95, -4.6), Vector3(0.0, 1.95, 0.0), 42.0)
+		"portraits":
+			# 얼굴 비율 비교용: 표정 6가지를 정면에서 (신난 · 곤란한 · 사랑에 빠진 · 시무룩한 · 무뚝뚝한 · 깜짝 놀란).
+			var presets: Array[Dictionary] = [
+				{"eyes": "happy", "nose": "button", "mouth": "laugh", "hair": "long", "hair_color": "brown"},
+				{"eyes": "round", "nose": "button", "mouth": "flat", "hair": "spiky", "hair_color": "brown"},
+				{"eyes": "heart", "nose": "big", "mouth": "o", "hair": "bob", "hair_color": "mint"},
+				{"eyes": "droopy", "nose": "big", "mouth": "pout", "hair": "pigtails", "hair_color": "brown"},
+				{"eyes": "round", "nose": "big", "mouth": "flat", "hair": "short", "hair_color": "black"},
+				{"eyes": "sparkle", "nose": "button", "mouth": "open", "hair": "curly", "hair_color": "brown"}]
+			for i: int in presets.size():
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				rig.position = Vector3((2.5 - float(i)) * 1.1, 0.0, 0.0)
+				rig.set_look(GameData.player_look(1, presets[i]))
+				rig.set_held("")
+				rig.tree.active = false
+			# 눈높이 정면, 멀리서 좁게 (원근 때문에 옆 머리가 돌아가 보이지 않게).
+			_camera(Vector3(0.0, 0.4, -24.0), Vector3(0.0, 0.4, 0.0), 6.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():

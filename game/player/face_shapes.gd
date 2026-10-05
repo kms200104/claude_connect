@@ -6,6 +6,7 @@ extends RefCounted
 ## 도형: ellipse(c, r, rot) · poly(pts) · stroke(pts, w) · arc(c, r, a0, a1, w) · chord(c, r, a0, a1) ·
 ##       star(c, r, inner, n, rot) · heart(c, s) · dome(c, r, h — 3D에서는 볼록 솟은 혹, 아이콘에서는 타원).
 ## 각도는 도(degree), 0 = 오른쪽(+x), 90 = 위. mirror: true 인 층은 좌우로 하나씩 더 그린다.
+## gaze: true 인 층(눈동자·하이라이트)은 왼쪽 눈에서도 좌우를 뒤집지 않는다 — 두 눈이 같은 쪽을 본다 (x 양수 = 캐릭터 오른쪽).
 ## 긴 변은 max_edge 보다 짧아질 때까지 반으로 나눈다 — 둥근 머리에 붙여도 평평한 삼각형이 머리 속으로 파묻히지 않게.
 
 const CIRCLE_STEPS: int = 16
@@ -15,7 +16,7 @@ const JOINT_STEPS: int = 8
 const JOINT_MIN_TURN: float = 25.0
 
 
-## 층 하나를 삼각형으로: {"tris": PackedVector2Array(3개씩), "color": Color, "dome": Vector3(높이, 반지름 x, 반지름 y) 또는 ZERO, "center": Vector2}.
+## 층 하나를 삼각형으로: {"tris": PackedVector2Array(3개씩), "color": Color, "dome": Vector3(높이, 반지름 x, 반지름 y) 또는 ZERO, "center": Vector2, "gaze": bool}.
 static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color], max_edge: float = 0.0) -> Dictionary:
 	var tris: PackedVector2Array = PackedVector2Array()
 	var shape: String = str(layer.get("shape", ""))
@@ -53,7 +54,7 @@ static func layer_triangles(layer: Dictionary, palette: Dictionary[String, Color
 		tris = subdivide(tris, max_edge)
 	var color_key: String = str(layer.get("color", "ink"))
 	var color: Color = palette.get(color_key, Color.html(color_key) if Color.html_is_valid(color_key) else Color.MAGENTA)
-	return {"tris": tris, "color": color, "dome": dome, "center": c}
+	return {"tris": tris, "color": color, "dome": dome, "center": c, "gaze": bool(layer.get("gaze", false))}
 
 
 ## 모든 층 (아래 → 위).
