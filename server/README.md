@@ -16,6 +16,8 @@ npm start                 # ws://0.0.0.0:8080  (PORT=9000 npm start 로 포트 �
 npm test                  # 서버 단위·통합 테스트
 ```
 
+Windows 에서는 저장소 맨 위의 `server.bat` 을 더블클릭하면 코드 받기 · 패키지 설치 · (전에 켠 서버가 8080 을 잡고 있으면 끄고) 서버 켜기 · 폰에 적을 주소 안내까지 한다.
+
 저장 파일: `server/saves/<방코드>.json` (`SAVE_DIR`로 변경, git 무시). 정적 데이터는 저장소의 `data/` 아래 JSON(물고기·아이템·나무·주민·부탁)을 클라이언트와 함께 읽는다(`DATA_DIR`).
 
 환경변수(`src/config.js`): `SAVE_DIR` `FISH_TIME_SCALE` `QUICK_SLOTS` `INVENTORY_CAPACITY` `PORT` `TICK_RATE` `RECONNECT_GRACE_MS` `HEARTBEAT_MS` `MAX_SPEED` `WORLD_HALF_EXTENT` `RATE_LIMIT_PER_SEC` `CHOP_COOLDOWN_MS` `NPC_TICK_RATE` `TALK_TIMEOUT_MS` …
@@ -56,6 +58,7 @@ npm test                  # 서버 단위·통합 테스트
 - 렌더러 없이 도는 검사: `godot --headless --path . res://tests/face_check.tscn` (얼굴 부품이 머리 겉면 밖인지 · 캐릭터 삼각형 4,000 이하, 절약·고화질 둘 다), `res://tests/quality_check.tscn` (화질 두 단계 · S24/폴드7 3D 해상도 · 리소스팩), `res://tests/audio_check.tscn` (발소리 재질 · 비 오는 날 물웅덩이 · 낮/밤/비/이벤트 음악 고르기 · 음악 연달아 바꾸기 · 소리 파일)
 - `tests/run_economy_e2e.sh` — 증권(시세 받기·휴대폰·매수·매도·거래세) · 은행(신용등급·금리·대출·상환) · 부동산(부스 '부동산' · 아파트 사기 · 발코니 깃발) · 식당(식당 열기 · 재료만큼만 주문 · 요리 미니게임 → 별점 · 앉은 손님) · 들판 채집 · 성성호수 낚시터
 - `tests/run_coop_e2e.sh` — 두 사람 (v0.9): 동사무소 창구 상황 버튼 · 전입신고 · 천안사랑카드 · 혼인신고 제안/수락 → 솔이 한 지갑으로 · 햇살론유스(고정) 가 배우자 지갑에도 · 식당 같이 일하기(재료 합치기 · 한 그릇의 동작을 나눠 맡기 · 팀 보너스) · 여울에 들어가 걷기 · 둘이 몰아 뜰채질 · 바닷가 조개 같이 캐기 · 삽으로 구덩이·메우기·흙길
+- `tests/run_test_server_e2e.sh` — 앱 안 테스트 서버 (Node 서버 없이): 주민 대화 · 나무 베기 → 그루터기 · 낚시 · 들판 채집 · 거울 · 다시 접속해도 가방 그대로
 - `tests/run_home_e2e.sh` — 집 안 (v0.10): 서버가 없을 때 접속 실패 → "테스트 서버로 하기" → 앱 안 테스트 서버 → 집 구경 · 꾸미기 / 진짜 서버에서 집 사기 → 공동 현관 '집 구경' → 엘리베이터 → 평면도대로 지은 벽 · 기본 가구 → 위에서 본 꾸미기(끌어 옮기기 · 보이지 않는 격자 · 벽 밖 거절 · 좌우 돌리기 · 가방에 넣기 · 가방에서 놓기) → 현관문 나가기
 - `godot --headless --path . res://tests/script_check.tscn` — 모든 GDScript 를 오토로드가 있는 상태에서 불러 문법·타입 오류 검사
 - `tests/run_title_e2e.sh` — 첫 화면: 높은 곳에서 비스듬히 내려다보며 나는 항공뷰 · 구름 · 새 마을 만들기 → 다시 켜면 서버 주소·마지막 방이 채워져 있고 "시작하기"로 같은 방에 들어감

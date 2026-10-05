@@ -3,8 +3,10 @@ extends Node
 ## 앱 안 테스트 서버 (v0.10): 진짜 서버(Node.js)에 연결할 수 없을 때 — 안드로이드 기기 하나만으로 — 게임을 돌려 볼 수 있게
 ## 같은 프로세스 안에서 WebSocket 서버(127.0.0.1)를 연다. 클라이언트(Net)는 진짜 서버와 똑같이 접속·요청한다.
 ## 입장 정보는 진짜 서버에서 찍어 둔 것(data/testserver/welcome.json, server/tools/make_test_snapshot.js)을 쓰고,
-## 걷기 · 가방(옮기기·버리기·손에 들기) · 상점(드나들기·사고팔기) · 마을 가구 · 아파트 집 구경·꾸미기를 직접 처리한다.
-## 그 밖의 요청(낚시·대화·식당 …)은 "test_server" 오류로 거절한다 — 혼자 테스트용이라 판정이 너그럽고 다른 사람이 없다.
+## 혼자 노는 데 필요한 것을 직접 처리한다: 걷기 · 가방(옮기기·버리기·손에 들기) · 상점(드나들기·사고팔기) · 마을 가구 ·
+## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 씨앗 심기·꽃 따기 ·
+## 들판 채집 · 아파트 집 구경·꾸미기. 나무·꽃은 진짜 서버보다 10배 빨리 자란다.
+## 여럿이 하는 일·경제(식당·증권·은행·동사무소·혼인신고·여울 그물·삽)는 "test_server" 오류로 알려 준다 — 판정이 너그럽고 다른 사람이 없다.
 ## 상태는 user://test_server.json 에 저장된다.
 
 const SNAPSHOT_PATH: String = "res://data/testserver/welcome.json"
@@ -14,6 +16,11 @@ const ROOM_CODE: String = "TEST01"
 const ERR_TEST_ONLY: String = "test_server"
 ## 마을 시간대 (서버 기본 UTC+9).
 const UTC_OFFSET_MS: float = 9.0 * 3600.0 * 1000.0
+## 나무·꽃이 자라는 빠르기 (진짜 서버의 게임 분 → 실제 초: 1분 = 6초).
+const GROW_MS_PER_MINUTE: float = 6000.0
+const CHOPS_TO_FELL: int = 3
+const FORAGE_MAX: int = 8
+const FORAGE_EVERY_MS: float = 40000.0
 
 var port: int = 0
 var _tcp: TCPServer = null
@@ -30,6 +37,34 @@ var _home_items: Dictionary = {}
 var _home_seq: int = 0
 var _placed: Dictionary = {}
 var _placed_seq: int = 0
+var _outfit: Dictionary = {"hat": "", "top": ""}
+var _face: Dictionary = {}
+var _friends: Dictionary = {}
+var _talk_days: Dictionary = {}
+var _chat_today: Dictionary = {}
+## 지금 이야기하는 주민.
+var _talking: String = ""
+var _planted: Dictionary = {}
+var _plant_seq: int = 0
+var _flowers: Dictionary = {}
+var _flower_seq: int = 0
+# 저장하지 않는 상태.
+## 접속해 있는 사람 (혼자 쓰는 서버라 하나).
+var _peer: WebSocketPeer = null
+## 나무 id → { s, c } (데이터 나무 + 심은 나무)
+var _trees: Dictionary = {}
+## 바닥의 채집물 id → { id, kind, item, x, z }
+var _drops: Dictionary = {}
+var _drop_seq: int = 0
+var _next_forage_ms: float = 0.0
+## 낚시 중이면 { rid, fish, bite_at, window }
+var _fishing: Dictionary = {}
+## [시각(ms), Callable] — 입질 · 자라기
+var _timers: Array = []
+var _fish_weights: Dictionary = {}
+var _spot_fish: Dictionary = {}
+var _chop_drops: Dictionary = {}
+var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 ## 127.0.0.1 의 빈 포트에서 듣기 시작. 실패하면 false.
@@ -41,7 +76,17 @@ func start() -> bool:
 	if _snapshot.is_empty():
 		push_error("LocalTestServer: %s 가 없음 (server/tools/make_test_snapshot.js)" % SNAPSHOT_PATH)
 		return false
+	_rng.randomize()
+	for f: Variant in _read_json("res://data/fish/fish.json").get("fish", []):
+		_fish_weights[str(f["id"])] = float(f.get("weight", 10))
+	for sp: Variant in _read_json("res://data/fish/spots.json").get("spots", []):
+		_spot_fish[str(sp["id"])] = sp.get("fish", [])
+	_chop_drops = _read_json("res://data/items/items.json").get("chop_drops", {})
 	_load()
+	for t: Variant in _snapshot.get("trees", []):
+		_trees[str(t["id"])] = {"s": "grown", "c": 0}
+	for id: String in _planted:
+		_trees[id] = {"s": str(_planted[id].get("s", "grown")), "c": 0}
 	_tcp = TCPServer.new()
 	for p: int in range(FIRST_PORT, FIRST_PORT + 20):
 		if _tcp.listen(p, "127.0.0.1") == OK:
@@ -62,10 +107,22 @@ func is_running() -> bool:
 func _process(_delta: float) -> void:
 	if _tcp == null:
 		return
+	var now: float = _now()
+	var due: Array = []
+	for t: Array in _timers:
+		if now >= float(t[0]):
+			due.append(t)
+	for t: Array in due:
+		_timers.erase(t)
+		(t[1] as Callable).call()
+	if _peer != null and now >= _next_forage_ms:
+		_next_forage_ms = now + FORAGE_EVERY_MS
+		_spawn_forage()
 	while _tcp.is_connection_available():
 		var peer: WebSocketPeer = WebSocketPeer.new()
 		if peer.accept_stream(_tcp.take_connection()) == OK:
 			_peers.append(peer)
+			_peer = peer
 	for peer: WebSocketPeer in _peers.duplicate():
 		peer.poll()
 		match peer.get_ready_state():
@@ -185,11 +242,354 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_save()
 		"home_enter", "home_exit", "home_place", "home_move", "home_pickup":
 			_handle_home(peer, msg, fail)
-		"bank_quote", "civic_info", "emote", "emote_quick", "talk_end", "fish_cancel":
+		"talk":
+			_talk(peer, msg, fail)
+		"talk_topic":
+			_talk_topic(peer, msg)
+		"chop":
+			_chop(peer, msg, fail)
+		"fish_cast":
+			_fish_cast(peer, msg, fail)
+		"fish_hook":
+			_fish_hook(peer, msg)
+		"fish_cancel":
+			if not _fishing.is_empty():
+				_end_fishing(peer, {"ok": false, "reason": "cancelled"})
+		"wear", "unwear":
+			_wear(peer, msg, fail)
+		"set_face":
+			var face: Variant = msg.get("face", {})
+			if not face is Dictionary:
+				fail.call(NetProtocol.ERR_BAD_FACE)
+				return
+			if _face.is_empty():
+				_face = ((_snapshot.get("players", [{}]) as Array)[0] as Dictionary).get("face", {}).duplicate()
+			_face.merge(face, true)
+			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
+			_save()
+		"plant":
+			_plant(peer, msg, fail)
+		"pick":
+			_pick(peer, msg, fail)
+		"collect":
+			var d: Dictionary = _drops.get(str(msg.get("id", "")), {})
+			if d.is_empty():
+				fail.call(NetProtocol.ERR_NO_DROP)
+				return
+			if not _add(str(d["item"]), 1):
+				fail.call(NetProtocol.ERR_INVENTORY_FULL)
+				return
+			_drops.erase(d["id"])
+			_send(peer, {"t": "collect_result", "rid": rid, "id": d["id"], "kind": d["kind"], "item": d["item"]})
+			_send_inventory(peer)
+			_send(peer, {"t": "drop_gone", "id": d["id"], "by": 1})
+			_save()
+		"talk_end":
+			_talking = ""
+		"bank_quote", "civic_info", "emote", "emote_quick":
 			pass
 		_:
 			if rid != null:
 				fail.call(ERR_TEST_ONLY)
+
+
+# ---- 주민 대화 ----
+
+func _talk(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var npc: String = str(msg.get("npc", ""))
+	if npc.is_empty():
+		fail.call(NetProtocol.ERR_NOT_NEAR_NPC)
+		return
+	# 박물관 관장 · 조종사 같은 지기도 받아 준다 (기분은 보통).
+	var mood: String = "calm"
+	for n: Variant in _snapshot.get("npcs", []):
+		if str(n["id"]) == npc:
+			mood = str(n.get("m", "calm"))
+	_talking = npc
+	var today: String = Time.get_date_string_from_system()
+	var first: bool = str(_talk_days.get(npc, "")) != today
+	if first:
+		_talk_days[npc] = today
+		_friends[npc] = mini(100, int(_friends.get(npc, 0)) + 2)
+		_send(peer, {"t": "profile", "sol": _sol, "friends": _friends})
+	_send(peer, {"t": "talk_open", "rid": msg.get("rid"), "npc": npc, "f": int(_friends.get(npc, 0)), "first": first, "m": mood})
+	_save()
+
+
+func _talk_topic(peer: WebSocketPeer, msg: Dictionary) -> void:
+	var npc: String = _talking
+	if npc.is_empty():
+		return
+	var today: String = Time.get_date_string_from_system()
+	var key: String = "%s/%s" % [npc, today]
+	var gain: int = 1 if int(_chat_today.get(key, 0)) < 3 else 0
+	_chat_today[key] = int(_chat_today.get(key, 0)) + 1
+	_friends[npc] = mini(100, int(_friends.get(npc, 0)) + gain)
+	_send(peer, {"t": "talk_topic", "npc": npc, "topic": msg.get("topic", ""), "f": int(_friends.get(npc, 0)), "gain": gain, "m": "happy"})
+	if gain > 0:
+		_send(peer, {"t": "profile", "sol": _sol, "friends": _friends})
+
+
+# ---- 나무 베기 ----
+
+func _chop(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var id: String = str(msg.get("tree", ""))
+	if _held_id() != "axe":
+		fail.call(NetProtocol.ERR_NO_TOOL)
+		return
+	if not _trees.has(id):
+		fail.call(NetProtocol.ERR_NOT_NEAR_TREE)
+		return
+	var st: Dictionary = _trees[id]
+	if str(st["s"]) != NetProtocol.TREE_GROWN:
+		fail.call(NetProtocol.ERR_TREE_NOT_READY)
+		return
+	var kind: String = str(_planted[id]["k"]) if _planted.has(id) else _tree_kind(id)
+	var item: String = _weighted(_chop_drops.get(kind, _chop_drops.get("round", [])))
+	if not _add(item, 1):
+		fail.call(NetProtocol.ERR_INVENTORY_FULL)
+		return
+	st["c"] = int(st["c"]) + 1
+	var felled: bool = int(st["c"]) >= CHOPS_TO_FELL
+	if felled:
+		st["s"] = NetProtocol.TREE_STUMP
+		st["c"] = 0
+		_grow_tree(id, [NetProtocol.TREE_SAPLING, NetProtocol.TREE_YOUNG, NetProtocol.TREE_GROWN], [8, 10, 10])
+	_send(peer, {"t": "chop_result", "rid": msg.get("rid"), "ok": true, "item": item, "n": 1, "tree": id, "felled": felled, "coop": false})
+	_send_inventory(peer)
+	_send_tree(id)
+	_save()
+
+
+func _tree_kind(id: String) -> String:
+	var info: TreeInfo = GameData.trees.get(id)
+	return info.kind if info != null else "round"
+
+
+## 단계마다 minutes 게임 분(테스트 서버에서는 1분 = 6초) 뒤에 다음 단계로.
+func _grow_tree(id: String, stages: Array, minutes: Array) -> void:
+	var at: float = _now()
+	for i: int in stages.size():
+		at += float(minutes[i]) * GROW_MS_PER_MINUTE
+		var stage: String = str(stages[i])
+		_timers.append([at, func() -> void:
+			if _trees.has(id):
+				_trees[id]["s"] = stage
+				if _planted.has(id):
+					_planted[id]["s"] = stage
+				_send_tree(id)])
+
+
+func _send_tree(id: String) -> void:
+	if _peer == null:
+		return
+	var wire: Dictionary = {"t": "tree", "id": id, "s": _trees[id]["s"], "c": _trees[id]["c"]}
+	if _planted.has(id):
+		wire.merge({"k": _planted[id]["k"], "x": _planted[id]["x"], "z": _planted[id]["z"]})
+	_send(_peer, wire)
+
+
+# ---- 낚시 ----
+
+func _fish_cast(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var rid: Variant = msg.get("rid")
+	if not _fishing.is_empty():
+		fail.call(NetProtocol.ERR_ALREADY_FISHING)
+		return
+	if _held_id() != "rod":
+		fail.call(NetProtocol.ERR_NO_TOOL)
+		return
+	var spot: String = str(msg.get("spot", ""))
+	var pool: Array = _spot_fish.get(spot, [])
+	if pool.is_empty():
+		fail.call(NetProtocol.ERR_NOT_AT_SPOT)
+		return
+	var entries: Array = pool.map(func(id: Variant) -> Dictionary: return {"id": str(id), "weight": _fish_weights.get(str(id), 10.0)})
+	var fish: String = _weighted(entries)
+	var info: FishInfo = GameData.fish.get(fish)
+	_fishing = {"rid": rid, "fish": fish, "bite_at": -1.0, "window": float(info.hook_window_ms if info != null else 700)}
+	_send(peer, {"t": "fish_started", "rid": rid, "spot": spot, "zone": "deep", "coop": false})
+	var at: float = _now() + _rng.randf_range(2000.0, 4000.0)
+	for i: int in _rng.randi_range(0, 2):
+		_timers.append([at, func() -> void:
+			if not _fishing.is_empty() and _fishing["rid"] == rid:
+				_send(peer, {"t": "fish_nibble", "rid": rid})])
+		at += _rng.randf_range(1500.0, 3000.0)
+	_timers.append([at, func() -> void:
+		if _fishing.is_empty() or _fishing["rid"] != rid:
+			return
+		_fishing["bite_at"] = _now()
+		_send(peer, {"t": "fish_bite", "rid": rid, "windowMs": int(_fishing["window"])})
+		_timers.append([_now() + float(_fishing["window"]) + 1500.0, func() -> void:
+			if not _fishing.is_empty() and _fishing["rid"] == rid:
+				_end_fishing(peer, {"ok": false, "reason": "escaped"})])])
+
+
+func _fish_hook(peer: WebSocketPeer, msg: Dictionary) -> void:
+	if _fishing.is_empty() or _fishing["rid"] != msg.get("rid"):
+		return
+	if float(_fishing["bite_at"]) < 0.0:
+		_end_fishing(peer, {"ok": false, "reason": "early"})
+		return
+	var reaction: float = float(msg.get("reaction", 0.0))
+	if reaction > float(_fishing["window"]):
+		_end_fishing(peer, {"ok": false, "reason": "late"})
+		return
+	var fish: String = str(_fishing["fish"])
+	if not _add(fish, 1):
+		_end_fishing(peer, {"ok": false, "reason": "inventory_full"})
+		return
+	_send_inventory(peer)
+	_end_fishing(peer, {"ok": true, "fish": fish})
+	_save()
+
+
+func _end_fishing(peer: WebSocketPeer, result: Dictionary) -> void:
+	var msg: Dictionary = {"t": "fish_result", "rid": _fishing.get("rid")}
+	msg.merge(result)
+	_fishing = {}
+	_send(peer, msg)
+
+
+# ---- 옷 ----
+
+func _wear(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	if str(msg.get("t", "")) == "unwear":
+		var part: String = str(msg.get("part", ""))
+		if not _outfit.has(part) or str(_outfit[part]).is_empty():
+			fail.call(NetProtocol.ERR_NOT_WEARABLE)
+			return
+		if not _add(str(_outfit[part]), 1):
+			fail.call(NetProtocol.ERR_INVENTORY_FULL)
+			return
+		_outfit[part] = ""
+	else:
+		var slot: int = int(msg.get("slot", -1))
+		var item: String = str(_slots[slot]["id"]) if slot >= 0 and slot < _slots.size() and _slots[slot] != null else ""
+		var info: ItemInfo = GameData.item(item)
+		if info == null or not info.is_clothing():
+			fail.call(NetProtocol.ERR_NOT_WEARABLE)
+			return
+		var previous: String = str(_outfit.get(info.wear_slot, ""))
+		_remove(slot, 1)
+		if not previous.is_empty():
+			_slots[slot] = {"id": previous, "n": 1}
+		_outfit[info.wear_slot] = item
+	_send_inventory(peer)
+	_send(peer, {"t": "profile", "sol": _sol, "outfit": _outfit})
+	_save()
+
+
+# ---- 씨앗 심기 · 꽃 따기 ----
+
+func _plant(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var seed: ItemInfo = GameData.item(_held_id())
+	if seed == null or (seed.plant_tree.is_empty() and seed.plant_flower.is_empty()):
+		fail.call(NetProtocol.ERR_NOT_SEED)
+		return
+	var x: float = snappedf(float(msg.get("x", 0.0)), 0.5)
+	var z: float = snappedf(float(msg.get("z", 0.0)), 0.5)
+	_remove(_held, 1)
+	var kind: String = "tree" if not seed.plant_tree.is_empty() else "flower"
+	var id: String = ""
+	if kind == "tree":
+		_plant_seq += 1
+		id = "p%d" % _plant_seq
+		_planted[id] = {"k": seed.plant_tree, "x": x, "z": z, "s": NetProtocol.TREE_SPROUT}
+		_trees[id] = {"s": NetProtocol.TREE_SPROUT, "c": 0}
+		_send_tree(id)
+		_grow_tree(id, [NetProtocol.TREE_SAPLING, NetProtocol.TREE_YOUNG, NetProtocol.TREE_GROWN], [8, 10, 10])
+	else:
+		_flower_seq += 1
+		id = "g%d" % _flower_seq
+		var def: Dictionary = _flower_def(seed.plant_flower)
+		var f: Dictionary = {"id": id, "sp": seed.plant_flower, "c": _rng.randi_range(0, maxi(0, (def.get("colors", [""]) as Array).size() - 1)), "x": x, "z": z, "s": "sprout"}
+		_flowers[id] = f
+		_send(peer, {"t": "flower", "f": _flower_wire(f), "by": 1})
+		_grow_flower(id)
+	_send(peer, {"t": "plant_result", "rid": msg.get("rid"), "id": id, "kind": kind, "x": x, "z": z})
+	_send_inventory(peer)
+	_save()
+
+
+func _pick(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var f: Dictionary = _flowers.get(str(msg.get("id", "")), {})
+	if f.is_empty() or str(f["s"]) != "bloom":
+		fail.call(NetProtocol.ERR_NO_FLOWER)
+		return
+	var item: String = str(_flower_def(str(f["sp"])).get("item", f["sp"]))
+	if not _add(item, 1):
+		fail.call(NetProtocol.ERR_INVENTORY_FULL)
+		return
+	f["s"] = "bud"
+	_send(peer, {"t": "pick_result", "rid": msg.get("rid"), "id": f["id"], "item": item})
+	_send(peer, {"t": "flower", "f": _flower_wire(f), "by": 1})
+	_send_inventory(peer)
+	var def: Dictionary = _flower_def(str(f["sp"]))
+	var id: String = str(f["id"])
+	_timers.append([_now() + float(def.get("rebloom_minutes", 6)) * GROW_MS_PER_MINUTE, func() -> void: _set_flower(id, "bloom")])
+	_save()
+
+
+func _grow_flower(id: String) -> void:
+	var def: Dictionary = _flower_def(str(_flowers[id]["sp"]))
+	var minutes: Dictionary = def.get("minutes", {"sprout": 5, "bud": 5})
+	var at: float = _now() + float(minutes.get("sprout", 5)) * GROW_MS_PER_MINUTE
+	_timers.append([at, func() -> void: _set_flower(id, "bud")])
+	at += float(minutes.get("bud", 5)) * GROW_MS_PER_MINUTE
+	_timers.append([at, func() -> void: _set_flower(id, "bloom")])
+
+
+func _set_flower(id: String, stage: String) -> void:
+	if not _flowers.has(id):
+		return
+	_flowers[id]["s"] = stage
+	if _peer != null:
+		_send(_peer, {"t": "flower", "f": _flower_wire(_flowers[id])})
+	_save()
+
+
+func _flower_def(species: String) -> Dictionary:
+	for f: Variant in _read_json("res://data/plants/plants.json").get("flowers", []):
+		if str(f["id"]) == species:
+			return f
+	return {}
+
+
+static func _flower_wire(f: Dictionary) -> Dictionary:
+	return {"id": f["id"], "sp": f["sp"], "c": f["c"], "x": f["x"], "z": f["z"], "s": f["s"]}
+
+
+# ---- 들판 채집 (나무 곁 풀숲에 돋는다 — 섬 안 땅이 틀림없는 자리) ----
+
+func _spawn_forage() -> void:
+	if _drops.size() >= FORAGE_MAX or GameData.trees.is_empty():
+		return
+	var items: Array = (_read_json("res://data/restaurant/restaurant.json").get("forage", {}) as Dictionary).get("items", [])
+	var trees: Array = GameData.trees.values()
+	var tree: TreeInfo = trees[_rng.randi_range(0, trees.size() - 1)]
+	var angle: float = _rng.randf() * TAU
+	_drop_seq += 1
+	var d: Dictionary = {"id": "t%d" % _drop_seq, "kind": "forage", "item": _weighted(items),
+		"x": snappedf(tree.position.x + cos(angle) * 2.4, 0.1), "z": snappedf(tree.position.z + sin(angle) * 2.4, 0.1)}
+	_drops[d["id"]] = d
+	_send(_peer, {"t": "drop", "d": d})
+
+
+func _held_id() -> String:
+	return str(_slots[_held]["id"]) if _held >= 0 and _held < _slots.size() and _slots[_held] != null else ""
+
+
+func _weighted(entries: Array) -> String:
+	var total: float = 0.0
+	for e: Dictionary in entries:
+		total += float(e.get("weight", 1))
+	var r: float = _rng.randf() * total
+	for e: Dictionary in entries:
+		r -= float(e.get("weight", 1))
+		if r <= 0.0:
+			return str(e["id"])
+	return str(entries[-1]["id"]) if not entries.is_empty() else ""
 
 
 # ---- 집 안 (서버 homes.js 와 같은 규칙, 테스트 서버에서는 어느 집이든 내 집처럼 꾸밀 수 있다) ----
@@ -313,6 +713,23 @@ func _welcome(resumed: bool) -> Dictionary:
 		players[0]["x"] = _pos.x
 		players[0]["z"] = _pos.z
 	w["placed"] = _placed.values()
+	if not _face.is_empty() and not players.is_empty():
+		players[0]["face"] = _face
+		prof["face"] = _face
+	prof["outfit"] = _outfit
+	if not players.is_empty():
+		players[0]["hat"] = _outfit["hat"]
+		players[0]["top"] = _outfit["top"]
+	prof["friends"] = _friends
+	var trees: Array = []
+	for id: String in _trees:
+		var wire: Dictionary = {"id": id, "s": _trees[id]["s"], "c": _trees[id]["c"]}
+		if _planted.has(id):
+			wire.merge({"k": _planted[id]["k"], "x": _planted[id]["x"], "z": _planted[id]["z"]})
+		trees.append(wire)
+	w["trees"] = trees
+	w["flowers"] = _flowers.values().map(func(f: Dictionary) -> Dictionary: return _flower_wire(f))
+	w["drops"] = _drops.values()
 	return w
 
 
@@ -411,6 +828,25 @@ func _load() -> void:
 	_home_seq = int(saved.get("home_seq", 0))
 	_placed = saved.get("placed", {}) if saved.get("placed") is Dictionary else {}
 	_placed_seq = int(saved.get("placed_seq", 0))
+	if saved.get("outfit") is Dictionary:
+		_outfit = saved["outfit"]
+	if saved.get("face") is Dictionary:
+		_face = saved["face"]
+	if saved.get("friends") is Dictionary:
+		_friends = saved["friends"]
+	if saved.get("talk_days") is Dictionary:
+		_talk_days = saved["talk_days"]
+	if saved.get("planted") is Dictionary:
+		_planted = saved["planted"]
+	_plant_seq = int(saved.get("plant_seq", 0))
+	if saved.get("flowers") is Dictionary:
+		_flowers = saved["flowers"]
+		# 저장했다 다시 켜면 덜 자란 꽃은 활짝 핀 것으로 (테스트 서버는 자라는 타이머를 저장하지 않는다).
+		for f: Dictionary in _flowers.values():
+			f["s"] = "bloom"
+	_flower_seq = int(saved.get("flower_seq", 0))
+	for planted: Dictionary in _planted.values():
+		planted["s"] = NetProtocol.TREE_GROWN
 	if not _home.is_empty() and GameData.econ.plan_of(_home) == null:
 		_home = ""
 
@@ -420,7 +856,9 @@ func _save() -> void:
 	if f == null:
 		return
 	f.store_string(JSON.stringify({"slots": _slots, "held": _held, "sol": _sol, "pos": [_pos.x, _pos.z], "home": _home,
-		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq}))
+		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
+		"outfit": _outfit, "face": _face, "friends": _friends, "talk_days": _talk_days,
+		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq}))
 
 
 static func _read_json(path: String) -> Dictionary:

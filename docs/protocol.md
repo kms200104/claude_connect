@@ -283,7 +283,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 ## 앱 안 테스트 서버 (v10)
 - 서버 주소 `test://local` = 클라이언트 안의 `LocalTestServer` (127.0.0.1 의 빈 포트, 18680~). 같은 메시지 형식으로 답한다.
 - 입장 정보는 `data/testserver/welcome.json` (`node server/tools/make_test_snapshot.js` 로 진짜 서버에서 찍음) + 저장된 가방·솔·위치.
-- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`). 그 밖에 rid 가 있는 요청은 `error{code: "test_server"}`.
+- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`). 나무·꽃은 게임 1분 = 실제 6초로 자란다. 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 …)은 `error{code: "test_server"}`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).
