@@ -32,7 +32,9 @@ const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(32, 22), Vect
 ## 머리카락 껍질 [둘레 칸, 위아래 칸].
 const HAIR_SEGMENTS: Array[Vector2i] = [Vector2i(20, 12), Vector2i(28, 18), Vector2i(38, 24)]
 ## 머리카락 다발 [마디 수, 단면 꼭짓점 수].
-const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 4), Vector2i(8, 6), Vector2i(11, 8)]
+const LOCK_SEGMENTS: Array[Vector2i] = [Vector2i(5, 5), Vector2i(8, 7), Vector2i(11, 9)]
+## 다발 단면을 렌즈 모양으로 (가운데 도톰, 가장자리 얇게).
+const LOCK_LENS: float = 0.55
 ## 머리카락 껍질의 중심과 반지름 (머리보다 조금 크고 위·뒤로 치우친 타원체). 다발은 이 겉면을 따라 내려온다.
 const HAIR_CENTER: Vector3 = Vector3(0.0, 0.43, 0.02)
 const HAIR_RADII: Vector3 = Vector3(0.44, 0.39, 0.36)
@@ -463,7 +465,7 @@ static func _face_max_edge() -> float:
 ## 머리카락: 머리보다 조금 큰 껍질(얼굴 자리는 머리 속으로 눌러 넣고, 결을 따라 살짝 골이 진다) 위에 끝이 모이는 도톰한 다발을 얹는다.
 ## 다발은 껍질 겉면을 따라 내려오다 늘어뜨린다 (_lock). 앞머리·옆머리·뒷머리·묶은 머리가 모양마다 다르다.
 static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
-	var color: Callable = ClayMesh.vertical_gradient(look.hair.darkened(0.2), look.hair.lightened(0.1), 1.0)
+	var color: Callable = _hair_paint(look.hair)
 	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var one: Callable = func(_d: Vector3) -> float: return 1.0
 	# 정수리에서 내려오는 결: 둘레를 따라 넓은 골이 진다 (아래로 갈수록 옅다).
@@ -579,6 +581,29 @@ static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
 			ClayMesh.add_ellipsoid(st, knot, Vector3(0.035, 0.035, 0.035), bow.darkened(0.08), 6, 4)
 
 
+## 머리카락 색 (v0.11.1 — 뭉친 떡처럼 보이지 않게):
+##   - 위를 보는 면은 밝게, 아래는 어둡게 (기존 세로 그라데이션).
+##   - 다발 가장자리·안쪽 면(법선이 머리 바깥을 향하지 않는 곳)은 어둡게 → 다발 사이에 골이 보여 한 가닥씩 갈라져 보인다.
+##   - 정수리 아래 둘레에 결을 따라 끊어지는 윤기 띠(천사링) → 머리카락의 반짝임.
+##   - 알파 0.5 로 표시해 두면 툰 셰이더가 가는 세로 결을 그린다.
+static func _hair_paint(hair: Color) -> Callable:
+	var dark: Color = hair.darkened(0.24)
+	var light: Color = hair.lightened(0.1)
+	var shine: Color = hair.lightened(0.34)
+	return func(pos: Vector3, normal: Vector3) -> Color:
+		var dir: Vector3 = (pos - HAIR_CENTER).normalized()
+		var c: Color = dark.lerp(light, clampf(normal.y * 0.5 + 0.5, 0.0, 1.0))
+		var facing: float = normal.dot(dir)
+		c = c.darkened(0.2 * (1.0 - smoothstep(0.1, 0.6, facing)))
+		var around: float = atan2(dir.x, -dir.z)
+		var band: float = smoothstep(0.38, 0.5, dir.y) * (1.0 - smoothstep(0.62, 0.76, dir.y))
+		var streak: float = 0.75 + 0.25 * sin(around * 9.0 + dir.y * 5.0)
+		c = c.lerp(shine, band * streak * clampf(facing, 0.0, 1.0) * 0.55)
+		# 알파 0.5 = 머리카락 표시: 툰 셰이더가 가는 결을 그린다 (toon_common.gdshaderinc).
+		c.a = 0.5
+		return c
+
+
 ## 머리카락 껍질. 얼굴 자리(앞쪽, dir.y < face_top, |dir.x| < face_half)는 잘라 내는 대신 머리 속으로 부드럽게 눌러 넣어
 ## 머리 겉면과 만나는 선이 계단 없이 둥글고, 완전히 파묻힌 면만 뺀다. 아래 끝은 앞(bottom)에서 뒤(bottom_back)로 이어진다.
 ## shape 는 방향별 반지름 배율 (결·곱슬), scale 은 껍질 반지름 배율.
@@ -646,7 +671,27 @@ static func _lock(st: SurfaceTool, color: Variant, yaw: float, pitch0: float, pi
 	var profile: Callable = func(u: float) -> float:
 		var root: float = lerpf(0.75, 1.0, minf(u * 5.0, 1.0))
 		return root * (1.0 - smoothstep(taper_from, 1.0, u) * (1.0 - blunt * 0.65))
-	ClayMesh.add_strand(st, points, width, thick, HAIR_CENTER, color, profile, lock_seg.y)
+	ClayMesh.add_strand(st, points, width, thick, HAIR_CENTER, color, profile, lock_seg.y, LOCK_LENS)
+	# 갈라진 끝: 넓은 다발은 끝쪽 절반에서 가는 가닥 둘이 양옆으로 갈라져 나온다 (한 덩어리로 뭉친 끝 → 머리카락 끝).
+	if detail >= 1 and width >= 0.07 and blunt < 0.5:
+		_split_tips(st, color, points, width, thick, lock_seg.y)
+
+
+## 다발 끝에서 양옆으로 살짝 벌어지는 가는 가닥 두 개. points 는 다발의 중심선.
+static func _split_tips(st: SurfaceTool, color: Variant, points: PackedVector3Array, width: float, thick: float, sides: int) -> void:
+	var count: int = points.size()
+	var start: int = count / 2
+	for side: float in [-1.0, 1.0]:
+		var tip: PackedVector3Array = PackedVector3Array()
+		for k: int in range(start, count):
+			var v: float = float(k - start) / float(count - 1 - start)
+			var t: Vector3 = (points[mini(k + 1, count - 1)] - points[maxi(k - 1, 0)]).normalized()
+			var out: Vector3 = (points[k] - HAIR_CENTER).normalized()
+			var across: Vector3 = t.cross(out).normalized()
+			tip.append(points[k] + across * side * width * (0.4 + 0.25 * v * v) + out * thick * 0.4 * v + t * width * 0.35 * v * v)
+		var profile: Callable = func(u: float) -> float:
+			return lerpf(0.6, 1.0, minf(u * 4.0, 1.0)) * (1.0 - smoothstep(0.3, 1.0, u))
+		ClayMesh.add_strand(st, tip, width * 0.42, thick * 0.7, HAIR_CENTER, color, profile, maxi(4, sides - 3), LOCK_LENS)
 
 
 ## 머리카락 껍질 겉면에서 (yaw, pitch) 자리의 점, lift 비율만큼 바깥으로.

@@ -146,7 +146,8 @@ static func add_shell(st: SurfaceTool, center: Vector3, radii: Vector3, color: V
 
 ## 점들을 따라가는 납작한 관 (머리카락 다발·땋은 머리). 단면은 옆으로 width, 바깥(out_center 반대쪽)으로 thickness 반지름.
 ## profile 은 Callable(u: float) -> float, 굵기 배율 (u: 0 = 첫 점, 1 = 끝 점). 0 이면 끝이 뾰족하게 모인다.
-static func add_strand(st: SurfaceTool, points: PackedVector3Array, width: float, thickness: float, out_center: Vector3, color: Variant, profile: Callable, sides: int = 5) -> void:
+## lens(0~1) 가 크면 단면이 렌즈처럼 가운데만 도톰하고 양옆 가장자리가 얇아진다 (머리카락 다발이 뭉툭한 떡처럼 보이지 않게).
+static func add_strand(st: SurfaceTool, points: PackedVector3Array, width: float, thickness: float, out_center: Vector3, color: Variant, profile: Callable, sides: int = 5, lens: float = 0.0) -> void:
 	var rows: int = points.size()
 	if rows < 2:
 		return
@@ -161,7 +162,8 @@ static func add_strand(st: SurfaceTool, points: PackedVector3Array, width: float
 		var s: float = float(profile.call(float(r) / float(rows - 1)))
 		for c: int in sides:
 			var a: float = TAU * float(c) / float(sides)
-			ring[r * sides + c] = points[r] + b * cos(a) * width * s + n * sin(a) * thickness * s
+			var bulge: float = sin(a) * lerpf(1.0, absf(sin(a)), lens)
+			ring[r * sides + c] = points[r] + b * cos(a) * width * s + n * bulge * thickness * s
 	_emit_grid(st, ring, rows, sides, Transform3D(), color)
 
 
