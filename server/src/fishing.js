@@ -93,7 +93,7 @@ export function createFishing({
     if (!hasFreeSpace(player.slots, data.isFish, data.limitOf)) return ErrorCode.inventoryFull;
 
     const { hour, weather, season = null } = environment(player);
-    const contest = derby(player);
+    const contest = derby(player, spot);
     const coop = companions(player, spot) > 0;
     const boost = (contest ? contest.def.rare_boost ?? 1 : 1) * (coop ? COOP_FISHING.rare : 1);
     const zone = shallowAt(spot, player.x, player.z) ? 'shallow' : 'deep';
@@ -219,7 +219,7 @@ export function createFishing({
   function land(player, session) {
     addItem(player.slots, session.fish.id, 1, cfg, data.limitOf);
     player.profile.catches += 1;
-    const contest = derby(player);
+    const contest = derby(player, session.spot);
     const bonus = contest ? contest.def.bonus?.[session.fish.rarity] ?? 0 : 0;
     player.profile.sol += bonus;
     earn(player.profile, bonus);

@@ -19,7 +19,10 @@
     "jeonse_end": "{unit} 전세 계약이 끝나 세입자에게 보증금 {sol}을 돌려드렸어요. 이제 다시 월세가 들어와요.",
     "jeonse_loan": "지갑이 모자라 {sol}은 전세금 반환 대출로 처리했어요.",
     "matured": "[{bank}] {name} 만기! 원금과 이자(세후 {interest})를 합쳐 {sol}을 지갑에 넣었어요. 수고 많으셨어요.",
-    "matured_bonus": "우대금리도 받았어요: {bonus}"
+    "matured_bonus": "우대금리도 받았어요: {bonus}",
+    "failed": "[예금보험공사] {bank} 영업정지로 맡긴 돈 {total} 가운데 {paid}을 돌려드렸어요.",
+    "failed_loss": "보호 한도(1억)를 넘은 {lost}은 돌려받지 못했어요.",
+    "news": "[마을 소식] {name} — {desc}"
   },
   "lines": {
     "kind": {

@@ -109,6 +109,8 @@ export const defaultConfig = {
   eventForce: process.env.EVENT_FORCE || '',
   // 특가 매입·떠돌이 상인이 찾는 물건을 고정한다 (쉼표 목록, 시연·테스트용).
   eventWanted: process.env.EVENT_WANTED || '',
+  // 경제 소식 고정 (v0.12, 테스트·시연용): events.json economy 의 id. 비우면 주간 정산 때 확률로 뽑는다.
+  econForce: process.env.ECON_FORCE || '',
   // 선물·별 조각이 떨어지는 간격 배율 (테스트는 작게).
   eventSpawnScale: num('EVENT_SPAWN_SCALE', 1),
   // 나무·꽃이 자라는 시간 배율 (1 = 데이터의 게임 분 그대로, 테스트·시연은 작게).

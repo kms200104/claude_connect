@@ -239,7 +239,15 @@ func _on_week(r: Dictionary) -> void:
 	for m: Dictionary in r.get("matured", []):
 		parts.append("%s 만기 +%s" % [str(m.get("name", "")), Money.short(int(m.get("net", 0)))])
 	parts.append("기준금리 %s" % Money.percent(float(r.get("base", 0.0))))
-	toast_hud.show_toast("한 주 정산 · " + " · ".join(parts), not bool(r.get("missed", false)))
+	var econ: Variant = r.get("econ")
+	if econ is Dictionary:
+		var info: EventInfo = GameData.event_info(str(econ.get("id", "")))
+		if info != null:
+			parts.append("[소식] " + info.display_name)
+	var failed: Variant = r.get("failed")
+	if failed is Dictionary:
+		parts.append("저축은행 영업정지 · %s 돌려받음%s" % [Money.short(int(failed.get("paid", 0))), " (손실 %s)" % Money.short(int(failed.get("lost", 0))) if int(failed.get("lost", 0)) > 0 else ""])
+	toast_hud.show_toast("한 주 정산 · " + " · ".join(parts), not bool(r.get("missed", false)) and not (failed is Dictionary and int(failed.get("lost", 0)) > 0))
 
 
 func _on_failed(kind: String, code: String) -> void:
@@ -257,6 +265,7 @@ func _on_failed(kind: String, code: String) -> void:
 		NetProtocol.ERR_ACCOUNT_LIMIT: "예적금은 8개까지 들 수 있어요.",
 		NetProtocol.ERR_NOT_ELIGIBLE: "가입 조건이 안 돼요.",
 		NetProtocol.ERR_BAD_LEASE: "이미 그 임대 방식이에요.",
+		NetProtocol.ERR_BANK_CLOSED: "영업정지 중인 금융기관이에요.",
 		NetProtocol.ERR_REST_BUSY: "다른 사람이 식당을 열었어요.",
 		NetProtocol.ERR_NOT_AT_RESTAURANT: "식당 카운터에서 열 수 있어요.",
 		NetProtocol.ERR_REST_CLOSED: "식당이 닫혀 있어요.",

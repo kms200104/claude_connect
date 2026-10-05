@@ -18,7 +18,8 @@ import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, mbtiLe
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { defaultFurniture, furnitureWire, interiorOrigin, lobbyOf, normRot, onFloor, snapGrid } from './homes.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
-import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
+import { activeEvents, buyMultiplier, dropPosition, eventsWire, findKind, planDay, sellMultiplier } from './events.js';
+import { weekOf } from './bank.js';
 import { applyFaceRequest, nearMirror } from './face.js';
 import { createMarket } from './market.js';
 import { createEconomy, earn } from './economy.js';
@@ -148,17 +149,24 @@ export function createServer(overrides = {}) {
   const planOf = (room) => {
     const day = clock.day();
     if (!room.plan || room.plan.day !== day) {
-      room.plan = planDay({ seed: room.weatherSeed, day, events: data.events, data, force: cfg.eventForce, forcedWanted: cfg.eventWanted });
+      room.plan = planDay({ seed: room.weatherSeed, day, events: data.events, data, force: cfg.eventForce, forcedWanted: cfg.eventWanted, season: environment(null).season });
     }
     return room.plan;
   };
-  const activeOf = (room) => (room ? activeEvents(planOf(room), clock.hour(), weatherOf(room)) : []);
+  /** 이번 주 경제 소식 (v0.12, economy.js 가 주간 정산 때 정한다). 지난 주 것이면 없다. */
+  const econOf = (room) => {
+    const e = room.econ;
+    if (!e || e.week !== weekOf(clock.day())) return null;
+    const def = data.events.economy?.find((x) => x.id === e.id);
+    return def ? { id: e.id, def } : null;
+  };
+  const activeOf = (room) => (room ? activeEvents(planOf(room), clock.hour(), weatherOf(room), econOf(room)) : []);
   const eventsMessage = (room) => ({ t: 'ev', ...eventsWire(activeOf(room), clock.day()) });
   const dropWire = (d) => (d.kind === 'gift' ? { id: d.id, kind: d.kind, x: d.x, z: d.z } : { id: d.id, kind: d.kind, item: d.item, x: d.x, z: d.z });
 
   /** 선물 풍선·별 조각 떨어뜨리기와 끝난 이벤트의 것 치우기 (worldTick 에서). */
   function tickDrops(room, active, t) {
-    const kinds = { gift: findEvent(active, 'gift_day'), star: findEvent(active, 'meteor_shower') };
+    const kinds = { gift: findKind(active, 'gift'), star: findKind(active, 'meteor') };
     for (const d of [...room.drops.values()]) {
       if (kinds[d.kind] || d.kind === 'forage') continue;
       room.drops.delete(d.id);
@@ -273,7 +281,11 @@ export function createServer(overrides = {}) {
     notify: sendTo,
     heldItem: (player) => player.heldItem,
     environment: (player) => environment(roomOf(player)),
-    derby: (player) => findEvent(activeOf(roomOf(player)), 'fishing_derby'),
+    // 낚시 대회: 대회가 열린 낚시터에서만 (spots 가 없으면 어디서나).
+    derby: (player, spot) => {
+      const d = findKind(activeOf(roomOf(player)), 'derby');
+      return d && (!Array.isArray(d.def.spots) || d.def.spots.includes(spot?.id)) ? d : null;
+    },
     // 같이 낚시: 같은 낚시터에서 9m 안에 다른 사람이 낚고 있으면.
     companions: (player, spot) => {
       const room = roomOf(player);
@@ -473,7 +485,7 @@ export function createServer(overrides = {}) {
     if (state.s !== TreeStage.grown) return fail(ErrorCode.treeNotReady);
     const drop = pickWeighted(data.chopDrops[def.kind], (d) => d.weight, random).id;
     // 나무꾼의 날에는 두 개씩.
-    const lumber = findEvent(activeOf(room), 'lumber_day');
+    const lumber = findKind(activeOf(room), 'lumber');
     const count = lumber ? lumber.def.drop_multiplier : 1;
     // 가방이 가득 차면 나무를 찍지 않는다(찍힌 횟수도 그대로).
     if (!canAdd(player.slots, drop, count, data.limitOf)) return fail(ErrorCode.inventoryFull);
@@ -688,14 +700,15 @@ export function createServer(overrides = {}) {
           if (base <= 0) return fail(ErrorCode.cantSell);
           item = slot.id;
           // 특가 매입의 날에는 고른 물건을 2배로.
-          amount = Math.floor(sellValue(base, n, room.shopPoints, shopLevels) * sellMultiplier(activeOf(room), item, 'shop'));
+          amount = Math.floor(sellValue(base, n, room.shopPoints, shopLevels) * sellMultiplier(activeOf(room), item, 'shop', data.kindOf));
           if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
           player.profile.sol += amount;
           earn(player.profile, amount);
         } else {
           item = msg.item;
           if (typeof item !== 'string' || !stockFor(room.shopPoints, shopLevels).includes(item)) return fail(ErrorCode.notForSale);
-          amount = data.items.get(item).buy * n;
+          // 장바구니 물가가 오른 주(v0.12 경제 소식)에는 그 종류가 비싸다.
+          amount = Math.round(data.items.get(item).buy * n * buyMultiplier(activeOf(room), item, data.kindOf));
           if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
           if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
           player.profile.sol -= amount;
@@ -719,7 +732,7 @@ export function createServer(overrides = {}) {
     const { player } = ctx;
     const room = ctx.room;
     const active = activeOf(room);
-    const merchant = findEvent(active, 'merchant');
+    const merchant = findKind(active, 'visitor');
     const spot = merchant?.def.spot;
     let back = 0;
     if (!merchant || Math.hypot(player.x - spot.x, player.z - spot.z) > data.npcRules.talkRange + 1) return fail(ErrorCode.merchantAway);
@@ -738,7 +751,8 @@ export function createServer(overrides = {}) {
     } else {
       item = msg.item;
       if (typeof item !== 'string' || !merchant.def.stock.includes(item)) return fail(ErrorCode.notForSale);
-      amount = data.items.get(item).buy * n;
+      // 손님마다 파는 값 배율 (v0.12: 중고 가구상은 70%).
+      amount = Math.round(data.items.get(item).buy * n * (merchant.def.buy_mult ?? 1));
       if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
       if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
       player.profile.sol -= amount;
@@ -759,7 +773,9 @@ export function createServer(overrides = {}) {
       const f = typeof msg.id === 'string' ? room.flowers.get(msg.id) : null;
       if (!f || f.s !== 'bloom' || Math.hypot(player.x - f.x, player.z - f.z) > data.plants.plant_range + 0.5) return fail(ErrorCode.noFlower);
       const def = data.flowerDefs.get(f.sp);
-      if (!addItem(player.slots, def.item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+      // 봄꽃 축제(v0.12)에는 꽃이 두 송이씩.
+      const fest = findKind(activeOf(room), 'flowers');
+      if (!addItem(player.slots, def.item, fest ? fest.def.drop_multiplier ?? 2 : 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
       pickFlower(f, def, clock.gameMs(), cfg.growthScale);
       send(ctx.ws, { t: 'pick_result', rid: msg.rid, id: f.id, item: def.item });
       sendInventory(player);

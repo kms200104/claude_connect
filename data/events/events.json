@@ -1,15 +1,16 @@
 {
   "version": 1,
   "_comment": "마을 이벤트. 날마다(05시 기준) 마을 시드로 하루 이벤트 하나를 뽑고(daily_chance), 밤 이벤트는 따로 굴린다. 서버가 정하고 클라이언트는 이름·설명을 보여 준다.",
+  "_v12_comment": "v0.12: kind 로 규칙을 고른다 (bargain · visitor · derby · lumber · flowers · gift · meteor · economy). seasons 가 있는 하루 이벤트는 그 계절에만 뽑히는 계절 축제. visitor 는 광장에 오는 손님 (사고팔기, buy_mult = 파는 값 배율). derby 의 spots 는 대회가 열린 낚시터. economy 는 주간 정산 때 economy_chance 로 하나 뽑는 한 주짜리 경제 소식 (effect: base_rate · apt_index · sell · buy · bank_failure).",
   "daily_chance": 0.75,
   "daily": [
     {
-      "id": "bargain", "name": "특가 매입의 날", "weight": 3, "icon": "coin",
+      "id": "bargain", "kind": "bargain", "name": "특가 매입의 날", "weight": 3, "icon": "coin",
       "desc": "상점 주인 달보가 오늘 고른 물건을 2배 값에 사 줘요!",
       "multiplier": 2, "wanted": { "fish": 2, "material": 1 }
     },
     {
-      "id": "merchant", "name": "떠돌이 상인 누리", "weight": 2, "icon": "merchant", "hours": [9, 21],
+      "id": "merchant", "kind": "visitor", "name": "떠돌이 상인 누리", "weight": 2, "icon": "merchant", "hours": [9, 21],
       "desc": "광장에 떠돌이 상인 누리가 왔어요. 귀한 물건을 팔고, 찾는 물건은 2배 값에 사 가요.",
       "multiplier": 2, "wanted": { "fish": 1, "goods": 1, "material": 1 },
       "stock": ["star_lamp", "toy_windmill", "music_box", "star_crown"],
@@ -21,17 +22,17 @@
       }
     },
     {
-      "id": "fishing_derby", "name": "호수 낚시 대회", "weight": 2, "icon": "fishing", "hours": [9, 18],
+      "id": "fishing_derby", "kind": "derby", "name": "호수 낚시 대회", "weight": 2, "icon": "fishing", "hours": [9, 18],
       "desc": "물고기를 낚을 때마다 대회 상금을 받아요. 희귀한 물고기가 더 잘 잡혀요!",
       "bonus": { "common": 4000, "uncommon": 15000, "rare": 50000 }, "rare_boost": 2.5
     },
     {
-      "id": "lumber_day", "name": "나무꾼의 날", "weight": 2, "icon": "axe",
+      "id": "lumber_day", "kind": "lumber", "name": "나무꾼의 날", "weight": 2, "icon": "axe",
       "desc": "나무를 찍으면 목재가 두 개씩 나와요.",
       "drop_multiplier": 2
     },
     {
-      "id": "gift_day", "name": "선물 풍선의 날", "weight": 2, "icon": "gift", "hours": [8, 19],
+      "id": "gift_day", "kind": "gift", "name": "선물 풍선의 날", "weight": 2, "icon": "gift", "hours": [8, 19],
       "desc": "마을 여기저기에 풍선 선물이 내려앉아요. 다가가서 주워 보세요!",
       "max": 4, "spawn_every_s": 40,
       "pool": [
@@ -44,14 +45,106 @@
         { "id": "picnic_basket", "weight": 2 },
         { "id": "toy_windmill", "weight": 2 }
       ]
+    },
+    {
+      "id": "antique_dealer", "kind": "visitor", "name": "중고 가구상 바우", "weight": 2, "icon": "merchant", "hours": [10, 19],
+      "desc": "광장에 중고 가구상 바우가 트럭을 세웠어요. 큰 가구를 30% 싸게 팔고, 옛날 물건은 넉넉히 쳐 줘요.",
+      "multiplier": 2.5, "buy_mult": 0.7, "wanted": { "goods": 2 },
+      "stock": ["rocking_chair", "grand_piano", "garden_swing", "sofa", "bookshelf"],
+      "spot": { "x": -3.2, "z": -2.2, "yaw": -2.17 },
+      "npc": {
+        "id": "bau", "name": "바우", "personality": "merchant", "mbti": "ISTJ", "color": "#8A6A4A", "voice": 0.86,
+        "look": { "hair": "#B8B0A0", "style": "short", "top": "#6E7A5A", "bottom": "#4A3A2A", "shoes": "#3A2A20", "eyes": "almond", "mouth": "tiny" },
+        "about": "섬과 섬을 다니며 오래된 가구를 고쳐 파는 할아버지. 나무 냄새만 맡아도 몇 년 된 건지 안다."
+      }
+    },
+    {
+      "id": "fish_buyer", "kind": "visitor", "name": "생선 장수 갈매", "weight": 2, "icon": "fishing", "hours": [6, 15],
+      "desc": "바다 건너 생선 장수 갈매가 왔어요. 고른 물고기를 2배 값에 사 가고, 요리 재료를 싸게 팔아요.",
+      "multiplier": 2, "buy_mult": 0.8, "wanted": { "fish": 3 },
+      "stock": ["butter", "lemon", "tofu", "garlic", "sesame_oil"],
+      "spot": { "x": -3.2, "z": -2.2, "yaw": -2.17 },
+      "npc": {
+        "id": "galmae", "name": "갈매", "personality": "merchant", "mbti": "ESFP", "color": "#4A8AB0", "voice": 1.08,
+        "look": { "hair": "#2A2A30", "style": "ponytail", "top": "#4A8AB0", "bottom": "#E8E2D0", "shoes": "#2A3A4A", "eyes": "bright", "mouth": "grin" },
+        "about": "새벽 배를 타고 섬마다 생선을 사러 다니는 장수. 목소리가 갈매기만큼 크다."
+      }
+    },
+    {
+      "id": "spring_flowers", "kind": "flowers", "name": "봄꽃 축제", "weight": 3, "icon": "gift", "hours": [8, 20], "seasons": ["spring"],
+      "desc": "봄꽃 축제! 핀 꽃을 따면 두 송이씩 손에 들어와요.",
+      "drop_multiplier": 2
+    },
+    {
+      "id": "sea_derby", "kind": "derby", "name": "여름 바다 낚시 대회", "weight": 3, "icon": "fishing", "hours": [6, 19], "seasons": ["summer"],
+      "desc": "바닷가에서 물고기를 낚을 때마다 상금! 귀한 바다 물고기가 더 잘 잡혀요.",
+      "spots": ["sea"], "bonus": { "common": 5000, "uncommon": 20000, "rare": 80000 }, "rare_boost": 2
+    },
+    {
+      "id": "harvest_fair", "kind": "bargain", "name": "한가위 장터", "weight": 3, "icon": "coin", "seasons": ["autumn"],
+      "desc": "한가위 장터가 열렸어요. 달보가 오늘 고른 물건 네 가지를 1.8배 값에 사 줘요.",
+      "multiplier": 1.8, "wanted": { "fish": 2, "material": 1, "goods": 1 }
+    },
+    {
+      "id": "smelt_festival", "kind": "derby", "name": "빙어 축제", "weight": 3, "icon": "fishing", "hours": [5, 14], "seasons": ["winter"],
+      "desc": "얼음 호수 빙어 축제! 마을 호수에서 낚을 때마다 상금을 받아요.",
+      "spots": ["lake"], "bonus": { "common": 6000, "uncommon": 15000, "rare": 50000 }, "rare_boost": 1.5
     }
   ],
   "night": [
     {
-      "id": "meteor_shower", "name": "유성우", "chance": 0.35, "icon": "star", "hours": [20, 4],
+      "id": "meteor_shower", "kind": "meteor", "name": "유성우", "chance": 0.35, "icon": "star", "hours": [20, 4],
       "weather": ["clear", "cloudy"],
       "desc": "밤하늘에 별똥별이 쏟아져요. 땅에 떨어진 별 조각을 주워 보세요!",
       "max": 5, "spawn_every_s": 30, "item": "star_fragment"
+    }
+  ],
+  "economy_chance": 0.4,
+  "economy": [
+    {
+      "id": "rate_hike", "kind": "economy", "name": "기준금리 인상", "weight": 2, "icon": "coin",
+      "desc": "물가를 잡으려고 기준금리가 0.5%p 올랐어요. 대출 이자는 늘고, 새로 드는 예금 금리는 올라요.",
+      "effect": { "type": "base_rate", "delta": 0.005 }
+    },
+    {
+      "id": "rate_cut", "kind": "economy", "name": "기준금리 인하", "weight": 2, "icon": "coin",
+      "desc": "경기를 살리려고 기준금리가 0.5%p 내렸어요. 대출 이자는 줄고, 새로 드는 예금 금리는 내려요.",
+      "effect": { "type": "base_rate", "delta": -0.005 }
+    },
+    {
+      "id": "housing_boom", "kind": "economy", "name": "집값 급등", "weight": 2, "icon": "coin",
+      "desc": "성성호수 공원 개발 소식에 아파트 값이 6% 뛰었어요.",
+      "effect": { "type": "apt_index", "mult": 1.06 }
+    },
+    {
+      "id": "housing_slump", "kind": "economy", "name": "집값 급락", "weight": 2, "icon": "coin",
+      "desc": "대출 규제 소식에 아파트 값이 7% 떨어졌어요.",
+      "effect": { "type": "apt_index", "mult": 0.93 }
+    },
+    {
+      "id": "fish_boom", "kind": "economy", "name": "수산물 값 급등", "weight": 2, "icon": "fishing",
+      "desc": "먼바다 태풍으로 생선이 귀해졌어요. 이번 주에는 상점이 물고기를 1.5배 값에 사 줘요.",
+      "effect": { "type": "sell", "item_kind": "fish", "mult": 1.5 }
+    },
+    {
+      "id": "fish_glut", "kind": "economy", "name": "수산물 값 폭락", "weight": 2, "icon": "fishing",
+      "desc": "풍어로 생선이 넘쳐나요. 이번 주에는 상점이 물고기를 30% 싸게 사 가요.",
+      "effect": { "type": "sell", "item_kind": "fish", "mult": 0.7 }
+    },
+    {
+      "id": "lumber_boom", "kind": "economy", "name": "목재 값 급등", "weight": 1, "icon": "axe",
+      "desc": "육지 집짓기 붐으로 목재가 모자라요. 이번 주에는 목재를 1.5배 값에 사 줘요.",
+      "effect": { "type": "sell", "item_kind": "material", "mult": 1.5 }
+    },
+    {
+      "id": "grocery_inflation", "kind": "economy", "name": "장바구니 물가 급등", "weight": 2, "icon": "coin",
+      "desc": "작황이 나빠 식재료 값이 30% 올랐어요. 이번 주에는 상점 재료가 비싸요.",
+      "effect": { "type": "buy", "item_kind": "ingredient", "mult": 1.3 }
+    },
+    {
+      "id": "bank_failure", "kind": "economy", "name": "저축은행 영업정지", "weight": 1, "icon": "coin",
+      "desc": "부실이 쌓인 저축은행이 영업정지됐어요. 예금자 보호 한도(1억)까지는 바로 돌려받지만, 넘는 돈은 일부만 돌아와요.",
+      "effect": { "type": "bank_failure", "bank_type": "savings_bank", "closed_weeks": 4 }
     }
   ],
   "collect_range": 2.0

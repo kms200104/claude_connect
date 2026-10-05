@@ -89,9 +89,10 @@ func _refresh() -> void:
 	if not visible:
 		return
 	var shop: ShopData = GameData.shop
-	var merchant: ActiveEvent = Net.event_active(EventInfo.MERCHANT) if at == AT_MERCHANT else null
+	var merchant: ActiveEvent = Net.event_of_kind(EventInfo.KIND_VISITOR) if at == AT_MERCHANT else null
 	if at == AT_MERCHANT:
-		_title.text = "떠돌이 상인 누리의 보따리"
+		var who: String = merchant.info().npc.display_name if merchant != null and merchant.info() != null and merchant.info().npc != null else "떠돌이 상인"
+		_title.text = "%s의 보따리" % who
 	elif at == AT_AIRPORT:
 		_title.text = "%s 기념품 가게" % GameData.airport.display_name
 	else:
@@ -118,7 +119,8 @@ func _refresh() -> void:
 			any = true
 		if not any:
 			if merchant != null:
-				_list.add_child(_note("누리가 찾는 물건은 %s 이에요. 구해 오면 2배 값에 사 줄 거예요!" % DialogueController.wanted_names(merchant)))
+				var who_note: String = merchant.info().npc.display_name if merchant.info() != null and merchant.info().npc != null else "상인"
+				_list.add_child(_note("%s이(가) 찾는 물건은 %s 이에요. 구해 오면 %s배 값에 사 줄 거예요!" % [who_note, DialogueController.wanted_names(merchant), EventHud._format_mult(merchant.multiplier)]))
 			else:
 				_list.add_child(_note("팔 수 있는 물건이 없어요. 나무를 베거나 물고기를 낚아 오세요!"))
 
@@ -135,9 +137,15 @@ func _refresh_points() -> void:
 
 
 func _buy_row(info: ItemInfo) -> Control:
-	var row: HBoxContainer = _row_base(info, "%s · %s솔" % [info.kind_label(), InventoryWindow._format_number(info.buy_price)])
+	var price: int = roundi(info.buy_price * Net.buy_multiplier(info.id, at))
+	var note: String = ""
+	if price < info.buy_price:
+		note = " (%d%% 할인)" % roundi((1.0 - float(price) / float(info.buy_price)) * 100.0)
+	elif price > info.buy_price:
+		note = " (물가 ↑)"
+	var row: HBoxContainer = _row_base(info, "%s · %s솔%s" % [info.kind_label(), InventoryWindow._format_number(price), note])
 	var button: Button = _action_button("사기")
-	button.disabled = Net.sol < info.buy_price
+	button.disabled = Net.sol < price
 	button.pressed.connect(func() -> void: Net.buy_item(info.id, 1, at))
 	row.add_child(button)
 	return row
@@ -149,6 +157,8 @@ func _sell_row(slot: int, item: InventoryItem, info: ItemInfo) -> Control:
 	var detail: String = "%d개 · 하나에 %s솔" % [item.count, InventoryWindow._format_number(each)]
 	if mult > 1.0:
 		detail = "×%s 특가! %s" % [EventHud._format_mult(mult), detail]
+	elif mult < 1.0:
+		detail = "×%s 값 내림 · %s" % [EventHud._format_mult(mult), detail]
 	var row: HBoxContainer = _row_base(info, detail)
 	if mult > 1.0:
 		(row.get_child(1).get_child(1) as Label).add_theme_color_override("font_color", Color(0.86, 0.36, 0.3))

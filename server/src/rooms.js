@@ -263,6 +263,8 @@ export class Room {
     this.homes = {}; // 호수 → { owner: uid, price, day }
     this.aptIndex = data.realestate?.index?.start ?? 1;
     this.baseRate = data.bank?.base_rate ?? 0.03;
+    this.econ = null; // v0.12: 이번 주 경제 소식 { id, week, bank? }
+    this.closedBanks = {}; // v0.12: 영업정지한 금융기관 → 다시 여는 주
     this.week = null;
     // 식당: 별점 기록 · 단골 (저장) / 지금 영업 (저장 안 함)
     this.restaurant = sanitizeRestaurant(null, data.recipes ?? []);
@@ -311,6 +313,9 @@ export class Room {
     if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
     if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
     room.week = intOr(world.week, null);
+    // v0.12 경제 소식(이번 주)과 영업정지한 금융기관 { 기관 id: 다시 여는 주 }.
+    room.econ = world.econ && typeof world.econ.id === 'string' && Number.isInteger(world.econ.week) ? { id: world.econ.id, week: world.econ.week, bank: typeof world.econ.bank === 'string' ? world.econ.bank : undefined } : null;
+    room.closedBanks = Object.fromEntries(Object.entries(world.closedBanks ?? {}).filter(([id, w]) => data.savings?.institutions.has(id) && Number.isInteger(w)));
     room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes);
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
@@ -395,6 +400,8 @@ export class Room {
         aptIndex: this.aptIndex,
         baseRate: this.baseRate,
         week: this.week,
+        econ: this.econ ?? null,
+        closedBanks: { ...(this.closedBanks ?? {}) },
         restaurant: structuredClone(this.restaurant),
         tiles: [...this.tiles.values()].map((t) => [t.x, t.z, t.s]),
         households: [...this.households.values()].map((h) => ({ id: h.id, members: [...h.members], sol: h.wallet.sol, since: h.since })),

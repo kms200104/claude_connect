@@ -136,7 +136,7 @@ func _ready() -> void:
 	econ.build_customers(npcs)
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
-	for group: String in ["daily", "night"]:
+	for group: String in ["daily", "night", "economy"]:
 		for entry: Variant in events_file.get(group, []):
 			if entry is Dictionary:
 				var ev: EventInfo = EventInfo.from_dict(entry)
@@ -205,6 +205,10 @@ func any_npc(id: String) -> NpcInfo:
 		return museum.keeper
 	if airport != null and airport.keeper.id == id:
 		return airport.keeper
+	# 광장 손님 (v0.12: 누리 · 바우 · 갈매).
+	for ev: EventInfo in events.values():
+		if ev.npc != null and ev.npc.id == id:
+			return ev.npc
 	return null
 
 

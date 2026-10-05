@@ -519,7 +519,8 @@ func _build_savings() -> void:
 	_body.add_child(grid)
 	for inst: Dictionary in insts:
 		var id: String = str(inst.get("id", ""))
-		var ib: Button = _button("%s\n%s" % [str(inst.get("name", id)), str(inst.get("type_name", ""))], 24, Color(str(inst.get("color", "#4D3320"))).darkened(0.25), id == _sv_bank)
+		var closed: bool = int(inst.get("closed", 0)) > 0
+		var ib: Button = _button("%s\n%s" % [str(inst.get("name", id)), "영업정지" if closed else str(inst.get("type_name", ""))], 24, UP if closed else Color(str(inst.get("color", "#4D3320"))).darkened(0.25), id == _sv_bank)
 		ib.custom_minimum_size = Vector2(0, 110)
 		ib.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ib.pressed.connect(func() -> void:
@@ -546,6 +547,9 @@ func _build_savings() -> void:
 	if float(picked.get("risk", 0.0)) > 0.0:
 		notes.append("맡긴 돈 %s / 보호 한도 %s" % [Money.short(int(exposure.get(_sv_bank, 0))), Money.short(protection)])
 	about.add_child(_label(" · ".join(notes), 22, SOFT))
+	if int(picked.get("closed", 0)) > 0:
+		about.add_child(_label("영업정지 중이에요 (%d주 뒤 다시 열어요). 그동안 새로 가입할 수 없어요." % maxi(1, int(picked.get("closed", 0)) - int(sv.get("week", 0))), 24, UP))
+		return
 	for p: Dictionary in products:
 		if str(p.get("bank", "")) == _sv_bank:
 			_build_product(p, sv, accounts)

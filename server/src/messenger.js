@@ -107,6 +107,14 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
       if (names.length > 0 && rules.bank.matured_bonus) line += ` ${fillLine(rules.bank.matured_bonus, { bonus: names.join(' · ') })}`;
       if (line) push(room, profile, 'sys:bank', 'bank', line);
     }
+    // v0.12 경제 소식: 마을 공지 방에 한 줄, 저축은행 영업정지로 돌려받은 돈은 은행 방에.
+    if (report.econ && rules.bank.news) push(room, profile, 'sys:town', 'town', fillLine(rules.bank.news, { name: report.econ.name, desc: report.econ.desc }));
+    if (report.failed) {
+      const bank = data.savings?.institutions.get(report.failed.bank)?.name ?? '저축은행';
+      let line = fillLine(rules.bank.failed ?? '', { bank, total: sol(report.failed.total), paid: sol(report.failed.paid) });
+      if (report.failed.lost > 0 && rules.bank.failed_loss) line += ` ${fillLine(rules.bank.failed_loss, { lost: sol(report.failed.lost) })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
     // v0.12 전세 만기: 보증금을 세입자에게 돌려줬다 (모자란 만큼은 전세금 반환 대출).
     for (const j of report.jeonse ?? []) {
       let line = fillLine(rules.bank.jeonse_end ?? '', { unit: j.unit, sol: sol(j.deposit) });

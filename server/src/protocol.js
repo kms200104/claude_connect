@@ -100,6 +100,7 @@ export const ErrorCode = Object.freeze({
   noJob: 'no_job', // 받은(또는 그 단계의) 배달이 없다
   notAtJob: 'not_at_job', // 받을 곳·갖다줄 집 곁이 아니다
   badLease: 'bad_lease', // 이미 전세(또는 월세)이거나 모르는 임대 방식
+  bankClosed: 'bank_closed', // 영업정지한 금융기관 (경제 소식)
   // 대화 주제
   badTopic: 'bad_topic',
 });

@@ -341,7 +341,7 @@ func _shopkeeper_flow() -> void:
 	var p: String = info.personality
 	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):
 		return
-	var bargain: ActiveEvent = Net.event_active(EventInfo.BARGAIN)
+	var bargain: ActiveEvent = Net.event_of_kind(EventInfo.KIND_BARGAIN)
 	if bargain != null:
 		values["wanted"] = wanted_names(bargain)
 		if not await _say(token, info, GameData.dialogue_line(p, "bargain", values)):
@@ -379,7 +379,7 @@ func _merchant_flow() -> void:
 	if actor != null:
 		player.look_toward(actor.global_position - player.global_position)
 		actor.face_toward(player.global_position)
-	var ev: ActiveEvent = Net.event_active(EventInfo.MERCHANT)
+	var ev: ActiveEvent = Net.event_of_kind(EventInfo.KIND_VISITOR)
 	var values: Dictionary = {"player": GameData.player_name(Net.my_id), "wanted": wanted_names(ev) if ev != null else ""}
 	var p: String = info.personality
 	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):

@@ -368,13 +368,51 @@ func event_active(event_id: String) -> ActiveEvent:
 	return null
 
 
-## 이 물건을 팔 때의 배율. 상점: 특가 매입이면 2, 아니면 1. 떠돌이 상인: 찾는 물건만 2, 그 밖은 0(안 산다).
+## 이 종류의 열린 이벤트 (v0.12: visitor · bargain · derby · economy …). 없으면 null.
+func event_of_kind(kind: String) -> ActiveEvent:
+	for e: ActiveEvent in events:
+		var info: EventInfo = e.info()
+		if info != null and info.kind == kind:
+			return e
+	return null
+
+
+## 이 물건을 팔 때의 배율 (서버 sellMultiplier 와 같다). 상점: 특가 매입 × 이번 주 경제 소식. 광장 손님: 찾는 물건만, 그 밖은 0(안 산다).
 func sell_multiplier(item_id: String, at: String = "") -> float:
 	if at == "merchant":
-		var m: ActiveEvent = event_active(EventInfo.MERCHANT)
+		var m: ActiveEvent = event_of_kind(EventInfo.KIND_VISITOR)
 		return m.multiplier if m != null and item_id in m.wanted else 0.0
-	var b: ActiveEvent = event_active(EventInfo.BARGAIN)
-	return b.multiplier if b != null and item_id in b.wanted else 1.0
+	var b: ActiveEvent = event_of_kind(EventInfo.KIND_BARGAIN)
+	var mult: float = b.multiplier if b != null and item_id in b.wanted else 1.0
+	var fx: Dictionary = _econ_effect()
+	if str(fx.get("type", "")) == "sell" and _item_kind(item_id) == str(fx.get("item_kind", "")):
+		mult *= float(fx.get("mult", 1.0))
+	return mult
+
+
+## 살 때의 배율 (서버 buyMultiplier · 광장 손님의 buy_mult 와 같다).
+func buy_multiplier(item_id: String, at: String = "") -> float:
+	if at == "merchant":
+		var m: ActiveEvent = event_of_kind(EventInfo.KIND_VISITOR)
+		return m.info().buy_mult if m != null and m.info() != null else 1.0
+	if at != "":
+		return 1.0
+	var fx: Dictionary = _econ_effect()
+	if str(fx.get("type", "")) == "buy" and _item_kind(item_id) == str(fx.get("item_kind", "")):
+		return float(fx.get("mult", 1.0))
+	return 1.0
+
+
+func _econ_effect() -> Dictionary:
+	var e: ActiveEvent = event_of_kind(EventInfo.KIND_ECONOMY)
+	return e.info().effect if e != null and e.info() != null else {}
+
+
+static func _item_kind(item_id: String) -> String:
+	if GameData.fish.has(item_id):
+		return "fish"
+	var info: ItemInfo = GameData.item(item_id)
+	return info.kind if info != null else ""
 
 
 ## 손에 든 씨앗을 (x, z) 에 심는다 (서버가 0.5m 격자로 맞춘다).
