@@ -56,8 +56,18 @@ func _ready() -> void:
 	_stage()
 	match _what:
 		"trees":
-			_row_meshes(["round", "pine", "birch", "stump", "sapling"].map(func(k: String) -> Mesh: return TreeField._mesh(k)), 3.2)
-			_camera(Vector3(0.0, 4.5, 13.0), Vector3(0.0, 1.6, 0.0), 40.0)
+			# 나무마다 옆에 그 나무의 그루터기 (굵기·껍질 색이 같아야 한다).
+			var clay: Material = load("res://assets/materials/foliage.tres")
+			var kinds: Array[String] = ["round", "pine", "birch"]
+			for i: int in kinds.size():
+				var x: float = (float(i) - 1.0) * 4.6
+				for pair: Array in [[kinds[i], x - 1.1], ["stump_" + kinds[i], x + 1.5]]:
+					var mi: MeshInstance3D = MeshInstance3D.new()
+					mi.mesh = TreeField._mesh(pair[0])
+					mi.material_override = TreeField.material_for_kind(pair[0], clay)
+					mi.position = Vector3(pair[1], 0.0, 0.0)
+					add_child(mi)
+			_camera(Vector3(0.0, 3.2, 12.5), Vector3(0.0, 1.2, 0.0), 44.0)
 		"characters":
 			var looks: Array[CharacterLook] = [CharacterLook.for_player(1), CharacterLook.for_player(2)]
 			for npc: NpcInfo in GameData.npcs.values():

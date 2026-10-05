@@ -43,7 +43,12 @@ ASSETS = {
     'shop_ext_2': {'src': 'shop_2.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 6.5), 'origin': 'front'},
     'shop_ext_3': {'src': 'shop_3.glb', 'budget': 4000, 'turn': [], 'fit': ('x', 9.0), 'origin': 'front'},
     'shop_counter': {'src': 'shop_counter.glb', 'budget': 1500, 'turn': [], 'fit': ('x', 2.0), 'origin': 'bottom'},
+    # 나무 (v0.11.3): 베면 그 나무 줄기의 굵기·껍질 색에 맞춘 그루터기가 남는다 → <id>.stump.json (stump: True).
+    'tree_pine': {'src': 'pine_tree.glb', 'budget': 2500, 'turn': [], 'fit': ('y', 3.6), 'origin': 'bottom', 'stump': True},
+    'tree_round': {'src': 'round_tree.glb', 'budget': 2500, 'turn': [], 'fit': ('y', 3.4), 'origin': 'bottom', 'stump': True},
 }
+# 그루터기를 자르는 높이 (m, 게임의 그루터기 높이와 같다).
+STUMP_CUT = 0.45
 
 
 def tri_count(ob):
@@ -153,6 +158,46 @@ def place(ob, cfg):
     print(f'[tripo]   크기 {np.round(np.ptp(v, axis=0), 3).tolist()} m, 범위 y {v[:, 1].min():.3f}~{v[:, 1].max():.3f}')
 
 
+def measure_stump(ob, asset_id):
+    """줄기 아래쪽을 재서 그루터기 정보를 남긴다 (게임 좌표, 원점 = 바닥 가운데):
+    root_radius = 땅에 닿는 뿌리 쪽 반지름, cut_radius = 자르는 높이(STUMP_CUT)의 반지름,
+    center = 줄기 가운데 (x, z), bark = 그 높이까지 줄기 겉면의 텍스처 평균색 (sRGB)."""
+    v = verts(ob)
+    xz = v[:, [0, 2]]
+
+    def band(lo, hi):
+        sel = (v[:, 1] >= lo) & (v[:, 1] <= hi)
+        return xz[sel]
+
+    trunk = band(STUMP_CUT - 0.08, STUMP_CUT + 0.08)
+    center = np.median(trunk, axis=0)
+    cut_r = float(np.median(np.linalg.norm(trunk - center, axis=1)))
+    root = band(0.0, 0.08)
+    root_r = float(np.median(np.linalg.norm(root - center, axis=1)))
+    # 껍질 색: 자르는 높이까지, 줄기 가운데에서 1.6 × 반지름 안의 면을 텍스처에서 고른다.
+    image = next((im for im in bpy.data.images if 'basecolor' in im.name.lower() or 'base' in im.name.lower()), None)
+    bark = (0.6, 0.38, 0.24)
+    if image is not None and ob.data.uv_layers:
+        w, h = image.size
+        px = np.array(image.pixels[:], dtype=np.float32).reshape(h, w, image.channels)
+        uv = ob.data.uv_layers.active.data
+        samples = []
+        for poly in ob.data.polygons:
+            c = poly.center
+            if c.y > STUMP_CUT + 0.15 or np.hypot(c.x - center[0], c.z - center[1]) > max(cut_r, root_r) * 1.6:
+                continue
+            for li in poly.loop_indices:
+                u, t = uv[li].uv
+                samples.append(px[int(min(max(t, 0.0), 0.999) * h), int((u % 1.0) * w), :3])
+        if samples:
+            bark = tuple(float(x) for x in np.median(np.array(samples), axis=0))
+    info = {'cut_height': STUMP_CUT, 'cut_radius': round(cut_r, 3), 'root_radius': round(root_r, 3),
+            'center': [round(float(center[0]), 3), round(float(center[1]), 3)],
+            'bark': '#%02X%02X%02X' % tuple(int(round(c * 255)) for c in bark)}
+    (OUT / f'{asset_id}.stump.json').write_text(json.dumps(info, ensure_ascii=False) + '\n', encoding='utf-8')
+    print(f'[tripo]   그루터기: 뿌리 반지름 {root_r:.2f} · 자른 곳 {cut_r:.2f} m · 껍질 {info["bark"]}')
+
+
 def export(ob, name):
     for o in bpy.context.scene.objects:
         o.select_set(o == ob)
@@ -168,6 +213,8 @@ def build(asset_id, cfg):
     tex = extract_base_color(SRC / cfg['src'], OUT / asset_id)
     print(f'[tripo]   텍스처 {tex.name} ({tex.stat().st_size // 1024} KB)')
     place(ob, cfg)
+    if cfg.get('stump'):
+        measure_stump(ob, asset_id)
     ob.data.materials.clear()
     for name in [a.name for a in ob.data.color_attributes]:
         ob.data.color_attributes.remove(ob.data.color_attributes[name])

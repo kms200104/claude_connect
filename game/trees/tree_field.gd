@@ -21,9 +21,16 @@ const LEAF_BIRCH: Color = Color(0.58, 0.76, 0.4)
 const BIRCH_BARK: Color = Color(0.93, 0.91, 0.86)
 const BIRCH_MARK: Color = Color(0.25, 0.22, 0.2)
 const STUMP_TOP: Color = Color(0.86, 0.7, 0.5)
+## 코드로 빚은 나무의 줄기 반지름 (그루터기도 같은 굵기로).
+const TRUNK_RADIUS: Dictionary[String, float] = {"round": 0.24, "pine": 0.2, "birch": 0.16}
 const FLOWER_CENTER: Color = Color(1.0, 0.86, 0.4)
 const NO_FLOWERS: Array[Color] = []
 const FLOWER_COLORS: Array[Color] = [Color(0.98, 0.66, 0.74), Color(1.0, 0.86, 0.45), Color(0.62, 0.74, 0.98), Color(0.82, 0.66, 0.92)]
+
+## 다 자란 나무 모양 → Tripo 모형 (tools/blender/import_tripo.py, v0.11.3). 없으면 코드로 빚은 나무.
+const MODELS: Dictionary[String, String] = {"pine": "tree_pine", "round": "tree_round"}
+## 그루터기 높이 (m). Tripo 모형의 그루터기 정보(<모형>.stump.json)도 이 높이에서 쟀다.
+const STUMP_HEIGHT: float = 0.45
 
 static var _meshes: Dictionary[String, ArrayMesh] = {}
 static var _leaf_mesh: ArrayMesh = null
@@ -52,6 +59,15 @@ func _ready() -> void:
 	Net.tree_changed.connect(_on_tree_changed)
 	Net.chop_succeeded.connect(_on_chop_succeeded)
 	Net.peer_action.connect(_on_peer_action)
+	Quality.changed.connect(_on_quality_changed)
+
+
+## 화질이 바뀌면 Tripo 나무를 그 화질의 모형(고화질 원본 / 절약 _low)으로 바꿔 끼운다.
+func _on_quality_changed() -> void:
+	for kind: String in MODELS:
+		_meshes.erase(kind)
+	for node: TreeNode in _trees.values():
+		_apply_stage(node, node.stage)
 
 
 func _on_peer_action(_player_id: int, kind: String, target: String) -> void:
@@ -110,7 +126,7 @@ func fell(id: String, from: Vector3) -> void:
 	pivot.global_position = base
 	var trunk: MeshInstance3D = MeshInstance3D.new()
 	trunk.mesh = _mesh(node.info.kind)
-	trunk.material_override = foliage_material
+	trunk.material_override = _material(node.info.kind)
 	trunk.rotation.y = node.body.rotation.y
 	pivot.add_child(trunk)
 	var axis: Vector3 = Vector3.UP.cross(dir).normalized()
@@ -275,31 +291,63 @@ func _apply_stage(node: TreeNode, stage: String) -> void:
 	node.stage = stage
 	node.base_scale = 1.0
 	var cylinder: CylinderShape3D = node.shape.shape
+	node.mesh.material_override = foliage_material
 	match stage:
 		NetProtocol.TREE_SPROUT:
 			node.mesh.mesh = _mesh("sprout")
 			node.shape.disabled = true
 		NetProtocol.TREE_YOUNG:
 			node.mesh.mesh = _mesh(node.info.kind)
+			node.mesh.material_override = _material(node.info.kind)
 			node.base_scale = 0.62
 			cylinder.radius = 0.3
 			cylinder.height = 1.9
 			node.shape.disabled = false
 		NetProtocol.TREE_STUMP:
-			node.mesh.mesh = _mesh("stump")
-			cylinder.radius = 0.45
-			cylinder.height = 0.5
+			# 그 나무의 줄기 굵기·껍질 색에 맞춘 그루터기.
+			var stump: Dictionary = stump_info(node.info.kind)
+			node.mesh.mesh = _mesh("stump_" + node.info.kind)
+			cylinder.radius = maxf(float(stump["cut_radius"]) + 0.04, 0.2)
+			cylinder.height = STUMP_HEIGHT + 0.05
 			node.shape.disabled = false
 		NetProtocol.TREE_SAPLING:
 			node.mesh.mesh = _mesh("sapling")
 			node.shape.disabled = true
 		_:
 			node.mesh.mesh = _mesh(node.info.kind)
+			node.mesh.material_override = _material(node.info.kind)
 			cylinder.radius = 0.4
 			cylinder.height = 3.0
 			node.shape.disabled = false
 	node.mesh.scale = Vector3.ONE * node.base_scale
 	node.shape.position = Vector3(0.0, cylinder.height * 0.5, 0.0)
+
+
+## 다 자란 나무를 그릴 머티리얼: Tripo 모형이면 그 텍스처를 꽂은 툰 머티리얼, 아니면 정점 색 머티리얼.
+func _material(kind: String) -> Material:
+	return material_for_kind(kind, foliage_material)
+
+
+static func material_for_kind(kind: String, fallback: Material) -> Material:
+	if MODELS.has(kind) and PartMesh.load_model(MODELS[kind]) != null:
+		return PartMesh.material_for(MODELS[kind], fallback)
+	return fallback
+
+
+## 나무 종류별 그루터기: {root_radius 뿌리 쪽 반지름, cut_radius 자른 곳 반지름, center 줄기 가운데(x, z), bark 껍질 색, birch 흰 껍질 무늬}.
+## Tripo 모형은 가져올 때 잰 값(<모형>.stump.json), 코드로 빚은 나무는 그 줄기(_add_trunk)와 같은 값.
+static func stump_info(kind: String) -> Dictionary:
+	if MODELS.has(kind) and PartMesh.load_model(MODELS[kind]) != null:
+		var path: String = "%s/%s.stump.json" % [PartMesh.MODEL_DIR, MODELS[kind]]
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+		if parsed is Dictionary:
+			var center: Array = (parsed as Dictionary).get("center", [0.0, 0.0])
+			return {"root_radius": float(parsed.get("root_radius", 0.4)), "cut_radius": float(parsed.get("cut_radius", 0.3)),
+				"center": Vector2(float(center[0]), float(center[1])), "bark": Color.html(str(parsed.get("bark", "#995F3D"))), "birch": false}
+	var radius: float = TRUNK_RADIUS.get(kind, TRUNK_RADIUS["round"])
+	# _add_trunk 의 윤곽: 바닥 1.9r → 0.12m 1.35r → 0.35m 1.05r.
+	return {"root_radius": radius * 1.9, "cut_radius": radius * 1.04, "center": Vector2.ZERO,
+		"bark": BIRCH_BARK if kind == "birch" else TRUNK_COLOR, "birch": kind == "birch"}
 
 
 ## 모양별 메시를 한 번만 만든다. 부위마다 정점 색을 칠해 머티리얼 1개로 그린다 (나무 1그루 = 드로우콜 1, 2,500 삼각형 이하 —
@@ -309,8 +357,14 @@ static func _mesh(kind: String) -> ArrayMesh:
 		return _meshes[kind]
 	var st: SurfaceTool = ClayMesh.begin()
 	match kind:
+		"pine" when _model("pine") != null:
+			_meshes[kind] = _model("pine")
+			return _meshes[kind]
+		"round" when _model("round") != null:
+			_meshes[kind] = _model("round")
+			return _meshes[kind]
 		"pine":
-			_add_trunk(st, 0.2, 1.0, TRUNK_COLOR)
+			_add_trunk(st, TRUNK_RADIUS["pine"], 1.0, TRUNK_COLOR)
 			# 아래가 넓은 물결 모양 층 4개. 위로 갈수록 작고 밝다.
 			var tiers: Array[Vector3] = [Vector3(1.35, 0.75, 1.15), Vector3(1.1, 1.45, 1.0), Vector3(0.85, 2.1, 0.9), Vector3(0.55, 2.7, 0.8)]
 			for i: int in tiers.size():
@@ -319,16 +373,10 @@ static func _mesh(kind: String) -> ArrayMesh:
 				ClayMesh.add_lathe(st, _tier_profile(tier.x, tier.z), 27, Transform3D(Basis(), Vector3(0.0, tier.y, 0.0)),
 						ClayMesh.vertical_gradient(color.darkened(0.18), color.lightened(0.08), 1.5), ClayMesh.scallop_wobble(9, 0.16, float(i)))
 		"birch":
-			_add_trunk(st, 0.16, 1.9, BIRCH_BARK, true)
+			_add_trunk(st, TRUNK_RADIUS["birch"], 1.9, BIRCH_BARK, true)
 			_add_canopy(st, LEAF_BIRCH, 0.82, Vector3(0.0, 2.55, 0.0), 1.18, 41, NO_FLOWERS)
-		"stump":
-			var stump_color: Callable = func(local: Vector3, normal: Vector3) -> Color:
-				if normal.y > 0.8:
-					# 나이테: 가운데에서 멀어질수록 밝고 어두운 고리가 번갈아.
-					var ring: float = sin(Vector2(local.x, local.z).length() * 38.0)
-					return STUMP_TOP.lerp(STUMP_TOP.darkened(0.18), clampf(ring * 0.5 + 0.5, 0.0, 1.0) * 0.6)
-				return TRUNK_COLOR.darkened(0.08 * (1.0 - local.y))
-			ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.46, 0.36, 0.0, 0.45, 0.05, 3), 22, Transform3D(), stump_color)
+		"stump", "stump_round", "stump_pine", "stump_birch":
+			_add_stump(st, stump_info(kind.trim_prefix("stump_") if kind != "stump" else "round"))
 		"sprout":
 			# 흙 둔덕 위에 떡잎 두 장.
 			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.02, 0.0), Vector3(0.28, 0.07, 0.28), Color("#8A6A4A"), 10, 3)
@@ -343,11 +391,45 @@ static func _mesh(kind: String) -> ArrayMesh:
 				ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.55 + 0.08 * i, 0.0) + dir * 0.16, Vector3(0.17, 0.06, 0.1), LEAF_ROUND.lightened(0.12), 8, 4, Basis(Vector3.UP, -a))
 			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.7, 0.0), Vector3(0.14, 0.16, 0.14), LEAF_ROUND.lightened(0.18), 8, 5)
 		_:
-			_add_trunk(st, 0.24, 1.5, TRUNK_COLOR)
+			_add_trunk(st, TRUNK_RADIUS["round"], 1.5, TRUNK_COLOR)
 			_add_canopy(st, LEAF_ROUND, 1.0, Vector3(0.0, 2.35, 0.0), 1.0, 7, FLOWER_COLORS)
 	var mesh: ArrayMesh = ClayMesh.commit(st)
 	_meshes[kind] = mesh
 	return mesh
+
+
+## 다 자란 나무의 Tripo 모형 (없으면 null).
+static func _model(kind: String) -> ArrayMesh:
+	return PartMesh.load_model(MODELS[kind]) if MODELS.has(kind) else null
+
+
+## 그루터기: 뿌리 쪽이 퍼진 밑동을 자른 높이까지, 옆은 그 나무의 껍질 색(세로 골), 윗면은 나이테 (굵을수록 고리가 많다).
+## 자작나무는 흰 껍질에 검은 가로 무늬. 줄기 가운데(center)가 모형 원점에서 비켜 있으면 그만큼 옮긴다.
+static func _add_stump(st: SurfaceTool, info: Dictionary) -> void:
+	var root: float = float(info["root_radius"])
+	var cut: float = float(info["cut_radius"])
+	var bark: Color = info["bark"]
+	var birch: bool = bool(info["birch"])
+	var center: Vector2 = info["center"]
+	var h: float = STUMP_HEIGHT
+	var profile: PackedVector2Array = PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(root, 0.0), Vector2(lerpf(root, cut, 0.55), 0.06), Vector2(lerpf(root, cut, 0.85), 0.16),
+		Vector2(cut * 1.01, h * 0.6), Vector2(cut, h - 0.03), Vector2(cut * 0.97, h), Vector2(cut * 0.9, h + 0.005), Vector2(0.0, h + 0.01)])
+	var paint: Callable = func(local: Vector3, normal: Vector3) -> Color:
+		var p: Vector2 = Vector2(local.x - center.x, local.z - center.y)
+		if normal.y > 0.8 and p.length() < cut * 0.92:
+			# 나이테: 가운데에서 멀어질수록 밝고 어두운 고리가 번갈아, 가장자리는 껍질 안쪽(형성층)이 조금 짙다.
+			var ring: float = sin(p.length() * 70.0)
+			var wood: Color = STUMP_TOP.lerp(STUMP_TOP.darkened(0.18), clampf(ring * 0.5 + 0.5, 0.0, 1.0) * 0.6)
+			return wood.darkened(0.12 * smoothstep(0.75, 0.92, p.length() / cut))
+		if birch:
+			var band: float = sin(local.y * 9.0 + sin(atan2(p.y, p.x) * 3.0) * 1.3)
+			return BIRCH_MARK if band > 0.72 else bark.darkened(0.04 * (1.0 - local.y / h))
+		# 껍질: 세로 골을 따라 조금씩 어둡고, 뿌리 쪽이 더 짙다.
+		var groove: float = 0.5 + 0.5 * sin(atan2(p.y, p.x) * 11.0 + local.y * 3.0)
+		return bark.darkened(0.02 + 0.07 * groove + 0.07 * (1.0 - local.y / h))
+	var segments: int = clampi(int(round(cut * 60.0)) + 14, 18, 40)
+	ClayMesh.add_lathe(st, profile, segments, Transform3D(Basis(), Vector3(center.x, 0.0, center.y)), paint, ClayMesh.blob_wobble(5, 0.06, 4))
 
 
 ## 뿌리 쪽이 넓게 퍼진 줄기. 자작나무는 흰 껍질에 검은 무늬.
