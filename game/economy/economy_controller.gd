@@ -67,6 +67,7 @@ func _ready() -> void:
 	Economy.trade_done.connect(_on_trade)
 	Economy.apt_done.connect(_on_apt)
 	Economy.loan_done.connect(_on_loan)
+	Economy.deposit_done.connect(_on_deposit)
 	Economy.week_passed.connect(_on_week)
 	Economy.failed.connect(_on_failed)
 	Economy.shift_closed.connect(_on_shift_closed)
@@ -207,6 +208,19 @@ func _on_loan(r: Dictionary) -> void:
 		toast_hud.show_toast("%s 갚았어요 · 남은 빚 %s" % [Money.short(int(r.get("paid", 0))), Money.short(int(r.get("left", 0)))], true)
 
 
+func _on_deposit(r: Dictionary) -> void:
+	Audio.play_sfx("coin", -4.0)
+	match str(r.get("kind", "")):
+		"dep_open":
+			var fee: int = int(r.get("fee", 0))
+			toast_hud.show_toast("가입했어요!" + (" (출자금 %s · 이제 조합원)" % Money.short(fee) if fee > 0 else ""), true)
+		"dep_close":
+			var gain: int = int(r.get("gross", 0)) - int(r.get("tax", 0))
+			toast_hud.show_toast("%s · %s 받았어요 (이자 %s, 세금 %s 뺌)" % ["중도해지" if bool(r.get("early", false)) else "만기 해지", Money.short(int(r.get("net", 0))), Money.short(gain), Money.short(int(r.get("tax", 0)))], not bool(r.get("early", false)))
+		_:
+			toast_hud.show_toast("파킹통장 잔액 %s" % Money.short(int(r.get("balance", 0))), true)
+
+
 func _on_week(r: Dictionary) -> void:
 	var parts: PackedStringArray = []
 	if int(r.get("rent", 0)) > 0:
@@ -215,6 +229,8 @@ func _on_week(r: Dictionary) -> void:
 		parts.append("이자 -%s" % Money.short(int(r.get("interest", 0))))
 	if bool(r.get("missed", false)):
 		parts.append("연체! 남은 이자 %s 가 원금에 붙었어요" % Money.short(int(r.get("capitalized", 0))))
+	for m: Dictionary in r.get("matured", []):
+		parts.append("%s 만기 +%s" % [str(m.get("name", "")), Money.short(int(m.get("net", 0)))])
 	parts.append("기준금리 %s" % Money.percent(float(r.get("base", 0.0))))
 	toast_hud.show_toast("한 주 정산 · " + " · ".join(parts), not bool(r.get("missed", false)))
 
@@ -229,6 +245,10 @@ func _on_failed(kind: String, code: String) -> void:
 		NetProtocol.ERR_NOT_YOUR_UNIT: "내 집이 아니에요.",
 		NetProtocol.ERR_LOAN_LIMIT: "대출 한도를 넘어요 (LTV·DSR·신용 한도).",
 		NetProtocol.ERR_BAD_LOAN: "대출 금액이 이상해요.",
+		NetProtocol.ERR_BAD_PRODUCT: "상품·기간·금액을 다시 골라요.",
+		NetProtocol.ERR_BAD_ACCOUNT: "없는 계좌예요.",
+		NetProtocol.ERR_ACCOUNT_LIMIT: "예적금은 8개까지 들 수 있어요.",
+		NetProtocol.ERR_NOT_ELIGIBLE: "가입 조건이 안 돼요.",
 		NetProtocol.ERR_REST_BUSY: "다른 사람이 식당을 열었어요.",
 		NetProtocol.ERR_NOT_AT_RESTAURANT: "식당 카운터에서 열 수 있어요.",
 		NetProtocol.ERR_REST_CLOSED: "식당이 닫혀 있어요.",

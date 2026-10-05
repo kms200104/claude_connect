@@ -62,6 +62,10 @@ export const ErrorCode = Object.freeze({
   marketClosed: 'market_closed', // 장이 닫혔다 (MARKET_HOURS=krx)
   badOrder: 'bad_order', // 모르는 종목·수량
   notEnoughShares: 'not_enough_shares', // 가진 주식보다 많이 팔려고 함
+  // 예적금 (v0.12)
+  badProduct: 'bad_product', // 모르는 상품·기간·금액
+  badAccount: 'bad_account', // 없는 계좌
+  accountLimit: 'account_limit', // 계좌를 더 만들 수 없음
   badUnit: 'bad_unit', // 모르는 호수
   unitTaken: 'unit_taken', // 이미 누가 가진 집
   notYourUnit: 'not_your_unit', // 내 집이 아님

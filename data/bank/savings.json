@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "_comment": "예적금 (v0.12). 금융기관은 모두 가상 이름. 금리 = 그 주 기준금리 + 상품 가산(spread), 가입할 때 고정된다 (대출처럼 연 금리를 52주로 나눠 주마다 쌓는다 — 빌려서 예금하면 손해가 나게). 우대금리(bonus)는 만기에 조건을 보고 더한다. 중도해지는 지난 기간 비율(early)에 따라 기본금리의 일부만 준다. 이자에는 세금(tax)이 붙고, 마을금고 조합원은 3천만까지 세금우대. 예금자 보호(protection)는 기관마다 원금+이자 1억까지 — 저축은행이 문을 닫으면(경제 이벤트) 한도까지는 바로, 넘는 돈은 recovery 비율만 돌려받는다.",
+  "tax": { "normal": 0.154, "coop_member": 0.014, "coop_limit": 30000000 },
+  "protection": 100000000,
+  "recovery": 0.6,
+  "early": [
+    { "under": 0.25, "factor": 0.1 },
+    { "under": 0.5, "factor": 0.3 },
+    { "under": 0.8, "factor": 0.5 },
+    { "under": 1.0, "factor": 0.7 }
+  ],
+  "max_accounts": 8,
+  "parking_cap": 50000000,
+  "parking_over_rate": 0.001,
+  "bonuses": {
+    "first": { "name": "첫 거래", "about": "이 은행에서 처음 드는 상품" },
+    "income": { "name": "급여 이체", "about": "가입 기간의 절반 이상, 한 주에 번 돈이 30만 솔 이상", "min_week_income": 300000 },
+    "auto": { "name": "자동이체 성실", "about": "적금을 한 번도 거르지 않음" },
+    "local_card": { "name": "천안사랑카드", "about": "동사무소에서 지역화폐 카드를 받음" },
+    "youth": { "name": "청년", "about": "만 34세 이하", "max_age": 34 }
+  },
+  "institutions": [
+    { "id": "solbaram", "name": "솔바람은행", "type": "commercial", "type_name": "시중은행", "color": "#3E8E5E", "about": "마을 대표 은행. 금리는 무난하지만 가장 튼튼해요. 대출도 여기서.", "risk": 0 },
+    { "id": "haneul", "name": "하늘빛은행", "type": "commercial", "type_name": "시중은행", "color": "#4C7FD0", "about": "첫 거래 손님에게 후한 시중은행. 청년 적금이 있어요.", "risk": 0 },
+    { "id": "gureum", "name": "구름뱅크", "type": "internet", "type_name": "인터넷은행", "color": "#F2B33D", "about": "점포 없는 휴대폰 은행. 언제든 넣고 빼는 파킹통장이 편해요.", "risk": 0 },
+    { "id": "deundeun", "name": "든든저축은행", "type": "savings_bank", "type_name": "저축은행", "color": "#C0743C", "about": "시중은행보다 금리가 높은 저축은행. 예금자 보호 한도(1억)를 기억하세요.", "risk": 0.002 },
+    { "id": "byeolbit", "name": "별빛저축은행", "type": "savings_bank", "type_name": "저축은행", "color": "#8E5CC4", "about": "특판 금리가 가장 높은 대신, 경영이 조금 불안하다는 소문이 있어요.", "risk": 0.006 },
+    { "id": "hosu", "name": "호수마을금고", "type": "coop", "type_name": "상호금융", "color": "#5AA8A0", "about": "동네 금고. 출자금(1만 솔)을 내고 조합원이 되면 3천만 솔까지 이자 세금이 1.4%예요.", "risk": 0, "member_fee": 10000 }
+  ],
+  "products": [
+    { "id": "sol_deposit", "bank": "solbaram", "kind": "deposit", "name": "솔바람 정기예금", "weeks": [4, 8, 12], "spread": [0.0, 0.002, 0.004], "min": 1000000, "max": 0, "bonus": { "first": 0.001, "income": 0.002 } },
+    { "id": "sol_savings", "bank": "solbaram", "kind": "savings", "name": "솔바람 정기적금", "weeks": [8, 12], "spread": [0.006, 0.008], "min": 100000, "max": 3000000, "bonus": { "auto": 0.003, "local_card": 0.002 } },
+    { "id": "haneul_first", "bank": "haneul", "kind": "deposit", "name": "하늘빛 첫거래 예금", "weeks": [12], "spread": [0.003], "min": 1000000, "max": 30000000, "bonus": { "first": 0.004 } },
+    { "id": "haneul_youth", "bank": "haneul", "kind": "savings", "name": "하늘빛 청년 꿈적금", "weeks": [12, 24], "spread": [0.008, 0.01], "min": 100000, "max": 700000, "only": "youth", "bonus": { "income": 0.003, "auto": 0.002 } },
+    { "id": "gureum_parking", "bank": "gureum", "kind": "parking", "name": "구름 파킹통장", "weeks": [0], "spread": [-0.006], "min": 1, "max": 0, "bonus": {} },
+    { "id": "gureum_savings", "bank": "gureum", "kind": "savings", "name": "구름 한 주 적금", "weeks": [4, 8], "spread": [0.004, 0.006], "min": 50000, "max": 1000000, "bonus": { "auto": 0.004 } },
+    { "id": "deundeun_deposit", "bank": "deundeun", "kind": "deposit", "name": "든든 정기예금", "weeks": [8, 12, 24], "spread": [0.006, 0.008, 0.009], "min": 1000000, "max": 0, "bonus": {} },
+    { "id": "byeolbit_special", "bank": "byeolbit", "kind": "deposit", "name": "별빛 특판예금", "weeks": [12], "spread": [0.01], "min": 1000000, "max": 20000000, "bonus": {} },
+    { "id": "byeolbit_savings", "bank": "byeolbit", "kind": "savings", "name": "별빛 정기적금", "weeks": [12], "spread": [0.013], "min": 100000, "max": 2000000, "bonus": {} },
+    { "id": "hosu_deposit", "bank": "hosu", "kind": "deposit", "name": "호수 정기예탁금", "weeks": [8, 12], "spread": [0.005, 0.006], "min": 1000000, "max": 0, "bonus": { "local_card": 0.002 } },
+    { "id": "hosu_savings", "bank": "hosu", "kind": "savings", "name": "호수 정기적금", "weeks": [12], "spread": [0.007], "min": 100000, "max": 2000000, "bonus": { "local_card": 0.002, "auto": 0.002 } }
+  ]
+}

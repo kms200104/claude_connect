@@ -5,6 +5,7 @@ import { blockedAreas } from './world.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
+import { loadSavings } from './savings.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -103,6 +104,8 @@ export function loadGameData(dataDir, cfg) {
   const units = listUnits(realestate);
   for (const u of units) if (!realestate.types[u.type]) throw new Error(`apartment ${u.id}: unknown type ${u.type}`);
   const bank = read('bank/bank.json');
+  // 예적금 (v0.12): 금융기관 여섯 곳 · 상품 · 우대 · 세금 · 예금자 보호.
+  const savings = loadSavings(read('bank/savings.json'));
   // 집 안 (v0.10): 평면도 · 집 안 자리 · 처음 놓이는 가구.
   const floorplans = read('realestate/floorplans.json');
   const plans = loadPlans(floorplans);
@@ -184,6 +187,7 @@ export function loadGameData(dataDir, cfg) {
     plans,
     planOf: (unit) => plans.get(planIdOf(realestate, unit)) ?? null,
     bank,
+    savings,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),
     cookSteps,

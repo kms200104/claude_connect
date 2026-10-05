@@ -37,6 +37,10 @@ func _wait_until(cond: Callable, timeout_s: float) -> bool:
 	return cond.call()
 
 
+func _accounts() -> Array:
+	return Array(Economy.bank.get("sv", {}).get("accounts", []))
+
+
 func _count(item_id: String) -> int:
 	var n: int = 0
 	for it: InventoryItem in Net.inventory:
@@ -107,6 +111,26 @@ func _run() -> void:
 	var loan_id: String = str(Economy.loans[0].get("id", "")) if not Economy.loans.is_empty() else ""
 	Economy.repay_loan(loan_id, 1000000)
 	_check(await _wait_until(func() -> bool: return loans.size() == 2 and Economy.loans.is_empty(), 2.0), "전액 상환")
+	var sv: Dictionary = Economy.bank.get("sv", {})
+	_check(Array(sv.get("institutions", [])).size() == 6 and Array(sv.get("products", [])).size() >= 10, "예적금: 금융기관 6곳 · 상품 %d개" % Array(sv.get("products", [])).size())
+	var deps: Array[Dictionary] = []
+	Economy.deposit_done.connect(func(r: Dictionary) -> void: deps.append(r))
+	Economy.open_deposit("deundeun_deposit", 12, 5000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 1 and _accounts().size() == 1, 2.0), "저축은행 정기예금 500만 가입 → 내 예적금")
+	Economy.park_move(2000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 2 and int(deps[1].get("balance", 0)) == 2000000, 2.0), "파킹통장 200만 넣기")
+	var dep_id: String = str(deps[0].get("id", ""))
+	Economy.close_deposit(dep_id)
+	_check(await _wait_until(func() -> bool: return deps.size() == 3 and bool(deps[2].get("early", false)) and int(deps[2].get("net", 0)) >= 5000000, 2.0), "중도해지: 원금은 그대로")
+	Economy.park_move(-2000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 4 and _accounts().is_empty(), 2.0), "파킹통장 다 빼기 → 계좌 없음")
+	econ.phone.set("_bank_savings", true)
+	econ.phone.set("_sv_bank", "gureum")
+	econ.phone.open(PhoneWindow.Tab.BANK)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(econ.phone.is_open(), "은행 앱 예적금 화면이 열림")
+	econ.phone.close()
 
 	# ---- 부동산 ----
 	var office: Vector3 = apartments.office_position()

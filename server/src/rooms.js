@@ -19,6 +19,7 @@ import { sanitizeHomeItems } from './homes.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
+import { sanitizeDeposits } from './savings.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const intOr = (v, fallback) => (Number.isInteger(v) ? v : fallback);
@@ -96,6 +97,10 @@ function newProfile(uid, slot, cfg, data) {
     civic: sanitizeCivic(null), // 동사무소 기록: 전입 · 받은 지원금 · 천안사랑카드 · 정책대출 승인
     age: data?.civic?.player_age?.[(slot - 1) % (data.civic.player_age.length || 1)] ?? 29,
     chats: {}, // 마을톡 대화방 (v0.11, messenger.js)
+    deposits: [], // 예적금 계좌 (v0.12, savings.js)
+    depSeq: 0,
+    banksUsed: [], // 상품을 든 적이 있는 금융기관 (첫 거래 우대)
+    coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
   };
 }
 
@@ -338,6 +343,10 @@ export class Room {
         chats: data.messenger ? sanitizeChats(p.chats, data.messenger) : {},
         // 오늘 먼저 온 마을톡 수 (하루 상한). 빠뜨리면 서버를 다시 켤 때마다 같은 날 연락이 또 온다.
         msgDay: sanitizeMsgDay(p.msgDay),
+        deposits: sanitizeDeposits(p.deposits, data.savings),
+        depSeq: Math.max(0, intOr(p.depSeq, 0)),
+        banksUsed: Array.isArray(p.banksUsed) ? p.banksUsed.filter((b) => data.savings?.institutions.has(b)) : [],
+        coopMember: !!p.coopMember,
       });
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);

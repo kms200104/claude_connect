@@ -98,6 +98,15 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     if (report.missed && report.capitalized > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.missed, { sol: sol(report.capitalized) }));
     if (report.rent > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.rent, { sol: sol(report.rent) }));
     if (report.grant > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.grant, { sol: sol(report.grant) }));
+    // v0.12 예적금 만기 (저절로 해지해 지갑으로).
+    for (const m of report.matured ?? []) {
+      const product = data.savings?.products.get(m.product);
+      const bank = data.savings?.institutions.get(product?.bank)?.name ?? '은행';
+      let line = fillLine(rules.bank.matured ?? '', { bank, name: m.name, interest: sol(m.gross - m.tax), sol: sol(m.net) });
+      const names = (m.got ?? []).map((k) => data.savings?.bonuses?.[k]?.name ?? k);
+      if (names.length > 0 && rules.bank.matured_bonus) line += ` ${fillLine(rules.bank.matured_bonus, { bonus: names.join(' · ') })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
   }
 
   function handle(ctx, msg, fail) {

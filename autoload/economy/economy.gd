@@ -23,6 +23,8 @@ signal cook_judged(result: Dictionary)
 signal trade_done(result: Dictionary)
 signal apt_done(result: Dictionary)
 signal loan_done(result: Dictionary)
+## 예적금 가입 · 해지 · 파킹통장 넣고 빼기 결과 (dep_result: kind, id, product, net, gross, tax, early, got, fee, balance, sol).
+signal deposit_done(result: Dictionary)
 ## 경제 요청이 거절됐다 (kind = 보낸 메시지 종류, code = 서버 에러 코드).
 signal failed(kind: String, code: String)
 ## 요리 동작을 맡았다 / 다 했다 (v9 같이 요리).
@@ -41,7 +43,7 @@ signal marry_proposed(from_id: int)
 signal marry_declined(by_id: int)
 signal household_formed(info: Dictionary)
 
-const KINDS: PackedStringArray = ["stock_order", "apt_buy", "apt_sell", "loan_take", "loan_repay", "rest_open", "rest_join", "rest_close", "rest_cook", "rest_step",
+const KINDS: PackedStringArray = ["stock_order", "apt_buy", "apt_sell", "loan_take", "loan_repay", "dep_open", "dep_close", "park_move", "rest_open", "rest_join", "rest_close", "rest_cook", "rest_step",
 	"civic_civil", "civic_apply", "marry_propose", "marry_answer"]
 
 var market_open: bool = true
@@ -187,6 +189,20 @@ func repay_loan(loan_id: String, amount: int) -> void:
 	Net.request("loan_repay", {"id": loan_id, "amount": amount})
 
 
+## 예적금 가입 (적금은 amount 가 한 주에 넣는 돈).
+func open_deposit(product: String, weeks: int, amount: int) -> void:
+	Net.request("dep_open", {"product": product, "weeks": weeks, "amount": amount})
+
+
+func close_deposit(account_id: String) -> void:
+	Net.request("dep_close", {"id": account_id})
+
+
+## 파킹통장: amount > 0 넣기, < 0 빼기.
+func park_move(amount: int) -> void:
+	Net.request("park_move", {"amount": amount})
+
+
 func open_restaurant() -> void:
 	Net.request("rest_open")
 
@@ -282,6 +298,8 @@ func _on_message(msg: Dictionary) -> void:
 			bank_changed.emit()
 		"loan_result":
 			loan_done.emit(msg)
+		"dep_result":
+			deposit_done.emit(msg)
 		"week":
 			apt_index = float(msg.get("index", apt_index))
 			week_passed.emit(msg)

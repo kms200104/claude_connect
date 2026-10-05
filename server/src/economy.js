@@ -6,6 +6,7 @@ import { buyCost, sellProceeds } from './market.js';
 import { purchaseCost, saleProceeds, stepIndex, unitPrice, weeklyRent } from './realestate.js';
 import { annualIncome, chargeWeek, creditLimit, creditScore, dsrOk, gradeOf, mortgageLimit, rateFor, stepBaseRate, weekOf, weeklyInterest } from './bank.js';
 import { cardCashback, didimdolTerms, eligibility, sunshineRate } from './civic.js';
+import { eligible, exposureByBank, failurePayout, parkingWeek, principalOf, productRate, settle } from './savings.js';
 
 /** 번 돈 기록 (대출 한도·신용점수의 소득). */
 export function earn(profile, amount) {
@@ -37,8 +38,11 @@ export function createEconomy(deps) {
     const list = membersOf(room, profile);
     return list.length > 1 ? combineIncome(list.map((p) => p.income)) : profile.income;
   };
-  /** 세대 자산 = 지갑(하나) + 세대원 주식 + 세대원 집. */
-  const assetsOf = (room, profile) => profile.sol + membersOf(room, profile).reduce((a, p) => a + market.holdingsValue(p.stocks), 0) + (room ? homesValueOf(room, profile) : 0);
+  /** 예적금에 넣어 둔 돈 (원금, v0.12). */
+  const depositsOf = (profile) => (profile.deposits ?? []).reduce((a, d) => a + principalOf(d), 0);
+  /** 세대 자산 = 지갑(하나) + 세대원 주식 + 세대원 예적금 + 세대원 집. */
+  const assetsOf = (room, profile) =>
+    profile.sol + membersOf(room, profile).reduce((a, p) => a + market.holdingsValue(p.stocks) + depositsOf(p), 0) + (room ? homesValueOf(room, profile) : 0);
 
   function creditOf(room, profile) {
     const score = creditScore(data.bank, { credit: profile.credit, income: incomeOf(room, profile), debt: debtOf(room, profile), assets: assetsOf(room, profile) });
@@ -64,7 +68,203 @@ export function createEconomy(deps) {
       week: weekOf(clock.day()),
       joint: membersOf(room, profile).length > 1,
       loans: profile.loans.map((l) => ({ ...l, weekly: weeklyInterest(l.principal, l.rate) })),
+      sv: savingsWire(room, profile),
     };
+  }
+
+  // ---- 예적금 (v0.12) ----
+
+  const sv = data.savings;
+  /** 우대 조건을 볼 때 쓰는 이 사람의 상황. */
+  const depositCtx = (profile) => ({ card: !!profile.civic?.card, age: profile.age ?? 29, coopMember: !!profile.coopMember });
+
+  /** 은행 앱 예적금 화면: 기관 · 상품(지금 금리) · 내 계좌(지금 해지하면 / 만기에 받을 돈) · 기관별 보호 한도. */
+  function savingsWire(room, profile) {
+    if (!sv) return null;
+    const week = weekOf(clock.day());
+    const ctx = depositCtx(profile);
+    const products = [...sv.products.values()].map((p) => ({
+      id: p.id,
+      bank: p.bank,
+      kind: p.kind,
+      name: p.name,
+      weeks: p.weeks,
+      rates: p.weeks.map((w) => productRate(p, room.baseRate, w)),
+      min: p.min,
+      max: p.max,
+      bonus: p.bonus,
+      only: p.only ?? '',
+      ok: eligible(sv, p, ctx),
+    }));
+    const accounts = (profile.deposits ?? []).map((a) => {
+      const product = sv.products.get(a.product);
+      const now = settle(sv, product, a, week, ctx);
+      const atEnd = a.kind === 'parking' ? now : settle(sv, product, { ...a, paidAt: a.kind === 'savings' ? Array.from({ length: a.weeks }, (_, i) => i) : a.paidAt }, a.week + a.weeks, { ...ctx });
+      return {
+        id: a.id,
+        product: a.product,
+        bank: a.bank,
+        kind: a.kind,
+        rate: a.rate,
+        weeks: a.weeks,
+        left: a.kind === 'parking' ? 0 : Math.max(0, a.week + a.weeks - week),
+        principal: principalOf(a),
+        amount: a.amount,
+        missed: a.missed,
+        now: now.net,
+        early: now.early,
+        maturity: atEnd.net,
+        bonus: atEnd.got,
+      };
+    });
+    return {
+      institutions: [...sv.institutions.values()].map((i) => ({ ...i, used: (profile.banksUsed ?? []).includes(i.id) })),
+      products,
+      accounts,
+      exposure: exposureByBank(profile.deposits ?? []),
+      protection: sv.protection,
+      parking_cap: sv.parking_cap,
+      parking_over_rate: sv.parking_over_rate,
+      tax: sv.tax,
+      bonuses: sv.bonuses,
+      coop: !!profile.coopMember,
+      week,
+    };
+  }
+
+  /** 예적금 요청: dep_open { product, weeks, amount } · dep_close { id } · park_move { amount (+넣기 / -빼기) }. */
+  function handleSavings(ctx, msg, fail) {
+    const { player, room } = ctx;
+    const p = player.profile;
+    if (!sv) return fail(ErrorCode.badProduct);
+    if (!player.acceptRid(msg.rid)) return;
+    const week = weekOf(clock.day());
+    const dctx = depositCtx(p);
+    let result = { t: 'dep_result', rid: msg.rid, kind: msg.t };
+    if (msg.t === 'dep_open') {
+      const product = sv.products.get(msg.product);
+      if (!product || product.kind === 'parking') return fail(ErrorCode.badProduct);
+      if (!eligible(sv, product, dctx)) return fail(ErrorCode.notEligible);
+      const weeks = msg.weeks;
+      const rate = productRate(product, room.baseRate, weeks);
+      const amount = msg.amount;
+      if (rate === null || !Number.isInteger(amount) || amount < product.min || (product.max > 0 && amount > product.max)) return fail(ErrorCode.badProduct);
+      if ((p.deposits ?? []).length >= sv.max_accounts) return fail(ErrorCode.accountLimit);
+      const inst = sv.institutions.get(product.bank);
+      const fee = inst.member_fee && !p.coopMember ? inst.member_fee : 0;
+      if (p.sol < amount + fee) return fail(ErrorCode.notEnoughSol);
+      p.sol -= amount + fee;
+      if (fee > 0) p.coopMember = true;
+      p.depSeq += 1;
+      const first = !(p.banksUsed ?? []).includes(product.bank);
+      if (first) p.banksUsed = [...(p.banksUsed ?? []), product.bank];
+      const account = {
+        id: `D${p.depSeq}`,
+        product: product.id,
+        bank: product.bank,
+        kind: product.kind,
+        week,
+        weeks,
+        rate,
+        principal: product.kind === 'deposit' ? amount : 0,
+        amount: product.kind === 'savings' ? amount : 0,
+        paidAt: product.kind === 'savings' ? [0] : [],
+        missed: 0,
+        incomeWeeks: 0,
+        first,
+      };
+      p.deposits.push(account);
+      result = { ...result, id: account.id, product: product.id, fee, sol: p.sol };
+    } else if (msg.t === 'dep_close') {
+      const a = (p.deposits ?? []).find((d) => d.id === msg.id);
+      if (!a) return fail(ErrorCode.badAccount);
+      const s = settle(sv, sv.products.get(a.product), a, week, dctx);
+      p.deposits = p.deposits.filter((d) => d !== a);
+      p.sol += s.net;
+      earn(p, s.gross - s.tax);
+      result = { ...result, id: a.id, product: a.product, ...s, sol: p.sol };
+    } else {
+      // 파킹통장: 넣기(+) · 빼기(-). 처음 넣으면 계좌를 연다.
+      const amount = msg.amount;
+      if (!Number.isInteger(amount) || amount === 0) return fail(ErrorCode.badProduct);
+      const product = [...sv.products.values()].find((x) => x.kind === 'parking');
+      let a = (p.deposits ?? []).find((d) => d.kind === 'parking');
+      if (amount > 0) {
+        if (p.sol < amount) return fail(ErrorCode.notEnoughSol);
+        if (!a) {
+          if ((p.deposits ?? []).length >= sv.max_accounts) return fail(ErrorCode.accountLimit);
+          p.depSeq += 1;
+          a = { id: `D${p.depSeq}`, product: product.id, bank: product.bank, kind: 'parking', week, weeks: 0, rate: productRate(product, room.baseRate, 0), principal: 0, amount: 0, paidAt: [], missed: 0, incomeWeeks: 0, first: false };
+          p.deposits.push(a);
+          if (!(p.banksUsed ?? []).includes(product.bank)) p.banksUsed = [...(p.banksUsed ?? []), product.bank];
+        }
+        p.sol -= amount;
+        a.principal += amount;
+      } else {
+        if (!a || a.principal < -amount) return fail(ErrorCode.notEnoughSol);
+        a.principal += amount;
+        p.sol -= amount;
+        if (a.principal === 0) p.deposits = p.deposits.filter((d) => d !== a);
+      }
+      result = { ...result, id: a.id, balance: a.principal, sol: p.sol };
+    }
+    send(ctx.ws, result);
+    sendProfile(player);
+    send(ctx.ws, { t: 'bank', ...bankWire(room, p) });
+    rooms.save(room);
+  }
+
+  /**
+   * 한 주 지나면 계좌마다: 파킹통장 이자(세후)를 붙이고, 파킹 금리를 새 기준금리로 고치고, 적금은 지갑에서 한 주 치를 넣고(모자라면 거름),
+   * 급여 이체 우대를 세고, 만기가 된 예적금은 저절로 해지해 지갑으로. 돌려준 목록을 week 보고에 싣는다.
+   */
+  function tickDeposits(room, p, week) {
+    if (!sv || !(p.deposits?.length > 0)) return [];
+    const ctx = depositCtx(p);
+    const matured = [];
+    const minIncome = sv.bonuses?.income?.min_week_income ?? 0;
+    for (const a of [...p.deposits]) {
+      const product = sv.products.get(a.product);
+      if (a.kind === 'parking') {
+        a.principal += parkingWeek(sv, a, ctx);
+        a.rate = productRate(product, room.baseRate, 0);
+        continue;
+      }
+      const held = week - a.week;
+      if ((p.income?.amount ?? 0) >= minIncome) a.incomeWeeks += 1;
+      if (a.kind === 'savings' && held < a.weeks) {
+        if (p.sol >= a.amount) {
+          p.sol -= a.amount;
+          a.paidAt.push(held);
+        } else {
+          a.missed += 1;
+        }
+      }
+      if (held >= a.weeks) {
+        const s = settle(sv, product, a, week, ctx);
+        p.deposits = p.deposits.filter((d) => d !== a);
+        p.sol += s.net;
+        earn(p, s.gross - s.tax);
+        matured.push({ id: a.id, product: a.product, name: product.name, ...s });
+      }
+    }
+    return matured;
+  }
+
+  /** 금융기관이 문을 닫았다 (경제 이벤트): 그 기관 계좌를 모두 정리해 보호 한도까지 + 넘는 돈의 일부를 지갑으로. */
+  function failInstitution(room, bankId) {
+    if (!sv) return [];
+    const week = weekOf(clock.day());
+    const out = [];
+    for (const p of room.profiles.values()) {
+      const list = (p.deposits ?? []).filter((d) => d.bank === bankId);
+      if (list.length === 0) continue;
+      const r = failurePayout(sv, list, week);
+      p.deposits = p.deposits.filter((d) => d.bank !== bankId);
+      p.sol += r.paid;
+      out.push({ uid: p.uid, ...r });
+    }
+    return out;
   }
 
   /** 동사무소 판단에 쓰는 이 사람(세대)의 상황. */
@@ -297,7 +497,9 @@ export function createEconomy(deps) {
     const rentProgram = data.programs.get('youth_rent');
     for (let w = 0; w < weeks; w++) {
       for (const p of room.profiles.values()) {
-        const r = reports.get(p.uid) ?? { rent: 0, paid: 0, capitalized: 0, missed: false, grant: 0 };
+        const r = reports.get(p.uid) ?? { rent: 0, paid: 0, capitalized: 0, missed: false, grant: 0, matured: [] };
+        // 예적금: 이번 주 소득을 보고(급여 이체 우대), 적금 납입 · 파킹 이자 · 만기 해지 (v0.12).
+        r.matured.push(...tickDeposits(room, p, week - weeks + w + 1));
         let rent = 0;
         for (const u of homesOfUids(room, [p.uid])) rent += weeklyRent(data.realestate, unitPrice(data.realestate, u, room.aptIndex));
         p.sol += rent;
@@ -326,12 +528,12 @@ export function createEconomy(deps) {
     // 마을톡 은행 알림 (끊겨 있는 사람도 다음에 들어오면 보인다).
     for (const [uid, r] of reports) {
       const profile = room.profiles.get(uid);
-      if (profile) deps.onWeekReport?.(room, profile, { interest: r.paid, capitalized: r.capitalized, missed: r.missed, rent: r.rent, grant: r.grant });
+      if (profile) deps.onWeekReport?.(room, profile, { interest: r.paid, capitalized: r.capitalized, missed: r.missed, rent: r.rent, grant: r.grant, matured: r.matured });
     }
     for (const player of room.players.values()) {
       const r = reports.get(player.uid);
       if (!r) continue;
-      sendTo(player, { t: 'week', week, rent: r.rent, interest: r.paid, capitalized: r.capitalized, missed: r.missed, grant: r.grant, base: room.baseRate, index: room.aptIndex, sol: player.profile.sol });
+      sendTo(player, { t: 'week', week, rent: r.rent, interest: r.paid, capitalized: r.capitalized, missed: r.missed, grant: r.grant, matured: r.matured, base: room.baseRate, index: room.aptIndex, sol: player.profile.sol });
       sendProfile(player);
     }
     room.broadcast({ t: 'homes', ...homesWire(room) });
@@ -541,6 +743,9 @@ export function createEconomy(deps) {
     broadcastMarket,
     handleHome,
     handleBank,
+    handleSavings,
+    savingsWire,
+    failInstitution,
     tickWeek,
     handleCivic,
     civicWire,

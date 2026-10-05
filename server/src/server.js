@@ -1341,6 +1341,10 @@ export function createServer(overrides = {}) {
       case 'apt_buy':
       case 'apt_sell':
         return economy.handleHome(ctx, msg, fail);
+      case 'dep_open':
+      case 'dep_close':
+      case 'park_move':
+        return economy.handleSavings(ctx, msg, fail);
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1489,6 +1493,9 @@ export function createServer(overrides = {}) {
       case 'stock_order':
       case 'apt_buy':
       case 'apt_sell':
+      case 'dep_open':
+      case 'dep_close':
+      case 'park_move':
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':

@@ -37,6 +37,12 @@ var _building: String = ""
 var _loan_ratio: float = 0.0
 ## 동사무소에서 승인받은 디딤돌대출로 살지 (v9).
 var _use_didimdol: bool = false
+## 은행 탭: 대출(false) / 예적금(true), 예적금에서 고른 금융기관 · 상품 · 기간 · 금액.
+var _bank_savings: bool = false
+var _sv_bank: String = ""
+var _sv_product: String = ""
+var _sv_weeks: int = 0
+var _sv_amount: int = 0
 var _dirty: bool = false
 var _week_reports: Array[Dictionary] = []
 ## 마을톡: 열어 둔 대화방 ("" = 목록)과 쓰다 만 글.
@@ -390,6 +396,19 @@ func _build_unit_detail(u: EconData.Unit) -> void:
 # ---- 은행 ----
 
 func _build_bank() -> void:
+	var toggle: HBoxContainer = HBoxContainer.new()
+	toggle.add_theme_constant_override("separation", 8)
+	_body.add_child(toggle)
+	for i: int in 2:
+		var tb: Button = _button(["대출", "예금 · 적금"][i], 30, INK, _bank_savings == (i == 1))
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tb.pressed.connect(func() -> void:
+			_bank_savings = i == 1
+			_rebuild())
+		toggle.add_child(tb)
+	if _bank_savings:
+		_build_savings()
+		return
 	var b: Dictionary = Economy.bank
 	_body.add_child(_label("솔바람은행 · 금리는 주마다 다시 매겨요 (기준금리 + 신용 가산)", 26, SOFT))
 	var card: VBoxContainer = _card()
@@ -438,6 +457,215 @@ func _build_bank() -> void:
 			pb.pressed.connect(Economy.repay_loan.bind(str(l.get("id", "")), pay))
 			rr.add_child(pb)
 
+
+
+# ---- 예적금 ----
+
+func _build_savings() -> void:
+	var sv: Dictionary = Economy.bank.get("sv", {})
+	if sv.is_empty():
+		_body.add_child(_label("은행 정보를 불러오는 중…", 26, SOFT))
+		return
+	var insts: Array = sv.get("institutions", [])
+	var products: Array = sv.get("products", [])
+	var accounts: Array = sv.get("accounts", [])
+	var exposure: Dictionary = sv.get("exposure", {})
+	var protection: int = int(sv.get("protection", 0))
+	var tax: Dictionary = sv.get("tax", {})
+	_body.add_child(_label("금리는 가입한 주의 기준금리(%s)로 고정돼요. 이자에는 세금 %s (마을금고 조합원은 %s까지 %s). 기관마다 원금+이자 %s까지 보호돼요." % [
+		Money.percent(float(Economy.bank.get("base", 0.0))), Money.percent(float(tax.get("normal", 0.0)), 1),
+		Money.short(int(tax.get("coop_limit", 0))), Money.percent(float(tax.get("coop_member", 0.0)), 1), Money.short(protection)], 24, SOFT))
+	_build_my_accounts(accounts, insts, products, exposure, protection)
+	_body.add_child(_label("금융기관", 32, INK))
+	if _sv_bank.is_empty() and not insts.is_empty():
+		_sv_bank = str(insts[0].get("id", ""))
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	_body.add_child(grid)
+	for inst: Dictionary in insts:
+		var id: String = str(inst.get("id", ""))
+		var ib: Button = _button("%s\n%s" % [str(inst.get("name", id)), str(inst.get("type_name", ""))], 24, Color(str(inst.get("color", "#4D3320"))).darkened(0.25), id == _sv_bank)
+		ib.custom_minimum_size = Vector2(0, 110)
+		ib.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ib.pressed.connect(func() -> void:
+			_sv_bank = id
+			_sv_product = ""
+			_rebuild())
+		grid.add_child(ib)
+	var picked: Dictionary = {}
+	for inst: Dictionary in insts:
+		if str(inst.get("id", "")) == _sv_bank:
+			picked = inst
+	if picked.is_empty():
+		return
+	var about: VBoxContainer = _card()
+	about.add_child(_label("%s · %s" % [str(picked.get("name", "")), str(picked.get("type_name", ""))], 32, INK))
+	about.add_child(_label(str(picked.get("about", "")), 24, SOFT))
+	var notes: PackedStringArray = []
+	if bool(picked.get("used", false)):
+		notes.append("거래한 적 있어요 (첫 거래 우대 없음)")
+	else:
+		notes.append("아직 거래 안 함 (첫 거래 우대 가능)")
+	if int(picked.get("member_fee", 0)) > 0:
+		notes.append("조합원이에요 (세금우대)" if bool(sv.get("coop", false)) else "처음 가입할 때 출자금 %s" % Money.short(int(picked.get("member_fee", 0))))
+	if float(picked.get("risk", 0.0)) > 0.0:
+		notes.append("맡긴 돈 %s / 보호 한도 %s" % [Money.short(int(exposure.get(_sv_bank, 0))), Money.short(protection)])
+	about.add_child(_label(" · ".join(notes), 22, SOFT))
+	for p: Dictionary in products:
+		if str(p.get("bank", "")) == _sv_bank:
+			_build_product(p, sv, accounts)
+
+
+func _build_product(p: Dictionary, sv: Dictionary, accounts: Array) -> void:
+	var id: String = str(p.get("id", ""))
+	var kind: String = str(p.get("kind", ""))
+	var weeks: Array = p.get("weeks", [])
+	var rates: Array = p.get("rates", [])
+	var bonus: Dictionary = p.get("bonus", {})
+	var bonuses: Dictionary = sv.get("bonuses", {})
+	var card: VBoxContainer = _card()
+	var kind_name: String = {"deposit": "정기예금", "savings": "정기적금", "parking": "파킹통장"}.get(kind, kind)
+	var title: String = str(p.get("name", id))
+	card.add_child(_label(title if title.ends_with(kind_name) else "%s · %s" % [title, kind_name], 30, INK))
+	var rate_text: PackedStringArray = []
+	for i: int in weeks.size():
+		rate_text.append(("수시 입출금 연 %s" % Money.percent(float(rates[i]))) if kind == "parking" else ("%d주 연 %s" % [int(weeks[i]), Money.percent(float(rates[i]))]))
+	card.add_child(_label(" · ".join(rate_text), 26, GOOD))
+	var bonus_total: float = 0.0
+	var bonus_text: PackedStringArray = []
+	for b: String in bonus:
+		bonus_total += float(bonus[b])
+		var info: Dictionary = bonuses.get(b, {})
+		bonus_text.append("%s +%s" % [str(info.get("name", b)), Money.percent(float(bonus[b]))])
+	if not bonus_text.is_empty():
+		card.add_child(_label("우대 (만기에 조건 확인): " + " · ".join(bonus_text) + " · 최고 +%s" % Money.percent(bonus_total), 22, SOFT))
+	var limits: String = ""
+	match kind:
+		"deposit":
+			limits = "한 번에 %s 이상%s 맡기고 만기에 원금+이자. 중간에 깨면 이자를 조금만 줘요." % [Money.short(int(p.get("min", 0))), "" if int(p.get("max", 0)) <= 0 else ", %s 까지" % Money.short(int(p.get("max", 0)))]
+		"savings":
+			limits = "매주 %s ~ %s 씩 지갑에서 자동으로 넣어요. 솔이 모자라 거르면 자동이체 우대가 사라져요." % [Money.short(int(p.get("min", 0))), Money.short(int(p.get("max", 0)))]
+		"parking":
+			limits = "언제든 넣고 빼요. 이자는 주마다 붙고(세후), %s 넘는 돈은 연 %s. 금리는 기준금리를 따라 주마다 바뀌어요." % [Money.short(int(sv.get("parking_cap", 50000000))), Money.percent(float(sv.get("parking_over_rate", 0.001)), 1)]
+	card.add_child(_label(limits, 22, SOFT))
+	if str(p.get("only", "")) == "youth":
+		card.add_child(_label("만 34세 이하만 가입할 수 있어요." if bool(p.get("ok", true)) else "만 34세 이하만 가입할 수 있어요 — 가입 불가", 22, SOFT if bool(p.get("ok", true)) else UP))
+	if kind == "parking":
+		_build_parking(card, accounts)
+		return
+	if not bool(p.get("ok", true)):
+		return
+	if _sv_product != id:
+		var pick: Button = _button("가입하기", 28)
+		pick.pressed.connect(func() -> void:
+			_sv_product = id
+			_sv_weeks = int(weeks[weeks.size() - 1])
+			_sv_amount = 0
+			_rebuild())
+		card.add_child(pick)
+		return
+	var wrow: HBoxContainer = HBoxContainer.new()
+	wrow.add_theme_constant_override("separation", 8)
+	card.add_child(wrow)
+	for w: Variant in weeks:
+		var wb: Button = _button("%d주" % int(w), 26, INK, int(w) == _sv_weeks)
+		wb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		wb.pressed.connect(func() -> void:
+			_sv_weeks = int(w)
+			_rebuild())
+		wrow.add_child(wb)
+	var lo: int = int(p.get("min", 0))
+	var hi: int = int(p.get("max", 0))
+	var steps: Array[int] = [1000000, 5000000, 10000000, 30000000]
+	if kind == "savings":
+		steps = [100000, 300000, 500000, 1000000]
+	var arow: HBoxContainer = HBoxContainer.new()
+	arow.add_theme_constant_override("separation", 8)
+	card.add_child(arow)
+	for a: int in steps:
+		var amount: int = maxi(a, lo)
+		if hi > 0:
+			amount = mini(amount, hi)
+		var ab: Button = _button(Money.short(amount), 24, INK, amount == _sv_amount)
+		ab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ab.pressed.connect(func() -> void:
+			_sv_amount = amount
+			_rebuild())
+		arow.add_child(ab)
+	if _sv_amount <= 0:
+		card.add_child(_label("금액을 골라요.", 22, SOFT))
+		return
+	var rate: float = float(rates[0])
+	for wi: int in weeks.size():
+		if int(weeks[wi]) == _sv_weeks:
+			rate = float(rates[wi])
+	var est: int = 0
+	if kind == "savings":
+		est = int(float(_sv_amount) * rate * float(_sv_weeks * (_sv_weeks + 1) / 2) / 52.0)
+	else:
+		est = int(float(_sv_amount) * rate * float(_sv_weeks) / 52.0)
+	var tax: float = float(sv.get("tax", {}).get("normal", 0.154))
+	var paid: int = _sv_amount * (_sv_weeks if kind == "savings" else 1)
+	card.add_child(_label("%d주 · 연 %s → 만기에 약 %s (원금 %s + 세후 이자 %s, 우대 빼고)" % [_sv_weeks, Money.percent(rate), Money.short(paid + int(est * (1.0 - tax))), Money.short(paid), Money.short(int(est * (1.0 - tax)))], 24, INK))
+	var go: Button = _button("%s %s 가입" % [Money.short(_sv_amount), "매주" if kind == "savings" else ""], 28, GOOD)
+	go.disabled = _sv_amount > Net.sol
+	go.pressed.connect(func() -> void:
+		Economy.open_deposit(id, _sv_weeks, _sv_amount)
+		_sv_product = "")
+	card.add_child(go)
+
+
+func _build_parking(card: VBoxContainer, accounts: Array) -> void:
+	var balance: int = 0
+	for a: Dictionary in accounts:
+		if str(a.get("kind", "")) == "parking":
+			balance = int(a.get("principal", 0))
+	card.add_child(_label("잔액 %s" % Money.short(balance), 28, INK))
+	for row_i: int in 2:
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		card.add_child(row)
+		for a: int in [1000000, 10000000, -1]:
+			var put: bool = row_i == 0
+			var amount: int = (Net.sol if put else balance) if a < 0 else a
+			var b: Button = _button(("전부 넣기" if put else "전부 빼기") if a < 0 else ("%s %s" % [Money.short(a), "넣기" if put else "빼기"]), 22)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.disabled = amount <= 0 or (put and amount > Net.sol) or (not put and amount > balance)
+			b.pressed.connect(Economy.park_move.bind(amount if put else -amount))
+			row.add_child(b)
+
+
+func _build_my_accounts(accounts: Array, insts: Array, products: Array, exposure: Dictionary, protection: int) -> void:
+	_body.add_child(_label("내 예적금", 32, INK))
+	if accounts.is_empty():
+		_body.add_child(_label("아직 없어요. 아래에서 금융기관을 골라 가입해 봐요.", 24, SOFT))
+		return
+	var names: Dictionary = {}
+	for inst: Dictionary in insts:
+		names[str(inst.get("id", ""))] = str(inst.get("name", ""))
+		var over: int = int(exposure.get(str(inst.get("id", "")), 0)) - protection
+		if over > 0:
+			_body.add_child(_label("⚠ %s에 보호 한도보다 %s 더 맡겼어요. 문을 닫으면 넘는 돈은 일부만 돌려받아요." % [str(inst.get("name", "")), Money.short(over)], 24, UP))
+	var pnames: Dictionary = {}
+	for p: Dictionary in products:
+		pnames[str(p.get("id", ""))] = str(p.get("name", ""))
+	for a: Dictionary in accounts:
+		var kind: String = str(a.get("kind", ""))
+		var card: VBoxContainer = _card()
+		card.add_child(_label("%s · %s" % [pnames.get(str(a.get("product", "")), ""), names.get(str(a.get("bank", "")), "")], 28, INK))
+		if kind == "parking":
+			card.add_child(_label("잔액 %s · 연 %s (주마다 바뀌어요)" % [Money.short(int(a.get("principal", 0))), Money.percent(float(a.get("rate", 0.0)))], 24, SOFT))
+			continue
+		var head: String = "넣은 돈 %s" % Money.short(int(a.get("principal", 0)))
+		if kind == "savings":
+			head += " (매주 %s%s)" % [Money.short(int(a.get("amount", 0))), ", %d번 거름" % int(a.get("missed", 0)) if int(a.get("missed", 0)) > 0 else ""]
+		card.add_child(_label("%s · 연 %s · 만기까지 %d주" % [head, Money.percent(float(a.get("rate", 0.0))), int(a.get("left", 0))], 24, SOFT))
+		card.add_child(_label("만기에 약 %s · 지금 깨면 %s" % [Money.short(int(a.get("maturity", 0))), Money.short(int(a.get("now", 0)))], 24, GOOD))
+		var cb: Button = _button("중도해지 (이자 손해)" if bool(a.get("early", true)) else "해지", 24, UP if bool(a.get("early", true)) else INK)
+		cb.pressed.connect(Economy.close_deposit.bind(str(a.get("id", ""))))
+		card.add_child(cb)
 
 # ---- 자산 ----
 
