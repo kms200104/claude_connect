@@ -12,5 +12,6 @@
   "hole_finds": { "chance": 0.3, "items": [ { "id": "round_pebble", "weight": 62 }, { "id": "old_coin", "weight": 28 }, { "id": "fossil", "weight": 10 } ] },
   "max_tiles": 400,
   "net": { "range": 0.9, "radius": 1.1, "coop_radius": 1.45, "cooldown_ms": 650, "max_catch": 3,
-    "flee_radius": 3.4, "flee_speed": 3.6, "panic_speed": 2.4, "wander_speed": 0.55, "respawn_s": 14 }
+    "flee_radius": 3.4, "flee_speed": 3.6, "panic_speed": 2.4, "wander_speed": 0.55, "respawn_s": 14,
+    "cornered_ms": 1500, "cornered_slow": 0.35 }
 }

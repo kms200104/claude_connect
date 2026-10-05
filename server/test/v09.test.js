@@ -76,6 +76,12 @@ describe('v0.9 계산', () => {
     const f = shoal.fish[0];
     assert.ok(f.z > zone.z + 1, '사람 반대쪽으로 달아난다');
     assert.ok(f.z <= zone.z + zone.half_z, '여울 밖으로는 못 나간다');
+    // 벽에 몰리면 잠깐 지쳐서 옆으로도 느리게 빠져나간다.
+    for (let i = 0; i < 20; i++) stepShoal(shoal, [{ x: f.x, z: f.z - 1 }], rules, 0.1, 0, Math.random);
+    assert.ok(f.tiredUntil > 0, '구석에 몰리면 지친다');
+    const before = f.x;
+    stepShoal(shoal, [{ x: f.x - 0.4, z: f.z - 0.4 }], rules, 0.1, 0, Math.random);
+    assert.ok(Math.abs(f.x - before) <= rules.flee_speed * rules.cornered_slow * 0.1 + 1e-6, '지친 물고기는 느리다');
     // 두 사람이 들어오면 우왕좌왕.
     stepShoal(shoal, [person, { x: zone.x + 0.5, z: zone.z }], rules, 0.1, 0, Math.random);
     assert.equal(shoal.panic, true);

@@ -174,7 +174,12 @@ func _run() -> void:
 func _play_minigame(kitchen: KitchenWindow) -> void:
 	var tapped_step: int = -1
 	var beat: int = 0
-	while kitchen.get("_mode") == KitchenWindow.Mode.COOKING:
+	var deadline: float = float(Time.get_ticks_msec()) + 30000.0
+	# v9: 동작마다 서버가 맡김을 확인(RESULT → COOKING)하므로 요리가 판정될 때까지 돈다.
+	while str(kitchen.get("_order_id")) != "" and kitchen.get("_mode") in [KitchenWindow.Mode.COOKING, KitchenWindow.Mode.RESULT] and float(Time.get_ticks_msec()) < deadline:
+		if kitchen.get("_mode") != KitchenWindow.Mode.COOKING:
+			await get_tree().process_frame
+			continue
 		var step: Dictionary = kitchen.get("_step")
 		var index: int = kitchen.get("_step_index")
 		var t: float = float(Time.get_ticks_msec()) - float(kitchen.get("_step_start_ms"))

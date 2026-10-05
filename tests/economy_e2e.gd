@@ -143,7 +143,8 @@ func _run() -> void:
 	Economy.cook_judged.connect(func(r: Dictionary) -> void: judged.append(r))
 	var order_id: String = str(arrived[0].get("order", ""))
 	econ.kitchen.call("_start_cooking", order_id)
-	_check(player.rig.is_cooking() and player.is_input_locked(), "요리 동작을 하며 멈춰 선다")
+	# v9: 서버가 동작을 맡겨 주면(rest_claim) 요리 자세를 잡는다.
+	_check(await _wait_until(func() -> bool: return player.rig.is_cooking() and player.is_input_locked(), 2.0), "요리 동작을 하며 멈춰 선다")
 	await _play_minigame(econ.kitchen)
 	_check(await _wait_until(func() -> bool: return not judged.is_empty(), 4.0), "요리를 냈다 → 별점")
 	if not judged.is_empty():
@@ -187,7 +188,12 @@ func _seated(site: RestaurantSite) -> int:
 func _play_minigame(kitchen: KitchenWindow) -> void:
 	var tapped_step: int = -1
 	var beat: int = 0
-	while kitchen.get("_mode") == KitchenWindow.Mode.COOKING:
+	var deadline: float = float(Time.get_ticks_msec()) + 30000.0
+	# v9: 동작마다 서버가 맡김을 확인(RESULT → COOKING)하므로 요리가 판정될 때까지 돈다.
+	while str(kitchen.get("_order_id")) != "" and kitchen.get("_mode") in [KitchenWindow.Mode.COOKING, KitchenWindow.Mode.RESULT] and float(Time.get_ticks_msec()) < deadline:
+		if kitchen.get("_mode") != KitchenWindow.Mode.COOKING:
+			await get_tree().process_frame
+			continue
 		var step: Dictionary = kitchen.get("_step")
 		var index: int = kitchen.get("_step_index")
 		var start: float = kitchen.get("_step_start_ms")

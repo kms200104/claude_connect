@@ -127,6 +127,7 @@ func _build_clouds() -> void:
 		mi.mesh = ClayMesh.commit(st)
 		mi.material_override = mat
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.name = "TitleCloud%d" % i
 		_village.add_child(mi)
 		var a: float = rng.randf() * TAU
 		var dist: float = rng.randf_range(40.0, 125.0)

@@ -50,6 +50,7 @@ function spawnOne(shoal, data, random) {
     vx: Math.cos(a) * 0.3,
     vz: Math.sin(a) * 0.3,
     turnAt: 0,
+    tiredUntil: 0,
   });
 }
 
@@ -98,7 +99,9 @@ export function stepShoal(shoal, people, rules, dt, t, random) {
       // 우왕좌왕하면 방향이 조금씩 흔들린다.
       const wobble = panic ? (random() - 0.5) * 1.2 : 0;
       const ang = Math.atan2(az, ax) + wobble;
-      const speed = fleeSpeed * Math.min(1, len * 1.6);
+      // 벽·구석에 몰린 물고기는 잠깐 지쳐서 느려진다 (몰이 사냥의 노림수).
+      const tired = t < (f.tiredUntil ?? 0) ? rules.cornered_slow ?? 0.35 : 1;
+      const speed = fleeSpeed * tired * Math.min(1, len * 1.6);
       f.vx = Math.cos(ang) * speed;
       f.vz = Math.sin(ang) * speed;
     } else if (t >= f.turnAt) {
@@ -116,10 +119,12 @@ export function stepShoal(shoal, people, rules, dt, t, random) {
     if (f.x < zone.x - hx || f.x > zone.x + hx) {
       f.x = Math.max(zone.x - hx, Math.min(zone.x + hx, f.x));
       f.vx = fleeing ? 0 : -f.vx;
+      if (fleeing) f.tiredUntil = t + (rules.cornered_ms ?? 1500);
     }
     if (f.z < zone.z - hz || f.z > zone.z + hz) {
       f.z = Math.max(zone.z - hz, Math.min(zone.z + hz, f.z));
       f.vz = fleeing ? 0 : -f.vz;
+      if (fleeing) f.tiredUntil = t + (rules.cornered_ms ?? 1500);
     }
     moved = true;
   }

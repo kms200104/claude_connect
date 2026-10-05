@@ -46,6 +46,20 @@ func _run() -> void:
 	var title: TitleScreen = await _open_title()
 	var hud: CanvasLayer = title.get_child(0).get_node("HUD")
 	_check(not hud.visible, "첫 화면에서는 게임 HUD 를 숨김")
+	# v0.9: 첫 화면은 비행기에서 내려다보듯 높은 곳에서 비스듬히 섬을 돈다.
+	var cam: Camera3D = title.get("_camera")
+	_check(cam != null and cam.current, "첫 화면 전용 카메라")
+	if cam != null:
+		var p0: Vector3 = cam.global_position
+		var pitch: float = rad_to_deg(asin(clampf(-cam.global_basis.z.y, -1.0, 1.0)))
+		_check(p0.y > 30.0 and pitch < -12.0 and pitch > -60.0, "높은 곳(%.0fm)에서 비스듬히 내려다봄 (%.0f°)" % [p0.y, pitch])
+		await get_tree().create_timer(1.0).timeout
+		_check(cam.global_position.distance_to(p0) > 0.5, "천천히 날아간다 (%.1fm/s)" % cam.global_position.distance_to(p0))
+		var clouds: int = 0
+		for n: Node in title.get_child(0).get_children():
+			if n.name.begins_with("TitleCloud"):
+				clouds += 1
+		_check(clouds > 0, "발밑으로 구름이 흘러감 (%d)" % clouds)
 	_check(title.get_node("%StartDetail").text == "새 마을 만들기", "기록이 없으면 '새 마을 만들기' 안내 (%s)" % title.get_node("%StartDetail").text)
 	(title.get_node("%ServerEdit") as LineEdit).text = _server
 	(title.get_node("%CreateButton") as Button).pressed.emit()
