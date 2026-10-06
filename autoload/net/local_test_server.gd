@@ -336,9 +336,28 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_talking = ""
 		"bank_quote", "civic_info", "emote", "emote_quick", "say":
 			pass
+		"cal_info":
+			_send(peer, _calendar())
 		_:
 			if rid != null:
 				fail.call(ERR_TEST_ONLY)
+
+
+# ---- 날씨 · 달력 (v16): 테스트 서버는 늘 맑고 이벤트가 없다. 주민 생일만 달력에 ----
+
+func _calendar() -> Dictionary:
+	var today: int = VillageClock.day_index(Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS)
+	var days: Array = []
+	for i: int in 7:
+		var date: Dictionary = VillageClock.date_of_day(today + i)
+		var npcs: Array = []
+		for npc: NpcInfo in GameData.npcs.values():
+			if npc.birthday == Vector2i(int(date["month"]), int(date["day"])):
+				npcs.append(npc.id)
+		var noon: float = (float(today + i) * VillageClock.DAY_MS) + 12.0 * VillageClock.HOUR_MS
+		days.append({"day": today + i, "y": int(date["year"]), "m": int(date["month"]), "d": int(date["day"]), "wd": int(date["weekday"]),
+			"season": VillageClock.season_of(noon), "w": ["clear", "clear", "clear", "clear", "clear", "clear", "clear", "clear"], "ev": "", "meteor": false, "npc": npcs, "pl": []})
+	return {"t": "cal", "today": today, "days": days, "econ": ""}
 
 
 # ---- 마을톡 (주민과만: 친구는 테스트 서버에 없다) ----

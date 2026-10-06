@@ -26,6 +26,8 @@ var _last_velocity: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
+	# v16 휴대폰 지도가 친구 자리를 찾는다.
+	add_to_group(&"player_replicator")
 	Net.welcomed.connect(_on_welcomed)
 	Net.peer_joined.connect(_on_peer_joined)
 	Net.face_changed.connect(_on_face_changed)

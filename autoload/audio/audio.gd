@@ -122,6 +122,15 @@ func current_music() -> String:
 	return _music_current
 
 
+## 음악 앱 (v16): 지금 곡이 흐른 시간 · 길이 (초, 곡이 없으면 0).
+func music_position() -> float:
+	return _music_active.get_playback_position() if _music_active != null and _music_active.playing else 0.0
+
+
+func music_length() -> float:
+	return _music_active.stream.get_length() if _music_active != null and _music_active.stream != null and _music_active.playing else 0.0
+
+
 ## 배경음악 바꾸기 (같은 곡이면 그대로). 빈 문자열이면 끈다. fade 가 0 보다 크면 그만큼 엇갈린다 (기본 music_fade).
 func play_music(track: String, fade: float = -1.0) -> void:
 	if track == _music_current:

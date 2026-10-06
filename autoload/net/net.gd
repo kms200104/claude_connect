@@ -656,6 +656,9 @@ func _start(url: String, intent: Intent, code: String) -> void:
 
 func _open_socket() -> void:
 	_ws = WebSocketPeer.new()
+	# v16: 사진(photo_up · photo)은 수십 KB 라 기본 버퍼(64KB)보다 넉넉히.
+	_ws.outbound_buffer_size = 1 << 18
+	_ws.inbound_buffer_size = 1 << 18
 	_open_handled = false
 	_connect_started_ms = Time.get_ticks_msec()
 	var err: Error = _ws.connect_to_url(_socket_url())

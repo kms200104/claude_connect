@@ -29,6 +29,12 @@ func _ready() -> void:
 	reset()
 
 
+## v16: 조이스틱을 오른쪽에 두면 낚시 · 그만두기 버튼은 왼쪽 아래로.
+func set_left_side(left: bool) -> void:
+	HudLayout.mirror_side(_action, left, -170.0)
+	HudLayout.mirror_side(_cancel, left, -170.0)
+
+
 func _process(_delta: float) -> void:
 	if _window_bar.visible and _window_ms > 0.0:
 		var left: float = 1.0 - (Time.get_ticks_msec() - _window_started_ms) / _window_ms

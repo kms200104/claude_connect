@@ -19,6 +19,8 @@ var mood: String = "calm"
 var teach: String = ""
 ## 친해져서 챙겨 준 선물 아이템 (없으면 빈 문자열). 이미 가방에 들어 있다.
 var gift: String = ""
+## 오늘이 이 주민 생일 (v16). 그날 처음 말을 걸면 친밀도가 더 오른다.
+var birthday: bool = false
 
 
 static func from_dict(data: Dictionary) -> TalkReply:
@@ -30,6 +32,7 @@ static func from_dict(data: Dictionary) -> TalkReply:
 	r.mood = str(data.get("m", "calm"))
 	r.teach = str(data.get("teach", ""))
 	r.gift = str(data.get("gift", ""))
+	r.birthday = bool(data.get("bday", false))
 	var q: Variant = data.get("quest")
 	if q is Dictionary:
 		r.quest = QuestInfo.from_dict(q)

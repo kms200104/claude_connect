@@ -59,3 +59,18 @@ static func format_time(hour: float) -> String:
 	if h12 == 0:
 		h12 = 12
 	return "%s %d:%02d" % [half, h12, m]
+
+
+## 마을 날짜 번호 → 그날의 달력 { year, month, day, weekday(0 = 일) } (서버 progress.js dateOfDay 와 같다: 그날 정오 기준).
+static func date_of_day(day: int) -> Dictionary:
+	var noon_ms: float = float(day) * DAY_MS + (DAY_START_HOUR + 7.0) * HOUR_MS
+	return Time.get_datetime_dict_from_unix_time(int(noon_ms / 1000.0))
+
+
+const WEEKDAYS: PackedStringArray = ["일", "월", "화", "수", "목", "금", "토"]
+
+
+## "10월 6일 (화)" 같은 표시용 날짜.
+static func format_date(day: int) -> String:
+	var d: Dictionary = date_of_day(day)
+	return "%d월 %d일 (%s)" % [int(d["month"]), int(d["day"]), WEEKDAYS[int(d["weekday"]) % 7]]

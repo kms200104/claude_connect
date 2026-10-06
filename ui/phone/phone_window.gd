@@ -1,7 +1,8 @@
 class_name PhoneWindow
 extends Control
 ## 휴대폰 (v0.14): 휴대폰 단추를 누르면 캐릭터가 들고 있던 물건을 넣고 휴대폰을 꺼내 들여다본다 (CharacterRig.set_phone).
-## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달 · 설정)이 있고, 누르면 그 앱이
+## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달 · 설정,
+## v16: 카메라 · 앨범 · 지도 · 도감 · 날씨 · 음악 · 업적 — ui/phone/apps/ 의 PhoneApp)이 있고, 누르면 그 앱이
 ## 아이콘 자리에서 커지며 열린다. 아래 막대의 ◁(뒤로: 앱 안의 한 단계 → 홈 → 닫기) · ○(홈) · ✕(넣기).
 ## 화면을 누를 때마다(떼는 순간, 굴리기 말고) 캐릭터가 왼손으로 톡 누르고 휴대폰 든 손이 살짝 떨린다 (CharacterRig.phone_tap).
 ## 꺼내 든 모습과 누르기는 다른 사람 화면에도 보인다 (v15: phone · phone_tap).
@@ -10,7 +11,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS, CAMERA, ALBUM, MAP, DEX, WEATHER, MUSIC, ACHIEVE }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -21,10 +22,20 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "지도", "도감", "날씨", "음악", "업적"]
 ## 앱 아이콘 그림 · 색 (Tab 순서, PhoneProp.ICON_COLORS 와 같은 색).
-const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings"]
-const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정"]
+const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings", "camera", "album", "map", "dex", "weather", "music", "achieve"]
+const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "섬 지도", "도감", "날씨 · 달력", "음악", "업적 · 칭호"]
+## v16: 따로 만든 앱 화면 (ui/phone/apps/).
+const APP_SCENES: Dictionary[int, Script] = {
+	Tab.CAMERA: preload("res://ui/phone/apps/camera_app.gd"),
+	Tab.ALBUM: preload("res://ui/phone/apps/album_app.gd"),
+	Tab.MAP: preload("res://ui/phone/apps/map_app.gd"),
+	Tab.DEX: preload("res://ui/phone/apps/dex_app.gd"),
+	Tab.WEATHER: preload("res://ui/phone/apps/calendar_app.gd"),
+	Tab.MUSIC: preload("res://ui/phone/apps/music_app.gd"),
+	Tab.ACHIEVE: preload("res://ui/phone/apps/achievements_app.gd"),
+}
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")
 const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
@@ -33,7 +44,7 @@ const WIDTH: float = 880.0
 const PORTRAIT_TOP: float = 56.0
 const PORTRAIT_BOTTOM: float = 1390.0
 const BEZEL: Color = Color("#2A2830")
-const ICON_SIZE: float = 150.0
+const ICON_SIZE: float = 132.0
 ## 이만큼(UI 좌표) 안에서 짧게 떼면 누르기 (그보다 많이 움직이면 굴리기).
 const TAP_SLOP: float = 28.0
 const TAP_MAX_MS: int = 700
@@ -96,6 +107,10 @@ var _talk_badge: Label = null
 var _typing: bool = false
 ## 설정 앱 내용 (v0.14.2, 닉네임 · 소리 · 화질 · 화면 방향).
 var _settings: SettingsPanel = null
+## v16: 지금 열린 따로 만든 앱 (카메라 · 앨범 · 지도 · 도감 · 날씨 · 음악 · 업적).
+var _app_view: PhoneApp = null
+## 앨범을 열 때 바로 크게 볼 사진.
+var _album_open: String = ""
 
 
 func _ready() -> void:
@@ -127,6 +142,14 @@ func _ready() -> void:
 			_dirty = true)
 	Talk.changed.connect(func() -> void:
 		_update_talk_badge()
+		if visible and _tab == Tab.TALK:
+			_dirty = true)
+	# 다시 접속하면 서버는 휴대폰을 내린 것으로 안다 (끊길 때 지움) — 꺼내 든 채였으면 다시 알린다.
+	Net.state_changed.connect(func(s: int) -> void:
+		if s == Net.State.ONLINE and visible:
+			Net.set_phone(true))
+	# v16: 마을톡 사진을 받아 오면 대화방을 다시 그린다.
+	Journal.photo_ready.connect(func(_id: String) -> void:
 		if visible and _tab == Tab.TALK:
 			_dirty = true)
 	_update_talk_badge()
@@ -232,13 +255,22 @@ func _build_home() -> void:
 	wall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_home.add_child(wall)
+	# v16: 앱이 15개라 가로 화면에서는 아래가 넘친다 → 홈 화면도 굴려 본다.
+	var home_scroll: ScrollContainer = ScrollContainer.new()
+	home_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	home_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_home.add_child(home_scroll)
+	var pad: MarginContainer = MarginContainer.new()
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pad.add_theme_constant_override("margin_left", 40)
+	pad.add_theme_constant_override("margin_right", 40)
+	pad.add_theme_constant_override("margin_top", 30)
+	pad.add_theme_constant_override("margin_bottom", 24)
+	home_scroll.add_child(pad)
 	var col: VBoxContainer = VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 40.0
-	col.offset_right = -40.0
-	col.offset_top = 36.0
-	col.add_theme_constant_override("separation", 40)
-	_home.add_child(col)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 34)
+	pad.add_child(col)
 	# 시계 위젯.
 	var widget: PanelContainer = PanelContainer.new()
 	widget.add_theme_stylebox_override("panel", EventHud._box(Color(1, 1, 1, 0.55), Color(1, 1, 1, 0.8), 40, 2, 26))
@@ -253,8 +285,8 @@ func _build_home() -> void:
 	# 앱 아이콘.
 	var grid: GridContainer = GridContainer.new()
 	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 34)
-	grid.add_theme_constant_override("v_separation", 30)
+	grid.add_theme_constant_override("h_separation", 40)
+	grid.add_theme_constant_override("v_separation", 24)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(grid)
 	for i: int in APP_KINDS.size():
@@ -266,7 +298,7 @@ func _build_home() -> void:
 		icon.pressed.connect(open_app.bind(i))
 		cell.add_child(icon)
 		_icons.append(icon)
-		var name_label: Label = _label(TAB_NAMES[i], 26, INK, false)
+		var name_label: Label = _label(TAB_NAMES[i], 24, INK, false)
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_label.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.8))
 		name_label.add_theme_constant_override("outline_size", 6)
@@ -403,7 +435,11 @@ func go_back() -> void:
 			_thread = ""
 			_typing = false
 		_:
+			# v16 앱은 앱 안에서 먼저 (크게 보던 사진 · 고른 표시 …).
 			stepped = false
+			if _app_view != null and is_instance_valid(_app_view) and _app_view.go_back():
+				_scroll.set_deferred("scroll_vertical", 0)
+				return
 	if stepped:
 		_rebuild()
 		_scroll.set_deferred("scroll_vertical", 0)
@@ -453,6 +489,7 @@ func _enter_app(animate: bool) -> void:
 func _show_home(animate: bool) -> void:
 	_on_home = true
 	_typing = false
+	_close_app_view()
 	_home.visible = true
 	_refresh_home()
 	if player != null and player.rig != null and player.rig.phone_prop() != null:
@@ -553,6 +590,7 @@ func close() -> void:
 		return
 	visible = false
 	_typing = false
+	_close_app_view()
 	if _settings != null and is_instance_valid(_settings):
 		_settings.release_focus_all()
 	_put_away()
@@ -607,15 +645,23 @@ func _process(_delta: float) -> void:
 		_refresh_home()
 	if _dirty:
 		_dirty = false
-		# 설정 앱은 다시 그리지 않는다 (막대를 끄는 중 · 이름을 쓰는 중일 수 있다).
-		if not _on_home and _tab != Tab.SETTINGS:
+		# 설정 앱은 다시 그리지 않는다 (막대를 끄는 중 · 이름을 쓰는 중일 수 있다). v16 앱은 스스로 다시 그린다.
+		if not _on_home and _tab != Tab.SETTINGS and not APP_SCENES.has(int(_tab)):
 			_rebuild()
 
 
 func _rebuild() -> void:
 	var keep: int = _scroll.scroll_vertical
+	_close_app_view()
 	for c: Node in _body.get_children():
 		c.queue_free()
+	if APP_SCENES.has(int(_tab)):
+		_app_view = AlbumApp.new(self, _album_open) if _tab == Tab.ALBUM else APP_SCENES[int(_tab)].new(self)
+		_album_open = ""
+		_app_view.name = "AppView"
+		_body.add_child(_app_view)
+		_scroll.set_deferred("scroll_vertical", 0)
+		return
 	match _tab:
 		Tab.STOCKS:
 			_build_stocks()
@@ -638,6 +684,33 @@ func _rebuild() -> void:
 				_scroll.set_deferred("scroll_vertical", 1 << 20)
 				return
 	_scroll.set_deferred("scroll_vertical", keep)
+
+
+# ---- v16 앱 ----
+
+func _close_app_view() -> void:
+	if _app_view != null and is_instance_valid(_app_view):
+		_app_view.on_close()
+	_app_view = null
+
+
+## 지금 열린 v16 앱 화면 (테스트용, 없으면 null).
+func app_view() -> PhoneApp:
+	return _app_view if visible and not _on_home and is_instance_valid(_app_view) else null
+
+
+## 앱 화면을 맨 위로 (자세히 보기를 열었을 때).
+func scroll_to_top() -> void:
+	_scroll.set_deferred("scroll_vertical", 0)
+
+
+## 앨범을 열며 그 사진을 크게 (카메라의 마지막 사진 · 마을톡 사진 저장 뒤).
+func open_album(photo_name: String = "") -> void:
+	_album_open = photo_name
+	if visible and not _on_home and _tab == Tab.ALBUM:
+		_rebuild()
+		return
+	open_app(Tab.ALBUM)
 
 
 # ---- 설정 (v0.14.2) ----
@@ -1443,6 +1516,11 @@ func _build_talk_room(th: String) -> void:
 		send.pressed.connect(do_send)
 		edit.text_submitted.connect(do_send)
 		input.add_child(send)
+		# v16: 친구 방에서는 앨범 사진도 보낼 수 있다.
+		if th.begins_with("pl:"):
+			var pick_photo: Button = _button("사진 보내기 (앨범)", 26)
+			pick_photo.pressed.connect(func() -> void: open_album())
+			_body.add_child(pick_photo)
 	Talk.mark_read(th)
 
 
@@ -1464,13 +1542,19 @@ func _bubble(th: String, msg: Dictionary, show_name: bool) -> Control:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", EventHud._box(MINE if mine else THEIRS, Color(0.8, 0.72, 0.6), 22, 1, 16))
-	var text: Label = _label(Talk.fill(str(msg.get("tx", ""))), 28, INK)
-	text.custom_minimum_size = Vector2(0, 0)
-	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(text)
-	# 긴 글은 화면 폭의 70% 에서 줄바꿈.
-	var longest: float = text.get_theme_font("font").get_string_size(text.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
-	panel.custom_minimum_size = Vector2(minf(longest + 40.0, WIDTH * 0.62), 0)
+	var photo_id: String = str(msg.get("ph", ""))
+	if not photo_id.is_empty():
+		# v16 사진 메시지: 사진 (받아 오는 중이면 자리만) + 한마디 + 앨범에 저장.
+		panel.add_child(_photo_bubble(photo_id, Talk.fill(str(msg.get("tx", "")))))
+		panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	else:
+		var text: Label = _label(Talk.fill(str(msg.get("tx", ""))), 28, INK)
+		text.custom_minimum_size = Vector2(0, 0)
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		panel.add_child(text)
+		# 긴 글은 화면 폭의 70% 에서 줄바꿈.
+		var longest: float = text.get_theme_font("font").get_string_size(text.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
+		panel.custom_minimum_size = Vector2(minf(longest + 40.0, WIDTH * 0.62), 0)
 	col.add_child(panel)
 	var time: Label = _label(_time_text(float(msg.get("at", 0.0))), 18, SOFT, false)
 	time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine else HORIZONTAL_ALIGNMENT_LEFT
@@ -1483,6 +1567,38 @@ func _bubble(th: String, msg: Dictionary, show_name: bool) -> Control:
 		row.add_child(col)
 		row.add_child(spacer)
 	return row
+
+
+## 사진 말풍선 안: 사진 · 한마디 · 앨범에 저장.
+func _photo_bubble(photo_id: String, caption: String) -> Control:
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	var tex: Texture2D = Journal.photo(photo_id)
+	if tex != null:
+		var pic: TextureRect = TextureRect.new()
+		pic.texture = tex
+		pic.custom_minimum_size = Vector2(340, 425)
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(pic)
+		var save: Button = _button("앨범에 저장", 24)
+		save.custom_minimum_size = Vector2(0, 64)
+		save.pressed.connect(func() -> void:
+			var saved: String = PhotoAlbum.save_jpeg(Journal.photo_bytes(photo_id))
+			if not saved.is_empty():
+				Audio.play_ui(Audio.SFX_CONFIRM)
+				open_album(saved))
+		box.add_child(save)
+	else:
+		var wait: Label = _label("사진 받는 중…", 26, SOFT, false)
+		wait.custom_minimum_size = Vector2(340, 120)
+		wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wait.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		box.add_child(wait)
+	if not caption.is_empty() and caption != "(사진)":
+		box.add_child(_label(caption, 26, INK))
+	return box
 
 
 ## 동그란 프로필: 대화방 색 + 이름 첫 글자.

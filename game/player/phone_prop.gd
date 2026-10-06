@@ -10,8 +10,9 @@ const CASE: Color = Color("#8FD6C4")
 const BEZEL: Color = Color("#2A2830")
 const LENS: Color = Color("#1B1E2A")
 const METAL: Color = Color("#D5D9DE")
-## 홈 화면 앱 아이콘 색 (PhoneWindow.APPS 와 같은 순서).
-const ICON_COLORS: Array[Color] = [Color("#E8594A"), Color("#4C8FE0"), Color("#3DAA6D"), Color("#F2B53A"), Color("#FFD84D"), Color("#9B6AD8"), Color("#F28A3C"), Color("#8C97A6")]
+## 홈 화면 앱 아이콘 색 (PhoneWindow.Tab 과 같은 순서, v16: 카메라 · 앨범 · 지도 · 도감 · 날씨 · 음악 · 업적).
+const ICON_COLORS: Array[Color] = [Color("#E8594A"), Color("#4C8FE0"), Color("#3DAA6D"), Color("#F2B53A"), Color("#FFD84D"), Color("#9B6AD8"), Color("#F28A3C"), Color("#8C97A6"),
+	Color("#5C6B7A"), Color("#F598B4"), Color("#3FB8A6"), Color("#7AAE48"), Color("#5AB0F0"), Color("#D46AB8"), Color("#E0A020")]
 const SCREEN_ENERGY: float = 0.9
 
 static var _body_mesh: ArrayMesh = null
@@ -105,7 +106,7 @@ static func body_mesh() -> ArrayMesh:
 	return _body_mesh
 
 
-## 홈 화면 그림: 위 상태 막대 · 앱 아이콘 2줄(4 + 4) · 아래 홈 막대, 배경은 복숭아 → 하늘 그라데이션.
+## 홈 화면 그림: 위 상태 막대 · 앱 아이콘 4줄(4 × 4, 마지막 줄 셋) · 아래 홈 막대, 배경은 복숭아 → 하늘 그라데이션.
 static func home_texture() -> Texture2D:
 	if _home_texture != null:
 		return _home_texture
@@ -124,18 +125,18 @@ static func home_texture() -> Texture2D:
 	img.fill_rect(Rect2i(22, 42, 40, 8), Color(0.35, 0.27, 0.22))
 	img.fill_rect(Rect2i(22, 56, 60, 5), Color(0.5, 0.42, 0.34))
 	# 앱 아이콘.
-	var size: int = 20
+	var size: int = 18
 	var gap: int = (w - 4 * size) / 5
 	for i: int in ICON_COLORS.size():
 		var col: int = i % 4
 		var row: int = i / 4
 		var x: int = gap + col * (size + gap)
-		var y: int = 92 + row * (size + 16)
+		var y: int = 84 + row * (size + 10)
 		_round_rect(img, Rect2i(x, y, size, size), 5, ICON_COLORS[i])
 		img.fill_rect(Rect2i(x + 6, y + 6, size - 12, size - 12), Color(1, 1, 1, 0.85))
-		img.fill_rect(Rect2i(x + 2, y + size + 4, size - 4, 3), Color(0.3, 0.24, 0.2, 0.6))
+		img.fill_rect(Rect2i(x + 2, y + size + 3, size - 4, 2), Color(0.3, 0.24, 0.2, 0.6))
 	# 아래 독 · 홈 막대.
-	_round_rect(img, Rect2i(10, h - 52, w - 20, 30), 10, Color(1.0, 1.0, 1.0, 0.45))
+	_round_rect(img, Rect2i(10, h - 44, w - 20, 26), 10, Color(1.0, 1.0, 1.0, 0.45))
 	img.fill_rect(Rect2i(w / 2 - 16, h - 12, 32, 3), Color(0.25, 0.2, 0.18, 0.8))
 	img.generate_mipmaps()
 	_home_texture = ImageTexture.create_from_image(img)

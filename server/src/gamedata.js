@@ -7,6 +7,7 @@ import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
 import { loadSavings } from './savings.js';
 import { loadJobs } from './jobs.js';
+import { loadAchievements, parseMonthDay } from './progress.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -52,6 +53,8 @@ export function loadGameData(dataDir, cfg) {
 
   const npcsFile = read('npcs/npcs.json');
   const npcs = new Map(npcsFile.npcs.map((n) => [n.id, n]));
+  // v16 주민 생일 "MM-DD".
+  for (const n of npcs.values()) if (n.birthday !== undefined && !parseMonthDay(n.birthday)) throw new Error(`npc ${n.id}: birthday ${n.birthday}`);
 
   const events = read('events/events.json');
   for (const ev of [...events.daily, ...events.night]) {
@@ -129,6 +132,8 @@ export function loadGameData(dataDir, cfg) {
 
   // 마을톡 (v0.11)
   const messenger = read('messenger/messenger.json');
+  // v16 업적 · 칭호
+  const achievements = loadAchievements(read('achievements/achievements.json'));
 
   // 식당: 요리 · 동작 · 손님
   const recipesFile = read('restaurant/recipes.json');
@@ -214,6 +219,7 @@ export function loadGameData(dataDir, cfg) {
     cookSteps,
     restaurant,
     messenger,
+    achievements,
     customers,
     civic,
     programs,

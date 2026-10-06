@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -109,6 +109,12 @@ export const ErrorCode = Object.freeze({
   bankClosed: 'bank_closed', // 영업정지한 금융기관 (경제 소식)
   // 대화 주제
   badTopic: 'bad_topic',
+  // v16: 칭호 · 생일 · 방명록 · 놀러 가기 · 사진
+  badTitle: 'bad_title', // 이루지 않은 업적의 칭호
+  badBirthday: 'bad_birthday', // 없는 날짜
+  notVisitable: 'not_visitable', // 놀러 갈 수 없는 집 (주인 없음 · 다른 마을)
+  badPhoto: 'bad_photo', // JPEG 가 아니거나 너무 큼
+  noPhoto: 'no_photo', // 없는(지워진) 사진
 });
 
 // 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).

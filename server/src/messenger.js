@@ -4,7 +4,7 @@
 //   sys:town    — 마을 공지 (처음 들어오면 환영 인사).
 //   sys:shop    — 솔바람 상점 배달 알림 (v13: "배달 가고 있습니다~").
 //   pl:<자리>   — 같은 마을 친구(플레이어)와 주고받는 대화.
-// 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 보낸 시각(유닉스 ms) }.
+// 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 보낸 시각(유닉스 ms), ph?: 사진 id (v16, photos.js) }.
 import { ErrorCode } from './protocol.js';
 import { addFriendship, relationOf } from './quests.js';
 
@@ -18,7 +18,7 @@ export function sanitizeChats(raw, rules) {
     const m = t.m
       .filter((x) => x && typeof x.f === 'string' && typeof x.tx === 'string' && Number.isFinite(x.at))
       .slice(-rules.max_messages)
-      .map((x) => ({ f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at }));
+      .map((x) => (typeof x.ph === 'string' && /^p[0-9a-z]{4,20}$/.test(x.ph) ? { f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at, ph: x.ph } : { f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at }));
     out[th] = { m, read: Math.max(0, Math.min(m.length, Number.isInteger(t.read) ? t.read : m.length)) };
   }
   return out;
@@ -40,10 +40,11 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     return profile.chats[th];
   }
 
-  /** 메시지 하나를 넣고, 그 사람이 접속 중이면 바로 보낸다. */
-  function push(room, profile, th, from, text, mine = false) {
+  /** 메시지 하나를 넣고, 그 사람이 접속 중이면 바로 보낸다. photo = 사진 id (v16). */
+  function push(room, profile, th, from, text, mine = false, photo = '') {
     const t = threadOf(profile, th);
     const m = { f: from, tx: String(text).slice(0, rules.max_text), at: wallNow() };
+    if (photo) m.ph = photo;
     t.m.push(m);
     if (mine) t.read = t.m.length;
     if (t.m.length > rules.max_messages) {
@@ -164,5 +165,48 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     push(room, target, `pl:${player.profile.slot}`, `p${player.profile.slot}`, text);
   }
 
-  return { push, wire, tick, weekly, handle, sanitize: (raw) => sanitizeChats(raw, rules) };
+  /**
+   * v16 생일: 플레이어 생일이면 친한 주민이 축하 마을톡과 선물(give(item) → 가방에 들어갔는지)을 보낸다. 같은 마을 친구들에게는 마을 소식.
+   * 한 해에 한 번 (profile.bdayYear). 보냈으면 true.
+   */
+  function birthday(room, player, year, give) {
+    const b = rules.birthday;
+    const p = player.profile;
+    if (!b || p.bdayYear === year) return false;
+    p.bdayYear = year;
+    push(room, p, 'sys:town', 'town', b.town_self);
+    let full = false;
+    for (const npc of room.npcs.values()) {
+      const def = npc.def;
+      if ((p.npcs?.[def.id]?.f ?? 0) < b.min_friendship) continue;
+      const lines = linesOf(def, 'birthday');
+      if (lines.length === 0) continue;
+      const gift = (def.gifts ?? []).length > 0 ? pick(def.gifts) : '';
+      const ok = gift ? give(gift) : false;
+      if (gift && !ok) full = true;
+      push(room, p, `npc:${def.id}`, def.id, pick(lines));
+    }
+    if (full && b.gift_full) push(room, p, 'sys:town', 'town', b.gift_full);
+    const name = p.name || '';
+    for (const other of room.profiles.values()) {
+      if (other === p) continue;
+      push(room, other, 'sys:town', 'town', fillLine(b.town_friend, { name: name || `친구 ${p.slot}` }));
+    }
+    return true;
+  }
+
+  /** v16 주민 생일 알림 (그날 처음 날짜가 바뀔 때 한 번): 모두의 마을 소식 방에. */
+  function npcBirthday(room, def) {
+    const b = rules.birthday;
+    if (!b?.npc_day) return;
+    for (const p of room.profiles.values()) push(room, p, 'sys:town', 'town', fillLine(b.npc_day, { name: def.name }));
+  }
+
+  /** v16 방명록 · 놀러 오기 알림 (집 주인의 마을 소식 방). */
+  function homeNote(room, ownerProfile, kind, values) {
+    const line = rules.guestbook?.[kind];
+    if (line) push(room, ownerProfile, 'sys:town', 'town', fillLine(line, values));
+  }
+
+  return { push, wire, tick, weekly, handle, birthday, npcBirthday, homeNote, sanitize: (raw) => sanitizeChats(raw, rules) };
 }

@@ -38,6 +38,8 @@ var icon: String = ""
 var multiplier: float = 1.0
 ## 떠돌이 상인이 파는 물건.
 var stock: PackedStringArray = []
+## 열리는 시각 [시작, 끝) (v16 달력에 보이기용, 비면 하루 종일).
+var hours: PackedInt32Array = []
 ## 떠돌이 상인이 서는 자리와 방향.
 var spot: Vector3 = Vector3.ZERO
 var spot_yaw: float = 0.0
@@ -54,6 +56,8 @@ static func from_dict(data: Dictionary) -> EventInfo:
 	for s: Variant in data.get("seasons", []):
 		info.seasons.append(str(s))
 	info.buy_mult = float(data.get("buy_mult", 1.0))
+	for h: Variant in data.get("hours", []):
+		info.hours.append(int(h))
 	for s: Variant in data.get("spots", []):
 		info.spots.append(str(s))
 	var fx: Variant = data.get("effect", {})

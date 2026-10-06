@@ -150,6 +150,16 @@ func _on_talk_opened(reply: TalkReply) -> void:
 
 	if not await _say(token, info, GameData.dialogue_line(p, "greet_" + VillageClock.time_band(Net.game_hour()), values)):
 		return
+	# v16 주민 생일: 생일 대사 · 기쁨 (그날 처음이면 친밀도가 더 올랐다).
+	if reply.birthday and GameData.has_dialogue(p, "birthday"):
+		var cheer: NpcActor = npcs.actor(info.id) if npcs != null else null
+		if cheer != null:
+			cheer.play_emote("happy")
+		if not await _say(token, info, GameData.dialogue_line(p, "birthday_first" if reply.first_today else "birthday", values)):
+			return
+		if reply.first_today:
+			toast_hud.show_toast("오늘은 %s의 생일! 축하해 줘서 더 친해졌어요" % info.display_name, true)
+			Audio.play_sfx("fanfare_small", -4.0, 1.0, 0.0)
 	if not reply.teach.is_empty():
 		values["emote"] = GameData.emote_name(reply.teach)
 		var actor: NpcActor = npcs.actor(info.id) if npcs != null else null

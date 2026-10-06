@@ -8,6 +8,8 @@ var display_name: String = ""
 var personality: String = "kind"
 var color: Color = Color.WHITE
 var about: String = ""
+## 생일 (v16, 달 · 날, 없으면 (0, 0)).
+var birthday: Vector2i = Vector2i.ZERO
 var house_position: Vector3 = Vector3.ZERO
 var house_yaw: float = 0.0
 var home: Vector3 = Vector3.ZERO
@@ -34,6 +36,9 @@ var mbti_self: String = ""
 
 static func from_dict(data: Dictionary) -> NpcInfo:
 	var info: NpcInfo = NpcInfo.new()
+	var bday: PackedStringArray = str(data.get("birthday", "")).split("-")
+	if bday.size() == 2 and bday[0].is_valid_int() and bday[1].is_valid_int():
+		info.birthday = Vector2i(int(bday[0]), int(bday[1]))
 	info.id = str(data.get("id", ""))
 	info.display_name = str(data.get("name", info.id))
 	info.personality = str(data.get("personality", "kind"))

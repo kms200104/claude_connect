@@ -21,6 +21,9 @@ import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
 import { sanitizeDeposits } from './savings.js';
+import { cleanBirthday, sanitizeAch, sanitizeDex, sanitizeStats } from './progress.js';
+import { sanitizeGuestbooks } from './guestbook.js';
+import { sanitizePhotos } from './photos.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const intOr = (v, fallback) => (Number.isInteger(v) ? v : fallback);
@@ -104,6 +107,13 @@ function newProfile(uid, slot, cfg, data) {
     banksUsed: [], // 상품을 든 적이 있는 금융기관 (첫 거래 우대)
     coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
     jobDay: null, // 일거리: { day: 마을 날짜, done: 그날 한 배달 수 }
+    // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
+    stats: sanitizeStats(null),
+    dex: { fish: {}, items: [] },
+    ach: [],
+    title: '',
+    birthday: null,
+    bdayYear: 0,
   };
 }
 
@@ -212,6 +222,7 @@ export class Player {
       top: this.profile.outfit.top,
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
+      title: this.profile.title ?? '',
       x: this.x,
       y: this.y,
       z: this.z,
@@ -292,6 +303,11 @@ export class Room {
     // v0.10: 집 안 가구 (호수 → [{id, item, x, z, rot}], 저장). 아직 없는 집은 평면도의 기본 가구를 보여 준다.
     this.homeItems = {};
     this.homeItemSeq = 0;
+    // v16: 집(호수)마다 방명록 · 마을톡으로 보낸 사진 목록 (파일은 photos.js).
+    this.guestbooks = {};
+    this.photos = [];
+    this.photoSeq = 0;
+    this.notedDay = null; // v16: 주민 생일 알림을 보낸 마을 날짜 (다시 켜도 같은 날 또 알리지 않게)
     this.dirty = false; // 위치 스냅샷 방송 필요
     this.saveDirty = false; // 파일 저장 필요
   }
@@ -332,6 +348,10 @@ export class Room {
     room.homes = sanitizeHomes(world.homes, data.units);
     room.homeItems = sanitizeHomeItems(scaleHomeItems(world.homeItems, Number.isInteger(saved.schema) && saved.schema < 6 ? HOME_SCALE_V6 : 1), data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
     room.homeItemSeq = Math.max(0, intOr(world.homeItemSeq, 0));
+    room.guestbooks = sanitizeGuestbooks(world.guestbooks, data.units);
+    room.photos = sanitizePhotos(world.photos);
+    room.photoSeq = Math.max(0, intOr(world.photoSeq, 0));
+    room.notedDay = intOr(world.notedDay, null);
     if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
     if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
     room.week = intOr(world.week, null);
@@ -379,7 +399,16 @@ export class Room {
         banksUsed: Array.isArray(p.banksUsed) ? p.banksUsed.filter((b) => data.savings?.institutions.has(b)) : [],
         coopMember: !!p.coopMember,
         jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
+        stats: sanitizeStats(p.stats),
+        dex: sanitizeDex(p.dex, data),
+        ach: data.achievements ? sanitizeAch(p.ach, data.achievements) : [],
+        bdayYear: Math.max(0, intOr(p.bdayYear, 0)),
+        birthday: cleanBirthday(p.birthday),
+        // 놀러 간 집 → 마지막으로 센 마을 날짜 (같은 집은 하루 한 번만 센다).
+        visitDay: Object.fromEntries(Object.entries(p.visitDay ?? {}).filter(([u, d]) => data.units.some((x) => x.id === u) && Number.isInteger(d))),
       });
+      const saved = room.profiles.get(uid);
+      saved.title = typeof p.title === 'string' && saved.ach.some((a) => a.id === p.title) ? p.title : '';
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
@@ -431,6 +460,10 @@ export class Room {
         householdSeq: this.householdSeq,
         homeItems: structuredClone(this.homeItems),
         homeItemSeq: this.homeItemSeq,
+        guestbooks: structuredClone(this.guestbooks),
+        photos: this.photos.map((ph) => ({ ...ph })),
+        photoSeq: this.photoSeq,
+        notedDay: this.notedDay,
         deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, items: d.items.map((it) => ({ ...it })), orders: d.orders })),
         delivSeq: this.delivSeq,
         ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),

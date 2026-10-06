@@ -43,6 +43,9 @@ func _ready() -> void:
 			_update_music(true))
 	Net.weather_changed.connect(func(_w: String) -> void: _update_music(false))
 	Net.events_changed.connect(func(_started: PackedStringArray) -> void: _update_music(false))
+	Prefs.events.changed.connect(func(key: String) -> void:
+		if key == Prefs.MUSIC:
+			_update_music(false))
 
 
 ## 지금 흘러야 할 마을 음악: 이벤트 > 비 > 밤 > 낮.
@@ -59,6 +62,10 @@ func _update_music(entering: bool) -> void:
 	if Net.state != Net.State.ONLINE:
 		return
 	var track: String = pick_music(Net.game_hour(), Net.weather, not Net.events.is_empty(), night_start, night_end)
+	# v16 음악 앱에서 곡을 골랐으면 그 곡 (끄기 = 조용히).
+	var chosen: String = Prefs.music()
+	if not chosen.is_empty():
+		track = "" if chosen == Prefs.MUSIC_OFF else chosen
 	var current: String = Audio.current_music()
 	if track == current:
 		return

@@ -1,4 +1,4 @@
-[gd_scene load_steps=74 format=3]
+[gd_scene load_steps=75 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -67,6 +67,7 @@
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
 [ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
 [ext_resource type="Script" path="res://game/fishing/sea_spot.gd" id="71_sea"]
+[ext_resource type="Script" path="res://game/journal/journal_controller.gd" id="72_journal"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -442,6 +443,10 @@ script = ExtResource("70_jobs")
 player = NodePath("../Player")
 hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="JournalNotices" type="Node" parent="." node_paths=PackedStringArray("hud")]
+script = ExtResource("72_journal")
+hud = NodePath("../HUD")
 
 [node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "camera_rig", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
 script = ExtResource("66_economy")

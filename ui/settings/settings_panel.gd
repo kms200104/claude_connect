@@ -5,6 +5,7 @@ extends VBoxContainer
 ##   소리   — 전체 · 배경음악 · 효과음 · 환경음 0~100% (손을 떼면 효과음으로 들려준다)
 ##   화질   — 자동(기기 추천) · 절약 · 고화질
 ##   화면   — 돌리는 대로 · 세로 고정 · 가로 고정
+## v16: 생일(마을에 들어와 있을 때) · 진동 켜기/끄기(물고기가 물 때) · 글자 크기 · 조이스틱 위치(왼손/오른손)와 크기.
 ## 바꾸면 바로 적용되고 기억된다.
 
 const INK: Color = Color(0.36, 0.24, 0.14)
@@ -21,6 +22,13 @@ var _percent: Dictionary[String, Label] = {}
 var _quality_buttons: Dictionary[String, Button] = {}
 var _quality_info: Label = null
 var _orient_buttons: Dictionary[String, Button] = {}
+var _pref_buttons: Dictionary[String, Dictionary] = {}
+var _vibration: CheckButton = null
+var _bday_month: int = 1
+var _bday_day: int = 1
+var _bday_label: Label = null
+var _bday_day_label: Label = null
+var _bday_note: Label = null
 
 static var _grabber: Texture2D = null
 
@@ -32,10 +40,18 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build_name()
+	if Net.state == Net.State.ONLINE:
+		_build_birthday()
 	_build_sound()
+	_build_play()
 	_build_quality()
 	_build_screen()
 	Quality.changed.connect(refresh)
+	Prefs.events.changed.connect(func(_k: String) -> void: refresh())
+	Journal.changed.connect(_refresh_birthday)
+	Journal.failed.connect(func(kind: String, _code: String) -> void:
+		if kind == "set_birthday" and _bday_note != null and is_instance_valid(_bday_note):
+			_bday_note.text = "생일을 저장하지 못했어요. 마을(서버)에 들어와 있을 때 다시 해 보세요.")
 	Audio.volume_changed.connect(refresh)
 	Net.name_changed.connect(func(id: int, _n: String) -> void:
 		if id == Net.my_id and not _name_edit.has_focus():
@@ -67,6 +83,11 @@ func refresh() -> void:
 			str(int(Quality.value("msaa", 2))), "부드럽게" if bool(Quality.value("shadow_soft", false)) else "또렷하게"]
 	for id: String in _orient_buttons:
 		_mark(_orient_buttons[id], ScreenFit.orientation == id)
+	for key: String in _pref_buttons:
+		for id: String in _pref_buttons[key]:
+			_mark(_pref_buttons[key][id], str(Prefs.get_value(key)) == id)
+	if _vibration != null:
+		_vibration.set_pressed_no_signal(Prefs.vibration())
 
 
 ## 닉네임 입력 칸 (테스트용).
@@ -188,6 +209,111 @@ static func _grabber_icon() -> Texture2D:
 			img.set_pixel(x, y, Color(col, a))
 	_grabber = ImageTexture.create_from_image(img)
 	return _grabber
+
+
+# ---- 생일 (v16) ----
+
+## 생일: 달 · 날을 ◀ ▶ 로 고르고 저장. 그날 친한 주민들이 마을톡으로 축하해 준다 (한 해에 한 번).
+func _build_birthday() -> void:
+	var col: VBoxContainer = _section("생일")
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(row)
+	_bday_label = _label("", 36, INK, false)
+	_bday_day_label = _label("", 36, INK, false)
+	for part: Array in [[_bday_label, 1, 0], [_bday_day_label, 0, 1]]:
+		var minus: Button = _button("-", 34)
+		minus.custom_minimum_size = Vector2(84, 88)
+		minus.pressed.connect(_step_birthday.bind(-int(part[1]), -int(part[2])))
+		row.add_child(minus)
+		var shown: Label = part[0]
+		shown.custom_minimum_size = Vector2(130, 0)
+		shown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		shown.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(shown)
+		var plus: Button = _button("+", 34)
+		plus.custom_minimum_size = Vector2(84, 88)
+		plus.pressed.connect(_step_birthday.bind(int(part[1]), int(part[2])))
+		row.add_child(plus)
+	var save_button: Button = _button("생일 저장", 30)
+	save_button.name = "SaveBirthday"
+	save_button.pressed.connect(func() -> void:
+		Journal.set_birthday(_bday_month, _bday_day)
+		_bday_note.text = "%d월 %d일로 저장했어요. 그날 친한 주민들이 마을톡으로 축하해 줘요 ♥" % [_bday_month, _bday_day]
+		Audio.play_ui(Audio.SFX_CONFIRM))
+	col.add_child(save_button)
+	_bday_note = _label("그날 친한 주민들이 축하 인사와 선물을 보내요 (한 해에 한 번). 친구 달력에도 보여요.", 24, SOFT)
+	col.add_child(_bday_note)
+	_refresh_birthday()
+
+
+## 생일 달 · 날 한 칸씩 (그 달의 마지막 날을 넘지 않게).
+func _step_birthday(dm: int, dd: int) -> void:
+	_bday_month = posmod(_bday_month - 1 + dm, 12) + 1
+	var last: int = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][_bday_month - 1]
+	_bday_day = posmod(_bday_day - 1 + dd, last) + 1 if dd != 0 else mini(_bday_day, last)
+	_show_birthday()
+	Audio.play_ui(Audio.SFX_CLICK)
+
+
+func _refresh_birthday() -> void:
+	if _bday_label == null or not is_instance_valid(_bday_label):
+		return
+	if Journal.birthday != Vector2i.ZERO:
+		_bday_month = Journal.birthday.x
+		_bday_day = Journal.birthday.y
+	_show_birthday()
+
+
+func _show_birthday() -> void:
+	_bday_label.text = "%d월" % _bday_month
+	_bday_day_label.text = "%d일" % _bday_day
+
+
+# ---- 조작 (v16) ----
+
+## 진동 · 글자 크기 · 조이스틱 위치와 크기.
+func _build_play() -> void:
+	var col: VBoxContainer = _section("조작 · 글자")
+	_vibration = CheckButton.new()
+	_vibration.text = "진동 (물고기가 물 때 휴대폰이 떨려요)"
+	_vibration.focus_mode = Control.FOCUS_NONE
+	_vibration.custom_minimum_size = Vector2(0, 88)
+	_vibration.add_theme_font_size_override("font_size", 28)
+	_vibration.add_theme_color_override("font_color", INK)
+	_vibration.add_theme_color_override("font_pressed_color", INK)
+	_vibration.add_theme_color_override("font_hover_color", INK)
+	_vibration.toggled.connect(func(on: bool) -> void:
+		Prefs.set_value(Prefs.VIBRATION, on)
+		if on:
+			Prefs.vibrate(60, 0.6)
+		Audio.play_ui(Audio.SFX_CLICK))
+	col.add_child(_vibration)
+	_choice_row(col, "글자 크기", Prefs.FONT, Prefs.FONT_NAMES)
+	_choice_row(col, "조이스틱 자리", Prefs.STICK_SIDE, Prefs.STICK_SIDES)
+	_choice_row(col, "조이스틱 크기", Prefs.STICK_SIZE, Prefs.STICK_NAMES)
+	col.add_child(_label("조이스틱을 오른쪽에 두면 상황 버튼(대화 · 베기 · 낚시)은 왼쪽 아래로 옮겨져요.", 22, SOFT))
+
+
+## 이름 + 고르기 단추 줄 (설정 key 의 값 하나).
+func _choice_row(col: VBoxContainer, title: String, key: String, names: Dictionary[String, String]) -> void:
+	col.add_child(_label(title, 28, INK, false))
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	col.add_child(row)
+	var buttons: Dictionary[String, Button] = {}
+	for id: String in names:
+		var b: Button = _button(names[id], 26)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
+		b.name = "%s_%s" % [key, id]
+		b.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Prefs.set_value(key, id))
+		row.add_child(b)
+		buttons[id] = b
+	_pref_buttons[key] = buttons
 
 
 # ---- 화질 ----

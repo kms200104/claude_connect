@@ -81,6 +81,10 @@ func _ready() -> void:
 	Net.name_changed.connect(func(id: int, _n: String) -> void:
 		if id == player_id:
 			set_online(online))
+	# v16: 칭호를 바꾸면 닉네임 옆 칭호도.
+	Journal.title_changed.connect(func(id: int) -> void:
+		if id == player_id:
+			set_online(online))
 
 
 func setup(state: NetPlayerState) -> void:
@@ -99,7 +103,7 @@ func setup(state: NetPlayerState) -> void:
 func set_online(value: bool) -> void:
 	online = value
 	if name_label != null:
-		var shown: String = GameData.player_name(player_id)
+		var shown: String = Journal.display_name(player_id)
 		name_label.text = shown if online else "%s · 연결 끊김" % shown
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 

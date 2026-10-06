@@ -1,6 +1,7 @@
 class_name TouchJoystick
 extends Control
 ## 터치 조이스틱. 화면 왼쪽 아래 영역을 누르면 반응하고, `output`에 방향(0~1)을 담는다.
+## v16 설정: 오른쪽(왼손잡이)으로 옮기고 크기를 바꿀 수 있다 (Prefs.STICK_SIDE · STICK_SIZE) — 그러면 상황 버튼은 왼쪽 아래로 간다.
 ## x: 오른쪽 +, y: 아래 + (위로 밀면 y < 0). 마우스는 emulate_touch_from_mouse로 터치처럼 동작한다.
 
 @export_group("Shape")
@@ -41,13 +42,48 @@ var boost: bool = false:
 var _touch_index: int = -1
 var _center: Vector2 = Vector2.ZERO
 var _knob_offset: Vector2 = Vector2.ZERO
+## 설정 전의 크기 (설정 배율을 곱한다).
+var _base_radius: float = 0.0
+var _base_knob: float = 0.0
+## 오른쪽에 둘지 (설정).
+var _right: bool = false
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_base_radius = radius
+	_base_knob = knob_radius
 	get_viewport().size_changed.connect(_reset_to_idle)
-	_reset_to_idle()
+	Prefs.events.changed.connect(func(key: String) -> void:
+		if key == Prefs.STICK_SIDE or key == Prefs.STICK_SIZE:
+			apply_prefs())
+	apply_prefs()
+
+
+## 설정(왼쪽/오른쪽 · 크기)을 적용한다. 오른쪽이면 상황 버튼(ActionHud)을 왼쪽 아래로 옮긴다.
+func apply_prefs() -> void:
+	_right = Prefs.stick_on_right()
+	radius = _base_radius * Prefs.stick_scale()
+	knob_radius = _base_knob * Prefs.stick_scale()
+	# 형제(상황 · 낚시 버튼)가 아직 준비 전일 수 있어 다음 프레임에.
+	_move_buttons.call_deferred()
+	_release()
+
+
+func _move_buttons() -> void:
+	var hud: Node = get_parent()
+	var action: ActionHud = hud.get_node_or_null("ActionHud") as ActionHud if hud != null else null
+	if action != null:
+		action.set_left_side(_right)
+	var fishing: FishingHud = hud.get_node_or_null("FishingHud") as FishingHud if hud != null else null
+	if fishing != null:
+		fishing.set_left_side(_right)
+
+
+## 지금 대기 자리 (테스트용, 화면 좌표).
+func idle_center() -> Vector2:
+	return _center
 
 
 func _input(event: InputEvent) -> void:
@@ -76,7 +112,8 @@ func _in_activation_area(pos: Vector2) -> bool:
 	var size_px: Vector2 = get_viewport_rect().size
 	if not floating:
 		return pos.distance_to(_center) <= radius * 1.5
-	return pos.x <= size_px.x * activation_max_x_ratio and pos.y >= size_px.y * activation_min_y_ratio
+	var x_ok: bool = pos.x >= size_px.x * (1.0 - activation_max_x_ratio) if _right else pos.x <= size_px.x * activation_max_x_ratio
+	return x_ok and pos.y >= size_px.y * activation_min_y_ratio
 
 
 func _update_stick(pos: Vector2) -> void:
@@ -99,7 +136,8 @@ func _release() -> void:
 
 func _reset_to_idle() -> void:
 	_knob_offset = Vector2.ZERO
-	_center = get_viewport_rect().size * idle_position_ratio
+	var ratio: Vector2 = Vector2(1.0 - idle_position_ratio.x, idle_position_ratio.y) if _right else idle_position_ratio
+	_center = get_viewport_rect().size * ratio
 	queue_redraw()
 
 

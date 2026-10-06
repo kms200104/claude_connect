@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v15
+# 네트워크 프로토콜 v16
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -15,6 +15,7 @@ v11 → v12: 말풍선(`say`) · 다른 사람 몸짓(`act`) · 배달 일거리
 v12 → v13: 가방 30칸(퀵 5 + 가방 30, 옛 저장의 칸 자리는 그대로) · 버린 물건이 바닥에 남음(`inv_discard` → `drop{kind: "item", n}` · 일부만 줍기 `collect_result.n left`, 에러 `cant_drop_here` `ground_full`) · 10개씩 사기와 식당 창고(`shop_result.stored`, `rest.store`, 에러 `storage_full`) · 식재료 배달(`deliv_order` → `deliv_ok`, 마을톡 `sys:shop`, `couriers`, `deliv_done`, 에러 `delivery_busy`) · 물 밑 물고기 그림자와 겨눠 던지기(`fishes`, `fish_cast.x z`, `fish_started.fid size ms bx bz`, `fish_found`, 에러 `bad_cast`). 저장 파일은 schema 6 그대로 (world 에 `ground groundSeq deliveries delivSeq`, `restaurant.storage`).
 v13 → v14: 닉네임 — `set_name{rid name}` → `name{rid? id name}`(방 전체), `create`/`join` 의 `name?`(처음 화면 설정에 적어 둔 이름), 플레이어 정보·프로필의 `name`(빈 문자열 = 자리 기본 이름), 에러 `bad_name`. 저장 파일은 schema 6 그대로 (프로필에 `name` 이 없으면 빈 이름).
 v14 → v15: 휴대폰 연출 — `phone{on}`(꺼내 듦/넣음 → 플레이어 정보 · 스냅샷의 `phone`), `phone_tap`(들고 있을 때만, 120ms에 한 번 → 다른 사람에게 `act{kind: "phone_tap"}`). 끊기면 `phone` 은 false. 저장 파일은 그대로.
+v15 → v16: 휴대폰 앱 · 놀거리 — 도감 · 업적 · 칭호(`profile` 의 `stats dex ach title birthday`, 새로 이루면 `ach{ids}`, `set_title` → `title{id title}` 방 전체, 플레이어 정보의 `title`), 생일(`set_birthday`, 그날 주민 축하 마을톡 · 선물, 주민 생일은 `npcs.json` 의 `birthday` · `talk_open.bday`), 날씨 · 달력(`cal_info` → `cal`), 친구 집 놀러 가기(`home_visit` → `home` · 주인에게 `visit`), 방명록(`home.gb`, `gb_write` → `gb`), 마을톡 사진(`photo_up` → `photo_sent` · 메시지의 `ph`, `photo_get` → `photo`, 사진만 큰 메시지 허용). 에러 `bad_title bad_birthday not_visitable bad_photo no_photo`. 저장 파일은 schema 6 그대로 (프로필에 `stats dex ach title birthday bdayYear visitDay`, world 에 `guestbooks photos photoSeq notedDay` — 없으면 빈 값).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
@@ -85,6 +86,13 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `set_name` | `rid name` | 닉네임 바꾸기 (v14, 어디서나). 앞뒤 공백을 지우고 띄어쓰기는 한 칸으로, 글자·숫자·띄어쓰기·`_ - .` 만 10자까지 — 아니면 `bad_name`. 빈 문자열 = 자리 기본 이름으로 |
 | `phone` | `on` | 휴대폰을 꺼내 들었다(true) · 넣었다(false) (v15, 연출용 — 답 없음). 다른 사람 화면에서 `players[]`/`snap.p[]` 의 `phone` 으로 들고 보는 모습 |
 | `phone_tap` | | 휴대폰 화면을 눌렀다 (v15, 들고 있을 때만, 120ms에 한 번). 다른 사람에게 `act{id, kind: "phone_tap"}` |
+| `set_title` | `rid id` | 칭호 달기 (v16): 이룬 업적 id 만, `""` = 떼기. 아니면 `bad_title`. 결과 `title{rid, id, title}` · 다른 사람에게 `title{id, title}` |
+| `set_birthday` | `rid birthday{m, d}` | 생일 정하기 (v16). 없는 날짜는 `bad_birthday`. 오늘로 정하면 바로 축하 (한 해에 한 번) |
+| `cal_info` | | 날씨 · 달력 (v16, 답 `cal`) |
+| `home_visit` | `rid unit` | 친구 집에 바로 놀러 가기 (v16): 주인이 있는 집만(`not_visitable`), 낚시 · 배달 중엔 안 됨. 답 `home`, 주인에게 `visit{id, unit}` + 마을톡 |
+| `gb_write` | `rid tx` | 방명록 쓰기 (v16): 주인이 있는 집 안에서만(`not_home`), 100자, 8초에 한 번(`too_fast`). 그 집 안 사람 모두에게 `gb` |
+| `photo_up` | `rid th img tx?` | 사진 보내기 (v16): `th` = `pl:<자리>`, `img` = base64 JPEG (96KB 이하, `bad_photo`), 4초에 한 번. 두 사람 대화방에 `msg{m: {…, ph}}`, 보낸 사람에게 `photo_sent{rid, id, th}`. 이 메시지만 `maxMessageBytes` 를 넘어도 된다 |
+| `photo_get` | `id` | 마을톡 사진 받기 (v16): 답 `photo{id, img}` (없으면 `no_photo`) |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -172,6 +180,8 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
+
+v16 서버 → 클라이언트: `ach{ids}`(새로 이룬 업적) · `title{rid?, id, title}` · `cal{today, days[{day, y, m, d, wd, season, w[8], ev, meteor, npc[], pl[]}], econ}`(오늘부터 이레, `w` = 0 · 3 · … · 21시 칸 날씨) · `gb{rid?, unit, list[{by, tx, at}]}` · `visit{id, unit}` · `photo_sent{rid, id, th}` · `photo{id, img}`. `profile` 의 v16 값: `stats`(업적 판정 값 — `data/achievements/achievements.json` 의 `stats`), `dex{fish{id: 낚은 수}, items[]}`, `ach[{id, at}]`, `title`, `birthday{m, d}|null`.
 
 에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face bad_name market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full cant_drop_here ground_full delivery_busy storage_full bad_cast` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
 
@@ -324,10 +334,18 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - 묶음 배달: 출발 전 상자(`wait`)에 다음 주문을 같이 담는다 — 최대 3건 · 배달비는 상자당 한 번 · 같은 재료는 합친다. 막 떠나려던 참이면 3초(`DELIVERY_TIME_SCALE` 배) 더 기다린다. 출발 · 완료 마을톡은 상자마다 한 번("주문하신 달걀 10개, 쌀 한 봉 2개, 두부 3개, 배달 가고 있습니다~"). 가방에 다 안 들어가면 들어가는 재료만 건네고 나머지는 식당 창고로, 마을톡 한 통에 함께 적는다.
 - 배달 (`data/shop/shop.json` 의 `delivery`, `server/src/delivery.js`): 주문 → 20~30초(`DELIVERY_TIME_SCALE` 배) 뒤 마을톡 `sys:shop` 에 "주문하신 ○○ n개, 배달 가고 있습니다~" → 배달 알바(`courier`)가 상점 문 앞에서 3.4m/s 로 주문한 사람에게 곧장 뛰어가 1.5m 안에서 건넨다(가방, 안 들어가면 식당 창고) → "배달 완료!" → 상점으로 돌아간다. 주문한 사람이 집·상점 안이거나 접속을 끊었으면 그 자리에서 90초 기다리다 식당 창고에 넣고 알린다. 기다리는 주문은 저장된다(다시 켜면 바로 출발하거나 창고로).
 
+## 도감 · 업적 · 칭호 · 생일 · 달력 · 방명록 · 사진 (서버 판정, v16)
+- 도감: 낚은 물고기는 낚을 때(낚싯대 · 뜰채) 센다. 가구 · 옷은 프로필을 보낼 때마다 가방 · 입은 옷 · 내가 마을에 놓은 가구를 훑어 한 번이라도 있었던 것을 올린다.
+- 업적(`server/src/progress.js`): 프로필을 보낼 때마다 판정 값(stats + 도감 크기 · 친밀도 30 이상 주민 수 · 지갑 · 가진 집 · 내가 기증한 물고기)이 목표를 넘은 업적을 적고 `ach` 로 알린다. 칭호는 이룬 업적의 것만 단다.
+- 생일: 플레이어 생일이 되면(접속할 때 · 날짜가 바뀔 때) 친밀도 `birthday.min_friendship`(4) 이상인 주민이 축하 마을톡과 선물(주민 `gifts` 중 하나, 가방이 차면 못 받음)을 보내고, 같은 마을 친구들 마을 소식 방에 알린다. 한 해에 한 번(`bdayYear`) — 생일을 바꿔도 다시 받지 못한다. 주민 생일에는 모두의 마을 소식 방에 알리고(하루 한 번, `notedDay`), 그날 처음 말을 걸면 친밀도 +`npc_talk_bonus`(3).
+- 달력: 날씨(`weatherAt`)와 하루 이벤트(`planDay`)는 마을 시드와 날짜로 정해지는 값이라 앞날을 그대로 계산해 보낸다 (예보가 틀리지 않는다). 유성우는 "그날 밤 맑으면".
+- 놀러 가기 · 방명록: 같은 집은 하루 한 번만 업적에 센다(`visitDay`). 방명록은 집마다 최근 40개.
+- 사진(`server/src/photos.js`): `<saveDir>/photos/<방 코드>/<id>.jpg`, 방마다 최근 80장(넘치면 오래된 것부터 지움). 앨범(찍은 사진)은 기기에만 있고 보낼 때 그 한 장만 올린다.
+
 ## 앱 안 테스트 서버 (v10)
 - 서버 주소 `test://local` = 클라이언트 안의 `LocalTestServer` (127.0.0.1 의 빈 포트, 18680~). 같은 메시지 형식으로 답한다.
 - 입장 정보는 `data/testserver/welcome.json` (`node server/tools/make_test_snapshot.js` 로 진짜 서버에서 찍음) + 저장된 가방·솔·위치.
-- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_reel` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`), v13: `inv_discard`(발밑에 남음, 다시 줍기) · 겨눠 던지기는 물고기 그림자가 없어 옛 방식 · `deliv_order` 는 `test_server`, v11: 주민 마을톡(`msg_send npc:*` 답장, 친한 주민이 30초마다 먼저 연락 — 친구 방은 `test_server`) · 가까이 서 있는 친한 주민의 `npc_greet`. 나무·꽃은 게임 1분 = 실제 6초로 자란다. 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 …)은 `error{code: "test_server"}`.
+- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_reel` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`), v13: `inv_discard`(발밑에 남음, 다시 줍기) · 겨눠 던지기는 물고기 그림자가 없어 옛 방식 · `deliv_order` 는 `test_server`, v11: 주민 마을톡(`msg_send npc:*` 답장, 친한 주민이 30초마다 먼저 연락 — 친구 방은 `test_server`) · 가까이 서 있는 친한 주민의 `npc_greet`. 나무·꽃은 게임 1분 = 실제 6초로 자란다. v16: `cal_info`(늘 맑음 · 이벤트 없음 · 주민 생일만). 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 · 칭호 · 생일 · 방명록 · 놀러 가기 · 사진 …)은 `error{code: "test_server"}`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).

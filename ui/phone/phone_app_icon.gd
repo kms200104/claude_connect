@@ -3,7 +3,8 @@ extends Button
 ## 휴대폰 홈 화면의 앱 아이콘 (v0.14): 둥근 네모 바탕(위가 밝은 광택) 위에 앱마다 그린 흰 그림.
 ## 누르면 톡 눌렸다가 돌아온다. 같은 그림 그리기로 아래 막대의 뒤로 · 홈 · 닫기 단추도 그린다 (kind = "nav_*").
 
-## stocks · homes · bank · assets · talk · jobs · delivery · settings · nav_back · nav_home · nav_close
+## stocks · homes · bank · assets · talk · jobs · delivery · settings · (v16) camera · album · map · dex · weather · music · achieve
+## · nav_back · nav_home · nav_close
 var kind: String = ""
 var tint: Color = Color.WHITE
 var _press: Tween = null
@@ -141,6 +142,74 @@ func _glyph(o: Vector2, s: float, ink: Color) -> void:
 			draw_rect(Rect2(p.call(0.56, 0.36), Vector2(0.08, 0.4) * s), tint)
 			for i: int in 3:
 				draw_line(p.call(0.12 + i * 0.03, 0.44 + i * 0.1), p.call(0.3, 0.44 + i * 0.1), ink, w, true)
+		"camera":
+			# 몸통 · 위 혹 · 렌즈 · 플래시 점.
+			var cam_body: StyleBoxFlat = StyleBoxFlat.new()
+			cam_body.bg_color = ink
+			cam_body.set_corner_radius_all(int(s * 0.08))
+			draw_style_box(cam_body, Rect2(p.call(0.16, 0.32), Vector2(0.68, 0.44) * s))
+			draw_rect(Rect2(p.call(0.36, 0.24), Vector2(0.22, 0.1) * s), ink)
+			draw_circle(p.call(0.5, 0.54), s * 0.15, tint)
+			draw_circle(p.call(0.5, 0.54), s * 0.1, ink)
+			draw_circle(p.call(0.46, 0.5), s * 0.03, Color(tint, 0.8))
+			draw_circle(p.call(0.74, 0.4), s * 0.03, tint)
+		"album":
+			# 겹친 사진 두 장 · 산과 해.
+			draw_rect(Rect2(p.call(0.26, 0.2), Vector2(0.54, 0.46) * s), Color(ink, 0.6))
+			draw_rect(Rect2(p.call(0.18, 0.3), Vector2(0.56, 0.5) * s), ink)
+			draw_colored_polygon(PackedVector2Array([p.call(0.22, 0.74), p.call(0.38, 0.52), p.call(0.5, 0.66), p.call(0.58, 0.58), p.call(0.7, 0.74)]), tint)
+			draw_circle(p.call(0.58, 0.42), s * 0.05, tint)
+		"map":
+			# 접힌 지도 세 쪽 · 위치 핀.
+			var folds: Array[PackedVector2Array] = [
+				PackedVector2Array([p.call(0.16, 0.28), p.call(0.38, 0.22), p.call(0.38, 0.74), p.call(0.16, 0.8)]),
+				PackedVector2Array([p.call(0.38, 0.22), p.call(0.62, 0.28), p.call(0.62, 0.8), p.call(0.38, 0.74)]),
+				PackedVector2Array([p.call(0.62, 0.28), p.call(0.84, 0.22), p.call(0.84, 0.74), p.call(0.62, 0.8)])]
+			for i: int in folds.size():
+				draw_colored_polygon(folds[i], Color(ink, 1.0 if i != 1 else 0.82))
+			draw_circle(p.call(0.5, 0.42), s * 0.1, Color("#E8594A"))
+			draw_colored_polygon(PackedVector2Array([p.call(0.42, 0.46), p.call(0.58, 0.46), p.call(0.5, 0.62)]), Color("#E8594A"))
+			draw_circle(p.call(0.5, 0.42), s * 0.04, Color.WHITE)
+		"dex":
+			# 책 · 물고기 그림.
+			var book: StyleBoxFlat = StyleBoxFlat.new()
+			book.bg_color = ink
+			book.set_corner_radius_all(int(s * 0.05))
+			draw_style_box(book, Rect2(p.call(0.2, 0.18), Vector2(0.6, 0.64) * s))
+			draw_rect(Rect2(p.call(0.2, 0.18), Vector2(0.08, 0.64) * s), Color(tint, 0.5))
+			var fish: PackedVector2Array = PackedVector2Array()
+			for i: int in 20:
+				var a: float = TAU * float(i) / 20.0
+				fish.append(p.call(0.52 + cos(a) * 0.15, 0.5 + sin(a) * 0.08))
+			draw_colored_polygon(fish, tint)
+			draw_colored_polygon(PackedVector2Array([p.call(0.66, 0.5), p.call(0.76, 0.42), p.call(0.76, 0.58)]), tint)
+			draw_circle(p.call(0.44, 0.48), s * 0.02, ink)
+		"weather":
+			# 해 뒤로 구름.
+			var sun: Vector2 = p.call(0.38, 0.38)
+			for i: int in 8:
+				var a: float = TAU * float(i) / 8.0
+				draw_line(sun + Vector2(cos(a), sin(a)) * s * 0.16, sun + Vector2(cos(a), sin(a)) * s * 0.22, Color("#FFE27A"), w, true)
+			draw_circle(sun, s * 0.13, Color("#FFE27A"))
+			draw_circle(p.call(0.46, 0.62), s * 0.13, ink)
+			draw_circle(p.call(0.62, 0.56), s * 0.16, ink)
+			draw_circle(p.call(0.76, 0.64), s * 0.11, ink)
+			draw_rect(Rect2(p.call(0.34, 0.62), Vector2(0.48, 0.13) * s), ink)
+		"music":
+			# 두 음표.
+			draw_line(p.call(0.4, 0.68), p.call(0.4, 0.26), ink, w * 1.2, true)
+			draw_line(p.call(0.7, 0.62), p.call(0.7, 0.22), ink, w * 1.2, true)
+			draw_colored_polygon(PackedVector2Array([p.call(0.4, 0.26), p.call(0.7, 0.22), p.call(0.7, 0.32), p.call(0.4, 0.36)]), ink)
+			draw_circle(p.call(0.33, 0.7), s * 0.09, ink)
+			draw_circle(p.call(0.63, 0.64), s * 0.09, ink)
+		"achieve":
+			# 트로피.
+			draw_colored_polygon(PackedVector2Array([p.call(0.3, 0.2), p.call(0.7, 0.2), p.call(0.63, 0.5), p.call(0.37, 0.5)]), ink)
+			draw_arc(p.call(0.3, 0.32), s * 0.09, PI * 0.5, PI * 1.5, 12, ink, w, true)
+			draw_arc(p.call(0.7, 0.32), s * 0.09, -PI * 0.5, PI * 0.5, 12, ink, w, true)
+			draw_rect(Rect2(p.call(0.46, 0.5), Vector2(0.08, 0.14) * s), ink)
+			draw_rect(Rect2(p.call(0.32, 0.64), Vector2(0.36, 0.12) * s), ink)
+			draw_circle(p.call(0.43, 0.3), s * 0.035, Color(tint, 0.7))
 
 
 ## 아래 막대 단추: 뒤로(◁) · 홈(○) · 닫기(✕).

@@ -28,6 +28,10 @@ func _ready() -> void:
 	_apply_orientation()
 	get_tree().root.size_changed.connect(_apply)
 	_apply()
+	# 글자 크기 설정 (v16): 화면의 글자를 고른 배율로.
+	var scaler: FontScaler = FontScaler.new()
+	scaler.name = "FontScaler"
+	add_child(scaler)
 
 
 ## 화면 방향 고르기: 기억해 두고 바로 적용한다.

@@ -324,8 +324,9 @@ func _send_reel() -> void:
 
 
 func _vibrate(v: Vector2) -> void:
+	# v16 설정 앱의 진동 켜기/끄기도 따른다.
 	if vibrate_on_bite:
-		Input.vibrate_handheld(int(v.x), v.y)
+		Prefs.vibrate(int(v.x), v.y)
 
 
 func _on_result(success: bool, fish_id: String, reason: String) -> void:

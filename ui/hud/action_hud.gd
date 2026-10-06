@@ -27,6 +27,11 @@ const ICONS: Dictionary[String, String] = {
 }
 
 
+## v16: 조이스틱을 오른쪽에 두면 상황 버튼은 왼쪽 아래로.
+func set_left_side(left: bool) -> void:
+	HudLayout.mirror_side(_button, left, -170.0)
+
+
 func show_action(text: String) -> void:
 	if _button.text != text or not _button.visible:
 		var path: String = ICONS.get(text, "")

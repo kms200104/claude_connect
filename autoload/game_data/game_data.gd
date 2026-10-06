@@ -16,6 +16,7 @@ const MUSEUM_PATH: String = "res://data/places/museum.json"
 const AIRPORT_PATH: String = "res://data/places/airport.json"
 const FACE_PATH: String = "res://data/looks/face_parts.json"
 const MBTI_PATH: String = "res://data/npcs/mbti.json"
+const ACHIEVEMENTS_PATH: String = "res://data/achievements/achievements.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -66,6 +67,10 @@ var airport: KeeperPlace = null
 var econ: EconData = null
 ## 일거리 (v0.12): 배달 알바 거리.
 var jobs: JobRules = JobRules.new()
+## v16 업적 (데이터 순서 그대로) · id → 업적 · 판정 값 이름 → 설명.
+var achievements: Array[AchievementInfo] = []
+var achievement_by_id: Dictionary[String, AchievementInfo] = {}
+var stat_names: Dictionary[String, String] = {}
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
@@ -134,6 +139,14 @@ func _ready() -> void:
 	econ = EconData.load_all()
 	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
 	econ.build_customers(npcs)
+	var ach_file: Dictionary = _read_json(ACHIEVEMENTS_PATH)
+	for key: Variant in ach_file.get("stats", {}):
+		stat_names[str(key)] = str(ach_file["stats"][key])
+	for entry: Variant in ach_file.get("list", []):
+		if entry is Dictionary:
+			var a: AchievementInfo = AchievementInfo.from_dict(entry)
+			achievements.append(a)
+			achievement_by_id[a.id] = a
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
 	for group: String in ["daily", "night", "economy"]:

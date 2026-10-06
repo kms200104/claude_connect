@@ -42,6 +42,23 @@ static func landscape_shift(c: Control, dx: float) -> void:
 	c.offset_right = base.y + (dx if wide else 0.0)
 
 
+## v16 조이스틱을 오른쪽에 둘 때: 오른쪽 아래에 붙은 단추(상황 · 낚시 버튼)를 왼쪽 아래로 거울처럼 옮긴다.
+## left = false 면 처음 자리. 가로 화면 비키기(landscape_shift)는 오른쪽일 때만 dx 만큼.
+static func mirror_side(c: Control, left: bool, dx: float) -> void:
+	if not c.has_meta("hud_side_base"):
+		c.set_meta("hud_side_base", Vector4(c.anchor_left, c.anchor_right, c.offset_left, c.offset_right))
+	var base: Vector4 = c.get_meta("hud_side_base")
+	if left:
+		c.anchor_left = 1.0 - base.y
+		c.anchor_right = 1.0 - base.x
+		c.set_meta("hud_base_x", Vector2(-base.w, -base.z))
+	else:
+		c.anchor_left = base.x
+		c.anchor_right = base.y
+		c.set_meta("hud_base_x", Vector2(base.z, base.w))
+	landscape_shift(c, 0.0 if left else dx)
+
+
 ## 방향이 바뀌었을 때: 이 도우미로 자리 잡은 컨트롤을 모두 다시 맞춘다.
 static func relayout(tree: SceneTree) -> void:
 	for node: Node in tree.get_nodes_in_group(GROUP):

@@ -9,6 +9,7 @@ import { ErrorCode } from './protocol.js';
 import { capacity, chooseOrder, cookQuality, stepMinMs, menuOf, pantryOf, payFor, ratingOf, starsFor, tasteMatch, tierOf, updateRegular } from './restaurant.js';
 import { countWhere, removeWhere } from './inventory.js';
 import { earn } from './economy.js';
+import { bump } from './progress.js';
 
 export { stepMinMs };
 
@@ -166,6 +167,7 @@ export function createKitchen(deps) {
       if (!p) continue;
       p.profile.sol += share;
       earn(p.profile, share);
+      bump(p.profile, 'serve');
     }
     room.restaurant.history.push(stars);
     if (room.restaurant.history.length > 100) room.restaurant.history.shift();

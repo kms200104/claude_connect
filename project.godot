@@ -26,6 +26,7 @@ Field="*res://autoload/field/field.gd"
 Home="*res://autoload/home/home.gd"
 Talk="*res://autoload/talk/talk.gd"
 ScreenFit="*res://autoload/screen/screen_fit.gd"
+Journal="*res://autoload/journal/journal.gd"
 
 [debug]
 

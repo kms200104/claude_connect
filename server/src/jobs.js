@@ -6,6 +6,7 @@ import { ErrorCode } from './protocol.js';
 import { earn } from './economy.js';
 import { addFriendship, relationOf } from './quests.js';
 import { pickWeighted } from './gamedata.js';
+import { bump } from './progress.js';
 
 /** jobs.json 검사 + 받을 곳 Map. */
 export function loadJobs(raw, npcs) {
@@ -112,6 +113,7 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
     p.sol += total;
     earn(p, total);
     p.jobDay.done += 1;
+    bump(p, 'deliver');
     addFriendship(relationOf(p, j.to.npc), rules.friend);
     for (const o of friends) {
       o.profile.sol += bonus;
