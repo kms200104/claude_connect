@@ -116,15 +116,15 @@ func _blocks(d: Dictionary, today: bool, ink: Color, soft: Color) -> HBoxContain
 func _day_events(col: VBoxContainer, d: Dictionary, ink: Color, soft: Color, detailed: bool) -> void:
 	var ev: EventInfo = GameData.event_info(str(d["event"]))
 	if ev != null:
-		col.add_child(label("★ %s · %s" % [ev.display_name, _hours_text(ev.hours)], 28, ink))
+		col.add_child(label("🎪 %s · %s" % [ev.display_name, _hours_text(ev.hours)], 28, ink))
 		if detailed and not ev.description.is_empty():
 			col.add_child(label(ev.description, 22, soft))
 	if bool(d["meteor"]):
 		var weather: PackedStringArray = d["weather"]
 		var clear_night: bool = weather.size() >= 8 and weather[7] == "clear"
-		col.add_child(label("☆ 유성우가 올지도 몰라요%s" % (" (밤에 맑음!)" if clear_night else " (밤에 맑아야 보여요)"), 26, ink))
+		col.add_child(label("✨ 유성우가 올지도 몰라요%s" % (" (밤에 맑음!)" if clear_night else " (밤에 맑아야 보여요)"), 26, ink))
 	for name_text: String in _birthday_names(d):
-		col.add_child(label("♥ %s 생일" % name_text, 26, ink))
+		col.add_child(label("🎂 %s 생일" % name_text, 26, ink))
 
 
 func _week_row(d: Dictionary, index: int) -> Control:
@@ -154,9 +154,9 @@ func _week_row(d: Dictionary, index: int) -> Control:
 	if ev != null:
 		extras.append(_hours_text(ev.hours))
 	if bool(d["meteor"]):
-		extras.append("☆ 유성우")
+		extras.append("✨ 유성우")
 	for n: String in _birthday_names(d):
-		extras.append("♥ %s" % n)
+		extras.append("🎂 %s" % n)
 	if not extras.is_empty():
 		var sub: Label = label(" · ".join(extras), 20, SOFT, false)
 		sub.clip_text = true

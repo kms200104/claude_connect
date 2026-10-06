@@ -240,7 +240,7 @@ func _build_birthday() -> void:
 	save_button.name = "SaveBirthday"
 	save_button.pressed.connect(func() -> void:
 		Journal.set_birthday(_bday_month, _bday_day)
-		_bday_note.text = "%d월 %d일로 저장했어요. 그날 친한 주민들이 마을톡으로 축하해 줘요 ♥" % [_bday_month, _bday_day]
+		_bday_note.text = "%d월 %d일로 저장했어요. 그날 친한 주민들이 마을톡으로 축하해 줘요 🎂" % [_bday_month, _bday_day]
 		Audio.play_ui(Audio.SFX_CONFIRM))
 	col.add_child(save_button)
 	_bday_note = _label("그날 친한 주민들이 축하 인사와 선물을 보내요 (한 해에 한 번). 친구 달력에도 보여요.", 24, SOFT)

@@ -28,7 +28,7 @@ func _ready() -> void:
 		for id: String in ids:
 			var a: AchievementInfo = GameData.achievement_by_id.get(id)
 			if a != null:
-				push("trophy", "업적 달성! %s" % a.display_name, "칭호 [%s]를 얻었어요 · 휴대폰 업적 앱에서 달 수 있어요" % a.title))
+				push("trophy", "업적 달성! %s" % a.display_name, "칭호 「%s」를 얻었어요 · 휴대폰 업적 앱에서 달 수 있어요" % a.title))
 	Journal.visited.connect(func(slot: int) -> void:
 		push("house", "%s 님이 놀러 왔어요!" % GameData.player_name(slot), "집 안에서 방명록을 남길 수 있어요"))
 	Journal.changed.connect(_check_birthday)

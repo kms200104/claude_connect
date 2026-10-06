@@ -151,7 +151,7 @@ func _run() -> void:
 	Journal.set_title("items_1")
 	_check(await _wait_until(func() -> bool: return Journal.my_title() == "items_1", 3.0), "칭호를 달았다")
 	_check(await _wait_until(func() -> bool: return not _bot.find(func(m: Dictionary) -> bool: return m.get("t") == "title" and int(m.get("id", 0)) == Net.my_id).is_empty(), 3.0), "친구에게 칭호가 알려짐")
-	_check(Journal.display_name(Net.my_id).begins_with("[꾸미기 새싹]"), "이름 옆 칭호 (%s)" % Journal.display_name(Net.my_id))
+	_check(Journal.display_name(Net.my_id).begins_with("「꾸미기 새싹」"), "이름 옆 칭호 (%s)" % Journal.display_name(Net.my_id))
 
 	# ---- 도감 ----
 	phone.open_app(PhoneWindow.Tab.DEX)

@@ -1,0 +1,11 @@
+[gd_resource type="FontVariation" load_steps=6 format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/jua_regular.ttf" id="1_jua"]
+[ext_resource type="FontFile" path="res://assets/fonts/gowun_dodum_symbols.ttf" id="2_symbols"]
+[ext_resource type="FontFile" path="res://assets/fonts/emoji_subset.ttf" id="3_emoji"]
+[ext_resource type="FontFile" path="res://assets/fonts/symbols_subset.ttf" id="4_more"]
+[ext_resource type="FontFile" path="res://assets/fonts/cjk_marks.ttf" id="5_cjk"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_symbols"), ExtResource("3_emoji"), ExtResource("4_more"), ExtResource("5_cjk")])
+base_font = ExtResource("1_jua")

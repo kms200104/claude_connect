@@ -102,10 +102,10 @@ func title_text(slot: int) -> String:
 	return a.title if a != null else ""
 
 
-## 머리 위 · 목록에 쓰는 이름: "[칭호] 닉네임" (칭호가 없으면 닉네임만).
+## 머리 위 · 목록에 쓰는 이름: "「칭호」 닉네임" (칭호가 없으면 닉네임만).
 func display_name(slot: int) -> String:
 	var t: String = title_text(slot)
-	return GameData.player_name(slot) if t.is_empty() else "[%s] %s" % [t, GameData.player_name(slot)]
+	return GameData.player_name(slot) if t.is_empty() else "「%s」 %s" % [t, GameData.player_name(slot)]
 
 
 func stat(key: String) -> int:

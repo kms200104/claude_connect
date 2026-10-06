@@ -45,7 +45,7 @@ window/handheld/orientation=6
 [gui]
 
 theme/custom="res://ui/theme/game_theme.tres"
-theme/custom_font="res://assets/fonts/jua_regular.ttf"
+theme/custom_font="res://assets/fonts/ui_font.tres"
 
 [input_devices]
 

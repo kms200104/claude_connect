@@ -1596,7 +1596,7 @@ func _photo_bubble(photo_id: String, caption: String) -> Control:
 		wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		wait.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		box.add_child(wait)
-	if not caption.is_empty() and caption != "(사진)":
+	if not caption.is_empty() and caption != "📷 사진":
 		box.add_child(_label(caption, 26, INK))
 	return box
 

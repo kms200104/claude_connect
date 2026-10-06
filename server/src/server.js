@@ -1623,7 +1623,7 @@ export function createServer(overrides = {}) {
     player.lastPhotoAt = t;
     const id = photos.put(room, buf, player.id, Date.now());
     if (!id) return fail(ErrorCode.badPhoto);
-    const caption = typeof msg.tx === 'string' && msg.tx.trim() ? msg.tx.trim().slice(0, 60) : '(사진)';
+    const caption = typeof msg.tx === 'string' && msg.tx.trim() ? msg.tx.trim().slice(0, 60) : '📷 사진';
     messenger.push(room, player.profile, th, 'me', caption, true, id);
     messenger.push(room, target, `pl:${player.profile.slot}`, `p${player.profile.slot}`, caption, false, id);
     send(ctx.ws, { t: 'photo_sent', rid: msg.rid, id, th });

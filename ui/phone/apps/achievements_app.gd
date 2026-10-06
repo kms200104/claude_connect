@@ -26,7 +26,7 @@ func _build() -> void:
 	var total: int = GameData.achievements.size()
 	var head: VBoxContainer = card()
 	var title: String = Journal.title_text(Net.my_id)
-	head.add_child(label("내 칭호: %s" % ("[%s]" % title if not title.is_empty() else "없음"), 34, INK))
+	head.add_child(label("내 칭호: %s" % ("「%s」" % title if not title.is_empty() else "없음"), 34, INK))
 	head.add_child(label("머리 위 이름 옆에 보여요 · %s" % Journal.display_name(Net.my_id), 24, SOFT))
 	if not title.is_empty():
 		var off: Button = button("칭호 떼기", 26)
@@ -86,7 +86,7 @@ func _row(a: AchievementInfo) -> Control:
 	top.add_child(text)
 	text.add_child(label(a.display_name, 30, INK if have else SOFT))
 	text.add_child(label(a.description, 22, SOFT))
-	text.add_child(label("칭호 [%s]" % a.title, 22, GOLD.darkened(0.25) if have else SOFT))
+	text.add_child(label("칭호 「%s」" % a.title, 22, GOLD.darkened(0.25) if have else SOFT))
 	if have:
 		var when: int = int(Journal.achieved_at.get(a.id, 0))
 		if when > 0:
