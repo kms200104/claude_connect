@@ -172,6 +172,31 @@ func _ready() -> void:
 				# 애니메이션 트리를 멈춰 두었으니 표정이 바로 감춰지지 않게 리그 갱신을 끈다.
 				rig.set_process(false)
 			_camera(Vector3(0.0, 0.6, -24.0), Vector3(0.0, 0.55, 0.0), 5.0)
+		"steps":
+			# v0.13.3 발걸음 파티클: 재질마다 걷기(앞줄) · 달리기(뒷줄). 발 뒤(+Z)로 차올린다.
+			var surfaces: PackedStringArray = ["dirt", "sand", "grass", "water", "stone", "wood"]
+			for i: int in surfaces.size():
+				for run: int in 2:
+					var at: Vector3 = Vector3((float(i) - 2.5) * 1.4, 0.0, -float(run) * 1.6)
+					var mark: MeshInstance3D = MeshInstance3D.new()
+					var disc: CylinderMesh = CylinderMesh.new()
+					disc.top_radius = 0.5
+					disc.bottom_radius = 0.5
+					disc.height = 0.02
+					mark.mesh = disc
+					var m: StandardMaterial3D = StandardMaterial3D.new()
+					m.albedo_color = (FootFx.COLORS[surfaces[i]][0] as Color).darkened(0.35)
+					mark.material_override = m
+					add_child(mark)
+					mark.position = at
+			# 첫 걸음에 FootFx 가 장면에 붙는다 → 한 프레임 뒤에 모두 같이 내딛는다.
+			FootFx.step(Vector3.ZERO, "dirt", false, Vector3.BACK)
+			await get_tree().create_timer(0.1).timeout
+			for i: int in surfaces.size():
+				for run: int in 2:
+					var at: Vector3 = Vector3((float(i) - 2.5) * 1.4, 0.0, -float(run) * 1.6)
+					FootFx.step(at, surfaces[i], run == 1, Vector3(0.0, 0.0, 1.0))
+			_camera(Vector3(0.0, 3.2, 5.5), Vector3(0.0, 0.2, -0.8), 45.0)
 		"poses":
 			# v0.13 허리·목 관절 확인: 감정표현 한가운데를 옆에서 (--wait 로 시점을 고른다).
 			var poses: PackedStringArray = ["bow", "sad", "think", "laugh", "surprise", "sleepy", "clap"]
