@@ -316,8 +316,12 @@ export class Room {
     room.delivSeq = Math.max(0, intOr(world.delivSeq, 0));
     const door = data.shop?.door ?? { x: 0, z: 0 };
     for (const d of Array.isArray(world.deliveries) ? world.deliveries : []) {
-      if (!d || typeof d.id !== 'string' || typeof d.uid !== 'string' || typeof d.item !== 'string' || !data.isKnown(d.item) || !Number.isInteger(d.n) || d.n < 1) continue;
-      room.deliveries.set(d.id, { id: d.id, uid: d.uid, pid: intOr(d.pid, 0), item: d.item, n: Math.min(d.n, 99), ph: 'wait', dueAt: 0, x: door.x, z: door.z, yaw: 0, waited: 0, handAt: 0 });
+      if (!d || typeof d.id !== 'string' || typeof d.uid !== 'string') continue;
+      // 묶음 상자(items) 또는 옛 한 건짜리(item, n).
+      const raw = Array.isArray(d.items) ? d.items : [{ item: d.item, n: d.n }];
+      const items = raw.filter((it) => it && typeof it.item === 'string' && data.isKnown(it.item) && Number.isInteger(it.n) && it.n >= 1).map((it) => ({ item: it.item, n: Math.min(it.n, 999) }));
+      if (items.length === 0) continue;
+      room.deliveries.set(d.id, { id: d.id, uid: d.uid, pid: intOr(d.pid, 0), items, orders: Math.max(1, intOr(d.orders, items.length)), ph: 'wait', dueAt: 0, x: door.x, z: door.z, yaw: 0, waited: 0, handAt: 0 });
     }
     room.groundSeq = Math.max(0, intOr(world.groundSeq, 0), ...[...room.drops.keys()].filter((id) => id.startsWith('g')).map((id) => intOr(Number(id.slice(1)), 0)));
     room.homes = sanitizeHomes(world.homes, data.units);
@@ -421,7 +425,7 @@ export class Room {
         householdSeq: this.householdSeq,
         homeItems: structuredClone(this.homeItems),
         homeItemSeq: this.homeItemSeq,
-        deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, item: d.item, n: d.n })),
+        deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, items: d.items.map((it) => ({ ...it })), orders: d.orders })),
         delivSeq: this.delivSeq,
         ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),
         groundSeq: this.groundSeq,

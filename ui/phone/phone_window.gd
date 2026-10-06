@@ -106,8 +106,8 @@ func _ready() -> void:
 	Economy.restaurant_changed.connect(func() -> void:
 		if visible and _tab == Tab.DELIVERY:
 			_dirty = true)
-	Net.delivery_ordered.connect(func(_i: String, _n: int, _e: int, _a: int) -> void: _dirty = true)
-	Net.delivery_done.connect(func(_i: String, _n: int, _w: String) -> void: _dirty = true)
+	Net.delivery_ordered.connect(func(_i: String, _n: int, _e: int, _a: int, _m: bool) -> void: _dirty = true)
+	Net.delivery_done.connect(func(_items: Array[Dictionary]) -> void: _dirty = true)
 	Net.couriers_updated.connect(func(_l: Array[Dictionary]) -> void:
 		if visible and _tab == Tab.DELIVERY:
 			_dirty = true)
@@ -775,14 +775,20 @@ func _build_delivery() -> void:
 	var shop: ShopData = GameData.shop
 	var courier: String = shop.courier.display_name if shop.courier != null else "알바"
 	_body.add_child(_label("솔바람 상점 배달 · 배달비 %s" % Money.short(shop.delivery_fee), 32, INK))
-	_body.add_child(_label("주문하면 %d~%d초 뒤에 출발해요. 배달 알바 %s이(가) 내가 있는 곳까지 뛰어와 건네줘요. 가방이 가득하거나 집·상점 안에 있으면 식당 창고에 넣어 둬요." % [int(shop.delivery_min_s), int(shop.delivery_max_s), courier], 24, SOFT))
-	var active: int = Net.my_deliveries.size()
-	if active > 0:
+	_body.add_child(_label("주문하면 %d~%d초 뒤에 출발해요. 배달 알바 %s이(가) 내가 있는 곳까지 뛰어와 건네줘요. 출발 전에 더 주문하면 같은 상자에 담아 한 번에 가져와요 (%d건까지, 배달비는 한 번). 가방이 가득하거나 집·상점 안에 있으면 식당 창고에 넣어 둬요." % [int(shop.delivery_min_s), int(shop.delivery_max_s), courier, shop.delivery_max_active], 24, SOFT))
+	var active: int = 0
+	if not Net.my_deliveries.is_empty():
 		var card: VBoxContainer = _card()
-		card.add_child(_label("내 주문", 28, INK))
+		card.add_child(_label("내 배달 상자", 28, INK))
 		for d: Dictionary in Net.my_deliveries:
-			var state: String = {"wait": "준비 중…", "walk": "오는 중! 🛵", "hand": "도착!", "back": "전해 드렸어요"}.get(str(d.get("ph", "wait")), "준비 중…")
-			card.add_child(_label("%s %d개 · %s" % [GameData.item_name(str(d.get("item", ""))), int(d.get("n", 1)), state], 26, GOOD if str(d.get("ph", "")) == "walk" else INK))
+			var state: String = {"wait": "상자 꾸리는 중… (더 담을 수 있어요)", "walk": "오는 중! 🛵", "hand": "도착!", "back": "전해 드렸어요"}.get(str(d.get("ph", "wait")), "준비 중…")
+			var names: PackedStringArray = []
+			for it: Variant in d.get("items", []):
+				if it is Dictionary:
+					names.append("%s %d개" % [GameData.item_name(str(it.get("item", ""))), int(it.get("n", 1))])
+			if str(d.get("ph", "wait")) in ["wait", "walk"]:
+				active += int(d.get("orders", 1))
+			card.add_child(_label("%s · %s" % [", ".join(names), state], 26, GOOD if str(d.get("ph", "")) == "walk" else INK))
 	var store: Dictionary = Economy.rest.get("store", {})
 	var stored: PackedStringArray = []
 	for id: Variant in store:
@@ -790,7 +796,7 @@ func _build_delivery() -> void:
 	_body.add_child(_label("식당 창고: %s" % (", ".join(stored) if not stored.is_empty() else "비어 있어요"), 24, SOFT))
 	var full: bool = active >= shop.delivery_max_active
 	if full:
-		_body.add_child(_label("배달은 한 번에 %d건까지예요. 먼저 받은 다음 또 주문해요." % shop.delivery_max_active, 24, UP))
+		_body.add_child(_label("배달은 한 상자에 %d건까지예요. 받은 다음 또 주문해요." % shop.delivery_max_active, 24, UP))
 	for id: String in shop.stock_for(Net.shop_level):
 		var info: ItemInfo = GameData.item(id)
 		if info == null or not info.is_ingredient():
@@ -810,7 +816,7 @@ func _build_delivery() -> void:
 		for n: int in [1, 10]:
 			var b: Button = _button("%d개" % n, 26)
 			b.custom_minimum_size = Vector2(120, 84)
-			b.disabled = full or Net.sol < each * n + shop.delivery_fee
+			b.disabled = full or Net.sol < each * n + (0 if Net.has_waiting_delivery() else shop.delivery_fee)
 			b.pressed.connect(func() -> void: Net.order_delivery(id, n))
 			row.add_child(b)
 

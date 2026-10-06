@@ -87,11 +87,16 @@ func _enter_phase(a: NpcActor, ph: String, to: int) -> void:
 			a.rig.set_held("")
 
 
-func _on_ordered(item_id: String, count: int, eta_s: int, amount: int) -> void:
-	if toast_hud != null:
+func _on_ordered(item_id: String, count: int, eta_s: int, amount: int, merged: bool) -> void:
+	if toast_hud == null:
+		return
+	if merged:
+		# 묶음 배달: 아직 떠나지 않은 상자에 같이 담는다 (배달비 없음, 출발 안내는 한 번만).
+		toast_hud.show_toast("%s %d개를 같은 상자에 담았어요 (%s, 배달비 없음) · 약 %d초 뒤 함께 출발" % [GameData.item_name(item_id), count, Money.short(amount), eta_s], true)
+	else:
 		toast_hud.show_toast("%s %d개 주문 완료 (%s) · 약 %d초 뒤 출발해요" % [GameData.item_name(item_id), count, Money.short(amount), eta_s], true)
 
 
-func _on_done(_item_id: String, _count: int, _where: String) -> void:
-	# 받았다는 알림은 마을톡("배달 완료!" · "식당 창고에 넣어 두었어요")이 띄운다 — 겹치지 않게 여기서는 소리만.
+func _on_done(_items: Array[Dictionary]) -> void:
+	# 받았다는 알림은 마을톡("배달 완료!" · "식당 창고에 넣어 두었어요")이 상자마다 한 번 띄운다 — 겹치지 않게 여기서는 소리만.
 	Audio.play_ui(Audio.SFX_CONFIRM)

@@ -87,7 +87,7 @@ describe('v13 상점 10개씩 · 식당 창고 · 식재료 배달', () => {
     const c = walking.c[0];
     assert.equal(c.to, welcome.id);
     const done = await a.type('deliv_done', 5000);
-    assert.deepEqual({ item: done.item, n: done.n, where: done.where }, { item: 'egg', n: 10, where: 'bag' });
+    assert.deepEqual(done.items, [{ item: 'egg', n: 10, where: 'bag' }]);
     const inv = await a.next((m) => m.t === 'inventory' && m.slots.some((s) => s?.id === 'egg' && s.n === 10));
     assert.ok(inv);
     const thanks = await a.next((m) => m.t === 'msg' && m.th === 'sys:shop');
@@ -96,6 +96,38 @@ describe('v13 상점 10개씩 · 식당 창고 · 식재료 배달', () => {
     const at = hand.c.find((x) => x.ph === 'hand');
     assert.ok(Math.hypot(at.x - 6, at.z - 6) <= server.data.shop.delivery.hand_range, '내 곁에서 건넨다');
     await a.next((m) => m.t === 'couriers' && m.c.length === 0, 6000);
+  });
+
+  it('묶음 배달: 떠나기 전 3건은 한 상자에 담겨 알바 한 명이 한 번에 · 마을톡도 한 번씩 · 배달비는 한 번', async () => {
+    const a = await open();
+    const w = await enter(a);
+    await moveTo(a, 8, 8);
+    const sent = [];
+    for (const [item, n] of [['rice', 10], ['egg', 5], ['rice', 2]]) {
+      a.send({ t: 'deliv_order', rid: newRid(), item, n });
+      sent.push(await a.type('deliv_ok'));
+    }
+    assert.equal(new Set(sent.map((o) => o.id)).size, 1, '같은 상자');
+    assert.deepEqual(sent.map((o) => o.fee), [server.data.shop.delivery.fee, 0, 0], '배달비는 처음 한 번');
+    assert.deepEqual(sent.map((o) => o.merged), [false, true, true]);
+    assert.deepEqual(sent[2].items, [{ item: 'rice', n: 12 }, { item: 'egg', n: 5 }], '같은 재료는 합친다');
+    assert.equal(sent[2].sol, w.prof.sol - sent.reduce((s, o) => s + o.amount, 0));
+    // 4건째는 이미 3건이 대기 중이라 거절.
+    a.send({ t: 'deliv_order', rid: newRid(), item: 'tofu', n: 1 });
+    assert.equal((await a.type('error')).code, 'delivery_busy');
+    const shopMsgs = [];
+    const done = await a.next((m) => {
+      // (도우미가 같은 메시지를 여러 번 물어볼 수 있어 보낸 시각으로 하나만 센다)
+      if (m.t === 'msg' && m.th === 'sys:shop' && !shopMsgs.some((x) => x.at === m.m.at && x.tx === m.m.tx)) shopMsgs.push(m.m);
+      return m.t === 'deliv_done';
+    }, 8000);
+    assert.deepEqual(done.items.map((it) => `${it.item}:${it.n}:${it.where}`), ['rice:12:bag', 'egg:5:bag']);
+    const thanks = await a.next((m) => m.t === 'msg' && m.th === 'sys:shop' && /배달 완료/.test(m.m.tx), 3000);
+    const texts = [...shopMsgs.map((m) => m.tx), thanks.m.tx];
+    assert.equal(texts.filter((t) => /배달 가고 있습니다/.test(t)).length, 1, `출발 안내는 한 번: ${texts.join(' / ')}`);
+    assert.match(texts[0], /쌀 한 봉 12개, 달걀 5개, 배달 가고 있습니다~/);
+    assert.match(thanks.m.tx, /배달 완료! 쌀 한 봉 12개, 달걀 5개/);
+    await a.next((m) => m.t === 'couriers' && m.c.length === 0, 8000);
   });
 
   it('배달: 식재료만, 한 사람이 동시에 3건까지', async () => {
@@ -131,7 +163,7 @@ describe('v13 상점 10개씩 · 식당 창고 · 식재료 배달', () => {
       a.send({ t: 'deliv_order', rid: newRid(), item: 'tofu', n: 4 });
       await a.type('deliv_ok');
       const done = await a.type('deliv_done', 5000);
-      assert.equal(done.where, 'storage');
+      assert.deepEqual(done.items.map((it) => it.where), ['storage']);
       const note = await a.next((m) => m.t === 'msg' && m.th === 'sys:shop' && /식당 창고/.test(m.m.tx), 3000);
       assert.match(note.m.tx, /두부 4개/);
     } finally {

@@ -185,11 +185,22 @@ func _run() -> void:
 
 	# ---- v13: 식재료 배달 → 마을톡 → 배달 알바가 뛰어와 건넴 ----
 	var couriers: CourierField = _village.get_node("Couriers")
+	# 묶음 배달 (v0.13.2): 출발 전에 세 건을 주문하면 한 상자에 담겨 한 번에 온다.
+	var sol_deliv: int = Net.sol
 	Net.order_delivery("egg", 10)
 	_check(await _wait_until(func() -> bool: return Net.my_deliveries.size() == 1, 2.0), "달걀 10개 배달 주문")
-	_check(await _wait_until(func() -> bool: return couriers.count() == 1, 8.0), "잠시 뒤 배달 알바가 나타남")
-	_check(Talk.last_text("sys:shop").contains("배달 가고 있습니다"), "마을톡: '%s'" % Talk.last_text("sys:shop"))
-	_check(await _wait_until(func() -> bool: return _count_of("egg") == 10, 25.0), "알바가 뛰어와 달걀 10개를 건넴")
+	Net.order_delivery("rice", 2)
+	Net.order_delivery("tofu", 3)
+	_check(await _wait_until(func() -> bool: return int(Net.my_deliveries[0].get("orders", 0)) == 3, 2.0) and Net.my_deliveries.size() == 1, "세 건이 한 상자에 담김 (%d상자)" % Net.my_deliveries.size())
+	var goods: int = 10 * GameData.item("egg").buy_price + 2 * GameData.item("rice").buy_price + 3 * GameData.item("tofu").buy_price
+	_check(sol_deliv - Net.sol == goods + GameData.shop.delivery_fee, "배달비는 한 번만 (%s)" % Money.short(sol_deliv - Net.sol))
+	var shop_count: int = (Talk.threads.get("sys:shop", {}).get("m", []) as Array).size()
+	_check(await _wait_until(func() -> bool: return couriers.count() == 1, 8.0), "잠시 뒤 배달 알바가 한 명 나타남")
+	_check(Talk.last_text("sys:shop").contains("배달 가고 있습니다") and Talk.last_text("sys:shop").contains("두부"), "마을톡: '%s'" % Talk.last_text("sys:shop"))
+	_check(await _wait_until(func() -> bool: return _count_of("egg") == 10 and _count_of("tofu") == 3, 25.0), "알바가 뛰어와 한 상자를 한 번에 건넴")
+	var shop_msgs: Array = Talk.threads.get("sys:shop", {}).get("m", [])
+	_check(shop_msgs.size() - shop_count == 2, "출발 안내 한 번 + 배달 완료 한 번 (%d통)" % (shop_msgs.size() - shop_count))
+	_check(couriers.count() <= 1, "알바는 한 명")
 	_check(Net.my_deliveries.is_empty() and Talk.last_text("sys:shop").contains("배달 완료"), "배달 완료 마을톡")
 	_check(await _wait_until(func() -> bool: return couriers.count() == 0, 25.0), "알바는 상점으로 돌아감")
 

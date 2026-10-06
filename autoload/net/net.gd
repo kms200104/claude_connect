@@ -71,9 +71,10 @@ signal drop_removed(id: String, by: int)
 signal collected(kind: String, item_id: String)
 ## 바닥 묶음의 개수가 바뀌었다 (v13: 가방에 다 안 들어가 일부만 주웠을 때).
 signal drop_changed(drop: DropInfo)
-## 식재료 배달 (v13): 주문이 받아졌다 / 물건을 받았다(where = "bag" | "storage") / 길 위의 배달 알바들이 바뀌었다.
-signal delivery_ordered(item_id: String, count: int, eta_s: int, amount: int)
-signal delivery_done(item_id: String, count: int, where: String)
+## 식재료 배달 (v13): 주문이 받아졌다(merged = 아직 떠나지 않은 상자에 같이 담김, 배달비 없음) /
+## 상자를 받았다(items = [{item, n, where: "bag" | "storage"}]) / 길 위의 배달 알바들이 바뀌었다.
+signal delivery_ordered(item_id: String, count: int, eta_s: int, amount: int, merged: bool)
+signal delivery_done(items: Array[Dictionary])
 signal couriers_updated(list: Array[Dictionary])
 ## 낚시 대회 상금을 받았다.
 signal fish_bonus(amount: int)
@@ -172,7 +173,7 @@ var last_trade_stored: bool = false
 var last_fish: Dictionary = {}
 ## 낚시터 id → 물고기 그림자 목록 (fishes_updated 와 같은 것).
 var fishes: Dictionary[String, Array] = {}
-## 길 위의 배달 알바 [{id, x, z, yaw, ph, to, item}] 와 내 배달 주문 [{id, item, n, ph}] (v13).
+## 길 위의 배달 알바 [{id, x, z, yaw, ph, to, item, k}] 와 내 배달 상자 [{id, items: [{item, n}], ph}] (v13, 묶음 배달).
 var couriers: Array[Dictionary] = []
 var my_deliveries: Array[Dictionary] = []
 ## 마지막 도끼질로 얻은 개수 (나무꾼의 날에는 2).
@@ -322,9 +323,17 @@ func cancel_fishing() -> void:
 
 
 ## 칸에 든 아이템 버리기(물고기는 놓아주기). 도구는 서버가 거부한다.
-## 식재료 배달 주문 (v13). 값 + 배달비를 바로 낸다.
+## 식재료 배달 주문 (v13). 값 + 배달비를 바로 낸다. 아직 상점을 떠나지 않은 내 상자가 있으면 거기에 같이 담기고 배달비는 없다.
 func order_delivery(item_id: String, count: int) -> void:
 	_request("deliv_order", {"item": item_id, "n": count})
+
+
+## 아직 상점을 떠나지 않은 (같이 담을 수 있는) 내 배달 상자가 있는지 — 있으면 다음 주문은 배달비 없이 같이 온다.
+func has_waiting_delivery() -> bool:
+	for d: Dictionary in my_deliveries:
+		if str(d.get("ph", "wait")) == "wait":
+			return true
+	return false
 
 
 func _apply_couriers(list: Variant) -> void:
@@ -921,12 +930,26 @@ func _handle_text(text: String) -> void:
 		"deliv_ok":
 			_pending.erase(str(msg.get("rid", "")))
 			sol = int(msg.get("sol", sol))
-			my_deliveries.append({"id": str(msg.get("id", "")), "item": str(msg.get("item", "")), "n": int(msg.get("n", 1)), "ph": "wait"})
-			delivery_ordered.emit(str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("eta", 0)), int(msg.get("amount", 0)))
+			# 같은 상자(id)에 담겼으면 그 상자의 물건 목록만 바꾼다.
+			var box_id: String = str(msg.get("id", ""))
+			var box_items: Array = msg.get("items", [{"item": msg.get("item", ""), "n": msg.get("n", 1)}])
+			var found: bool = false
+			for d: Dictionary in my_deliveries:
+				if str(d.get("id", "")) == box_id:
+					d["items"] = box_items
+					d["orders"] = int(msg.get("orders", 1))
+					found = true
+			if not found:
+				my_deliveries.append({"id": box_id, "items": box_items, "orders": int(msg.get("orders", 1)), "ph": "wait"})
+			delivery_ordered.emit(str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("eta", 0)), int(msg.get("amount", 0)), bool(msg.get("merged", false)))
 		"deliv_done":
 			var done_id: String = str(msg.get("id", ""))
 			my_deliveries = my_deliveries.filter(func(d: Dictionary) -> bool: return str(d.get("id", "")) != done_id)
-			delivery_done.emit(str(msg.get("item", "")), int(msg.get("n", 1)), str(msg.get("where", "bag")))
+			var got: Array[Dictionary] = []
+			for entry: Variant in msg.get("items", []):
+				if entry is Dictionary:
+					got.append(entry)
+			delivery_done.emit(got)
 		"couriers":
 			_apply_couriers(msg.get("c", []))
 		"collect_result":
