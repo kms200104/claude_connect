@@ -13,15 +13,15 @@ import { Client, uid } from './helpers.js';
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
 
 describe('v0.10 집 안 계산', () => {
-  it('평면도 다섯 가지: 26평 A/B · 27평 · 34평 · 35평, 크기가 평형에 맞다', () => {
-    assert.deepEqual([...data.plans.keys()].sort(), ['26a', '26b', '27', '34', '35']);
+  it('평면도 여덟 가지: 푸르지오 26평 A/B · 27평 · 34평 · 35평 + e편한세상 84A · 105 · 125, 크기가 평형에 맞다', () => {
+    assert.deepEqual([...data.plans.keys()].sort(), ['105', '125', '26a', '26b', '27', '34', '35', '84a']);
+    const rooms = { '26a': 3, '26b': 3, 27: 3, 34: 4, 35: 4, '84a': 3, 105: 3, 125: 4 };
     for (const p of data.plans.values()) {
       const area = p.rooms.reduce((a, r) => a + r.rects.reduce((b, [x0, z0, x1, z1]) => b + (x1 - x0) * (z1 - z0), 0), 0);
-      const small = p.pyeong < 30;
-      // 전용 59㎡ 는 발코니 확장 포함 70~90㎡, 84㎡ 는 95~125㎡ 정도.
-      assert.ok(small ? area > 65 && area < 92 : area > 92 && area < 128, `${p.id} 바닥 ${area.toFixed(1)}㎡`);
+      // 발코니·실외기실까지 친 바닥: 평(3.3㎡)의 0.8~1.15배 정도 (전용 59㎡ ≈ 70~90㎡, 84㎡ ≈ 92~125㎡).
+      assert.ok(area > p.pyeong * 2.6 && area < p.pyeong * 3.8, `${p.id} 바닥 ${area.toFixed(1)}㎡`);
       const bedrooms = p.rooms.filter((r) => r.kind === 'bedroom' || r.kind === 'master').length;
-      assert.equal(bedrooms, small ? 3 : 4, `${p.id} 방 수`);
+      assert.equal(bedrooms, rooms[p.id], `${p.id} 방 수`);
       assert.ok(onFloor(p, p.spawn[0], p.spawn[1]), `${p.id} 현관에서 시작`);
       assert.equal(roomAt(p, p.spawn[0], p.spawn[1]).kind, 'entry');
     }
@@ -29,10 +29,11 @@ describe('v0.10 집 안 계산', () => {
 
   it('동·라인마다 평형과 평면, 호수마다 겹치지 않는 집 안 자리', () => {
     const plan = (id) => planIdOf(data.realestate, data.units.find((u) => u.id === id));
-    assert.equal(plan('101-501'), '34');
-    assert.equal(plan('101-502'), '34');
+    assert.equal(plan('101-501'), '84a');
+    assert.equal(plan('101-502'), '34', '84B 는 아직 예전 평면');
     assert.equal(plan('102-302'), '35');
-    assert.equal(plan('104-301'), '35');
+    assert.equal(plan('104-301'), '105');
+    assert.equal(plan('105-302'), '125');
     const origins = data.units.map((u) => interiorOrigin(data.floorplans, data.units, u.id));
     const edge = defaultConfig.worldHalfExtent;
     for (let i = 0; i < origins.length; i++) {
@@ -106,9 +107,9 @@ describe('v0.10 집 안 서버 연동', () => {
     await a.type('apt_result');
     a.send({ t: 'home_enter', rid: newRid(), unit: '102-501' });
     const home = await a.type('home');
-    assert.equal(home.plan, '34');
+    assert.equal(home.plan, '84a');
     assert.equal(home.edit, true);
-    assert.equal(home.f.length, 7, 'TV · 에어컨 · 선풍기 · 침대 4');
+    assert.equal(home.f.length, 6, 'TV · 에어컨 · 선풍기 · 침대 3');
     const o = interiorOrigin(data.floorplans, data.units, '102-501');
     assert.deepEqual([home.ox, home.oz], [o.x, o.z]);
     // 침대 하나를 옆으로 옮기고 90° 돌린다 (보이지 않는 0.25m 격자에 맞춘다).
@@ -131,13 +132,13 @@ describe('v0.10 집 안 서버 연동', () => {
     a.send({ t: 'home_place', rid: newRid(), slot: sofaSlot, x: 9.0, z: 7.0, rot: 4 });
     const placed = await a.type('home_f');
     assert.ok(placed.f.some((f) => f[1] === 'fabric_sofa' && f[4] === 4));
-    assert.equal(room.homeItems['102-501'].length, 7, '선풍기 하나 빼고 소파 하나 더');
+    assert.equal(room.homeItems['102-501'].length, 6, '선풍기 하나 빼고 소파 하나 더');
     // 친구는 구경만.
     await moveTo(b, lobby.x + 0.5, lobby.z);
     b.send({ t: 'home_enter', rid: newRid(), unit: '102-501' });
     const visit = await b.type('home');
     assert.equal(visit.edit, false);
-    assert.equal(visit.f.length, 7);
+    assert.equal(visit.f.length, 6);
     b.send({ t: 'home_pickup', rid: newRid(), id: bed[0] });
     assert.equal((await b.type('error')).code, 'not_editable');
     // 주인이 옮기면 같이 있는 친구에게도 보인다.

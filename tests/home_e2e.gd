@@ -60,7 +60,7 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.state == Net.State.ONLINE, 5.0), "앱 안 테스트 서버로 접속")
 	_check(Net.is_test_server() and Net.room_code == LocalTestServer.ROOM_CODE, "테스트 서버 방 %s" % Net.room_code)
 	_check(GameData.trees.size() > 0 and Net.tree_stages.size() == GameData.trees.size(), "진짜 서버에서 찍어 둔 마을 (나무 %d)" % Net.tree_stages.size())
-	await _visit_and_decorate(home, interaction, "102-501", "34", true)
+	await _visit_and_decorate(home, interaction, "102-501", "84a", true)
 	# 테스트 서버에서 안 되는 요청은 알기 쉽게 거절.
 	var refused: Array = []
 	Net.request_failed.connect(func(kind: String, code: String) -> void: refused.append(code))
