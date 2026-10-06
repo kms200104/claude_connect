@@ -25,6 +25,17 @@ extends Node3D
 var focus: float = 0.0
 var _focus_tween: Tween = null
 
+@export_group("Bag")
+## 가방 창을 열었을 때 (v0.12): 캐릭터에 조금 다가가면서 바라보는 점을 머리 위로 올린다
+## → 캐릭터는 화면 아래쪽에 서고, 머리 위 빈 하늘에 가방 창이 뜬다.
+@export_range(1.0, 30.0, 0.1, "suffix:m") var bag_distance: float = 6.2
+@export_range(0.0, 85.0, 0.5, "suffix:°") var bag_pitch_degrees: float = 30.0
+@export_range(0.0, 6.0, 0.05, "suffix:m") var bag_height: float = 3.6
+
+## 0 = 평소, 1 = 가방 창 구도. set_bag_view 로 부드럽게 바꾼다.
+var bag_view: float = 0.0
+var _bag_tween: Tween = null
+
 @export_group("Smoothing")
 ## 클수록 캐릭터에 딱 붙는다 (지수 감쇠 계수, 프레임레이트와 무관).
 @export_range(0.5, 30.0, 0.1) var follow_smoothing: float = 5.0
@@ -63,15 +74,25 @@ func set_focus(amount: float, duration: float = 0.6) -> void:
 	_focus_tween.tween_property(self, "focus", clampf(amount, 0.0, 1.0), duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
+## 가방 창 구도로 옮겨 가거나(on) 평소로 돌아온다. 카메라가 미끄러지듯 움직인다.
+func set_bag_view(on: bool, duration: float = 0.55) -> void:
+	if _bag_tween != null and _bag_tween.is_valid():
+		_bag_tween.kill()
+	_bag_tween = create_tween()
+	_bag_tween.tween_property(self, "bag_view", 1.0 if on else 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT if on else Tween.EASE_IN_OUT)
+
+
 func _apply_framing() -> void:
-	rotation_degrees = Vector3(-lerpf(pitch_degrees, focus_pitch_degrees, focus), yaw_degrees, 0.0)
+	var pitch: float = lerpf(lerpf(pitch_degrees, focus_pitch_degrees, focus), bag_pitch_degrees, bag_view)
+	rotation_degrees = Vector3(-pitch, yaw_degrees, 0.0)
 	if camera != null:
-		camera.position = Vector3(0.0, 0.0, lerpf(distance, focus_distance, focus))
+		camera.position = Vector3(0.0, 0.0, lerpf(lerpf(distance, focus_distance, focus), bag_distance, bag_view))
 		camera.fov = fov
 
 
 func _goal_position() -> Vector3:
-	var goal: Vector3 = target.global_position + target_offset.lerp(Vector3(0.0, focus_height, 0.0), focus)
+	var offset: Vector3 = target_offset.lerp(Vector3(0.0, focus_height, 0.0), focus).lerp(Vector3(0.0, bag_height, 0.0), bag_view)
+	var goal: Vector3 = target.global_position + offset
 	if look_ahead_time > 0.0 and target is CharacterBody3D:
 		var body: CharacterBody3D = target
 		goal += Vector3(body.velocity.x, 0.0, body.velocity.z) * look_ahead_time

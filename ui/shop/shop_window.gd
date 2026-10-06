@@ -144,10 +144,16 @@ func _buy_row(info: ItemInfo) -> Control:
 	elif price > info.buy_price:
 		note = " (물가 ↑)"
 	var row: HBoxContainer = _row_base(info, "%s · %s솔%s" % [info.kind_label(), InventoryWindow._format_number(price), note])
-	var button: Button = _action_button("사기")
+	var button: Button = _action_button("1개")
 	button.disabled = Net.sol < price
 	button.pressed.connect(func() -> void: Net.buy_item(info.id, 1, at))
 	row.add_child(button)
+	# v13: 10개씩 사기 (식재료는 가방 대신 식당 창고로 간다).
+	if not (info.is_furniture() or info.is_clothing() or info.is_tool()):
+		var ten: Button = _action_button("10개")
+		ten.disabled = Net.sol < price * 10
+		ten.pressed.connect(func() -> void: Net.buy_item(info.id, 10, at))
+		row.add_child(ten)
 	return row
 
 
@@ -224,8 +230,10 @@ func _on_traded(kind: String, item_id: String, count: int, amount: int) -> void:
 	var name_text: String = GameData.item_name(item_id)
 	if kind == "sell":
 		_message.text = "%s %d개를 %s솔에 팔았어요" % [name_text, count, InventoryWindow._format_number(amount)]
+	elif Net.last_trade_stored:
+		_message.text = "%s %d개를 %s솔에 샀어요 → 식당 창고에 보관" % [name_text, count, InventoryWindow._format_number(amount)]
 	else:
-		_message.text = "%s을(를) %s솔에 샀어요" % [name_text, InventoryWindow._format_number(amount)]
+		_message.text = "%s %d개를 %s솔에 샀어요" % [name_text, count, InventoryWindow._format_number(amount)]
 	_refresh()
 
 
@@ -242,6 +250,8 @@ func _on_request_failed(kind: String, code: String) -> void:
 			_message.text = "솔이 모자라요"
 		NetProtocol.ERR_INVENTORY_FULL:
 			_message.text = "가방이 가득 찼어요"
+		NetProtocol.ERR_STORAGE_FULL:
+			_message.text = "식당 창고에 그 재료가 가득해요"
 		NetProtocol.ERR_CANT_SELL:
 			_message.text = "그건 팔 수 없어요"
 		NetProtocol.ERR_NOT_FOR_SALE:

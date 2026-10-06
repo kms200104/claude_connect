@@ -1,4 +1,4 @@
-[gd_scene load_steps=72 format=3]
+[gd_scene load_steps=73 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -21,6 +21,7 @@
 [ext_resource type="Material" path="res://assets/materials/foliage.tres" id="23_foliage"]
 [ext_resource type="Script" path="res://game/npc/npc_crowd.gd" id="24_crowd"]
 [ext_resource type="PackedScene" path="res://game/npc/npc_actor.tscn" id="25_actor"]
+[ext_resource type="Script" path="res://game/shop/courier_field.gd" id="72_couriers"]
 [ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="26_wall"]
 [ext_resource type="Material" path="res://assets/materials/house_roof.tres" id="27_roof"]
 [ext_resource type="Material" path="res://assets/materials/window_glow.tres" id="28_window"]
@@ -227,6 +228,12 @@ script = ExtResource("24_crowd")
 actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
+
+[node name="Couriers" type="Node3D" parent="." node_paths=PackedStringArray("toast_hud", "player")]
+script = ExtResource("72_couriers")
+actor_scene = ExtResource("25_actor")
+toast_hud = NodePath("../HUD/FishingHud")
+player = NodePath("../Player")
 
 [node name="Drops" type="Node3D" parent="."]
 script = ExtResource("48_drops")
@@ -548,8 +555,9 @@ script = ExtResource("61_catch_card")
 
 [node name="DialogueBox" parent="HUD" instance=ExtResource("38_dialogue_box")]
 
-[node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
+[node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player", "camera_rig") instance=ExtResource("21_inventory")]
 player = NodePath("../../Player")
+camera_rig = NodePath("../../CameraRig")
 
 [node name="ShopWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("44_shop_window")]
 player = NodePath("../../Player")

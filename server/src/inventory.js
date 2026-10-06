@@ -119,15 +119,22 @@ export function moveSlot(slots, from, to, limitOf) {
 
 /**
  * 저장 파일에서 읽은 값을 정리한다.
- * - 새 형식: 칸 배열(길이 = 퀵슬롯 + 가방)
+ * - 새 형식: 칸 배열. positional 이면 칸 자리를 그대로 지킨다. 가방 칸 수가 바뀌었으면(v0.12: 20 → 30)
+ *   있는 칸은 같은 자리에 두고, 줄어서 넘친 아이템만 빈 칸에 다시 넣는다.
  * - 옛 형식(schema 1): 물고기 목록 [{id, n}] → 차례로 넣는다
  */
-export function sanitize(raw, cfg, isKnown, limitOf) {
+export function sanitize(raw, cfg, isKnown, limitOf, positional = Array.isArray(raw) && raw.length === slotCount(cfg)) {
   const slots = emptySlots(cfg);
   if (!Array.isArray(raw)) return slots;
   const clean = (it) => (it && typeof it.id === 'string' && isKnown(it.id) && Number.isInteger(it.n) && it.n >= 1 ? { id: it.id, n: Math.min(it.n, limitOf(it.id)) } : null);
-  if (raw.length === slots.length) {
-    for (let i = 0; i < raw.length; i++) slots[i] = clean(raw[i]);
+  if (positional) {
+    const overflow = [];
+    for (let i = 0; i < raw.length; i++) {
+      const c = clean(raw[i]);
+      if (i < slots.length) slots[i] = c;
+      else if (c) overflow.push(c);
+    }
+    for (const c of overflow) addItem(slots, c.id, c.n, cfg, limitOf);
     return slots;
   }
   for (const it of raw) {

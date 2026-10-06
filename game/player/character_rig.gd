@@ -58,6 +58,8 @@ var _cook_target: float = 0.0
 var _cook_value: float = 0.0
 var _sit_target: float = 0.0
 var _sit_value: float = 0.0
+var _rummage_target: float = 0.0
+var _rummage_value: float = 0.0
 var _tool_id: String = ""
 var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
@@ -148,11 +150,11 @@ func set_held(item_id: String) -> void:
 		_held_before_show = item_id
 		return
 	if rod != null:
-		rod.visible = item_id == "rod" and _cook_target < 0.5
+		rod.visible = item_id == "rod" and _cook_target < 0.5 and _rummage_target < 0.5
 	if axe != null:
-		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and _cook_target < 0.5
+		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and _cook_target < 0.5 and _rummage_target < 0.5
 	_set_swing(item_id if item_id in SWING_TOOLS else "")
-	if _cook_target < 0.5:
+	if _cook_target < 0.5 and _rummage_target < 0.5:
 		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
 
@@ -226,6 +228,24 @@ func is_cooking() -> bool:
 ## 식당 의자에 앉기 (다리를 앞으로 뻗고 몸을 살짝 흔든다).
 func set_sitting(active: bool) -> void:
 	_sit_target = 1.0 if active else 0.0
+
+
+## 가방을 여는 동안 주머니를 뒤진다 (고개를 숙여 주머니를 내려다본다). 손에 든 도구는 잠깐 숨긴다.
+func set_rummaging(active: bool) -> void:
+	_rummage_target = 1.0 if active else 0.0
+	var hide: bool = active or _cook_target > 0.5 or _show_target > 0.5
+	if rod != null:
+		rod.visible = not hide and held_item == "rod"
+	if axe != null:
+		axe.visible = not hide and (held_item == "axe" or held_item in SWING_TOOLS)
+	if tool != null and active:
+		tool.visible = false
+	elif not active and _cook_target < 0.5:
+		_set_tool(held_item if held_item in HAND_TOOLS else "")
+
+
+func is_rummaging() -> bool:
+	return _rummage_target > 0.5
 
 
 func _set_tool(tool_id: String) -> void:
@@ -369,6 +389,11 @@ func _process(delta: float) -> void:
 	tree.set("parameters/CookBlend/blend_amount", _cook_value)
 	_sit_value = move_toward(_sit_value, _sit_target, 6.0 * delta)
 	tree.set("parameters/SitBlend/blend_amount", _sit_value)
+	_rummage_value = move_toward(_rummage_value, _rummage_target, 5.0 * delta)
+	tree.set("parameters/RummageBlend/blend_amount", _rummage_value)
+	if _rummage_value > 0.0:
+		# 주머니를 내려다본다 (눈동자를 아래 오른쪽으로).
+		set_eye_offset(_eye_offset.lerp(Vector2(0.35, -0.8) * _rummage_value, 1.0 - exp(-8.0 * delta)))
 	if _tug > 0.0 or rotation.x != 0.0:
 		_tug = move_toward(_tug, 0.0, 0.9 * delta)
 		rotation.x = lerpf(rotation.x, _tug, 1.0 - exp(-30.0 * delta))

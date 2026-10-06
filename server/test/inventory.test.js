@@ -71,6 +71,15 @@ describe('inventory (퀵슬롯 + 가방 칸)', () => {
     assert.deepEqual(sanitize('x', cfg, isKnown, limitOf), emptySlots(cfg));
   });
 
+  it('가방 칸 수가 바뀐 저장 파일: 있던 칸은 같은 자리, 넘친 것만 빈 칸으로', () => {
+    // 옛 가방 2칸(퀵 2 + 가방 2 = 4칸) → 지금 가방 3칸: 자리를 그대로 두고 마지막 칸만 빈다.
+    const older = [{ id: 'rod', n: 1 }, null, null, { id: 'carp', n: 2 }];
+    assert.deepEqual(sanitize(older, cfg, isKnown, limitOf, true), [{ id: 'rod', n: 1 }, null, null, { id: 'carp', n: 2 }, null]);
+    // 칸이 줄었으면 넘친 아이템은 빈 칸에 다시 넣는다.
+    const bigger = [{ id: 'rod', n: 1 }, null, null, null, null, { id: 'c', n: 1 }];
+    assert.deepEqual(sanitize(bigger, cfg, isKnown, limitOf, true), [{ id: 'rod', n: 1 }, null, { id: 'c', n: 1 }, null, null]);
+  });
+
   it('전송 형식에 칸 수와 손에 든 칸이 실린다', () => {
     const s = emptySlots(cfg);
     s[0] = { id: 'rod', n: 1 };

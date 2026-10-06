@@ -65,6 +65,12 @@ signal drop_added(drop: DropInfo)
 signal drop_removed(id: String, by: int)
 ## 내가 선물·별 조각을 주웠다.
 signal collected(kind: String, item_id: String)
+## 바닥 묶음의 개수가 바뀌었다 (v13: 가방에 다 안 들어가 일부만 주웠을 때).
+signal drop_changed(drop: DropInfo)
+## 식재료 배달 (v13): 주문이 받아졌다 / 물건을 받았다(where = "bag" | "storage") / 길 위의 배달 알바들이 바뀌었다.
+signal delivery_ordered(item_id: String, count: int, eta_s: int, amount: int)
+signal delivery_done(item_id: String, count: int, where: String)
+signal couriers_updated(list: Array[Dictionary])
 ## 낚시 대회 상금을 받았다.
 signal fish_bonus(amount: int)
 ## 누군가 씨앗을 심어 새 나무가 생겼다 (상태는 tree_changed 로도 온다).
@@ -153,6 +159,14 @@ var outfit_top: String = ""
 var events: Array[ActiveEvent] = []
 ## 바닥에 떨어진 선물·별 조각 (id → 정보).
 var drops: Dictionary[String, DropInfo] = {}
+## 마지막으로 주운 개수와 바닥에 남은 개수 (v13 내려놓은 묶음).
+var last_collect_count: int = 1
+var last_collect_left: int = 0
+## 마지막으로 산 것이 식당 창고로 갔는지 (v13: 식재료).
+var last_trade_stored: bool = false
+## 길 위의 배달 알바 [{id, x, z, yaw, ph, to, item}] 와 내 배달 주문 [{id, item, n, ph}] (v13).
+var couriers: Array[Dictionary] = []
+var my_deliveries: Array[Dictionary] = []
 ## 마지막 도끼질로 얻은 개수 (나무꾼의 날에는 2).
 var last_chop_count: int = 1
 ## 씨앗을 심어 생긴 나무 (id → 정보). 데이터 나무는 GameData.trees.
@@ -294,6 +308,25 @@ func cancel_fishing() -> void:
 
 
 ## 칸에 든 아이템 버리기(물고기는 놓아주기). 도구는 서버가 거부한다.
+## 식재료 배달 주문 (v13). 값 + 배달비를 바로 낸다.
+func order_delivery(item_id: String, count: int) -> void:
+	_request("deliv_order", {"item": item_id, "n": count})
+
+
+func _apply_couriers(list: Variant) -> void:
+	couriers.clear()
+	if list is Array:
+		for entry: Variant in list:
+			if entry is Dictionary:
+				couriers.append(entry)
+	# 내 주문 중 길에 나선 것은 'walk' 로 (휴대폰에 "오는 중" 표시).
+	for d: Dictionary in my_deliveries:
+		for c: Dictionary in couriers:
+			if str(c.get("id", "")) == str(d.get("id", "")):
+				d["ph"] = str(c.get("ph", "walk"))
+	couriers_updated.emit(couriers)
+
+
 func discard_item(slot: int, count: int = 1) -> void:
 	_request("inv_discard", {"slot": slot, "n": count})
 
@@ -812,6 +845,7 @@ func _handle_text(text: String) -> void:
 		"shop_result":
 			_pending.erase(str(msg.get("rid", "")))
 			sol = int(msg.get("sol", sol))
+			last_trade_stored = bool(msg.get("stored", false))
 			shop_traded.emit(str(msg.get("kind", "")), str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("amount", 0)))
 		"placed":
 			_pending.erase(str(msg.get("rid", "")))
@@ -848,14 +882,31 @@ func _handle_text(text: String) -> void:
 			var dropped: Variant = msg.get("d", {})
 			if dropped is Dictionary:
 				var d: DropInfo = DropInfo.from_dict(dropped)
+				var known: bool = drops.has(d.id)
 				drops[d.id] = d
-				drop_added.emit(d)
+				if known:
+					drop_changed.emit(d)
+				else:
+					drop_added.emit(d)
 		"drop_gone":
 			var gone: String = str(msg.get("id", ""))
 			drops.erase(gone)
 			drop_removed.emit(gone, int(msg.get("by", 0)))
+		"deliv_ok":
+			_pending.erase(str(msg.get("rid", "")))
+			sol = int(msg.get("sol", sol))
+			my_deliveries.append({"id": str(msg.get("id", "")), "item": str(msg.get("item", "")), "n": int(msg.get("n", 1)), "ph": "wait"})
+			delivery_ordered.emit(str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("eta", 0)), int(msg.get("amount", 0)))
+		"deliv_done":
+			var done_id: String = str(msg.get("id", ""))
+			my_deliveries = my_deliveries.filter(func(d: Dictionary) -> bool: return str(d.get("id", "")) != done_id)
+			delivery_done.emit(str(msg.get("item", "")), int(msg.get("n", 1)), str(msg.get("where", "bag")))
+		"couriers":
+			_apply_couriers(msg.get("c", []))
 		"collect_result":
 			_pending.erase(str(msg.get("rid", "")))
+			last_collect_count = int(msg.get("n", 1))
+			last_collect_left = int(msg.get("left", 0))
 			collected.emit(str(msg.get("kind", "")), str(msg.get("item", "")))
 		"error":
 			_on_server_error(str(msg.get("code", "")), msg)
@@ -918,6 +969,11 @@ func _on_welcome(msg: Dictionary) -> void:
 				var p: PlacedInfo = PlacedInfo.from_dict(entry)
 				placed[p.id] = p
 	drops.clear()
+	_apply_couriers(msg.get("couriers", []))
+	my_deliveries.clear()
+	for entry: Variant in msg.get("deliv", []):
+		if entry is Dictionary:
+			my_deliveries.append(entry)
 	var drop_list: Variant = msg.get("drops", [])
 	if drop_list is Array:
 		for entry: Variant in drop_list:

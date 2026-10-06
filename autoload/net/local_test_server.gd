@@ -185,9 +185,18 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send_inventory(peer)
 			_save()
 		"inv_discard":
+			# v13: 버린 물건은 발밑에 남는다 (다시 주울 수 있다).
 			var slot: int = int(msg.get("slot", -1))
 			if slot >= 0 and slot < _slots.size() and _slots[slot] != null and not _is_tool(str(_slots[slot]["id"])):
-				_remove(slot, maxi(1, int(msg.get("n", 1))))
+				var n: int = clampi(int(msg.get("n", 1)), 1, int(_slots[slot]["n"]))
+				var item: String = str(_slots[slot]["id"])
+				_remove(slot, n)
+				_drop_seq += 1
+				var k: float = float(_drop_seq % 12)
+				var g: Dictionary = {"id": "g%d" % _drop_seq, "kind": "item", "item": item, "n": n,
+					"x": _pos.x + cos(k * 2.4) * (0.25 + 0.2 * sqrt(k)), "z": _pos.z + sin(k * 2.4) * (0.25 + 0.2 * sqrt(k))}
+				_drops[g["id"]] = g
+				_send(peer, {"t": "drop", "d": g, "by": 1})
 				_save()
 			_send_inventory(peer)
 		"shop_enter", "shop_exit":
@@ -297,11 +306,12 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if d.is_empty():
 				fail.call(NetProtocol.ERR_NO_DROP)
 				return
-			if not _add(str(d["item"]), 1):
+			var n: int = int(d.get("n", 1))
+			if not _add(str(d["item"]), n):
 				fail.call(NetProtocol.ERR_INVENTORY_FULL)
 				return
 			_drops.erase(d["id"])
-			_send(peer, {"t": "collect_result", "rid": rid, "id": d["id"], "kind": d["kind"], "item": d["item"]})
+			_send(peer, {"t": "collect_result", "rid": rid, "id": d["id"], "kind": d["kind"], "item": d["item"], "n": n, "left": 0})
 			_send_inventory(peer)
 			_send(peer, {"t": "drop_gone", "id": d["id"], "by": 1})
 			_save()
@@ -701,7 +711,7 @@ static func _flower_wire(f: Dictionary) -> Dictionary:
 # ---- 들판 채집 (나무 곁 풀숲에 돋는다 — 섬 안 땅이 틀림없는 자리) ----
 
 func _spawn_forage() -> void:
-	if _drops.size() >= FORAGE_MAX or GameData.trees.is_empty():
+	if _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "forage").size() >= FORAGE_MAX or GameData.trees.is_empty():
 		return
 	var items: Array = (_read_json("res://data/restaurant/restaurant.json").get("forage", {}) as Dictionary).get("items", [])
 	var trees: Array = GameData.trees.values()
@@ -958,8 +968,15 @@ func _load() -> void:
 	var saved: Dictionary = _read_json(SAVE_PATH)
 	if saved.is_empty():
 		return
-	if saved.get("slots") is Array and (saved["slots"] as Array).size() == _slots.size():
-		_slots = saved["slots"]
+	if saved.get("slots") is Array:
+		# 가방 칸 수가 바뀌었어도(v13: 20 → 30) 있던 칸은 같은 자리에 둔다.
+		var old_slots: Array = saved["slots"]
+		for i: int in mini(old_slots.size(), _slots.size()):
+			_slots[i] = old_slots[i]
+	for g: Variant in saved.get("ground", []):
+		if g is Dictionary and str(g.get("id", "")).begins_with("g") and GameData.item(str(g.get("item", ""))) != null:
+			_drops[str(g["id"])] = g
+	_drop_seq = int(saved.get("drop_seq", _drop_seq))
 	_held = int(saved.get("held", _held))
 	_sol = int(saved.get("sol", _sol))
 	var p: Array = saved.get("pos", [0, 0])
@@ -1000,7 +1017,8 @@ func _save() -> void:
 	f.store_string(JSON.stringify({"slots": _slots, "held": _held, "sol": _sol, "pos": [_pos.x, _pos.z], "home": _home,
 		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
 		"outfit": _outfit, "face": _face, "friends": _friends, "talk_days": _talk_days,
-		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats}))
+		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats,
+		"ground": _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "item"), "drop_seq": _drop_seq}))
 
 
 static func _read_json(path: String) -> Dictionary:

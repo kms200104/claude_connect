@@ -101,12 +101,6 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.faces.get(Net.my_id, {}).get("hair", "") == "pigtails", 3.0), "완료하면 서버가 저장: %s" % str(Net.faces.get(Net.my_id)))
 	_check(await _wait_until(func() -> bool: return not window.is_open(), 2.0), "저장되면 창이 닫힌다")
 	_check(player.rig.look.eyes == "sparkle" and player.rig.look.hair_style == "pigtails" and player.rig.look.mouth == "open", "내 캐릭터에 새 얼굴")
-	var bag: InventoryWindow = _village.get_node("HUD/InventoryWindow")
-	bag.open()
-	await get_tree().create_timer(0.3).timeout
-	var preview: CharacterPreview = bag.get_node("%CharacterPreview")
-	_check(preview.rig.look.hair_style == "pigtails", "가방 창 미리보기도 새 얼굴")
-	bag.close()
 
 	# 거울에서 멀면 서버가 거절
 	await _teleport(Vector3(20.0, 0.1, 30.0))

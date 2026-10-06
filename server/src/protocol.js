@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -21,6 +21,10 @@ export const ErrorCode = Object.freeze({
   inventoryFull: 'inventory_full',
   badItem: 'bad_item',
   cantDiscard: 'cant_discard', // 도구는 버릴 수 없다
+  cantDropHere: 'cant_drop_here', // v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다
+  groundFull: 'ground_full', // v13: 마을 바닥에 놓인 물건이 너무 많다
+  deliveryBusy: 'delivery_busy', // v13: 이미 배달 중인 주문이 많다
+  storageFull: 'storage_full', // v13: 식당 창고에 그 재료가 가득하다
   // 도구 / 나무 베기
   noTool: 'no_tool', // 알맞은 도구를 손에 들고 있지 않음
   notNearTree: 'not_near_tree',

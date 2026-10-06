@@ -58,6 +58,8 @@ var plant_spot: Vector3 = Vector3.ZERO
 var _plant_marker: MeshInstance3D = null
 var _marker_ok: ArrayMesh = null
 var _marker_bad: ArrayMesh = null
+## 주울 수 있는 것 위에 뜨는 이름표 (v13).
+var pickup_tag: PickupTag = null
 
 
 func _ready() -> void:
@@ -71,6 +73,9 @@ func _ready() -> void:
 	Net.npc_greeted.connect(_on_npc_greeted)
 	Net.flower_picked.connect(func(item_id: String) -> void: toast_hud.show_toast("%s을(를) 땄어요" % GameData.item_name(item_id), true))
 	_build_plant_marker()
+	pickup_tag = PickupTag.new()
+	pickup_tag.name = "PickupTag"
+	(drops if drops != null else player.get_parent()).add_child.call_deferred(pickup_tag)
 
 
 ## 지금 말 걸기·베기 대상이 있는지 (있으면 낚시 버튼을 숨긴다).
@@ -110,6 +115,22 @@ func _process(_delta: float) -> void:
 		_:
 			action_hud.hide_action()
 	_update_plant_marker()
+	_update_pickup_tag()
+
+
+## 지금 주울 대상(바닥의 물건 · 내 가구) 위에 무엇인지 이름표를 띄운다.
+func _update_pickup_tag() -> void:
+	if pickup_tag == null or not pickup_tag.is_inside_tree():
+		return
+	match target:
+		Target.COLLECT:
+			var d: DropInfo = Net.drops.get(target_id)
+			pickup_tag.show_at("drop:" + target_id, drops.drop_position(target_id) + Vector3.UP * drops.label_height(target_id), DropField.label_of(d))
+		Target.PICKUP:
+			var f: PlacedInfo = Net.placed.get(target_id)
+			pickup_tag.show_at("placed:" + target_id, (f.position if f != null else player.global_position) + Vector3.UP * 1.4, GameData.item_name(f.item) if f != null else "")
+		_:
+			pickup_tag.hide_tag()
 
 
 func _pick_target() -> void:
@@ -233,6 +254,9 @@ func _on_action_pressed() -> void:
 			Net.pickup_furniture(target_id)
 		Target.COLLECT:
 			player.look_toward(drops.drop_position(target_id) - player.global_position)
+			var picked: DropInfo = Net.drops.get(target_id)
+			if picked != null and picked.kind == DropInfo.KIND_ITEM:
+				player.play_plant()
 			Net.collect(target_id)
 		Target.PICK:
 			player.look_toward(flowers.flower_position(target_id) - player.global_position)
@@ -259,6 +283,8 @@ func _collect_label(drop_id: String) -> String:
 	if d == null:
 		return "줍기"
 	match d.kind:
+		DropInfo.KIND_ITEM:
+			return "줍기"
 		DropInfo.KIND_GIFT:
 			return "선물 줍기"
 		DropInfo.KIND_FORAGE:
@@ -373,6 +399,10 @@ func _on_collected(kind: String, item_id: String) -> void:
 		toast_hud.show_toast("선물 상자 속에 %s!" % GameData.item_name(item_id), true)
 	elif kind == DropInfo.KIND_FORAGE:
 		toast_hud.show_toast("%s을(를) 채집했어요 (식당 재료)" % GameData.item_name(item_id), true)
+	elif kind == DropInfo.KIND_ITEM:
+		var count: String = " %d개" % Net.last_collect_count if Net.last_collect_count > 1 else ""
+		var left: String = " (가방이 가득 차서 %d개는 그대로 있어요)" % Net.last_collect_left if Net.last_collect_left > 0 else ""
+		toast_hud.show_toast("%s%s을(를) 주웠어요%s" % [GameData.item_name(item_id), count, left], true)
 	else:
 		toast_hud.show_toast("반짝! %s을(를) 주웠어요" % GameData.item_name(item_id), true)
 
@@ -427,6 +457,15 @@ func _on_request_failed(kind: String, code: String) -> void:
 			return
 		"shop_enter", "shop_exit":
 			toast_hud.show_toast("문에 더 가까이 가야 해요", false)
+			return
+		"inv_discard":
+			match code:
+				NetProtocol.ERR_CANT_DROP_HERE:
+					toast_hud.show_toast("여기에서는 내려놓을 수 없어요 (밖에서 해 보세요)", false)
+				NetProtocol.ERR_GROUND_FULL:
+					toast_hud.show_toast("마을 바닥에 물건이 너무 많아요. 조금 주워 주세요", false)
+				NetProtocol.ERR_CANT_DISCARD:
+					toast_hud.show_toast("도구는 내려놓을 수 없어요", false)
 			return
 		"collect":
 			player.clear_look_direction()

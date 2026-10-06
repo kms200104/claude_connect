@@ -2,12 +2,13 @@
 //   npc:<주민>  — 친한 주민이 하루 한두 번 먼저 연락한다 (안부 · "식당 언제 열어?" · 비 오는 날). 내가 보내면 잠시 뒤 답장.
 //   sys:bank    — 은행·동사무소 알림 (매주 이자 · 연체 · 월세 수입 · 지원금).
 //   sys:town    — 마을 공지 (처음 들어오면 환영 인사).
+//   sys:shop    — 솔바람 상점 배달 알림 (v13: "배달 가고 있습니다~").
 //   pl:<자리>   — 같은 마을 친구(플레이어)와 주고받는 대화.
 // 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 보낸 시각(유닉스 ms) }.
 import { ErrorCode } from './protocol.js';
 import { addFriendship, relationOf } from './quests.js';
 
-const THREAD = /^(npc:[a-z_]+|sys:(bank|town)|pl:[1-9][0-9]?)$/;
+const THREAD = /^(npc:[a-z_]+|sys:(bank|town|shop)|pl:[1-9][0-9]?)$/;
 
 export function sanitizeChats(raw, rules) {
   const out = {};

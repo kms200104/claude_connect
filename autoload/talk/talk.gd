@@ -1,6 +1,6 @@
 extends Node
 ## 마을톡 (v0.11) — 휴대폰 메신저의 상태. 서버가 보낸 대화방만 들고 있고, 보내기·읽음 요청을 보낸다.
-## 대화방: npc:<주민> · sys:bank(은행·동사무소 알림) · sys:town(마을 공지) · pl:<자리>(같은 마을 친구).
+## 대화방: npc:<주민> · sys:bank(은행·동사무소 알림) · sys:town(마을 공지) · sys:shop(상점 배달, v13) · pl:<자리>(같은 마을 친구).
 ## 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 유닉스 ms }.
 
 ## 새 메시지 (내가 보낸 것 포함).
@@ -111,6 +111,8 @@ func title(thread: String) -> String:
 		return "솔바람 은행 · 동사무소"
 	if thread == "sys:town":
 		return "마을 소식"
+	if thread == "sys:shop":
+		return "솔바람 상점 배달"
 	if thread.begins_with("pl:"):
 		return "%s (친구)" % GameData.player_name(int(thread.trim_prefix("pl:")))
 	return thread
@@ -124,6 +126,9 @@ func sender_name(from: String) -> String:
 		return "은행"
 	if from == "town":
 		return "마을"
+	if from == "courier":
+		var c: NpcInfo = GameData.shop.courier if GameData.shop != null else null
+		return "%s (배달)" % c.display_name if c != null else "배달 알바"
 	if from.begins_with("p"):
 		return GameData.player_name(int(from.trim_prefix("p")))
 	return GameData.npc_name(from)
@@ -138,6 +143,8 @@ func color_of(thread: String) -> Color:
 		return Color("#5AAE7A")
 	if thread == "sys:town":
 		return Color("#E8B84A")
+	if thread == "sys:shop":
+		return Color("#F2A65A")
 	return Color("#6AAEE8")
 
 

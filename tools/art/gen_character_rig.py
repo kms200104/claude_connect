@@ -235,6 +235,18 @@ anim('dig', 0.8, [(0, REST), (0.08, DG(0.02,0.08,1.0,0.0,0.03,-1.6)), (0.2, DG(-
 # sit: 의자에 앉아 두 다리를 앞으로 쭉 (작은 몸이라 발이 바닥에 안 닿는다), 다리를 번갈아 달랑달랑
 SI = lambda rz, y, a, b: pose((0,y,0),(0.04,0,rz),(1,1,1),(0.5,0,0.08),(0.5,0,-0.08),(1.5+a,0,0.05),(1.5+b,0,-0.05))
 anim('sit', 2.4, [(0, SI(0,0,0,0)), (0.6, SI(0.04,0.008,0.15,-0.1)), (1.2, SI(0,0,0,0)), (1.8, SI(-0.04,0.008,-0.1,0.15)), (2.4, SI(0,0,0,0))], loop=True)
+# rummage (v0.12): 가방을 열면 주머니를 뒤진다. 고개를 숙여 오른쪽 주머니를 내려다보며 오른손을 넣어 휘적휘적,
+#                  왼손은 옆구리 주머니를 툭툭 두드려 본다. 가끔 고개를 들어 갸웃 (반복).
+RM = lambda y, rx, ry, rz, k, al, ar: pose((0,y,0),(rx,ry,rz),sq(k),al,ar,(0,0,0.03),(0,0,-0.03))
+anim('rummage', 1.6, [
+ (0, RM(-0.015,-0.2,-0.28,0.06,-0.01,(0.12,0,-0.05),(0.12,0,0.02))),
+ (0.2, RM(-0.025,-0.24,-0.3,0.07,-0.02,(0.2,0,-0.02),(0.32,0,-0.08))),
+ (0.4, RM(-0.015,-0.21,-0.26,0.05,-0.01,(0.08,0,-0.08),(0.05,0,0.06))),
+ (0.6, RM(-0.025,-0.25,-0.31,0.07,-0.02,(0.18,0,-0.03),(0.36,0,-0.1))),
+ (0.8, RM(-0.015,-0.2,-0.27,0.06,-0.01,(0.1,0,-0.06),(0.1,0,0.04))),
+ (1.05, RM(0.0,-0.1,-0.12,-0.04,0.01,(0.15,0,-0.1),(0.42,0,-0.14))),
+ (1.3, RM(-0.01,-0.14,-0.18,-0.02,0.0,(0.12,0,-0.08),(0.38,0,-0.12))),
+ (1.6, RM(-0.015,-0.2,-0.28,0.06,-0.01,(0.12,0,-0.05),(0.12,0,0.02)))], loop=True)
 
 def fmt(v):
     def f(x):
@@ -277,7 +289,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig']) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage']) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -326,7 +338,7 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
-''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig']) + '''[sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage']) + '''[sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
 fadein_time = 0.06
 fadeout_time = 0.12
 
@@ -336,6 +348,8 @@ xfade_time = 0.12
 [sub_resource type="AnimationNodeBlend2" id="Blend2_cook"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_sit"]
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_rummage"]
 
 [sub_resource type="AnimationNodeOneShot" id="OneShot_emote"]
 fadein_time = 0.1
@@ -373,6 +387,10 @@ nodes/Sit/node = SubResource("AN_sit")
 nodes/Sit/position = Vector2(220, 200)
 nodes/SitBlend/node = SubResource("Blend2_sit")
 nodes/SitBlend/position = Vector2(270, 40)
+nodes/Rummage/node = SubResource("AN_rummage")
+nodes/Rummage/position = Vector2(270, 200)
+nodes/RummageBlend/node = SubResource("Blend2_rummage")
+nodes/RummageBlend/position = Vector2(295, 40)
 nodes/Chop/node = SubResource("AN_chop")
 nodes/Chop/position = Vector2(120, 200)
 nodes/ChopShot/node = SubResource("OneShot_chop")
@@ -398,7 +416,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"ChopShot", 0, &"SitBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"ChopShot", 0, &"RummageBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")

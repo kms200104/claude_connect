@@ -26,6 +26,13 @@ var exit_range: float = 1.8
 ## 실내 방의 남쪽 벽(출구) 가운데. 방은 여기서 -Z 쪽으로 펼쳐진다.
 var room_origin: Vector3 = Vector3.ZERO
 var levels: Array[Level] = []
+## 식재료 배달 (v13): 배달 알바, 배달비, 기다리는 시간.
+var courier: NpcInfo = null
+var delivery_fee: int = 0
+var delivery_min_s: float = 20.0
+var delivery_max_s: float = 30.0
+var delivery_max_n: int = 99
+var delivery_max_active: int = 3
 
 
 static func from_dict(data: Dictionary) -> ShopData:
@@ -44,6 +51,15 @@ static func from_dict(data: Dictionary) -> ShopData:
 	d.exit = _point(data.get("exit"))
 	d.exit_range = float(data.get("exit_range", 1.8))
 	d.room_origin = _point(data.get("room_origin"))
+	var deliv: Variant = data.get("delivery", {})
+	if deliv is Dictionary:
+		if deliv.get("courier") is Dictionary:
+			d.courier = NpcInfo.from_dict(deliv["courier"])
+		d.delivery_fee = int(deliv.get("fee", 0))
+		d.delivery_min_s = float(deliv.get("min_delay_s", 20.0))
+		d.delivery_max_s = float(deliv.get("max_delay_s", 30.0))
+		d.delivery_max_n = int(deliv.get("max_n", 99))
+		d.delivery_max_active = int(deliv.get("max_active", 3))
 	for entry: Variant in data.get("levels", []):
 		if entry is Dictionary:
 			var lv: Level = Level.new()

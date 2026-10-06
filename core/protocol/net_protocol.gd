@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 12
+const VERSION: int = 13
 
 ## v12 말풍선(say): 대사 간격(ms)과 최대 글자 수 (서버와 같다).
 const SAY_GAP_MS: int = 250
@@ -25,6 +25,12 @@ const ERR_NOT_FISHING: String = "not_fishing"
 const ERR_INVENTORY_FULL: String = "inventory_full"
 const ERR_BAD_ITEM: String = "bad_item"
 const ERR_CANT_DISCARD: String = "cant_discard"
+## v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다 / 마을 바닥에 물건이 너무 많다.
+const ERR_CANT_DROP_HERE: String = "cant_drop_here"
+const ERR_GROUND_FULL: String = "ground_full"
+## v13: 이미 배달 중인 주문이 많다 / 식당 창고에 그 재료가 가득하다.
+const ERR_DELIVERY_BUSY: String = "delivery_busy"
+const ERR_STORAGE_FULL: String = "storage_full"
 
 # 도구 / 나무 베기
 const ERR_NO_TOOL: String = "no_tool"

@@ -256,9 +256,13 @@ export function updateRegular(rules, rec, dish, stars) {
 }
 
 /** 저장 파일의 식당 기록 정리: { history: [별점…], regulars: { 손님: rec }, served, revenue } */
-export function sanitizeRestaurant(raw, recipes) {
-  const out = { history: [], regulars: {}, served: 0, revenue: 0 };
+export function sanitizeRestaurant(raw, recipes, kindOf = () => '') {
+  // storage (v13): 식당 창고 { 재료 id: 개수 }. 상점에서 산 식재료 · 받지 못한 배달이 여기로 온다.
+  const out = { history: [], regulars: {}, served: 0, revenue: 0, storage: {} };
   if (!raw || typeof raw !== 'object') return out;
+  for (const [id, n] of Object.entries(raw.storage ?? {})) {
+    if (kindOf(id) === 'ingredient' && Number.isInteger(n) && n > 0) out.storage[id] = Math.min(n, 999);
+  }
   if (Array.isArray(raw.history)) out.history = raw.history.filter((s) => Number.isInteger(s) && s >= 1 && s <= 5).slice(-100);
   const ids = new Set(recipes.map((r) => r.id));
   for (const [c, rec] of Object.entries(raw.regulars ?? {})) {

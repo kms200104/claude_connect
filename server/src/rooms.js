@@ -258,6 +258,11 @@ export class Room {
     this.eventSig = '';
     this.drops = new Map();
     this.dropSeq = 0;
+    // v13: 사람이 내려놓은 물건(kind 'item')은 drops 에 같이 두되 저장한다 (id 'g…').
+    this.groundSeq = 0;
+    // v13: 식재료 배달 (delivery.js). 기다리는 주문은 저장한다(다시 켜면 바로 출발하거나 식당 창고로).
+    this.deliveries = new Map();
+    this.delivSeq = 0;
     this.nextDropAt = { gift: 0, star: 0, forage: 0 };
     // 경제 (마을 공용): 아파트 소유 · 집값 지수 · 기준금리 · 마지막으로 이자를 매긴 주
     this.homes = {}; // 호수 → { owner: uid, price, day }
@@ -267,7 +272,7 @@ export class Room {
     this.closedBanks = {}; // v0.12: 영업정지한 금융기관 → 다시 여는 주
     this.week = null;
     // 식당: 별점 기록 · 단골 (저장) / 지금 영업 (저장 안 함)
-    this.restaurant = sanitizeRestaurant(null, data.recipes ?? []);
+    this.restaurant = sanitizeRestaurant(null, data.recipes ?? [], data.kindOf);
     this.shift = null;
     // v0.9: 혼인신고한 세대 (id → { id, members: [uid, uid], wallet: { sol }, since }), 삽으로 고친 땅 칸 (저장),
     // 조개 숨구멍 · 여울 물고기 떼 · 같이 찍은 나무 기록 (저장 안 함).
@@ -307,6 +312,14 @@ export class Room {
     room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0) * money));
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
+    for (const g of sanitizeGround(world.ground, data, cfg)) room.drops.set(g.id, g);
+    room.delivSeq = Math.max(0, intOr(world.delivSeq, 0));
+    const door = data.shop?.door ?? { x: 0, z: 0 };
+    for (const d of Array.isArray(world.deliveries) ? world.deliveries : []) {
+      if (!d || typeof d.id !== 'string' || typeof d.uid !== 'string' || typeof d.item !== 'string' || !data.isKnown(d.item) || !Number.isInteger(d.n) || d.n < 1) continue;
+      room.deliveries.set(d.id, { id: d.id, uid: d.uid, pid: intOr(d.pid, 0), item: d.item, n: Math.min(d.n, 99), ph: 'wait', dueAt: 0, x: door.x, z: door.z, yaw: 0, waited: 0, handAt: 0 });
+    }
+    room.groundSeq = Math.max(0, intOr(world.groundSeq, 0), ...[...room.drops.keys()].filter((id) => id.startsWith('g')).map((id) => intOr(Number(id.slice(1)), 0)));
     room.homes = sanitizeHomes(world.homes, data.units);
     room.homeItems = sanitizeHomeItems(scaleHomeItems(world.homeItems, Number.isInteger(saved.schema) && saved.schema < 6 ? HOME_SCALE_V6 : 1), data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
     room.homeItemSeq = Math.max(0, intOr(world.homeItemSeq, 0));
@@ -316,13 +329,13 @@ export class Room {
     // v0.12 경제 소식(이번 주)과 영업정지한 금융기관 { 기관 id: 다시 여는 주 }.
     room.econ = world.econ && typeof world.econ.id === 'string' && Number.isInteger(world.econ.week) ? { id: world.econ.id, week: world.econ.week, bank: typeof world.econ.bank === 'string' ? world.econ.bank : undefined } : null;
     room.closedBanks = Object.fromEntries(Object.entries(world.closedBanks ?? {}).filter(([id, w]) => data.savings?.institutions.has(id) && Number.isInteger(w)));
-    room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes);
+    room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes, data.kindOf);
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
       const base = newProfile(uid, slot, cfg, data);
       // schema 1 은 물고기 목록(items), schema 2 부터는 칸 배열(slots).
-      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf), cfg);
+      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf, Array.isArray(p.slots)), cfg);
       const held = intOr(p.held, base.held);
       room.profiles.set(uid, {
         ...base,
@@ -408,6 +421,10 @@ export class Room {
         householdSeq: this.householdSeq,
         homeItems: structuredClone(this.homeItems),
         homeItemSeq: this.homeItemSeq,
+        deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, item: d.item, n: d.n })),
+        delivSeq: this.delivSeq,
+        ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),
+        groundSeq: this.groundSeq,
       },
       profiles,
     };
@@ -557,4 +574,20 @@ export class RoomManager {
     for (const room of this.rooms.values()) this.save(room);
     await this.store.idle();
   }
+}
+
+/** v13: 저장된 "바닥에 내려놓은 물건". 모르는 아이템 · 이상한 값은 버리고 묶음 수를 넘으면 앞에서부터만 남긴다. */
+export function sanitizeGround(raw, data, cfg) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const g of raw) {
+    if (out.length >= cfg.groundItemMax) break;
+    if (!g || typeof g.id !== 'string' || !/^g\d+$/.test(g.id) || seen.has(g.id)) continue;
+    if (typeof g.item !== 'string' || !data.isKnown(g.item) || !Number.isFinite(g.x) || !Number.isFinite(g.z)) continue;
+    const n = Number.isInteger(g.n) && g.n >= 1 ? Math.min(g.n, 999) : 1;
+    seen.add(g.id);
+    out.push({ id: g.id, kind: 'item', item: g.item, n, x: g.x, z: g.z });
+  }
+  return out;
 }

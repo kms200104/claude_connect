@@ -65,9 +65,9 @@ describe('낚시 · 인벤토리 · 저장', () => {
   it('성공: 입질 후 제때 당기면 인벤토리에 들어오고 파일에 저장된다', async () => {
     const a = await open();
     const { welcome } = await enter(a);
-    assert.equal(welcome.inv.slots.length, 25);
+    assert.equal(welcome.inv.slots.length, 35);
     assert.deepEqual(welcome.inv.slots.slice(0, 3), [{ id: 'rod', n: 1 }, { id: 'axe', n: 1 }, null], '낚싯대·도끼를 들고 시작');
-    assert.deepEqual({ quick: welcome.inv.quick, cap: welcome.inv.cap, held: welcome.inv.held }, { quick: 5, cap: 20, held: 0 });
+    assert.deepEqual({ quick: welcome.inv.quick, cap: welcome.inv.cap, held: welcome.inv.held }, { quick: 5, cap: 30, held: 0 });
     await goToPond(a);
     const r = newRid();
     a.send({ t: 'fish_cast', rid: r, spot: 'lake' });
@@ -257,7 +257,16 @@ describe('낚시 · 인벤토리 · 저장', () => {
     a.send({ t: 'inv_discard', rid: newRid(), slot: 0, n: 1 });
     assert.equal((await a.type('error')).code, 'cant_discard', '낚싯대는 버릴 수 없다');
     a.send({ t: 'inv_discard', rid: newRid(), slot: 5, n: 1 });
+    // v13: 버린 물건은 사라지지 않고 발밑(줍기 거리 안)에 남는다.
+    const drop = (await a.type('drop')).d;
+    assert.equal(drop.kind, 'item');
+    assert.equal(drop.n, 1);
+    assert.ok(Math.hypot(drop.x - AT_POND.x, drop.z - AT_POND.z) < 1.0, `발밑에 놓임 (${drop.x}, ${drop.z})`);
     assert.equal((await a.type('inventory')).slots[5], null);
+    a.send({ t: 'collect', rid: newRid(), id: drop.id });
+    const got = await a.type('collect_result');
+    assert.deepEqual({ item: got.item, n: got.n, left: got.left }, { item: drop.item, n: 1, left: 0 });
+    assert.equal((await a.type('drop_gone')).id, drop.id);
   });
 
   it('서버를 껐다 켜도 같은 uid는 같은 자리·인벤토리·위치를 되찾는다', async () => {

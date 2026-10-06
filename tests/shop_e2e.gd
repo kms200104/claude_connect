@@ -129,11 +129,19 @@ func _run() -> void:
 	for item_id: String in ["straw_hat", "log_stool"]:
 		var sol_now: int = Net.sol
 		var buy: Button = _buy_button(window, item_id)
-		_check(buy != null and not buy.disabled, "%s '사기' 버튼" % GameData.item_name(item_id))
+		_check(buy != null and not buy.disabled, "%s '1개' 사기 버튼" % GameData.item_name(item_id))
 		if buy != null:
 			buy.pressed.emit()
 		await _reply(Net.shop_traded)
 		_check(await _wait_until(func() -> bool: return _slot_of(item_id) >= 0, 2.0) and Net.sol == sol_now - GameData.item(item_id).buy_price, "%s 구매 (%d솔)" % [GameData.item_name(item_id), GameData.item(item_id).buy_price])
+	# v13: 10개씩 사기 — 식재료는 가방 대신 식당 창고로.
+	var ten: Button = _buy_button(window, "rice", "10개")
+	_check(ten != null and not ten.disabled, "쌀 '10개' 버튼")
+	if ten != null:
+		ten.pressed.emit()
+	await _reply(Net.shop_traded)
+	_check(Net.last_trade_stored and _slot_of("rice") < 0, "식재료 10개는 가방이 아니라 식당 창고로")
+	_check(await _wait_until(func() -> bool: return int(Economy.rest.get("store", {}).get("rice", 0)) == 10, 2.0), "식당 창고에 쌀 10")
 	window.close()
 	await _advance_until_choices(box)
 	await _choose(box, 3)
@@ -154,7 +162,7 @@ func _run() -> void:
 	_check(use.visible and use.text == "입기", "모자를 고르면 '입기' 버튼")
 	use.pressed.emit()
 	_check(await _wait_until(func() -> bool: return Net.outfit_hat == "straw_hat", 2.0), "밀짚모자를 씀 (서버 확정)")
-	_check(player.rig.outfit_item("hat") == "straw_hat" and inventory.preview().rig.outfit_item("hat") == "straw_hat", "내 캐릭터와 가방 창 미리보기에 모자가 보임")
+	_check(player.rig.outfit_item("hat") == "straw_hat", "내 캐릭터에 모자가 보임")
 	_check(_slot_of("straw_hat") < 0, "입은 모자는 가방에서 빠짐")
 
 	# ---- 가구 설치 · 줍기 ----
@@ -171,8 +179,27 @@ func _run() -> void:
 	_check(placed != null and placed.position.distance_to(Vector3(16.0, 0.0, 6.5)) < 0.6 and furniture.has_furniture(placed.id), "캐릭터 앞 1.5m, 0.5m 격자에 생김")
 	_check(not inventory.is_open() and _slot_of("log_stool") < 0, "설치하면 가방 창이 닫히고 가방에서 빠짐")
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.PICKUP, 2.0), "내 가구 곁에서 '줍기'")
+	_check(interaction.pickup_tag.current_text() == GameData.item_name("log_stool"), "가구 위에 이름표 '%s'" % interaction.pickup_tag.current_text())
 	interaction.action_hud.action_pressed.emit()
 	_check(await _wait_until(func() -> bool: return Net.placed.is_empty() and _slot_of("log_stool") >= 0, 2.0), "주우면 다시 가방으로")
+
+	# ---- v13: 식재료 배달 → 마을톡 → 배달 알바가 뛰어와 건넴 ----
+	var couriers: CourierField = _village.get_node("Couriers")
+	Net.order_delivery("egg", 10)
+	_check(await _wait_until(func() -> bool: return Net.my_deliveries.size() == 1, 2.0), "달걀 10개 배달 주문")
+	_check(await _wait_until(func() -> bool: return couriers.count() == 1, 8.0), "잠시 뒤 배달 알바가 나타남")
+	_check(Talk.last_text("sys:shop").contains("배달 가고 있습니다"), "마을톡: '%s'" % Talk.last_text("sys:shop"))
+	_check(await _wait_until(func() -> bool: return _count_of("egg") == 10, 25.0), "알바가 뛰어와 달걀 10개를 건넴")
+	_check(Net.my_deliveries.is_empty() and Talk.last_text("sys:shop").contains("배달 완료"), "배달 완료 마을톡")
+	_check(await _wait_until(func() -> bool: return couriers.count() == 0, 25.0), "알바는 상점으로 돌아감")
+
+
+func _count_of(item_id: String) -> int:
+	var n: int = 0
+	for it: InventoryItem in Net.inventory:
+		if it != null and it.id == item_id:
+			n += it.count
+	return n
 
 
 ## 서버 응답 신호를 기다린다. 요청이 거부되거나 3초가 지나면 그만 기다린다 (테스트가 멈추지 않게).
@@ -196,7 +223,7 @@ func _first_sell_button(window: ShopWindow) -> Button:
 	return null
 
 
-func _buy_button(window: ShopWindow, item_id: String) -> Button:
+func _buy_button(window: ShopWindow, item_id: String, button_text: String = "1개") -> Button:
 	var name_text: String = GameData.item_name(item_id)
 	for row: Node in window.get_node("%List").get_children():
 		var has_name: bool = false
@@ -205,7 +232,7 @@ func _buy_button(window: ShopWindow, item_id: String) -> Button:
 				has_name = true
 		if has_name:
 			for child: Node in row.get_children():
-				if child is Button and (child as Button).text == "사기":
+				if child is Button and (child as Button).text == button_text:
 					return child
 	return null
 

@@ -113,8 +113,8 @@ func play_action(kind: String, target: String = "") -> void:
 			# 배달 물건을 받아 든다 (손에 든 모습은 위치 스냅샷의 held 로 바뀐다, 빈 문자열 = 그만둠).
 			if not target.is_empty():
 				rig.play_plant()
-		"plant", "pick", "place":
-			# 쪼그려 앉아 심기·줍기·가구 놓기 (같은 몸짓).
+		"plant", "pick", "place", "drop":
+			# 쪼그려 앉아 심기·줍기·가구 놓기·내려놓기 (같은 몸짓).
 			rig.play_plant()
 		"give", "deliver":
 			rig.play_emote("bow")

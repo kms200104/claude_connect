@@ -33,9 +33,9 @@ export function createKitchen(deps) {
   const staffOf = (room) => (room.shift ? [...room.shift.staff].map((id) => room.players.get(id)).filter((p) => p && p.online) : []);
   const nearCounter = (player) => Math.hypot(player.x - rest.counter.x, player.z - rest.counter.z) <= rest.open_range + 0.5;
 
-  /** 직원 모두의 가방 재료 − 이미 주문에 떼어 둔 재료. */
+  /** 식당 창고(v13) + 직원 모두의 가방 재료 − 이미 주문에 떼어 둔 재료. */
   function available(room) {
-    const avail = {};
+    const avail = { ...(room.restaurant.storage ?? {}) };
     for (const p of staffOf(room)) for (const [id, n] of Object.entries(pantryOf(p.slots))) avail[id] = (avail[id] ?? 0) + n;
     for (const [id, n] of Object.entries(room.shift?.reserved ?? {})) avail[id] = (avail[id] ?? 0) - n;
     return avail;
@@ -59,6 +59,7 @@ export function createKitchen(deps) {
       revenue: room.restaurant.revenue,
       regulars,
       capacity: shift ? capacity(menuOf(data.recipes, tier, when()), available(room), data) : 0,
+      store: { ...(room.restaurant.storage ?? {}) },
       shift: shift ? { served: shift.served, revenue: shift.revenue } : null,
       orders: shift
         ? [...shift.orders.values()].map((o) => ({
@@ -108,17 +109,24 @@ export function createKitchen(deps) {
     room.saveDirty = true;
   }
 
-  /** 떼어 둔 재료를 직원 가방에서 꺼낸다 (만든 사람부터). 모자라면 false (아무것도 꺼내지 않는다). */
+  /** 떼어 둔 재료를 꺼낸다: 식당 창고(v13)부터, 그다음 직원 가방 (만든 사람부터). 모자라면 null (아무것도 꺼내지 않는다). */
   function takeIngredients(room, order, contributors) {
     const staff = staffOf(room);
     const ordered = [...contributors.map((id) => room.players.get(id)).filter(Boolean), ...staff.filter((p) => !contributors.includes(p.id))];
+    const storage = room.restaurant.storage ?? {};
     for (const [id, n] of Object.entries(order.used)) {
-      const have = ordered.reduce((a, p) => a + countWhere(p.slots, (x) => x === id), 0);
+      const have = (storage[id] ?? 0) + ordered.reduce((a, p) => a + countWhere(p.slots, (x) => x === id), 0);
       if (have < n) return null;
     }
     const touched = new Set();
     for (const [id, n] of Object.entries(order.used)) {
       let need = n;
+      const fromStore = Math.min(need, storage[id] ?? 0);
+      if (fromStore > 0) {
+        storage[id] -= fromStore;
+        if (storage[id] <= 0) delete storage[id];
+        need -= fromStore;
+      }
       for (const p of ordered) {
         if (need <= 0) break;
         const take = Math.min(need, countWhere(p.slots, (x) => x === id));
@@ -311,5 +319,5 @@ export function createKitchen(deps) {
     room.restaurant.history = cfg.restStartHistory.split(',').map(Number).filter((s) => Number.isInteger(s) && s >= 1 && s <= 5);
   }
 
-  return { restWire, handleRestaurant, tickRestaurant, seedRestaurant, closeShift, leaveStaff };
+  return { restWire, broadcastRest, handleRestaurant, tickRestaurant, seedRestaurant, closeShift, leaveStaff };
 }

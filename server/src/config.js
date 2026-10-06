@@ -44,8 +44,10 @@ export const defaultConfig = {
 
   // 인벤토리: 퀵슬롯 칸 수 + 가방 칸 수. 물고기 한 칸에 쌓을 수 있는 개수(도구·목재는 items.json 의 stack).
   quickSlots: num('QUICK_SLOTS', 5),
-  inventoryCapacity: num('INVENTORY_CAPACITY', 20),
+  inventoryCapacity: num('INVENTORY_CAPACITY', 30),
   inventoryStackSize: num('INVENTORY_STACK_SIZE', 99),
+  // v13: 버린 물건은 사라지지 않고 발밑에 남는다. 마을 바닥에 둘 수 있는 묶음 수.
+  groundItemMax: num('GROUND_ITEM_MAX', 150),
 
   // 낚시. 입질까지 기다리는 시간은 fishTimeScale 배로 줄이거나 늘릴 수 있다(테스트는 0.01).
   fishTimeScale: num('FISH_TIME_SCALE', 1),
@@ -113,6 +115,8 @@ export const defaultConfig = {
   econForce: process.env.ECON_FORCE || '',
   // 선물·별 조각이 떨어지는 간격 배율 (테스트는 작게).
   eventSpawnScale: num('EVENT_SPAWN_SCALE', 1),
+  // v13: 식재료 배달이 출발하기까지 기다리는 시간 배수 (테스트는 0.01).
+  deliveryTimeScale: num('DELIVERY_TIME_SCALE', 1),
   // 나무·꽃이 자라는 시간 배율 (1 = 데이터의 게임 분 그대로, 테스트·시연은 작게).
   growthScale: num('GROWTH_SCALE', 1),
   // 처음 들어온 사람의 주민 친밀도 (시연·테스트용: 선물·감정표현 배우기를 바로 보려고).

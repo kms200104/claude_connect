@@ -6,7 +6,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -17,7 +17,7 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달"]
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")
 const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
@@ -86,7 +86,7 @@ func _ready() -> void:
 	tabs.add_theme_constant_override("separation", 10)
 	col.add_child(tabs)
 	for i: int in TAB_NAMES.size():
-		var b: Button = _button(TAB_NAMES[i], 30)
+		var b: Button = _button(TAB_NAMES[i], 26)
 		b.custom_minimum_size = Vector2(0, 92)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(open.bind(i))
@@ -102,6 +102,15 @@ func _ready() -> void:
 	_scroll.add_child(_body)
 	for sig: Signal in [Economy.market_changed, Economy.portfolio_changed, Economy.homes_changed, Economy.bank_changed, Economy.job_changed]:
 		sig.connect(func() -> void: _dirty = true)
+	# 배달 탭 (v13): 주문 상태 · 식당 창고가 바뀌면 다시 그린다.
+	Economy.restaurant_changed.connect(func() -> void:
+		if visible and _tab == Tab.DELIVERY:
+			_dirty = true)
+	Net.delivery_ordered.connect(func(_i: String, _n: int, _e: int, _a: int) -> void: _dirty = true)
+	Net.delivery_done.connect(func(_i: String, _n: int, _w: String) -> void: _dirty = true)
+	Net.couriers_updated.connect(func(_l: Array[Dictionary]) -> void:
+		if visible and _tab == Tab.DELIVERY:
+			_dirty = true)
 	Talk.changed.connect(func() -> void:
 		_update_talk_badge()
 		if visible and _tab == Tab.TALK:
@@ -172,6 +181,8 @@ func _rebuild() -> void:
 			_build_assets()
 		Tab.JOBS:
 			_build_jobs()
+		Tab.DELIVERY:
+			_build_delivery()
 		Tab.TALK:
 			_build_talk()
 			if not _thread.is_empty():
@@ -755,6 +766,53 @@ func _build_jobs() -> void:
 		"예금·적금: 은행 앱에서 금리·기간을 비교해 넣어 두면 이자가 붙어요.",
 	]:
 		tips.add_child(_label("· " + line, 24, SOFT))
+
+
+# ---- 배달 (v13) ----
+
+## 식재료 배달: 지금 상점에서 파는 식재료를 1개 · 10개씩 주문한다. 20~30초 뒤 알바가 출발해 내게 갖다준다.
+func _build_delivery() -> void:
+	var shop: ShopData = GameData.shop
+	var courier: String = shop.courier.display_name if shop.courier != null else "알바"
+	_body.add_child(_label("솔바람 상점 배달 · 배달비 %s" % Money.short(shop.delivery_fee), 32, INK))
+	_body.add_child(_label("주문하면 %d~%d초 뒤에 출발해요. 배달 알바 %s이(가) 내가 있는 곳까지 뛰어와 건네줘요. 가방이 가득하거나 집·상점 안에 있으면 식당 창고에 넣어 둬요." % [int(shop.delivery_min_s), int(shop.delivery_max_s), courier], 24, SOFT))
+	var active: int = Net.my_deliveries.size()
+	if active > 0:
+		var card: VBoxContainer = _card()
+		card.add_child(_label("내 주문", 28, INK))
+		for d: Dictionary in Net.my_deliveries:
+			var state: String = {"wait": "준비 중…", "walk": "오는 중! 🛵", "hand": "도착!", "back": "전해 드렸어요"}.get(str(d.get("ph", "wait")), "준비 중…")
+			card.add_child(_label("%s %d개 · %s" % [GameData.item_name(str(d.get("item", ""))), int(d.get("n", 1)), state], 26, GOOD if str(d.get("ph", "")) == "walk" else INK))
+	var store: Dictionary = Economy.rest.get("store", {})
+	var stored: PackedStringArray = []
+	for id: Variant in store:
+		stored.append("%s %d" % [GameData.item_name(str(id)), int(store[id])])
+	_body.add_child(_label("식당 창고: %s" % (", ".join(stored) if not stored.is_empty() else "비어 있어요"), 24, SOFT))
+	var full: bool = active >= shop.delivery_max_active
+	if full:
+		_body.add_child(_label("배달은 한 번에 %d건까지예요. 먼저 받은 다음 또 주문해요." % shop.delivery_max_active, 24, UP))
+	for id: String in shop.stock_for(Net.shop_level):
+		var info: ItemInfo = GameData.item(id)
+		if info == null or not info.is_ingredient():
+			continue
+		var each: int = roundi(info.buy_price * Net.buy_multiplier(id))
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_body.add_child(row)
+		var chip: ItemSlot = ItemSlot.new()
+		chip.custom_minimum_size = Vector2(84, 84)
+		chip.disabled = true
+		chip.set_item(InventoryItem.new(id, 1))
+		row.add_child(chip)
+		var text: Label = _label("%s\n하나에 %s" % [info.display_name, Money.short(each)], 26, INK)
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(text)
+		for n: int in [1, 10]:
+			var b: Button = _button("%d개" % n, 26)
+			b.custom_minimum_size = Vector2(120, 84)
+			b.disabled = full or Net.sol < each * n + shop.delivery_fee
+			b.pressed.connect(func() -> void: Net.order_delivery(id, n))
+			row.add_child(b)
 
 
 # ---- 자산 ----

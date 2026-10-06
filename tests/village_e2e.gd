@@ -1,6 +1,6 @@
 extends Node
 ## 마을 종단 테스트(클라이언트 1개): 비 오는 날 · 퀵슬롯으로 도끼 들기 · 나무 베기 → 인벤토리 ·
-## 가방 창(캐릭터가 고른 칸을 바라봄, 칸 옮기기) · 주민 대화 → 부탁 수락 → 목재 모아 완료.
+## 가방 창(주머니 뒤적이기 · 머리 위 창 · 칸 옮기기 · 끌어다 놓기) · 주민 대화 → 부탁 수락 → 목재 모아 완료.
 ## tests/run_village_e2e.sh 가 서버를 WEATHER_FORCE=rain QUEST_CHANCE=1 QUEST_TEMPLATE=wood 로 띄운다.
 ## 인자: -- --server=ws://127.0.0.1:PORT
 
@@ -97,34 +97,64 @@ func _run() -> void:
 	_check(interaction.target != InteractionController.Target.CHOP or interaction.target_id != tree_id, "그루터기는 더 못 벤다")
 
 	# ---- 가방 창 ----
+	var camera_rig: FollowCamera = _village.get_node("CameraRig")
 	hotbar.bag_pressed.emit()
-	_check(window.is_open() and window.get_viewport().disable_3d, "가방 아이콘 → 창이 열리고 월드 렌더링은 멈춤")
+	_check(window.is_open() and not window.get_viewport().disable_3d, "가방 아이콘 → 창이 열리고 월드는 계속 움직임")
 	_check(player.is_input_locked(), "가방 창이 열려 있으면 캐릭터가 멈춤")
+	_check(player.rig.is_rummaging(), "가방을 열면 캐릭터가 주머니를 뒤적임")
+	await get_tree().create_timer(0.8).timeout
+	_check(camera_rig.bag_view > 0.95, "카메라가 가방 구도로 옮겨 감 (%.2f)" % camera_rig.bag_view)
+	var head: Vector2 = get_viewport().get_camera_3d().unproject_position(player.global_position + Vector3.UP * InventoryWindow.HEAD_TOP)
+	var rect: Rect2 = window.panel_rect()
+	_check(rect.end.y < head.y and rect.position.y >= 0.0, "가방 창은 캐릭터 머리 위에 뜸 (창 아래 %.0f < 머리 %.0f)" % [rect.end.y, head.y])
+	_check(Net.inventory.size() == Net.quick_slot_count + 30, "가방 30칸 + 퀵슬롯 (%d)" % Net.inventory.size())
 	var wood_slot: int = -1
 	for i: int in range(Net.quick_slot_count, Net.inventory.size()):
 		if Net.inventory[i] != null and not GameData.item(Net.inventory[i].id).is_tool():
 			wood_slot = i
 			break
-	window.press_slot(wood_slot)
-	var preview: CharacterPreview = window.preview()
-	await get_tree().create_timer(0.8).timeout
-	_check(preview.look_active and preview.yaw_offset() < -0.2, "왼쪽 칸을 고르면 캐릭터가 그쪽으로 몸을 돌림 (%.2f rad)" % preview.yaw_offset())
-	_check(preview.rig.get_eye_offset().x > 0.2, "눈동자도 그 칸 쪽으로 (%.2f)" % preview.rig.get_eye_offset().x)
-	var yaw_bag: float = preview.yaw_offset()
-	window.press_slot(wood_slot)  # 같은 칸 다시 → 선택 해제
-	window.press_slot(0)  # 퀵슬롯 1번(낚싯대): 아래쪽 칸
-	await get_tree().create_timer(0.8).timeout
-	_check(preview.look_active and preview.pivot.rotation.x < 0.0, "아래쪽 퀵슬롯을 고르면 고개를 숙임 (%.2f)" % preview.pivot.rotation.x)
-	_check(absf(preview.yaw_offset() - yaw_bag) > 0.01, "고른 칸이 바뀌면 시선도 바뀜")
-	window.press_slot(0)
-	# 칸 옮기기: 목재 칸 → 가방 마지막 칸
+	# 칸 옮기기 1: 누르고 → 다른 칸 누르기
 	var last: int = Net.inventory.size() - 1
 	var moved_id: String = Net.inventory[wood_slot].id
 	window.press_slot(wood_slot)
+	_check(window.selected_slot == wood_slot, "칸을 누르면 고름")
 	window.press_slot(last)
 	_check(await _wait_until(func() -> bool: return Net.inventory[last] != null and Net.inventory[last].id == moved_id, 2.0), "고른 아이템을 다른 칸으로 옮김 (서버 확정)")
+	# 칸 옮기기 2: 끌어다 놓기 (가방 마지막 칸 → 가방 첫 칸 옆)
+	var target: int = Net.quick_slot_count + 1
+	var from_slot: ItemSlot = window.slot_control(last)
+	var data: Variant = from_slot._get_drag_data(Vector2.ZERO)
+	_check(data is Dictionary and int(data["slot_drag"]) == last, "아이템 칸을 끌면 끌기 데이터가 생김")
+	var to_slot: ItemSlot = window.slot_control(target)
+	_check(to_slot._can_drop_data(Vector2.ZERO, data) and not from_slot._can_drop_data(Vector2.ZERO, data), "다른 칸에는 놓을 수 있고 자기 칸에는 못 놓음")
+	to_slot._drop_data(Vector2.ZERO, data)
+	_check(await _wait_until(func() -> bool: return Net.inventory[target] != null and Net.inventory[target].id == moved_id, 2.0), "끌어다 놓아 칸을 옮김 (서버 확정)")
+	_check(not window._can_drop_data(Vector2.ZERO, {"slot_drag": 0}), "도구(낚싯대)는 창 밖으로 끌어도 못 버림")
 	window.close()
-	_check(not window.is_open() and not window.get_viewport().disable_3d and not player.is_input_locked(), "창을 닫으면 월드가 다시 그려지고 움직일 수 있음")
+	_check(not window.is_open() and not player.is_input_locked() and not player.rig.is_rummaging(), "창을 닫으면 다시 움직일 수 있음")
+	await get_tree().create_timer(0.7).timeout
+	_check(camera_rig.bag_view < 0.05 and not window.visible, "카메라가 평소 구도로 돌아오고 창이 사라짐")
+
+	# ---- 내려놓기 (v13): 창 밖으로 끌어 놓으면 발밑에 남고, 다가가면 이름표가 뜨고, 다시 주울 수 있다 ----
+	var wood_id: String = Net.inventory[target].id
+	var wood_count: int = Net.inventory[target].count
+	window.open()
+	_check(window._can_drop_data(Vector2.ZERO, {"slot_drag": target}), "목재 칸은 창 밖으로 끌어 놓을 수 있음")
+	window._drop_data(Vector2.ZERO, {"slot_drag": target})
+	window.close()
+	var ground: Array[DropInfo] = []
+	_check(await _wait_until(func() -> bool:
+		ground.assign(Net.drops.values().filter(func(d: DropInfo) -> bool: return d.kind == DropInfo.KIND_ITEM))
+		return not ground.is_empty(), 2.0), "내려놓은 목재가 바닥에 남음")
+	_check(Net.inventory[target] == null, "가방 칸은 비었음")
+	var g: DropInfo = ground[0] if not ground.is_empty() else null
+	if g != null:
+		_check(g.item == wood_id and g.count == wood_count and Vector2(g.position.x - player.global_position.x, g.position.z - player.global_position.z).length() < 1.0, "발밑에 %s ×%d" % [g.item, g.count])
+		_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.COLLECT and interaction.target_id == g.id, 2.0), "가까이 있으면 '줍기' 대상")
+		_check(await _wait_until(func() -> bool: return interaction.pickup_tag.current_text() == (GameData.item_name(wood_id) if wood_count == 1 else "%s ×%d" % [GameData.item_name(wood_id), wood_count]), 1.0), "물건 위에 이름표: '%s'" % interaction.pickup_tag.current_text())
+		interaction.action_hud.action_pressed.emit()
+		_check(await _wait_until(func() -> bool: return not Net.drops.has(g.id) and _count_drops() == 3, 2.0), "다시 주우면 가방으로 (%d)" % _count_drops())
+		_check(await _wait_until(func() -> bool: return not interaction.pickup_tag.visible, 1.0), "주우면 이름표가 사라짐")
 
 	# ---- 주민 대화 → 부탁 ----
 	player.global_position = mujin.global_position + Vector3(1.6, 0.1, 0.0)
