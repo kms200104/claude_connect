@@ -61,7 +61,7 @@ func _water_material() -> ShaderMaterial:
 	return null
 
 
-## 윤곽 호수의 거리 그림 (tools/art/gen_lake_sdf.py 가 만든 JSON: 160² L8, base64)을 물 셰이더에 넣는다.
+## 윤곽 호수의 거리 그림 (tools/art/gen_lake_sdf.py 가 만든 JSON: size² L8, base64)을 물 셰이더에 넣는다.
 func _apply_outline_sdf(mat: ShaderMaterial) -> void:
 	var path: String = "res://data/fish/sdf/%s.json" % spot_id
 	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))

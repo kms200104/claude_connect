@@ -9,7 +9,7 @@ import { Client, sleep, uid } from './helpers.js';
 
 // random=0 → 항상 첫 물고기(붕어, 창 700ms), 가짜 입질 0번, 최소 대기. 시간은 1/100로 줄인다.
 const FAST = { fishTimeScale: 0.01, fishHookGraceMs: 500, moveSlackMeters: 100, random: () => 0, reconnectGraceMs: 300, saveIntervalMs: 60000 };
-const AT_POND = { x: -9, y: 0.1, z: 2 };
+const AT_POND = { x: -42.6, y: 0.1, z: 35.4 };
 
 describe('낚시 · 인벤토리 · 저장', () => {
   let saveDir;
@@ -200,7 +200,7 @@ describe('낚시 · 인벤토리 · 저장', () => {
     await goToPond(a);
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     await a.type('fish_started');
-    a.send({ t: 'move', x: -12, y: 0.1, z: 2, yaw: 0, vx: 0, vz: 0 });
+    a.send({ t: 'move', x: AT_POND.x + 2, y: 0.1, z: AT_POND.z, yaw: 0, vx: 0, vz: 0 });
     assert.equal((await a.type('fish_result')).reason, 'moved');
 
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });

@@ -183,6 +183,7 @@ shape = SubResource("Shape_lake")
 [node name="LilyPads" type="MultiMeshInstance3D" parent="Terrain"]
 material_override = ExtResource("33_lily")
 script = ExtResource("32_decor")
+count = 6
 
 [node name="Seongseong" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
@@ -204,7 +205,7 @@ shape = SubResource("Shape_lake")
 material_override = ExtResource("33_lily")
 script = ExtResource("32_decor")
 spot_id = "seongseong"
-count = 14
+count = 40
 seed_value = 31
 
 [node name="Decor" type="Node3D" parent="."]

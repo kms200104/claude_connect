@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
-import { loadGameData } from '../src/gamedata.js';
+import { distanceToSpot, loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
 import { cardCashback, didimdolTerms, eligibility } from '../src/civic.js';
 import { combineIncome } from '../src/economy.js';
@@ -59,7 +59,19 @@ describe('v0.9 계산', () => {
   it('얕은 물은 작은 물고기, 깊은 물은 큰 물고기가 잘 문다', () => {
     const lake = data.spots.get('lake');
     const zone = lake.shallows[0];
-    assert.ok(shallowAt(lake, zone.x - zone.half_x - 1, zone.z), '여울 곁 물가');
+    // 여울 가운데에서 물 밖으로 나간 첫 자리 (윤곽 호수라 방향마다 물가가 다르다).
+    let shore = null;
+    for (let a = 0; a < 16 && !shore; a++) {
+      for (let r = 0.1; r < 12; r += 0.1) {
+        const x = zone.x + Math.cos((a * Math.PI) / 8) * r;
+        const z = zone.z + Math.sin((a * Math.PI) / 8) * r;
+        if (distanceToSpot(lake, x, z) > 0.1) {
+          if (shallowAt(lake, x, z)) shore = { x, z };
+          break;
+        }
+      }
+    }
+    assert.ok(shore, '여울 곁 물가');
     assert.equal(shallowAt(lake, lake.x + lake.half_x + 1, lake.z), null, '반대쪽은 깊은 물');
     assert.equal(zoneWeight('shallow', { size: 'L' }), 0);
     assert.ok(zoneWeight('shallow', { size: 'S' }) > zoneWeight('deep', { size: 'S' }));
