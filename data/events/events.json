@@ -13,7 +13,7 @@
       "desc": "광장에 떠돌이 상인 누리가 왔어요. 귀한 물건을 팔고, 찾는 물건은 2배 값에 사 가요.",
       "multiplier": 2, "wanted": { "fish": 1, "goods": 1, "material": 1 },
       "stock": ["star_lamp", "toy_windmill", "music_box", "star_crown"],
-      "spot": { "x": -3.2, "z": -2.2, "yaw": -2.17 },
+      "spot": { "x": -3.2, "z": 63.8, "yaw": -2.17 },
       "npc": {
         "id": "nuri", "name": "누리", "personality": "merchant", "mbti": "ENTP", "color": "#C890E0", "voice": 1.15,
         "look": { "hair": "#5A3A6A", "style": "bun", "top": "#C890E0", "bottom": "#3A4A70", "shoes": "#6E4A3A" },

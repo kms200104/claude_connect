@@ -948,6 +948,9 @@ func _load() -> void:
 	_slots = (inv.get("slots", []) as Array).duplicate(true)
 	_held = int(inv.get("held", 0))
 	_sol = int((_snapshot.get("prof", {}) as Dictionary).get("sol", 0))
+	var players: Array = _snapshot.get("players", [])
+	if not players.is_empty() and players[0] is Dictionary:
+		_pos = Vector3(float(players[0].get("x", 0.0)), 0.1, float(players[0].get("z", 0.0)))
 	var saved: Dictionary = _read_json(SAVE_PATH)
 	if saved.is_empty():
 		return

@@ -2,7 +2,7 @@
   "version": 1,
   "_comment": "솔바람 박물관. building 은 건물 앞면 가운데 바닥(앞면이 +Z). 관장에게 말을 걸어 낚은 물고기를 한 종에 한 마리씩 기증한다 (마을 공용). 기증한 물고기는 박물관 앞 큰 수조에서 헤엄친다.",
   "name": "솔바람 박물관",
-  "building": { "x": 48, "z": -16, "yaw": 0, "width": 14, "depth": 9 },
+  "building": { "x": -26, "z": 62, "yaw": 0, "width": 14, "depth": 9 },
   "curator": {
     "id": "curator",
     "name": "부엉",
@@ -11,9 +11,9 @@
     "voice": 0.82,
     "look": { "hair": "#5A4A3A", "style": "bun", "top": "#8A6A4A", "bottom": "#4A3A2A", "shoes": "#3A2A20", "eyes": "bright", "nose": "long", "mouth": "tiny" },
     "about": "박물관 관장. 동그란 안경 너머로 물고기 이야기를 하면 밤을 새운다.",
-    "x": 44.6, "z": -13.2, "yaw": 0.6
+    "x": -29.4, "z": 64.8, "yaw": 0.6
   },
-  "aquarium": { "x": 57.5, "z": -9.5, "width": 6.0, "depth": 3.4 },
+  "aquarium": { "x": -16.5, "z": 68.5, "width": 6.0, "depth": 3.4 },
   "donate_range": 3.2,
   "reward_sol": 5000,
   "milestones": [

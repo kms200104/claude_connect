@@ -2,6 +2,7 @@
 // 저장할 필요 없이 언제 계산해도 같은 결과가 나온다 (날씨와 같은 방식). 바닥에 떨어진 선물·별 조각은 메모리에만 둔다.
 import { inHours, seededRandom } from './clock.js';
 import { nearSpot, pickWeighted } from './gamedata.js';
+import { groundProblem } from './world.js';
 
 const EVENT_SALT = 0x5eed;
 
@@ -82,7 +83,7 @@ export function eventsWire(active, day) {
  * 선물·별 조각이 떨어질 자리: 광장 둘레 28m 안에서 호수·상점·집·나무·바위를 피한다.
  * 30번 안에 못 찾으면 null.
  */
-export function dropPosition({ random, data, layout, near = { x: -3, z: 2 }, radius = 28 }) {
+export function dropPosition({ random, data, layout, near = layout?.plaza ?? { x: 0, z: 0 }, radius = 28 }) {
   for (let i = 0; i < 30; i++) {
     const a = random() * Math.PI * 2;
     const r = Math.sqrt(random()) * radius;
@@ -100,7 +101,7 @@ function blocked(x, z, data, layout) {
   }
   const door = data.shop.door;
   if (Math.abs(x - door.x) < 6 && z < door.z + 2 && z > door.z - 9) return true;
-  for (const n of data.npcs.values()) if (Math.hypot(x - n.house.x, z - n.house.z) < 4) return true;
+  if (data.blocked && groundProblem(data, x, z)) return true;
   for (const t of data.trees.values()) if (Math.hypot(x - t.x, z - t.z) < 1.4) return true;
   for (const rock of layout?.rocks ?? []) if (Math.hypot(x - rock.x, z - rock.z) < rock.size + 1) return true;
   return false;

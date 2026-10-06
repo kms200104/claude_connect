@@ -207,7 +207,7 @@ export function createServer(overrides = {}) {
       { x: data.realestate.office.x, z: data.realestate.office.z, r: 4 },
       // 동사무소 건물(앞면 기준 뒤로 depth) + 앞 창구·광장.
       ...(data.civic?.building ? [{ x: data.civic.building.x, z: data.civic.building.z - (data.civic.building.depth ?? 8) * 0.5, r: 10 }] : []),
-      { x: 0, z: 0, r: 8 },
+      { x: data.layout?.plaza?.x ?? 0, z: data.layout?.plaza?.z ?? 0, r: 8 },
     ];
     for (let i = 0; i < 10; i++) {
       const at = dropPosition({ random, data, layout: data.layout, near: { x: 0, z: 0 }, radius: rules.radius });
