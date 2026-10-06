@@ -123,7 +123,7 @@ describe('마을 이벤트', () => {
 
   it('낚시 대회: 낚을 때마다 상금', async () => {
     const { c } = await start({ eventForce: 'fishing_derby' });
-    await moveTo(c, -10.5, 2);
+    await moveTo(c, -42.6, 35.4); // 서쪽 연못 동쪽 물가
     const r = newRid();
     c.send({ t: 'fish_cast', rid: r, spot: 'lake' });
     await c.type('fish_bite');
@@ -140,6 +140,7 @@ describe('마을 이벤트', () => {
     const dropped = await c.type('drop', 3000);
     assert.equal(dropped.d.kind, 'gift');
     assert.equal(dropped.d.item, undefined, '선물 속은 주울 때까지 비밀');
+    await moveTo(c, dropped.d.x + 8, dropped.d.z);
     c.send({ t: 'collect', rid: newRid(), id: dropped.d.id });
     assert.equal((await c.type('error')).code, 'no_drop');
     await moveTo(c, dropped.d.x + 0.5, dropped.d.z);

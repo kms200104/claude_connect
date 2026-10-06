@@ -235,8 +235,9 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     a.send({ t: 'quest_accept', rid: newRid() });
     assert.equal((await a.type('error')).code, 'no_offer');
     const haerang = w.npcs.find((n) => n.id === 'haerang');
-    // 해랑의 집 앞은 호숫가: 낚시를 시작한 뒤 말을 걸어 본다
-    await moveTo(a, haerang.x, haerang.z - 3.5);
+    // 서쪽 연못 물가에서 낚시를 시작한 뒤 해랑에게 말을 걸어 본다 (낚시 중이면 거리와 상관없이 먼저 막힌다)
+    assert.ok(haerang);
+    await moveTo(a, -42.6, 35.4);
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'lake' });
     await a.type('fish_started');
     a.send({ t: 'talk', rid: newRid(), npc: 'haerang' });

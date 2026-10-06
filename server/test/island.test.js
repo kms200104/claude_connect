@@ -12,6 +12,9 @@ import { loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
 import { Client, uid } from './helpers.js';
 
+// 빈 풀밭 (박물관–동사무소 길 바로 남쪽: 길 가운데까지 약 4m, 둘레 3m 안에 나무·꽃밭·바위 없음).
+const GRASS = { x: -43, z: 64 };
+
 const MIN = 60000;
 /** 테스트가 돌리는 시계 (gameMs 를 직접 옮긴다). */
 const fakeClock = (hour = 12) => {
@@ -60,11 +63,13 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     assert.ok(onIsland(island, 0, 0) && onIsland(island, 60, 60));
     assert.ok(!onIsland(island, 99, 99), '모서리 바다');
     assert.equal(groundProblem(data, 0, 120), 'edge');
-    assert.equal(groundProblem(data, -20, 2), 'water');
-    assert.equal(groundProblem(data, 48, -20), 'building', '박물관');
+    assert.equal(groundProblem(data, 10, 0), 'water', '성성호수 가운데');
+    assert.equal(groundProblem(data, data.museum.building.x, data.museum.building.z - 4), 'building', '박물관');
     assert.equal(groundProblem(data, 0, -80), 'building', '공항');
-    assert.equal(groundProblem(data, 6, 12), null);
-    assert.ok(onPath(data.layout, 0, 0) && onPath(data.layout, 5, -50) && !onPath(data.layout, 6, 12));
+    assert.equal(groundProblem(data, -30.3, -7.9), 'building', 'e편한세상 112동');
+    assert.equal(groundProblem(data, GRASS.x, GRASS.z), null);
+    const plaza = data.layout.plaza;
+    assert.ok(onPath(data.layout, plaza.x, plaza.z) && onPath(data.layout, 3, -56) && !onPath(data.layout, GRASS.x, GRASS.z));
   });
 
   it('씨앗을 심으면 새싹 → 묘목 → 어린 나무 → 다 자란 나무 (베면 다시 그루터기), 꽃은 피면 딸 수 있다', async () => {
@@ -72,23 +77,23 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     const { c, welcome } = await join(server);
     const acorn = slotOf(welcome.inv, 'acorn');
     const seed = slotOf(welcome.inv, 'seed_tulip');
-    await moveTo(c, 6, 13);
+    await moveTo(c, GRASS.x, GRASS.z + 1);
     // 손에 든 게 씨앗이 아니면 못 심는다 (낚싯대).
-    c.send({ t: 'plant', rid: newRid(), x: 6, z: 12 });
+    c.send({ t: 'plant', rid: newRid(), x: GRASS.x, z: GRASS.z });
     assert.equal((await c.type('error')).code, 'not_seed');
     // 퀵슬롯으로 옮겨 손에 든다.
     c.send({ t: 'inv_move', rid: newRid(), from: acorn, to: 2 });
     c.send({ t: 'inv_move', rid: newRid(), from: seed, to: 3 });
     c.send({ t: 'equip', slot: 2 });
     await c.next((m) => m.t === 'inventory' && m.held === 2 && m.slots[2]?.id === 'acorn');
-    c.send({ t: 'plant', rid: newRid(), x: 0, z: 2 });
+    c.send({ t: 'plant', rid: newRid(), x: GRASS.x, z: GRASS.z + 3 });
     assert.equal((await c.type('error')).code, 'bad_plant', '길 위에는 안 된다');
-    c.send({ t: 'plant', rid: newRid(), x: 6.1, z: 12.2 });
+    c.send({ t: 'plant', rid: newRid(), x: GRASS.x + 0.1, z: GRASS.z + 0.2 });
     const planted = await c.type('plant_result');
-    assert.deepEqual({ kind: planted.kind, x: planted.x, z: planted.z }, { kind: 'tree', x: 6, z: 12 }, '0.5m 격자에 맞춘다');
+    assert.deepEqual({ kind: planted.kind, x: planted.x, z: planted.z }, { kind: 'tree', x: GRASS.x, z: GRASS.z }, '0.5m 격자에 맞춘다');
     const sprout = await c.next((m) => m.t === 'tree' && m.id === planted.id);
-    assert.deepEqual({ s: sprout.s, k: sprout.k, x: sprout.x }, { s: 'sprout', k: 'round', x: 6 });
-    c.send({ t: 'plant', rid: newRid(), x: 7, z: 12 });
+    assert.deepEqual({ s: sprout.s, k: sprout.k, x: sprout.x }, { s: 'sprout', k: 'round', x: GRASS.x });
+    c.send({ t: 'plant', rid: newRid(), x: GRASS.x + 1, z: GRASS.z });
     assert.equal((await c.type('error')).code, 'bad_plant', '나무 곁에 바짝 붙여 심을 수 없다');
 
     const m = server.data.plants.tree_minutes;
@@ -107,7 +112,7 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     // 꽃: 튤립 알뿌리
     c.send({ t: 'equip', slot: 3 });
     await c.next((x) => x.t === 'inventory' && x.held === 3);
-    c.send({ t: 'plant', rid: newRid(), x: 8, z: 14 });
+    c.send({ t: 'plant', rid: newRid(), x: GRASS.x + 2, z: GRASS.z + 2 });
     const fp = await c.type('plant_result');
     assert.equal(fp.kind, 'flower');
     const f0 = await c.next((x) => x.t === 'flower' && x.f.id === fp.id);

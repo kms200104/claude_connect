@@ -375,8 +375,9 @@ describe('v0.9 서버 연동 (같이 하기 · 동사무소 · 여울 · 삽)', 
     a.send({ t: 'dig', rid: newRid(), x: at.x, z: at.z, mode: 'dig' });
     assert.equal((await a.type('error')).code, 'bad_dig', '모래밭은 구덩이를 못 판다');
     // 풀밭: 구덩이 → 메우기 → 흙길 → 걷기
-    const gx = 18;
-    const gz = 14;
+    // 빈 풀밭 (박물관–동사무소 길 바로 남쪽).
+    const gx = -43;
+    const gz = 64;
     await moveTo(a, gx + 1, gz);
     await sleep(450);
     a.send({ t: 'dig', rid: newRid(), x: gx, z: gz, mode: 'fill' });

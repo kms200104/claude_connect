@@ -70,7 +70,8 @@ describe('거울: 얼굴 꾸미기', () => {
     a.c.send({ t: 'set_face', rid: newRid(), face: { eyes: 'star' } });
     assert.equal((await a.c.type('error')).code, 'not_near_mirror', '광장 가운데는 거울에서 멀다');
 
-    await moveTo(a.c, -2.0, 4.2);
+    const mirror = server.data.layout.mirrors[0];
+    await moveTo(a.c, mirror.x + 0.5, mirror.z - 1.0);
     a.c.send({ t: 'set_face', rid: newRid(), face: { eyes: 'laser' } });
     assert.equal((await a.c.type('error')).code, 'bad_face');
     const r = newRid();

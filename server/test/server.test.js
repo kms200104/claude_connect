@@ -2,6 +2,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
+import { spawnPoints } from '../src/config.js';
 import { Client, sleep, uid } from './helpers.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -70,11 +71,12 @@ describe('session server', () => {
     const b = await connect();
     b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code });
     await b.type('welcome');
-    a.send({ t: 'move', x: 0.2, y: 0.1, z: -0.2, yaw: 1.5, vx: 2, vz: -2 });
+    const s0 = spawnPoints[0];
+    a.send({ t: 'move', x: s0.x + 0.2, y: 0.1, z: s0.z - 0.2, yaw: 1.5, vx: 2, vz: -2 });
     const snap = await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.yaw === 1.5);
     const p1 = snap.p.find((p) => p.id === 1);
-    assert.equal(p1.x, 0.2);
-    assert.equal(p1.z, -0.2);
+    assert.equal(p1.x, s0.x + 0.2);
+    assert.equal(p1.z, s0.z - 0.2);
     assert.equal(typeof snap.st, 'number');
   });
 
@@ -103,8 +105,9 @@ describe('session server', () => {
     const b = await connect();
     b.send({ t: 'join', v: PROTOCOL_VERSION, uid: uid(), code: wa.code });
     await b.type('welcome');
-    a.send({ t: 'move', x: 0.3, y: 0.1, z: 0.3, yaw: 0, vx: 0, vz: 0 });
-    await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.x === 0.3);
+    const s0 = spawnPoints[0];
+    a.send({ t: 'move', x: s0.x + 0.3, y: 0.1, z: s0.z + 0.3, yaw: 0, vx: 0, vz: 0 });
+    await b.next((m) => m.t === 'snap' && m.p.find((p) => p.id === 1)?.x === s0.x + 0.3);
 
     a.kill();
     const off = await b.next((m) => m.t === 'peer_status' && m.id === 1 && m.online === false);
@@ -116,7 +119,7 @@ describe('session server', () => {
     const w2 = await a2.type('welcome');
     assert.equal(w2.resumed, true);
     assert.equal(w2.id, 1);
-    assert.equal(w2.players.find((p) => p.id === 1).x, 0.3);
+    assert.equal(w2.players.find((p) => p.id === 1).x, s0.x + 0.3);
     const on = await b.next((m) => m.t === 'peer_status' && m.id === 1 && m.online === true);
     assert.ok(on);
   });

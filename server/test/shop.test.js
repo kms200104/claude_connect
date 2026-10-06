@@ -167,18 +167,20 @@ describe('상점 · 가구 설치 · 옷', () => {
       assert.equal((await a.type('error')).code, 'bad_place', '상점 안');
       a.send({ t: 'shop_exit' });
       await a.type('shop_door');
-      a.send({ t: 'move', x: 10, y: 0.1, z: 14, yaw: 0, vx: 0, vz: 0 });
-      await a.next((m) => m.t === 'snap' && m.p.some((p) => p.x === 10));
-      a.send({ t: 'place', rid: newRid(), slot: chairSlot, x: 20, z: 14, rot: 0 });
+      // 빈 풀밭 (박물관–동사무소 길 바로 남쪽).
+      const g = { x: -44, z: 64 };
+      a.send({ t: 'move', x: g.x, y: 0.1, z: g.z, yaw: 0, vx: 0, vz: 0 });
+      await a.next((m) => m.t === 'snap' && m.p.some((p) => p.x === g.x));
+      a.send({ t: 'place', rid: newRid(), slot: chairSlot, x: g.x + 10, z: g.z, rot: 0 });
       assert.equal((await a.type('error')).code, 'bad_place', '너무 멀다');
-      a.send({ t: 'place', rid: newRid(), slot: chairSlot, x: 11.2, z: 14.9, rot: 5 });
+      a.send({ t: 'place', rid: newRid(), slot: chairSlot, x: g.x + 1.2, z: g.z + 0.9, rot: 5 });
       const placed = await b.type('placed');
-      assert.deepEqual({ item: placed.f.item, x: placed.f.x, z: placed.f.z, rot: placed.f.rot, owner: placed.f.owner }, { item: 'wood_chair', x: 11, z: 15, rot: 1, owner: 1 });
+      assert.deepEqual({ item: placed.f.item, x: placed.f.x, z: placed.f.z, rot: placed.f.rot, owner: placed.f.owner }, { item: 'wood_chair', x: g.x + 1, z: g.z + 1, rot: 1, owner: 1 });
       assert.ok(await a.next((m) => m.t === 'inventory' && m.slots[chairSlot] === null), '설치한 의자는 가방에서 빠진다');
 
       // 남의 가구는 못 줍는다
-      b.send({ t: 'move', x: 11, y: 0.1, z: 14, yaw: 0, vx: 0, vz: 0 });
-      await b.next((m) => m.t === 'snap' && m.p.some((p) => p.id === 2 && p.x === 11));
+      b.send({ t: 'move', x: g.x + 1, y: 0.1, z: g.z, yaw: 0, vx: 0, vz: 0 });
+      await b.next((m) => m.t === 'snap' && m.p.some((p) => p.id === 2 && p.x === g.x + 1));
       b.send({ t: 'pickup', rid: newRid(), id: placed.f.id });
       assert.equal((await b.type('error')).code, 'not_owner');
 
