@@ -33,6 +33,9 @@ var at: String = ""
 func _ready() -> void:
 	visible = false
 	add_to_group(&"blocks_joystick")
+	# 가로 화면 (v0.14.3): 화면 끝까지 늘어나지 않게 가운데 1240 폭으로.
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit())
+	_fit()
 	_close.pressed.connect(close)
 	_buy_tab.pressed.connect(func() -> void: set_mode(MODE_BUY))
 	_sell_tab.pressed.connect(func() -> void: set_mode(MODE_SELL))
@@ -42,6 +45,26 @@ func _ready() -> void:
 	Net.shop_traded.connect(_on_traded)
 	Net.request_failed.connect(_on_request_failed)
 	Net.state_changed.connect(_on_net_state_changed)
+
+
+func _fit() -> void:
+	var panel: Control = get_node_or_null("Panel")
+	if panel == null:
+		return
+	if ScreenFit.landscape:
+		panel.anchor_left = 0.5
+		panel.anchor_right = 0.5
+		panel.offset_left = -620.0
+		panel.offset_right = 620.0
+		panel.offset_top = 150.0
+		panel.offset_bottom = -40.0
+	else:
+		panel.anchor_left = 0.0
+		panel.anchor_right = 1.0
+		panel.offset_left = 30.0
+		panel.offset_right = -30.0
+		panel.offset_top = 280.0
+		panel.offset_bottom = -80.0
 
 
 func is_open() -> bool:

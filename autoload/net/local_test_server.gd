@@ -302,6 +302,9 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_face.merge(face, true)
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
 			_save()
+		"phone", "phone_tap":
+			# 혼자 노는 테스트 서버: 다른 사람이 없으니 알릴 곳이 없다.
+			pass
 		"set_name":
 			var raw: String = str(msg.get("name", ""))
 			var clean: String = NetProtocol.clean_name(raw)

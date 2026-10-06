@@ -3,7 +3,8 @@ extends Control
 ## 휴대폰 (v0.14): 휴대폰 단추를 누르면 캐릭터가 들고 있던 물건을 넣고 휴대폰을 꺼내 들여다본다 (CharacterRig.set_phone).
 ## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달 · 설정)이 있고, 누르면 그 앱이
 ## 아이콘 자리에서 커지며 열린다. 아래 막대의 ◁(뒤로: 앱 안의 한 단계 → 홈 → 닫기) · ○(홈) · ✕(넣기).
-## 화면을 누를 때마다 캐릭터가 왼손으로 톡 누르고 휴대폰 든 손이 살짝 떨린다 (CharacterRig.phone_tap).
+## 화면을 누를 때마다(떼는 순간, 굴리기 말고) 캐릭터가 왼손으로 톡 누르고 휴대폰 든 손이 살짝 떨린다 (CharacterRig.phone_tap).
+## 꺼내 든 모습과 누르기는 다른 사람 화면에도 보인다 (v15: phone · phone_tap).
 ## 카메라는 가방 창처럼 캐릭터를 화면 아래(가로 화면은 왼쪽)에 두고 휴대폰 화면은 위(오른쪽)에 띄운다.
 ## 값은 서버가 보낸 것(Economy)만 보여 주고, 사고팔기·대출은 서버가 확정한다.
 
@@ -33,6 +34,9 @@ const PORTRAIT_TOP: float = 56.0
 const PORTRAIT_BOTTOM: float = 1390.0
 const BEZEL: Color = Color("#2A2830")
 const ICON_SIZE: float = 150.0
+## 이만큼(UI 좌표) 안에서 짧게 떼면 누르기 (그보다 많이 움직이면 굴리기).
+const TAP_SLOP: float = 28.0
+const TAP_MAX_MS: int = 700
 ## 휴대폰을 보는 동안의 카메라 (거리 m, 내려다보는 각도 °, 바라보는 점 높이 m): 가방 창보다 낮고 정면에서 —
 ## 휴대폰을 내려다보는 얼굴과 손에 든 휴대폰이 보이게, 캐릭터는 화면 아래쪽에.
 const CAMERA: Vector3 = Vector3(4.4, 12.0, 1.9)
@@ -59,6 +63,11 @@ var _status_sol: Label = null
 var _move: Tween = null
 var _camera_saved: Vector3 = Vector3(-1.0, 0.0, 0.0)
 var _hud_fade: Tween = null
+## 누르기 판정: 누른 자리 (INF = 휴대폰 밖) · 시각.
+var _press_at: Vector2 = Vector2.INF
+var _press_ms: int = 0
+## 글자판 때문에 휴대폰을 올린 만큼 (UI 좌표).
+var _lift: float = 0.0
 var _body: VBoxContainer = null
 var _scroll: ScrollContainer = null
 var _clock: Label = null
@@ -311,8 +320,8 @@ func _layout() -> void:
 		_frame.anchor_bottom = 1.0
 		_frame.offset_left = -WIDTH * 0.5
 		_frame.offset_right = WIDTH * 0.5
-		_frame.offset_top = 30.0
-		_frame.offset_bottom = -30.0
+		_frame.offset_top = 30.0 - _lift
+		_frame.offset_bottom = -30.0 - _lift
 	else:
 		_frame.anchor_left = 0.5
 		_frame.anchor_right = 0.5
@@ -320,8 +329,8 @@ func _layout() -> void:
 		_frame.anchor_bottom = 0.0
 		_frame.offset_left = -WIDTH * 0.5
 		_frame.offset_right = WIDTH * 0.5
-		_frame.offset_top = PORTRAIT_TOP
-		_frame.offset_bottom = PORTRAIT_BOTTOM
+		_frame.offset_top = PORTRAIT_TOP - _lift
+		_frame.offset_bottom = PORTRAIT_BOTTOM - _lift
 
 
 func _draw_status_icons(c: Control) -> void:
@@ -489,6 +498,7 @@ func _refresh_home() -> void:
 
 ## 휴대폰 꺼내기: 캐릭터가 들고 있던 것을 넣고 휴대폰을 들고, 카메라는 캐릭터를 화면 아래(왼쪽)에 둔다.
 func _take_out() -> void:
+	Net.set_phone(true)
 	if player != null:
 		player.set_input_lock(&"phone", true)
 		var cam: Camera3D = get_viewport().get_camera_3d()
@@ -507,6 +517,7 @@ func _take_out() -> void:
 
 
 func _put_away() -> void:
+	Net.set_phone(false)
 	if player != null:
 		player.set_input_lock(&"phone", false)
 		player.clear_look_direction()
@@ -549,23 +560,46 @@ func close() -> void:
 	closed.emit()
 
 
-## 휴대폰 화면을 누를 때마다 캐릭터도 톡 누른다.
+## 휴대폰 화면을 누를 때마다 캐릭터도 톡 누른다 — 손을 뗄 때, 거의 움직이지 않았으면 (굴리기 · 끌기는 누르기가 아니다).
 func _input(event: InputEvent) -> void:
-	if not visible or player == null or player.rig == null:
+	if not visible:
 		return
-	var pressed: bool = (event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) \
-		or (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed)
-	if not pressed:
+	var down: bool
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		down = (event as InputEventMouseButton).pressed
+	elif event is InputEventScreenTouch:
+		down = (event as InputEventScreenTouch).pressed
+	else:
 		return
 	var local: InputEvent = _frame.make_input_local(event)
 	var at: Vector2 = (local as InputEventMouseButton).position if local is InputEventMouseButton else (local as InputEventScreenTouch).position
-	if Rect2(Vector2.ZERO, _frame.size).has_point(at):
+	if down:
+		_press_at = at if Rect2(Vector2.ZERO, _frame.size).has_point(at) else Vector2.INF
+		_press_ms = Time.get_ticks_msec()
+		return
+	if _press_at == Vector2.INF:
+		return
+	var moved: float = at.distance_to(_press_at)
+	_press_at = Vector2.INF
+	if moved <= TAP_SLOP and Time.get_ticks_msec() - _press_ms <= TAP_MAX_MS:
+		tap()
+
+
+## 화면을 한 번 톡 (캐릭터 손짓 + 다른 사람에게도 알린다).
+func tap() -> void:
+	if player != null and player.rig != null:
 		player.rig.phone_tap()
+	Net.phone_tap()
 
 
 func _process(_delta: float) -> void:
 	if not visible:
 		return
+	# 글자판이 올라오면 쓰는 칸(마을톡 · 닉네임)이 보이게 휴대폰을 올린다.
+	var want: float = KeyboardLift.lift_for(_frame, _lift)
+	if absf(want - _lift) > 1.0:
+		_lift = want
+		_layout()
 	var h: float = Net.game_hour()
 	_clock.text = "%d:%02d" % [int(h), int(fmod(h, 1.0) * 60.0)]
 	_status_sol.text = Money.short(Net.sol)

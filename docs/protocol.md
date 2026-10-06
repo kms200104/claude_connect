@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v14
+# 네트워크 프로토콜 v15
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -14,6 +14,7 @@ v10 → v11: 낚시 끌어올리기 — `fish_started.shadow`(물고기 그림�
 v11 → v12: 말풍선(`say`) · 다른 사람 몸짓(`act`) · 배달 일거리(`job_*`) · 예적금(`dep_open` `dep_close` `park_move`) · 주간 경제 소식. 버전이 다르면 `error{code: "bad_version", server_v}` 로 서버 버전을 알려 준다.
 v12 → v13: 가방 30칸(퀵 5 + 가방 30, 옛 저장의 칸 자리는 그대로) · 버린 물건이 바닥에 남음(`inv_discard` → `drop{kind: "item", n}` · 일부만 줍기 `collect_result.n left`, 에러 `cant_drop_here` `ground_full`) · 10개씩 사기와 식당 창고(`shop_result.stored`, `rest.store`, 에러 `storage_full`) · 식재료 배달(`deliv_order` → `deliv_ok`, 마을톡 `sys:shop`, `couriers`, `deliv_done`, 에러 `delivery_busy`) · 물 밑 물고기 그림자와 겨눠 던지기(`fishes`, `fish_cast.x z`, `fish_started.fid size ms bx bz`, `fish_found`, 에러 `bad_cast`). 저장 파일은 schema 6 그대로 (world 에 `ground groundSeq deliveries delivSeq`, `restaurant.storage`).
 v13 → v14: 닉네임 — `set_name{rid name}` → `name{rid? id name}`(방 전체), `create`/`join` 의 `name?`(처음 화면 설정에 적어 둔 이름), 플레이어 정보·프로필의 `name`(빈 문자열 = 자리 기본 이름), 에러 `bad_name`. 저장 파일은 schema 6 그대로 (프로필에 `name` 이 없으면 빈 이름).
+v14 → v15: 휴대폰 연출 — `phone{on}`(꺼내 듦/넣음 → 플레이어 정보 · 스냅샷의 `phone`), `phone_tap`(들고 있을 때만, 120ms에 한 번 → 다른 사람에게 `act{kind: "phone_tap"}`). 끊기면 `phone` 은 false. 저장 파일은 그대로.
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
@@ -82,6 +83,8 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `home_pickup` | `rid id` | 집 가구를 가방에 넣기 (`inventory_full`) → `home_f`, `inventory` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
 | `set_name` | `rid name` | 닉네임 바꾸기 (v14, 어디서나). 앞뒤 공백을 지우고 띄어쓰기는 한 칸으로, 글자·숫자·띄어쓰기·`_ - .` 만 10자까지 — 아니면 `bad_name`. 빈 문자열 = 자리 기본 이름으로 |
+| `phone` | `on` | 휴대폰을 꺼내 들었다(true) · 넣었다(false) (v15, 연출용 — 답 없음). 다른 사람 화면에서 `players[]`/`snap.p[]` 의 `phone` 으로 들고 보는 모습 |
+| `phone_tap` | | 휴대폰 화면을 눌렀다 (v15, 들고 있을 때만, 120ms에 한 번). 다른 사람에게 `act{id, kind: "phone_tap"}` |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -165,7 +168,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
+`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.

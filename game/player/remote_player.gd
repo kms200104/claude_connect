@@ -18,6 +18,11 @@ extends Node3D
 ## 보간 결과를 한 번 더 부드럽게 따라가는 정도 (클수록 딱 붙는다).
 @export_range(1.0, 60.0, 0.5) var follow_smoothing: float = 30.0
 @export_range(4, 100) var max_samples: int = 40
+## 화면에 그리는 이동 속도의 상한 (m/s, 달리기 7 + 여유). 위치 소식이 몰려 오면(모바일 망 · 끊김 뒤) 보간 목표가 한꺼번에
+## 앞으로 튀는데, 그대로 따라가면 순간 빨라 보인다. 상한까지만 따라가고, 너무 뒤처지면(catch_up_after 넘게) 조금씩 더 빨리 따라잡는다.
+@export_range(1.0, 30.0, 0.1, "suffix:m/s") var max_display_speed: float = 8.0
+@export_range(0.1, 5.0, 0.1, "suffix:m") var catch_up_after: float = 1.0
+@export_range(0.0, 20.0, 0.5) var catch_up_gain: float = 6.0
 
 @export_group("Animation")
 ## 이 속도(m/s)로 움직이면 walk 애니메이션이 100% 재생된다 (플레이어 최대 속도와 같게).
@@ -88,6 +93,7 @@ func setup(state: NetPlayerState) -> void:
 	set_online(state.online)
 	_apply_held(state.held)
 	set_outfit(state.hat, state.top)
+	set_phone(state.phone)
 
 
 func set_online(value: bool) -> void:
@@ -126,6 +132,14 @@ func play_action(kind: String, target: String = "") -> void:
 			rig.play_plant()
 		"give", "deliver":
 			rig.play_emote("bow")
+		"phone_tap":
+			rig.phone_tap()
+
+
+## 휴대폰을 꺼내 보는 중인지 (스냅샷마다 온다, v15).
+func set_phone(on: bool) -> void:
+	if rig != null and rig.is_holding_phone() != on:
+		rig.set_phone(on and online)
 
 
 ## 상대의 낚시 장면 한 토막 (서버 act kind = fish).
@@ -296,7 +310,15 @@ func _process(delta: float) -> void:
 
 	var weight: float = 1.0 - exp(-follow_smoothing * delta)
 	var before: Vector3 = global_position
-	global_position = global_position.lerp(target_pos, weight)
+	var next: Vector3 = global_position.lerp(target_pos, weight)
+	var step: Vector2 = Vector2(next.x - before.x, next.z - before.z)
+	var lag: float = Vector2(target_pos.x - before.x, target_pos.z - before.z).length()
+	if lag < teleport_distance and delta > 0.0:
+		var limit: float = (max_display_speed + maxf(0.0, lag - catch_up_after) * catch_up_gain) * delta
+		if step.length() > limit:
+			step = step.normalized() * limit
+			next = Vector3(before.x + step.x, next.y, before.z + step.y)
+	global_position = next
 	if rig != null and delta > 0.0:
 		# 실제로 화면에서 움직인 속도로 걷기 애니메이션을 정한다 (낚시 중에는 서 있는다).
 		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta

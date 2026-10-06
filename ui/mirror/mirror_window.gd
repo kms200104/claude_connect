@@ -205,10 +205,16 @@ func close() -> void:
 	closed.emit()
 
 
+## 거울을 보는 동안 판 · 얼굴을 가리는 HUD (이벤트 알림판 · 오른쪽 단추 줄 · 상황 버튼).
+const HIDE_HUD: PackedStringArray = ["EventHud", "PhoneButton", "EmoteBar", "ActionHud", "FishingHud"]
+
+
 func _set_popups_visible(shown: bool) -> void:
-	var events: CanvasItem = get_parent().get_node_or_null("EventHud") as CanvasItem
-	if events != null:
-		events.visible = shown
+	for n: String in HIDE_HUD:
+		var c: CanvasItem = get_parent().get_node_or_null(n) as CanvasItem
+		if c != null:
+			# 보이기 여부는 각자 정하니(온라인 · 이벤트) 투명도로만 감춘다. 창이 화면을 덮어 눌리지는 않는다.
+			c.modulate.a = 1.0 if shown else 0.0
 
 
 ## 완료: 바뀐 항목만 서버에 보낸다 (얼굴 · 이름, 바뀐 게 없으면 그냥 닫는다).
@@ -261,12 +267,7 @@ func _process(_delta: float) -> void:
 	if not visible:
 		return
 	# 글자판이 올라와 있으면 이름 칸이 가려지지 않게 판을 올린다.
-	var want: float = 0.0
-	if _name_edit.has_focus():
-		var kb: float = float(DisplayServer.virtual_keyboard_get_height())
-		var window_h: float = float(DisplayServer.window_get_size().y)
-		if kb > 0.0 and window_h > 0.0:
-			want = kb * get_viewport_rect().size.y / window_h
+	var want: float = KeyboardLift.lift_for(_panel, _lift)
 	if absf(want - _lift) > 1.0:
 		_set_lift(want)
 

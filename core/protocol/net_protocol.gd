@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 14
+const VERSION: int = 15
 
 ## v14 닉네임: 최대 글자 수 (서버 nickname.js NAME_MAX 와 같다).
 const NAME_MAX: int = 10

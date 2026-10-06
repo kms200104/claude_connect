@@ -396,6 +396,10 @@ export function createServer(overrides = {}) {
     const { room, player } = ctx;
     if (!room || !player || player.ws !== ctx.ws) return;
     player.ws = null;
+    if (player.phone) {
+      player.phone = false;
+      room.dirty = true;
+    }
     fishing.drop(player);
     closeTalk(room, player, false);
     room.broadcast({ t: 'peer_status', id: player.id, online: false });
@@ -1049,6 +1053,23 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  /** 휴대폰 꺼내 보기 · 화면 누르기 (v15, 연출용): 꺼내 든 상태는 플레이어 정보(phone)로, 누르기는 몸짓(act phone_tap)으로 알린다. */
+  function handlePhone(ctx, msg) {
+    const { player, room } = ctx;
+    if (msg.t === 'phone') {
+      const on = msg.on === true;
+      if (player.phone === on) return;
+      player.phone = on;
+      room.dirty = true;
+      return;
+    }
+    // 누르기는 휴대폰을 든 동안만, 너무 잦으면 거른다.
+    const t = now();
+    if (!player.phone || t - (player.phoneTapAt ?? -Infinity) < 120) return;
+    player.phoneTapAt = t;
+    act(room, player, 'phone_tap');
+  }
+
   /** 입장할 때 같이 보낸 닉네임 (처음 화면 설정). 쓸 수 없거나 비었으면 그대로 둔다. */
   function applyJoinName(player, raw) {
     const name = cleanName(raw);
@@ -1475,6 +1496,9 @@ export function createServer(overrides = {}) {
         return handleFace(ctx, msg, fail);
       case 'set_name':
         return handleName(ctx, msg, fail);
+      case 'phone':
+      case 'phone_tap':
+        return handlePhone(ctx, msg);
       case 'stock_order':
         return economy.handleStock(ctx, msg, fail);
       case 'apt_buy':
@@ -1642,6 +1666,8 @@ export function createServer(overrides = {}) {
       case 'donate':
       case 'set_face':
       case 'set_name':
+      case 'phone':
+      case 'phone_tap':
       case 'talk_topic':
       case 'stock_order':
       case 'apt_buy':
@@ -1728,6 +1754,7 @@ export function createServer(overrides = {}) {
         p: [...room.players.values()].map((p) => ({
           id: p.id,
           fishing: p.fishing !== null,
+          phone: p.phone,
           held: jobs.carried(p) ?? p.heldItem,
           hat: p.profile.outfit.hat,
           top: p.profile.outfit.top,

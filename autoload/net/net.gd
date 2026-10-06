@@ -551,6 +551,16 @@ func save_nickname(display_name: String) -> void:
 	cfg.save(_settings_path())
 
 
+## 휴대폰을 꺼냈다 · 넣었다 (v15, 다른 사람 화면에서도 들고 보는 모습이 보이게).
+func set_phone(on: bool) -> void:
+	_send({"t": "phone", "on": on})
+
+
+## 휴대폰 화면을 눌렀다 (다른 사람 화면에서도 톡 누르는 손짓).
+func phone_tap() -> void:
+	_send({"t": "phone_tap"})
+
+
 ## 거울 앞에서 얼굴을 바꾼다 (바꿀 항목만 보내도 된다). 결과는 face_changed.
 func set_face(face: Dictionary) -> void:
 	_request("set_face", {"face": face})

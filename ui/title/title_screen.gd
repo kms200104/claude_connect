@@ -36,6 +36,8 @@ var _angle: float = 0.6
 var _started: bool = false
 var _time: float = 0.0
 var _clouds: Array[Node3D] = []
+## 글자판 때문에 카드를 올린 만큼 (방 코드 · 서버 주소 칸).
+var _lift: float = 0.0
 
 
 func _ready() -> void:
@@ -112,8 +114,8 @@ func _fit() -> void:
 		_card.anchor_bottom = 0.5
 		_card.offset_left = 40.0
 		_card.offset_right = -70.0
-		_card.offset_top = -330.0
-		_card.offset_bottom = 330.0
+		_card.offset_top = -330.0 - _lift
+		_card.offset_bottom = 330.0 - _lift
 		_card.grow_vertical = Control.GROW_DIRECTION_BOTH
 	else:
 		for c: Control in [_logo, _subtitle]:
@@ -131,8 +133,8 @@ func _fit() -> void:
 		_card.anchor_bottom = 1.0
 		_card.offset_left = 70.0
 		_card.offset_right = -70.0
-		_card.offset_top = -760.0
-		_card.offset_bottom = -120.0
+		_card.offset_top = -760.0 - _lift
+		_card.offset_bottom = -120.0 - _lift
 		_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
@@ -142,6 +144,10 @@ func _process(delta: float) -> void:
 	_time += delta
 	_angle += orbit_speed * delta
 	_place_camera()
+	var want: float = KeyboardLift.lift_for(_card, _lift)
+	if absf(want - _lift) > 1.0:
+		_lift = want
+		_fit()
 	if _logo != null:
 		# 로고가 둥실둥실.
 		_logo.pivot_offset = _logo.size * 0.5

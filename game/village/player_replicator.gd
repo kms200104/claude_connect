@@ -138,6 +138,7 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 			continue
 		var remote: RemotePlayer = _spawn_remote(state)
 		remote.push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
+		remote.set_phone(state.phone)
 		remote.set_outfit(state.hat, state.top)
 
 

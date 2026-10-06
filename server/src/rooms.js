@@ -171,6 +171,7 @@ export class Player {
     this.lastMotionAt = -Infinity; // 몸짓(브레이크) 간격
     this.graceTimer = null;
     this.fishing = null; // 낚시 세션 (fishing.js)
+    this.phone = false; // 휴대폰을 꺼내 보는 중 (v15, 연출용)
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
     this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
@@ -205,6 +206,7 @@ export class Player {
       id: this.id,
       online: this.online,
       fishing: this.fishing !== null,
+      phone: this.phone,
       held: this.heldItem,
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
