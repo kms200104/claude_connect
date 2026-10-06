@@ -61,6 +61,7 @@
 [ext_resource type="Script" path="res://game/places/restaurant_site.gd" id="65_restaurant"]
 [ext_resource type="Script" path="res://game/economy/economy_controller.gd" id="66_economy"]
 [ext_resource type="Script" path="res://game/places/civic_site.gd" id="67_civic"]
+[ext_resource type="Script" path="res://game/places/park_site.gd" id="99_park"]
 [ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
 
@@ -255,6 +256,11 @@ actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
 npcs = NodePath("../Npcs")
+
+[node name="Park" type="Node3D" parent="."]
+script = ExtResource("99_park")
+clay_material = ExtResource("23_foliage")
+window_material = ExtResource("28_window")
 
 [node name="Civic" type="Node3D" parent="."]
 script = ExtResource("67_civic")

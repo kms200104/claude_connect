@@ -215,6 +215,10 @@ func _blocked(p: Vector2, margin: float) -> bool:
 	if not runway.is_empty() and p.x > float(runway.x0) - 1.0 and p.x < float(runway.x1) + 1.0 and absf(p.y - float(runway.z)) < float(runway.width) * 0.5 + 1.0:
 		return true
 	for spot: SpotInfo in GameData.spots.values():
+		if spot.has_outline():
+			if spot.signed_distance(p) < _layout.lake_shore + margin:
+				return true
+			continue
 		var q: Vector2 = (p - spot.center).abs() / (spot.half_extent + Vector2.ONE * (_layout.lake_shore + margin))
 		if pow(q.x, _layout.lake_shape_power) + pow(q.y, _layout.lake_shape_power) < 1.0:
 			return true

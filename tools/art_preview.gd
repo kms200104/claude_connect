@@ -9,6 +9,7 @@ var _what: String = "trees"
 var _out: String = "user://preview.png"
 var _cam: Vector3 = Vector3(0.0, 30.0, 30.0)
 var _at: Vector3 = Vector3.ZERO
+var _player: Vector3 = Vector3.INF
 var _ids: PackedStringArray = []
 
 
@@ -22,12 +23,17 @@ func _ready() -> void:
 			_cam = _vec(arg.trim_prefix("--cam="))
 		elif arg.begins_with("--at="):
 			_at = _vec(arg.trim_prefix("--at="))
+		elif arg.begins_with("--player="):
+			_player = _vec(arg.trim_prefix("--player="))
 		elif arg.begins_with("--ids="):
 			_ids = arg.trim_prefix("--ids=").split(",")
 	if _what == "village":
 		var village: Node = load("res://game/village/village.tscn").instantiate()
 		add_child(village)
 		(village.get_node("HUD") as CanvasLayer).visible = false
+		# 월드 커브는 플레이어 기준으로 휘므로, 먼 곳을 가까이서 볼 땐 --player=x,y,z 로 플레이어를 그쪽에 둔다.
+		if _player != Vector3.INF:
+			(village.get_node("Player") as Node3D).global_position = _player
 		await get_tree().create_timer(0.3).timeout
 		_camera(_cam, _at, 50.0)
 		await get_tree().create_timer(0.8).timeout

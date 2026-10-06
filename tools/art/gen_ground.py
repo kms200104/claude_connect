@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from lake_poly import signed_distance
+
 ROOT = Path(__file__).resolve().parents[2]
 SIZE = 1024
 DETAIL = 256
@@ -112,6 +114,21 @@ def main(pack: str) -> None:
     shore = float(layout["lake_shore"])
     power = float(layout["lake_shape_power"])
     for spot in spots["spots"]:
+        if "outline" in spot:
+            # 실제 윤곽 호수: 바깥 사각형 + 모래톱 폭 안쪽 창만 부호 있는 거리를 계산한다 (전체 격자는 낭비).
+            outline = np.array(spot["outline"], dtype=float)
+            pad = shore + 1.0
+            win = (px >= spot["x"] - spot["half_x"] - pad) & (px <= spot["x"] + spot["half_x"] + pad) & (pz >= spot["z"] - spot["half_z"] - pad) & (pz <= spot["z"] + spot["half_z"] + pad)
+            rows, cols = np.where(win)
+            r0, r1, c0, c1 = rows.min(), rows.max() + 1, cols.min(), cols.max() + 1
+            sd = np.full((SIZE, SIZE), 1e3)
+            sd[r0:r1, c0:c1] = signed_distance(outline, px[r0:r1, c0:c1], pz[r0:r1, c0:c1])
+            sand = smoothstep(shore + 0.1, shore - 0.4, sd + wobble * 0.7)
+            bed = smoothstep(0.1, -0.35, sd)
+            color = color * (1 - sand[..., None]) + SAND * sand[..., None]
+            color = color * (1 - bed[..., None]) + LAKE_BED * bed[..., None]
+            grassiness = grassiness * (1 - sand)
+            continue
         cx, cz = float(spot["x"]), float(spot["z"])
         hx, hz = float(spot["half_x"]), float(spot["half_z"])
 

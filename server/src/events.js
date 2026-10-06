@@ -1,7 +1,7 @@
 // 마을 이벤트(서버 권위). 날마다 마을 시드로 하루 이벤트 하나를 뽑고, 밤 이벤트(유성우)는 따로 굴린다.
 // 저장할 필요 없이 언제 계산해도 같은 결과가 나온다 (날씨와 같은 방식). 바닥에 떨어진 선물·별 조각은 메모리에만 둔다.
 import { inHours, seededRandom } from './clock.js';
-import { pickWeighted } from './gamedata.js';
+import { nearSpot, pickWeighted } from './gamedata.js';
 
 const EVENT_SALT = 0x5eed;
 
@@ -96,7 +96,7 @@ export function dropPosition({ random, data, layout, near = { x: -3, z: 2 }, rad
 
 function blocked(x, z, data, layout) {
   for (const s of data.spots.values()) {
-    if (Math.abs(x - s.x) < s.half_x + 2 && Math.abs(z - s.z) < s.half_z + 2) return true;
+    if (nearSpot(s, x, z, 2)) return true;
   }
   const door = data.shop.door;
   if (Math.abs(x - door.x) < 6 && z < door.z + 2 && z > door.z - 9) return true;

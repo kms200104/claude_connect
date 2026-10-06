@@ -1,6 +1,7 @@
 // 삽 (서버 권위): 조개 숨구멍(바닷가 모래밭·호숫가)과 땅 고치기(구덩이·메우기·흙길).
 // 숨구멍은 hp 번 파야 나온다 — 다른 사람이 coop_window 안에 같이 파면 한 번에 두 번 판 셈이고, 다 파면 판 사람 모두 하나씩 받는다.
 import { islandShape } from './world.js';
+import { insideOutline, signedDistance } from './outline.js';
 
 export const TileKind = Object.freeze({ hole: 'hole', path: 'path' });
 
@@ -23,6 +24,27 @@ export function beachSpot(island, random) {
 
 /** 호숫가 모래(수역 둘레 shore 폭 안)의 자리 하나. */
 export function lakeShoreSpot(spot, shore, random) {
+  if (spot.outline) {
+    // 윤곽 수역: 경계의 한 점에서 물 바깥쪽으로 off 만큼 나간 자리. 좁은 물줄기 건너편(물)에 떨어지면 다시 뽑는다.
+    const o = spot.outline;
+    let out = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const i = Math.floor(random() * o.length);
+      const [ax, az] = o[i];
+      const [bx, bz] = o[(i + 1) % o.length];
+      const t = random();
+      const px = ax + (bx - ax) * t;
+      const pz = az + (bz - az) * t;
+      const len = Math.hypot(bx - ax, bz - az) || 1;
+      let nx = -(bz - az) / len;
+      let nz = (bx - ax) / len;
+      const off = 0.5 + random() * Math.max(0.3, shore - 0.6);
+      if (insideOutline(o, px + nx * 0.2, pz + nz * 0.2)) [nx, nz] = [-nx, -nz];
+      out = { x: Math.round((px + nx * off) * 10) / 10, z: Math.round((pz + nz * off) * 10) / 10 };
+      if (signedDistance(o, out.x, out.z) > 0.3) break;
+    }
+    return out;
+  }
   const side = Math.floor(random() * 4);
   const off = 0.5 + random() * Math.max(0.3, shore - 0.6);
   const u = random() * 2 - 1;

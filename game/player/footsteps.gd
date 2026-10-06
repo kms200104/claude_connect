@@ -91,6 +91,10 @@ static func surface_of(position: Vector3) -> String:
 	if not Field.tile_at(roundi(p.x), roundi(p.y)).is_empty():
 		return "dirt"
 	for spot: SpotInfo in GameData.spots.values():
+		if spot.has_outline():
+			if spot.signed_distance(p) < layout.lake_shore:
+				return "dirt"
+			continue
 		var q: Vector2 = (p - spot.center).abs() / (spot.half_extent + Vector2.ONE * layout.lake_shore)
 		if pow(q.x, layout.lake_shape_power) + pow(q.y, layout.lake_shape_power) < 1.0:
 			return "dirt"

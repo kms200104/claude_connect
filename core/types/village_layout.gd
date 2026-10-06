@@ -38,6 +38,8 @@ var dock_center: Vector2 = Vector2.ZERO
 var dock_size: Vector2 = Vector2.ZERO
 var grass_count: int = 0
 var wild_flower_count: int = 0
+## 성성호수공원 시설 (방문자센터·정자·벤치): data/world/village_layout.json 의 park. 없으면 빈 사전.
+var park: Dictionary = {}
 
 
 static func from_dict(data: Dictionary) -> VillageLayout:
@@ -61,6 +63,9 @@ static func from_dict(data: Dictionary) -> VillageLayout:
 			layout.mirrors.append(Vector3(float(entry.get("x", 0.0)), float(entry.get("z", 0.0)), float(entry.get("yaw", 0.0))))
 	for line: Variant in data.get("paths", []):
 		layout.paths.append(_points(line))
+	var park: Variant = data.get("park", {})
+	if park is Dictionary:
+		layout.park = park
 	layout.lake_shore = float(data.get("lake_shore", layout.lake_shore))
 	layout.lake_shape_power = float(data.get("lake_shape_power", layout.lake_shape_power))
 	for entry: Variant in data.get("rocks", []):

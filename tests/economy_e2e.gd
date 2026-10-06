@@ -172,7 +172,9 @@ func _run() -> void:
 
 	# ---- 성성호수 낚시터 ----
 	var spot: SpotInfo = GameData.spots.get("seongseong")
-	await _teleport(Vector3(spot.center.x, 0.1, spot.center.y - spot.half_extent.y - 1.0))
+	# 실제 윤곽 호수: 바깥 사각형 위쪽이 아니라 북쪽에서 가장 가까운 물가에 선다.
+	var shore: Vector2 = spot.boundary_nearest(Vector2(spot.center.x, spot.center.y - spot.half_extent.y))
+	await _teleport(Vector3(shore.x, 0.1, shore.y - 1.0))
 	Net.equip(0)
 	await get_tree().create_timer(0.3).timeout
 	await get_tree().process_frame

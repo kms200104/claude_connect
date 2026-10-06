@@ -49,6 +49,19 @@ export function blockedAreas(data) {
   const civic = data.civic?.building;
   if (civic) rects.push(buildingRect(civic, 1.5));
   for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
+  // 성성호수공원: 방문자센터(앞면 가운데 기준, yaw 는 90° 단위)와 정자.
+  const park = data.layout?.park;
+  if (park?.visitor_center) {
+    const v = park.visitor_center;
+    const pad = 1.5;
+    const c = Math.cos(v.yaw ?? 0);
+    const s = Math.sin(v.yaw ?? 0);
+    // 로컬 (u, w): u = 앞면 가운데 기준 가로, w = 앞(+)·뒤(-) 방향. 월드 = 회전 후 이동.
+    const corners = [[-v.width / 2 - pad, -v.depth - pad], [v.width / 2 + pad, -v.depth - pad], [v.width / 2 + pad, pad], [-v.width / 2 - pad, pad]]
+      .map(([u, w]) => [v.x + u * c + w * s, v.z - u * s + w * c]);
+    rects.push({ x0: Math.min(...corners.map((q) => q[0])), x1: Math.max(...corners.map((q) => q[0])), z0: Math.min(...corners.map((q) => q[1])), z1: Math.max(...corners.map((q) => q[1])) });
+  }
+  if (park?.pavilion) circles.push({ x: park.pavilion.x, z: park.pavilion.z, r: park.pavilion.size / 2 + 0.8 });
   return { rects, circles };
 }
 

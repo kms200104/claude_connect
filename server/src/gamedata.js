@@ -5,6 +5,7 @@ import { blockedAreas } from './world.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
+import { insideOutline, nearestOnBoundary, signedDistance } from './outline.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -13,9 +14,16 @@ export function loadGameData(dataDir, cfg) {
   const spots = new Map();
   for (const s of read('fish/spots.json').spots) {
     for (const id of s.fish) if (!fish.has(id)) throw new Error(`spot ${s.id}: unknown fish ${id}`);
+    if (s.outline && (!Array.isArray(s.outline) || s.outline.length < 3)) throw new Error(`spot ${s.id}: outline 은 점 3개 이상`);
     // 여울(얕은 물, v0.9): 수역 안쪽 사각형. 들어가서 뜰채로 물고기를 몬다.
     for (const z of s.shallows ?? []) {
       if (Math.abs(z.x - s.x) + z.half_x > s.half_x + 1e-6 || Math.abs(z.z - s.z) + z.half_z > s.half_z + 1e-6) throw new Error(`spot ${s.id}: shallow ${z.id} 가 수역 밖`);
+      // 윤곽이 있는 수역은 여울 네 모서리가 윤곽 안쪽이어야 한다.
+      if (s.outline) {
+        for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          if (!insideOutline(s.outline, z.x + cx * z.half_x, z.z + cz * z.half_z)) throw new Error(`spot ${s.id}: shallow ${z.id} 가 윤곽 밖`);
+        }
+      }
       for (const id of z.fish) if (!fish.has(id)) throw new Error(`shallow ${z.id}: unknown fish ${id}`);
     }
     spots.set(s.id, s);
@@ -204,11 +212,37 @@ export function loadGameData(dataDir, cfg) {
   return data;
 }
 
-/** 점과 낚시터 사각형 사이의 거리(안쪽이면 0). */
+/** 점과 수역 사이의 거리(안쪽이면 0). 윤곽(outline)이 있으면 다각형, 없으면 사각형. */
 export function distanceToSpot(spot, x, z) {
+  if (spot.outline) {
+    // 바깥 사각형 밖으로 한참 먼 점은 윤곽을 볼 것도 없이 사각형 거리가 하한이다.
+    const dx = Math.max(Math.abs(x - spot.x) - spot.half_x, 0);
+    const dz = Math.max(Math.abs(z - spot.z) - spot.half_z, 0);
+    if (dx > 0 || dz > 0) {
+      const box = Math.hypot(dx, dz);
+      if (box > 8) return box;
+    }
+    return Math.max(signedDistance(spot.outline, x, z), 0);
+  }
   const dx = Math.max(Math.abs(x - spot.x) - spot.half_x, 0);
   const dz = Math.max(Math.abs(z - spot.z) - spot.half_z, 0);
   return Math.hypot(dx, dz);
+}
+
+/** 수역 안에서 이 점과 가장 가까운 점 (윤곽 수역은 안이면 그 점, 밖이면 경계점). */
+export function nearestInSpot(spot, x, z) {
+  if (spot.outline) {
+    if (insideOutline(spot.outline, x, z)) return { x, z };
+    const b = nearestOnBoundary(spot.outline, x, z);
+    return { x: b.x, z: b.z };
+  }
+  return { x: Math.max(spot.x - spot.half_x, Math.min(spot.x + spot.half_x, x)), z: Math.max(spot.z - spot.half_z, Math.min(spot.z + spot.half_z, z)) };
+}
+
+/** 이 점이 수역(+margin m) 가까이인지 — 이벤트·드롭 자리 피하기용. 사각형 수역은 예전처럼 사각형 + margin. */
+export function nearSpot(spot, x, z, margin) {
+  if (spot.outline) return distanceToSpot(spot, x, z) < margin;
+  return Math.abs(x - spot.x) < spot.half_x + margin && Math.abs(z - spot.z) < spot.half_z + margin;
 }
 
 /** 지금 시각·날씨에 이 낚시터에서 낚일 수 있는 물고기. */

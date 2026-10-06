@@ -1,6 +1,7 @@
 class_name FishingSpot
 extends Node3D
 ## 낚시터(수역). 위치와 크기는 data/fish/spots.json 에서 읽는다 — 서버가 판정에 쓰는 값과 같은 출처.
+## 윤곽(outline)이 있는 호수는 거리 그림(data/fish/sdf/<id>.json)으로 물 모양을 자르고, 물 막이는 윤곽을 안쪽으로 줄인 다각형으로 만든다.
 ## v9: 여울(shallows)은 물 막이를 비워 걸어 들어갈 수 있고, 밝고 맑은 물빛 + "얕은 물" 팻말로, 나머지 가운데는 짙은 물빛("깊은 물")으로 보인다.
 
 @export var spot_id: String = "pond"
@@ -36,14 +37,79 @@ func _ready() -> void:
 		plane.subdivide_width = maxi(int(plane.size.x), 1)
 		plane.subdivide_depth = maxi(int(plane.size.y), 1)
 		water.position = Vector3(0.0, water_height, 0.0)
-		if water.material_override is ShaderMaterial:
-			(water.material_override as ShaderMaterial).set_shader_parameter("half_extent", info.half_extent)
-		elif water.get_surface_override_material(0) is ShaderMaterial:
-			(water.get_surface_override_material(0) as ShaderMaterial).set_shader_parameter("half_extent", info.half_extent)
+		var mat: ShaderMaterial = _water_material()
+		if mat != null:
+			mat.set_shader_parameter("half_extent", info.half_extent)
+			if info.has_outline():
+				_apply_outline_sdf(mat)
 	if blocker != null and blocker.shape is BoxShape3D:
 		blocker.shape = blocker.shape.duplicate()
-		_build_blocker()
+		if info.has_outline():
+			_build_outline_blocker()
+		else:
+			_build_blocker()
 	_build_depth()
+
+
+func _water_material() -> ShaderMaterial:
+	if water == null:
+		return null
+	if water.material_override is ShaderMaterial:
+		return water.material_override
+	if water.get_surface_override_material(0) is ShaderMaterial:
+		return water.get_surface_override_material(0) as ShaderMaterial
+	return null
+
+
+## 윤곽 호수의 거리 그림 (tools/art/gen_lake_sdf.py 가 만든 JSON: 160² L8, base64)을 물 셰이더에 넣는다.
+func _apply_outline_sdf(mat: ShaderMaterial) -> void:
+	var path: String = "res://data/fish/sdf/%s.json" % spot_id
+	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not doc is Dictionary:
+		push_error("FishingSpot: 거리 그림 없음 — python3 tools/art/gen_lake_sdf.py (%s)" % path)
+		return
+	var size: int = int(doc["size"])
+	var image: Image = Image.create_from_data(size, size, false, Image.FORMAT_L8, Marshalls.base64_to_raw(str(doc["data"])))
+	var half: Array = doc["half"]
+	mat.set_shader_parameter("use_outline", true)
+	mat.set_shader_parameter("outline_sdf", ImageTexture.create_from_image(image))
+	mat.set_shader_parameter("sdf_half", Vector2(float(half[0]), float(half[1])))
+	mat.set_shader_parameter("sdf_range", float(doc["range"]))
+
+
+## 윤곽 호수의 물 막이: 윤곽을 물가 폭만큼 안쪽으로 줄인 다각형(들)을 한 칸 높이로 세운다. 선착장·여울 자리는 뺀다.
+func _build_outline_blocker() -> void:
+	var gaps: Array[PackedVector2Array] = []
+	var layout: VillageLayout = GameData.layout
+	if layout != null and layout.dock_size.x > 0.0:
+		gaps.append(_rect_polygon(layout.dock_rect()))
+	for z: Dictionary in info.shallows:
+		gaps.append(_rect_polygon(Rect2(float(z["x"]) - float(z["half_x"]) - 0.6, float(z["z"]) - float(z["half_z"]) - 0.6, float(z["half_x"]) * 2.0 + 1.2, float(z["half_z"]) * 2.0 + 1.2)))
+	var pieces: Array[PackedVector2Array] = []
+	for poly: PackedVector2Array in Geometry2D.offset_polygon(info.outline, -shore_margin, Geometry2D.JOIN_ROUND):
+		if Geometry2D.is_polygon_clockwise(poly):
+			continue  # 구멍(바깥쪽)으로 나온 조각은 건너뛴다.
+		pieces.append(poly)
+	for gap: PackedVector2Array in gaps:
+		var next: Array[PackedVector2Array] = []
+		for piece: PackedVector2Array in pieces:
+			for part: PackedVector2Array in Geometry2D.clip_polygons(piece, gap):
+				if not Geometry2D.is_polygon_clockwise(part):
+					next.append(part)
+		pieces = next
+	blocker.disabled = true
+	var body: Node = blocker.get_parent()
+	for poly: PackedVector2Array in pieces:
+		var node: CollisionPolygon3D = CollisionPolygon3D.new()
+		node.polygon = poly
+		node.depth = 2.0
+		body.add_child(node)
+		# 폴리곤은 로컬 XY 평면 → X 축으로 90° 눕혀 월드 XZ 에 놓는다 (월드 원점 기준 좌표를 그대로 쓴다).
+		node.global_transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0.0, 1.0, 0.0))
+
+
+static func _rect_polygon(r: Rect2) -> PackedVector2Array:
+	return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
 
 
 ## 물 막이: 수역보다 물가 폭만큼 작은 상자. 선착장이 물 위로 나와 있으면 그 자리만 비워 걸어 들어갈 수 있게 한다.
@@ -101,6 +167,12 @@ func _build_depth() -> void:
 
 ## 여울 쪽 물가 (팻말 자리): 여울에서 수역 가장자리로 가장 가까운 바깥.
 func _shore_point(z: Dictionary) -> Vector3:
+	if info.has_outline():
+		# 윤곽에서 여울 가운데에 가장 가까운 점을 지나, 물 바깥쪽으로 1m.
+		var c: Vector2 = Vector2(float(z["x"]), float(z["z"]))
+		var edge: Vector2 = info.boundary_nearest(c)
+		var out: Vector2 = edge + (edge - c).normalized() * 1.0
+		return Vector3(out.x, 0.0, out.y)
 	var zx: float = float(z["x"])
 	var zz: float = float(z["z"])
 	var left: float = zx - float(z["half_x"]) - (info.center.x - info.half_extent.x)

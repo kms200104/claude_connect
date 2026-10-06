@@ -1,5 +1,5 @@
 shader_type spatial;
-// 호수 물: 둥근 사각(초타원) 모양으로 잘라 내고, 물가는 옅은 청록 → 가운데는 깊은 파랑, 물가에 흔들리는 거품 띠,
+// 호수 물: 둥근 사각(초타원) 모양 — 또는 실제 윤곽(거리 그림, use_outline) — 으로 잘라 내고, 물가는 옅은 청록 → 가운데는 깊은 파랑, 물가에 흔들리는 거품 띠,
 // 잔물결 반짝임. v0.9: 여울(얕은 물, 최대 2곳)은 모래 바닥이 비치는 맑은 물빛 + 햇빛 무늬, 그 밖의 가운데는 더 짙은 깊은 물.
 // 비가 오면(world_wetness) 빗방울 동심원이 퍼진다. 텍스처 없음, 알파 블렌드 없음(가장자리만 discard).
 render_mode diffuse_toon, specular_disabled;
@@ -13,6 +13,12 @@ global uniform float world_wetness;
 uniform vec2 half_extent = vec2(9.0, 7.0);
 // 모양 지수: 2 = 타원, 클수록 사각형에 가깝다. village_layout.json 의 lake_shape_power 와 같아야 한다.
 uniform float shape_power = 4.0;
+// 실제 윤곽 호수: 윤곽까지의 부호 있는 거리 그림 (FishingSpot 이 data/fish/sdf/<id>.json 으로 만든다).
+// 0.5 = 윤곽, 안쪽 < 0.5. 거리(m) = (값 - 0.5) * 2 * sdf_range. 그림 영역 = 수면 원점 기준 ±sdf_half.
+uniform bool use_outline = false;
+uniform sampler2D outline_sdf : filter_linear, repeat_disable;
+uniform vec2 sdf_half = vec2(16.0, 16.0);
+uniform float sdf_range = 4.0;
 uniform vec4 shallow_color : source_color = vec4(0.55, 0.85, 0.84, 1.0);
 uniform vec4 deep_color : source_color = vec4(0.24, 0.55, 0.74, 1.0);
 uniform vec4 foam_color : source_color = vec4(0.96, 0.99, 1.0, 1.0);
@@ -44,10 +50,23 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 q = abs(local_xz) / half_extent;
-	float r = pow(pow(q.x, shape_power) + pow(q.y, shape_power), 1.0 / shape_power);
-	if (r > 1.0) {
-		discard;
+	float r;
+	float edge_dist = 0.0; // 윤곽에서 안쪽으로 얼마나 들어왔는지(m), 윤곽 호수만.
+	if (use_outline) {
+		vec2 suv = local_xz / (2.0 * sdf_half) + 0.5;
+		float sd = (texture(outline_sdf, suv).r - 0.5) * 2.0 * sdf_range;
+		if (sd > 0.0) {
+			discard;
+		}
+		edge_dist = -sd;
+		// 둥근 호수의 1 - r 와 비슷한 값 (물가 0 → 안쪽 1, 3.5m 에 걸쳐).
+		r = 1.0 - clamp(edge_dist / 3.5, 0.0, 1.0);
+	} else {
+		vec2 q = abs(local_xz) / half_extent;
+		r = pow(pow(q.x, shape_power) + pow(q.y, shape_power), 1.0 / shape_power);
+		if (r > 1.0) {
+			discard;
+		}
 	}
 	float t = TIME;
 	float shallow = max(shallow_of(shallow_a, local_xz), shallow_of(shallow_b, local_xz));
@@ -70,6 +89,11 @@ void fragment() {
 	float angle = atan(local_xz.y, local_xz.x);
 	float foam_edge = 0.94 + 0.02 * sin(angle * 14.0 + t * 1.6) + 0.015 * sin(angle * 31.0 - t * 2.3);
 	float foam = smoothstep(foam_edge - 0.02, foam_edge + 0.01, r);
+	if (use_outline) {
+		// 윤곽 따라 출렁이는 거품 띠 (물가 0.45m 안쪽에서 시작).
+		float wob = 0.08 * sin(local_xz.x * 2.1 + local_xz.y * 1.3 + t * 1.6) + 0.06 * sin(local_xz.x * 4.7 - local_xz.y * 3.9 - t * 2.3);
+		foam = 1.0 - smoothstep(0.12 + wob, 0.42 + wob, edge_dist);
+	}
 	color = mix(color, foam_color.rgb, foam * 0.85);
 	// 빗방울 동심원 (1.5m 칸마다 하나, 칸마다 다른 시각에 떨어진다).
 	if (world_wetness > 0.01) {

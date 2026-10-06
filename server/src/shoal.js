@@ -2,6 +2,8 @@
 // 물고기는 가까운 사람에게서 달아나고(flee_speed, 사람 걸음보다 빠르다), 여울 사각형 밖으로는 못 나간다 — 그래서 혼자서는 잘 안 잡히고
 // 구석으로 몰거나 둘이 양쪽에서 막아야 한다. 같은 여울에 두 사람 이상 들어오면 물고기가 우왕좌왕(panic_speed)해 느려지고 뜰채도 넓게 뜬다.
 
+import { nearestInSpot } from './gamedata.js';
+
 /** 여울 목록: [{ id, name, spot(낚시터 id), x, z, half_x, half_z, max, fish[] }] */
 export function shallowZones(spots) {
   const zones = [];
@@ -15,9 +17,8 @@ export function inZone(zone, x, z, margin = 0) {
 
 /** 이 자리에서 가장 가까운 물이 여울이면 그 여울 (낚시가 얕은 곳인지 깊은 곳인지 가를 때). */
 export function shallowAt(spot, x, z) {
-  // 수역 사각형에서 가장 가까운 점.
-  const cx = Math.max(spot.x - spot.half_x, Math.min(spot.x + spot.half_x, x));
-  const cz = Math.max(spot.z - spot.half_z, Math.min(spot.z + spot.half_z, z));
+  // 수역에서 가장 가까운 점 (윤곽이 없으면 사각형 기준).
+  const { x: cx, z: cz } = nearestInSpot(spot, x, z);
   for (const s of spot.shallows ?? []) if (Math.abs(cx - s.x) <= s.half_x + 0.4 && Math.abs(cz - s.z) <= s.half_z + 0.4) return s;
   return null;
 }

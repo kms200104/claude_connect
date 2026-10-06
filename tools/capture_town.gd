@@ -165,7 +165,8 @@ func _run() -> void:
 			break
 	var spot: SpotInfo = GameData.spots.get("seongseong")
 	camera.distance = base_distance + 4.0
-	await _put(Vector3(spot.center.x - 2.0, 0.1, spot.center.y - spot.half_extent.y - 0.9), PI)
+	var shore: Vector2 = spot.boundary_nearest(Vector2(spot.center.x, spot.center.y - spot.half_extent.y))
+	await _put(Vector3(shore.x - 2.0, 0.1, shore.y - 0.9), PI)
 	await _shot("t15_seongseong")
 	player.rig.set_sitting(false)
 
