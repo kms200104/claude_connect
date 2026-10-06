@@ -5,6 +5,8 @@ extends Node
 ## 판정은 서버(Economy)가 하고 여기서는 화면과 연출만 맡는다.
 
 @export var player: Player
+## 휴대폰을 보는 동안 캐릭터를 비추는 카메라 (v0.14).
+@export var camera_rig: FollowCamera
 @export var apartments: ApartmentSite
 @export var restaurant: RestaurantSite
 ## 동사무소 (v0.9, 없어도 된다).
@@ -37,6 +39,8 @@ var _join_pending: bool = false
 func _ready() -> void:
 	phone = PhoneWindow.new()
 	phone.name = "PhoneWindow"
+	phone.player = player
+	phone.camera_rig = camera_rig
 	kitchen = KitchenWindow.new()
 	kitchen.name = "KitchenWindow"
 	kitchen.player = player

@@ -1,8 +1,11 @@
 class_name PhoneWindow
 extends Control
-## 휴대폰: 증권 · 부동산 · 은행 · 자산 네 가지 앱. 값은 서버가 보낸 것(Economy)만 보여 주고, 사고팔기·대출은 서버가 확정한다.
-## 증권은 1분마다 시세가 움직이고(모의 거래소 또는 MARKET_FEED_URL 시세 서버), 부동산은 성성호수 아파트 60호,
-## 은행은 신용점수에 따라 금리가 바뀌는 신용대출·주택담보대출, 자산은 순자산과 이번 주 소득을 한눈에.
+## 휴대폰 (v0.14): 휴대폰 단추를 누르면 캐릭터가 들고 있던 물건을 넣고 휴대폰을 꺼내 들여다본다 (CharacterRig.set_phone).
+## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달)이 있고, 누르면 그 앱이
+## 아이콘 자리에서 커지며 열린다. 아래 막대의 ◁(뒤로: 앱 안의 한 단계 → 홈 → 닫기) · ○(홈) · ✕(넣기).
+## 화면을 누를 때마다 캐릭터가 왼손으로 톡 누르고 휴대폰 든 손이 살짝 떨린다 (CharacterRig.phone_tap).
+## 카메라는 가방 창처럼 캐릭터를 화면 아래(가로 화면은 왼쪽)에 두고 휴대폰 화면은 위(오른쪽)에 띄운다.
+## 값은 서버가 보낸 것(Economy)만 보여 주고, 사고팔기·대출은 서버가 확정한다.
 
 signal closed
 
@@ -18,13 +21,44 @@ const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
 const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달"]
+## 앱 아이콘 그림 · 색 (Tab 순서, PhoneProp.ICON_COLORS 와 같은 색).
+const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery"]
+const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달"]
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")
 const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
-const WIDTH: float = 1000.0
+## 휴대폰 크기 (UI 좌표). 세로 화면은 위쪽에, 가로 화면은 오른쪽에 (캐릭터는 아래 · 왼쪽).
+const WIDTH: float = 880.0
+const PORTRAIT_TOP: float = 56.0
+const PORTRAIT_BOTTOM: float = 1390.0
+const BEZEL: Color = Color("#2A2830")
+const ICON_SIZE: float = 150.0
+## 휴대폰을 보는 동안의 카메라 (거리 m, 내려다보는 각도 °, 바라보는 점 높이 m): 가방 창보다 낮고 정면에서 —
+## 휴대폰을 내려다보는 얼굴과 손에 든 휴대폰이 보이게, 캐릭터는 화면 아래쪽에.
+const CAMERA: Vector3 = Vector3(4.4, 12.0, 1.9)
+## 휴대폰을 보는 동안 흐리게 감추는 HUD (캐릭터를 가린다).
+const HIDE_HUD: PackedStringArray = ["Joystick", "Hotbar", "ActionHud", "FishingHud", "EmoteBar", "EventHud", "PhoneButton"]
+
+## 휴대폰을 들고 볼 캐릭터와 카메라 (없어도 창은 열린다).
+var player: Player = null
+var camera_rig: FollowCamera = null
 
 var _tab: Tab = Tab.STOCKS
-var _tab_buttons: Array[Button] = []
+## 홈 화면을 보고 있는지 (false = 앱 안).
+var _on_home: bool = true
+var _frame: PanelContainer = null
+var _stage: Control = null
+var _home: Control = null
+var _app: VBoxContainer = null
+var _app_title: Label = null
+var _app_bar: PanelContainer = null
+var _icons: Array[PhoneAppIcon] = []
+var _widget_time: Label = null
+var _widget_info: Label = null
+var _status_sol: Label = null
+var _move: Tween = null
+var _camera_saved: Vector3 = Vector3(-1.0, 0.0, 0.0)
+var _hud_fade: Tween = null
 var _body: VBoxContainer = null
 var _scroll: ScrollContainer = null
 var _clock: Label = null
@@ -58,48 +92,17 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_to_group(&"blocks_joystick")
+	# 휴대폰 밖을 누르면 넣는다 (캐릭터가 보이게 거의 투명).
 	var dim: ColorRect = ColorRect.new()
-	dim.color = Color(0.1, 0.08, 0.05, 0.5)
+	dim.color = Color(0.1, 0.08, 0.05, 0.12)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 			close())
 	add_child(dim)
-	var phone: PanelContainer = PanelContainer.new()
-	phone.add_theme_stylebox_override("panel", EventHud._box(BG, EDGE, 56, 10, 26))
-	HudLayout.center_top(phone, WIDTH, 120.0)
-	HudLayout.fit_bottom(phone, 1780.0)
-	add_child(phone)
-	var col: VBoxContainer = VBoxContainer.new()
-	col.add_theme_constant_override("separation", 14)
-	phone.add_child(col)
-	# 위: 시계 · 제목 · 닫기
-	var top: HBoxContainer = HBoxContainer.new()
-	col.add_child(top)
-	_clock = _label("", 28, SOFT)
-	_clock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(_clock)
-	var close_button: Button = _button("닫기", 30)
-	close_button.pressed.connect(close)
-	top.add_child(close_button)
-	var tabs: HBoxContainer = HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 10)
-	col.add_child(tabs)
-	for i: int in TAB_NAMES.size():
-		var b: Button = _button(TAB_NAMES[i], 26)
-		b.custom_minimum_size = Vector2(0, 92)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.pressed.connect(open.bind(i))
-		tabs.add_child(b)
-		_tab_buttons.append(b)
-	_scroll = ScrollContainer.new()
-	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(_scroll)
-	_body = VBoxContainer.new()
-	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_body.add_theme_constant_override("separation", 12)
-	_scroll.add_child(_body)
+	_build_frame()
+	_layout()
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _layout())
 	for sig: Signal in [Economy.market_changed, Economy.portfolio_changed, Economy.homes_changed, Economy.bank_changed, Economy.job_changed]:
 		sig.connect(func() -> void: _dirty = true)
 	# 배달 탭 (v13): 주문 상태 · 식당 창고가 바뀌면 다시 그린다.
@@ -115,12 +118,6 @@ func _ready() -> void:
 		_update_talk_badge()
 		if visible and _tab == Tab.TALK:
 			_dirty = true)
-	_talk_badge = _label("", 22, Color.WHITE, false)
-	_talk_badge.add_theme_stylebox_override("normal", EventHud._box(Color("#E0483A"), Color("#B03028"), 18, 0, 6))
-	_talk_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_talk_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	_talk_badge.position = Vector2(-44.0, -6.0)
-	_tab_buttons[Tab.TALK].add_child(_talk_badge)
 	_update_talk_badge()
 	Economy.week_passed.connect(func(r: Dictionary) -> void:
 		_week_reports.push_front(r)
@@ -129,22 +126,413 @@ func _ready() -> void:
 		_dirty = true)
 
 
+## 휴대폰 틀(검은 테두리) · 상태 막대 · 화면(홈 / 앱) · 아래 막대(뒤로 · 홈 · 닫기).
+func _build_frame() -> void:
+	_frame = PanelContainer.new()
+	_frame.name = "Phone"
+	_frame.add_theme_stylebox_override("panel", EventHud._box(BEZEL, Color("#4A4752"), 76, 6, 20))
+	add_child(_frame)
+	var screen: PanelContainer = PanelContainer.new()
+	screen.add_theme_stylebox_override("panel", EventHud._box(BG, BG, 58, 0, 0))
+	screen.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	_frame.add_child(screen)
+	var col: VBoxContainer = VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	screen.add_child(col)
+	# 상태 막대: 시계 · (앞 카메라 구멍) · 솔 · 신호 · 배터리.
+	var status: HBoxContainer = HBoxContainer.new()
+	status.custom_minimum_size = Vector2(0, 64)
+	status.add_theme_constant_override("separation", 10)
+	col.add_child(status)
+	var pad_l: Control = Control.new()
+	pad_l.custom_minimum_size = Vector2(36, 0)
+	status.add_child(pad_l)
+	_clock = _label("", 28, INK, false)
+	_clock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_clock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.add_child(_clock)
+	var notch: Control = Control.new()
+	notch.custom_minimum_size = Vector2(40, 40)
+	notch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	notch.draw.connect(func() -> void: notch.draw_circle(notch.size * 0.5, 13.0, BEZEL))
+	status.add_child(notch)
+	_status_sol = _label("", 26, SOFT, false)
+	_status_sol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status_sol.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_status_sol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	status.add_child(_status_sol)
+	var bars: Control = Control.new()
+	bars.custom_minimum_size = Vector2(96, 40)
+	bars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bars.draw.connect(_draw_status_icons.bind(bars))
+	status.add_child(bars)
+	var pad_r: Control = Control.new()
+	pad_r.custom_minimum_size = Vector2(26, 0)
+	status.add_child(pad_r)
+	# 화면: 홈과 앱이 겹쳐 있다 (앱이 아이콘 자리에서 커지며 덮는다).
+	_stage = Control.new()
+	_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_stage.clip_contents = true
+	col.add_child(_stage)
+	_build_home()
+	_build_app()
+	# 아래 막대: 뒤로 · 홈 · 닫기.
+	var nav_bg: PanelContainer = PanelContainer.new()
+	nav_bg.add_theme_stylebox_override("panel", EventHud._box(Color(0.96, 0.92, 0.84), Color(0.88, 0.82, 0.72), 0, 0, 0))
+	col.add_child(nav_bg)
+	var nav: HBoxContainer = HBoxContainer.new()
+	nav.alignment = BoxContainer.ALIGNMENT_CENTER
+	nav.add_theme_constant_override("separation", 120)
+	nav_bg.add_child(nav)
+	for k: String in ["nav_back", "nav_home", "nav_close"]:
+		var b: PhoneAppIcon = PhoneAppIcon.new(k, INK, 104.0)
+		b.name = k.capitalize().replace(" ", "")
+		b.tooltip_text = {"nav_back": "뒤로", "nav_home": "홈", "nav_close": "넣기"}[k]
+		match k:
+			"nav_back":
+				b.pressed.connect(go_back)
+			"nav_home":
+				b.pressed.connect(go_home)
+			"nav_close":
+				b.pressed.connect(close)
+		nav.add_child(b)
+
+
+## 홈 화면: 배경 그라데이션 · 시계 위젯 · 앱 아이콘 4줄 칸.
+func _build_home() -> void:
+	_home = Control.new()
+	_home.name = "Home"
+	_home.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_stage.add_child(_home)
+	var wall: TextureRect = TextureRect.new()
+	var grad: GradientTexture2D = GradientTexture2D.new()
+	var g: Gradient = Gradient.new()
+	g.set_color(0, Color("#FFDCC0"))
+	g.set_color(1, Color("#A8D8F0"))
+	g.add_point(0.55, Color("#F7E6D6"))
+	grad.gradient = g
+	grad.fill_from = Vector2(0.5, 0.0)
+	grad.fill_to = Vector2(0.5, 1.0)
+	grad.width = 8
+	grad.height = 256
+	wall.texture = grad
+	wall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	wall.stretch_mode = TextureRect.STRETCH_SCALE
+	wall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_home.add_child(wall)
+	var col: VBoxContainer = VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = 40.0
+	col.offset_right = -40.0
+	col.offset_top = 36.0
+	col.add_theme_constant_override("separation", 40)
+	_home.add_child(col)
+	# 시계 위젯.
+	var widget: PanelContainer = PanelContainer.new()
+	widget.add_theme_stylebox_override("panel", EventHud._box(Color(1, 1, 1, 0.55), Color(1, 1, 1, 0.8), 40, 2, 26))
+	widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(widget)
+	var wcol: VBoxContainer = VBoxContainer.new()
+	widget.add_child(wcol)
+	_widget_time = _label("", 76, INK, false)
+	wcol.add_child(_widget_time)
+	_widget_info = _label("", 28, SOFT)
+	wcol.add_child(_widget_info)
+	# 앱 아이콘.
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 34)
+	grid.add_theme_constant_override("v_separation", 30)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(grid)
+	for i: int in APP_KINDS.size():
+		var cell: VBoxContainer = VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 8)
+		grid.add_child(cell)
+		var icon: PhoneAppIcon = PhoneAppIcon.new(APP_KINDS[i], PhoneProp.ICON_COLORS[i], ICON_SIZE)
+		icon.name = "App_%s" % APP_KINDS[i]
+		icon.pressed.connect(open_app.bind(i))
+		cell.add_child(icon)
+		_icons.append(icon)
+		var name_label: Label = _label(TAB_NAMES[i], 26, INK, false)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.8))
+		name_label.add_theme_constant_override("outline_size", 6)
+		cell.add_child(name_label)
+	# 마을톡 안 읽은 수 (아이콘 오른쪽 위 빨간 동그라미).
+	_talk_badge = _label("", 24, Color.WHITE, false)
+	_talk_badge.add_theme_stylebox_override("normal", EventHud._box(Color("#E0483A"), Color.WHITE, 22, 3, 8))
+	_talk_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_talk_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_talk_badge.position = Vector2(-30.0, -12.0)
+	_icons[Tab.TALK].add_child(_talk_badge)
+
+
+## 앱 화면: 앱 색 머리 막대(제목) + 내용 (굴려 본다).
+func _build_app() -> void:
+	_app = VBoxContainer.new()
+	_app.name = "App"
+	_app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_app.add_theme_constant_override("separation", 0)
+	_app.visible = false
+	_stage.add_child(_app)
+	_app_bar = PanelContainer.new()
+	_app.add_child(_app_bar)
+	_app_title = _label("", 38, Color.WHITE, false)
+	_app_bar.add_child(_app_title)
+	var inner: MarginContainer = MarginContainer.new()
+	inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side: String in ["left", "right", "top", "bottom"]:
+		inner.add_theme_constant_override("margin_" + side, 22 if side != "top" else 16)
+	var app_bg: PanelContainer = PanelContainer.new()
+	app_bg.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	app_bg.add_theme_stylebox_override("panel", EventHud._box(BG, BG, 0, 0, 0))
+	_app.add_child(app_bg)
+	app_bg.add_child(inner)
+	_scroll = ScrollContainer.new()
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	inner.add_child(_scroll)
+	_body = VBoxContainer.new()
+	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_body.add_theme_constant_override("separation", 12)
+	_scroll.add_child(_body)
+
+
+## 휴대폰 자리: 세로 = 위 가운데, 가로 = 오른쪽 (오른쪽 단추 줄 왼쪽).
+func _layout() -> void:
+	if ScreenFit.landscape:
+		_frame.anchor_left = 0.66
+		_frame.anchor_right = 0.66
+		_frame.anchor_top = 0.0
+		_frame.anchor_bottom = 1.0
+		_frame.offset_left = -WIDTH * 0.5
+		_frame.offset_right = WIDTH * 0.5
+		_frame.offset_top = 30.0
+		_frame.offset_bottom = -30.0
+	else:
+		_frame.anchor_left = 0.5
+		_frame.anchor_right = 0.5
+		_frame.anchor_top = 0.0
+		_frame.anchor_bottom = 0.0
+		_frame.offset_left = -WIDTH * 0.5
+		_frame.offset_right = WIDTH * 0.5
+		_frame.offset_top = PORTRAIT_TOP
+		_frame.offset_bottom = PORTRAIT_BOTTOM
+
+
+func _draw_status_icons(c: Control) -> void:
+	# 신호 막대 넷 · 배터리.
+	for i: int in 4:
+		var h: float = 8.0 + i * 6.0
+		c.draw_rect(Rect2(Vector2(4.0 + i * 9.0, 32.0 - h), Vector2(6.0, h)), INK)
+	c.draw_rect(Rect2(Vector2(48.0, 10.0), Vector2(38.0, 20.0)), INK, false, 3.0)
+	c.draw_rect(Rect2(Vector2(87.0, 16.0), Vector2(4.0, 8.0)), INK)
+	c.draw_rect(Rect2(Vector2(52.0, 14.0), Vector2(26.0, 12.0)), Color("#3E8E4E"))
+
+
 func is_open() -> bool:
 	return visible
 
 
+## 앱 하나를 연다 (tab < 0 = 홈 화면). 닫혀 있으면 휴대폰을 꺼내며 연다.
 func open(tab: int = -1) -> void:
-	if tab >= 0:
-		_tab = tab as Tab
-	visible = true
+	var was_open: bool = visible
+	if not was_open:
+		visible = true
+		_take_out()
+		Audio.play_sfx("ui_open", -6.0)
+	if tab < 0:
+		if not was_open:
+			_show_home(false)
+		return
+	_tab = tab as Tab
+	_enter_app(was_open and _on_home)
+
+
+## 홈 화면의 아이콘을 눌렀다.
+func open_app(tab: int) -> void:
+	_tab = tab as Tab
+	_enter_app(true)
+
+
+func is_on_home() -> bool:
+	return visible and _on_home
+
+
+func current_app() -> int:
+	return -1 if _on_home else int(_tab)
+
+
+## 뒤로: 앱 안의 한 단계(종목 · 호수 · 상품 · 대화방) → 홈 화면 → 휴대폰 넣기.
+func go_back() -> void:
+	if not visible:
+		return
+	if _on_home:
+		close()
+		return
+	var stepped: bool = true
+	match _tab:
+		Tab.STOCKS:
+			stepped = not _stock_id.is_empty()
+			_stock_id = ""
+		Tab.HOMES:
+			stepped = not _unit_id.is_empty()
+			_unit_id = ""
+		Tab.BANK:
+			if not _sv_product.is_empty():
+				_sv_product = ""
+			elif _bank_savings:
+				_bank_savings = false
+			else:
+				stepped = false
+		Tab.TALK:
+			stepped = not _thread.is_empty()
+			_thread = ""
+			_typing = false
+		_:
+			stepped = false
+	if stepped:
+		_rebuild()
+		_scroll.set_deferred("scroll_vertical", 0)
+	else:
+		go_home()
+
+
+## 홈: 앱을 아이콘 자리로 줄이며 홈 화면으로.
+func go_home() -> void:
+	if not visible or _on_home:
+		return
+	_show_home(true)
+
+
+func _enter_app(animate: bool) -> void:
+	_on_home = false
 	if _tab == Tab.BANK:
 		Economy.ask_bank()
 	elif _tab == Tab.JOBS:
 		Economy.ask_jobs()
-	for i: int in _tab_buttons.size():
-		_tab_buttons[i].add_theme_stylebox_override("normal", EventHud._box(PICKED if i == _tab else CARD, EDGE, 26, 3, 10))
+	var color: Color = PhoneProp.ICON_COLORS[int(_tab)]
+	_app_bar.add_theme_stylebox_override("panel", EventHud._box(color, color, 0, 0, 22))
+	_app_title.text = APP_TITLES[int(_tab)]
+	_app_title.add_theme_color_override("font_color", Color("#5A3A18") if _tab == Tab.TALK else Color.WHITE)
 	_rebuild()
-	Audio.play_sfx("ui_open", -6.0)
+	_app.visible = true
+	if player != null and player.rig != null and player.rig.phone_prop() != null:
+		player.rig.phone_prop().set_app(int(_tab))
+	_kill_move()
+	if animate:
+		# 아이콘 자리에서 커지며 열린다.
+		_app.pivot_offset = _icon_center(int(_tab))
+		_app.scale = Vector2.ONE * 0.18
+		_app.modulate.a = 0.0
+		_move = create_tween().set_parallel(true)
+		_move.tween_property(_app, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_move.tween_property(_app, "modulate:a", 1.0, 0.14)
+		_move.tween_property(_home, "modulate:a", 0.0, 0.2)
+		_move.chain().tween_callback(func() -> void: _home.visible = false)
+		Audio.play_sfx("ui_open", -10.0)
+	else:
+		_app.scale = Vector2.ONE
+		_app.modulate.a = 1.0
+		_home.visible = false
+
+
+func _show_home(animate: bool) -> void:
+	_on_home = true
+	_typing = false
+	_home.visible = true
+	_refresh_home()
+	if player != null and player.rig != null and player.rig.phone_prop() != null:
+		player.rig.phone_prop().set_app(-1)
+	_kill_move()
+	if animate and _app.visible:
+		_app.pivot_offset = _icon_center(int(_tab))
+		_home.modulate.a = 0.0
+		_move = create_tween().set_parallel(true)
+		_move.tween_property(_app, "scale", Vector2.ONE * 0.18, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		_move.tween_property(_app, "modulate:a", 0.0, 0.2)
+		_move.tween_property(_home, "modulate:a", 1.0, 0.18)
+		_move.chain().tween_callback(func() -> void: _app.visible = false)
+		Audio.play_sfx("ui_close", -10.0)
+	else:
+		_home.modulate.a = 1.0
+		_app.visible = false
+
+
+func _kill_move() -> void:
+	if _move != null and _move.is_valid():
+		_move.kill()
+	_move = null
+
+
+## 아이콘 가운데 (화면 기준) — 앱이 여기서 커지고 여기로 줄어든다.
+func _icon_center(index: int) -> Vector2:
+	var icon: PhoneAppIcon = _icons[index]
+	if not icon.is_inside_tree() or icon.size == Vector2.ZERO:
+		return _stage.size * 0.5
+	return icon.get_global_rect().get_center() - _stage.get_global_rect().position
+
+
+func _refresh_home() -> void:
+	var h: float = Net.game_hour()
+	var hour: int = int(h)
+	_widget_time.text = "%s %d:%02d" % ["오전" if hour < 12 else "오후", (hour + 11) % 12 + 1, int(fmod(h, 1.0) * 60.0)]
+	var weather: Dictionary = {"clear": "맑음", "cloudy": "흐림", "rain": "비", "storm": "천둥번개", "snow": "눈"}
+	var unread: int = Talk.unread_total()
+	var seasons: Dictionary = {"spring": "봄", "summer": "여름", "autumn": "가을", "fall": "가을", "winter": "겨울"}
+	_widget_info.text = "%s · %s · %s%s" % [seasons.get(Net.season(), Net.season()), weather.get(Net.weather, Net.weather), Money.short(Net.sol), (" · 안 읽은 마을톡 %d" % unread) if unread > 0 else ""]
+
+
+## 휴대폰 꺼내기: 캐릭터가 들고 있던 것을 넣고 휴대폰을 들고, 카메라는 캐릭터를 화면 아래(왼쪽)에 둔다.
+func _take_out() -> void:
+	if player != null:
+		player.set_input_lock(&"phone", true)
+		var cam: Camera3D = get_viewport().get_camera_3d()
+		if cam != null:
+			player.look_toward(cam.global_position - player.global_position)
+		if player.rig != null:
+			player.rig.set_phone(true)
+	if camera_rig != null:
+		if _camera_saved.x < 0.0:
+			_camera_saved = Vector3(camera_rig.bag_distance, camera_rig.bag_pitch_degrees, camera_rig.bag_height)
+		camera_rig.bag_distance = CAMERA.x
+		camera_rig.bag_pitch_degrees = CAMERA.y
+		camera_rig.bag_height = CAMERA.z
+		camera_rig.set_bag_view(true)
+	_fade_hud(false)
+
+
+func _put_away() -> void:
+	if player != null:
+		player.set_input_lock(&"phone", false)
+		player.clear_look_direction()
+		if player.rig != null:
+			player.rig.set_phone(false)
+	if camera_rig != null:
+		camera_rig.set_bag_view(false)
+		var saved: Vector3 = _camera_saved
+		_camera_saved = Vector3(-1.0, 0.0, 0.0)
+		get_tree().create_timer(0.6).timeout.connect(func() -> void:
+			if not visible and saved.x >= 0.0 and camera_rig.bag_view <= 0.0:
+				camera_rig.bag_distance = saved.x
+				camera_rig.bag_pitch_degrees = saved.y
+				camera_rig.bag_height = saved.z)
+	_fade_hud(true)
+
+
+func _fade_hud(shown: bool) -> void:
+	var hud: Node = get_parent()
+	if hud == null:
+		return
+	if _hud_fade != null and _hud_fade.is_valid():
+		_hud_fade.kill()
+	_hud_fade = create_tween().set_parallel(true)
+	for n: String in HIDE_HUD:
+		var c: CanvasItem = hud.get_node_or_null(n) as CanvasItem
+		if c != null:
+			_hud_fade.tween_property(c, "modulate:a", 1.0 if shown else 0.0, 0.2)
 
 
 func close() -> void:
@@ -152,18 +540,37 @@ func close() -> void:
 		return
 	visible = false
 	_typing = false
+	_put_away()
 	Audio.play_sfx("ui_close", -6.0)
 	closed.emit()
+
+
+## 휴대폰 화면을 누를 때마다 캐릭터도 톡 누른다.
+func _input(event: InputEvent) -> void:
+	if not visible or player == null or player.rig == null:
+		return
+	var pressed: bool = (event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) \
+		or (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed)
+	if not pressed:
+		return
+	var local: InputEvent = _frame.make_input_local(event)
+	var at: Vector2 = (local as InputEventMouseButton).position if local is InputEventMouseButton else (local as InputEventScreenTouch).position
+	if Rect2(Vector2.ZERO, _frame.size).has_point(at):
+		player.rig.phone_tap()
 
 
 func _process(_delta: float) -> void:
 	if not visible:
 		return
 	var h: float = Net.game_hour()
-	_clock.text = "%02d:%02d · 솔 %s" % [int(h), int(fmod(h, 1.0) * 60.0), Money.short(Net.sol)]
+	_clock.text = "%d:%02d" % [int(h), int(fmod(h, 1.0) * 60.0)]
+	_status_sol.text = Money.short(Net.sol)
+	if _on_home:
+		_refresh_home()
 	if _dirty:
 		_dirty = false
-		_rebuild()
+		if not _on_home:
+			_rebuild()
 
 
 func _rebuild() -> void:
@@ -862,7 +1269,7 @@ func _build_assets() -> void:
 
 ## 지금 화면에 열려 있는 마을톡 대화방 ("" = 마을톡을 보고 있지 않음).
 func showing_thread() -> String:
-	return _thread if visible and _tab == Tab.TALK else ""
+	return _thread if visible and not _on_home and _tab == Tab.TALK else ""
 
 ## 대화방 하나를 바로 연다 (알림을 눌렀을 때).
 func open_thread(thread: String) -> void:

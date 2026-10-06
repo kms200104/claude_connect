@@ -81,7 +81,25 @@ func _run() -> void:
 	_check(phone_button != null and phone_button.visible, "HUD 에 휴대폰 단추")
 	phone_button.pressed.emit()
 	await get_tree().process_frame
-	_check(econ.phone.is_open(), "휴대폰이 열림 (증권 앱)")
+	_check(econ.phone.is_open() and econ.phone.is_on_home(), "휴대폰이 열림 (홈 화면)")
+	var me: Player = _village.get_node("Player")
+	_check(me.rig.is_holding_phone() and me.is_input_locked(), "캐릭터가 휴대폰을 꺼내 든다 (멈춰 서서)")
+	await get_tree().create_timer(0.6).timeout
+	_check(me.rig.phone_prop() != null and me.rig.phone_prop().visible, "손에 휴대폰 모형")
+	var stocks_icon: PhoneAppIcon = econ.phone.find_child("App_stocks", true, false)
+	_check(stocks_icon != null, "홈 화면에 증권 앱 아이콘")
+	stocks_icon.pressed.emit()
+	await get_tree().process_frame
+	_check(econ.phone.current_app() == PhoneWindow.Tab.STOCKS, "아이콘을 누르면 증권 앱")
+	econ.phone.set("_stock_id", "SBE")
+	econ.phone.go_back()
+	_check(econ.phone.current_app() == PhoneWindow.Tab.STOCKS and str(econ.phone.get("_stock_id")) == "", "뒤로: 종목 화면 → 종목 목록")
+	econ.phone.go_back()
+	_check(econ.phone.is_on_home(), "뒤로: 앱 → 홈 화면")
+	econ.phone.open_app(PhoneWindow.Tab.BANK)
+	econ.phone.go_home()
+	_check(econ.phone.is_on_home(), "홈 단추: 앱 → 홈 화면")
+	econ.phone.open_app(PhoneWindow.Tab.STOCKS)
 	var sol0: int = Net.sol
 	var trades: Array = []
 	Economy.trade_done.connect(func(r: Dictionary) -> void: trades.append(r))
@@ -95,7 +113,10 @@ func _run() -> void:
 	econ.phone.open(PhoneWindow.Tab.ASSETS)
 	await get_tree().process_frame
 	_check(Economy.net_worth > 0, "자산 앱: 순자산 %s" % Money.short(Economy.net_worth))
-	econ.phone.close()
+	econ.phone.go_home()
+	econ.phone.go_back()
+	_check(not econ.phone.is_open(), "홈 화면에서 뒤로 = 휴대폰 넣기")
+	_check(await _wait_until(func() -> bool: return not me.rig.is_holding_phone() and not me.is_input_locked() and not me.rig.phone_prop().visible, 2.0), "휴대폰을 넣고 다시 움직인다")
 
 	# ---- 은행 ----
 	var banked: Array = [false]

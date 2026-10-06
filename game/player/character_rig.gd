@@ -50,6 +50,12 @@ const EMOTES: PackedStringArray = ["hello", "happy", "laugh", "surprise", "love"
 ## 자랑할 때 손에 든 물건의 자리 (몸통 기준, 턱 아래 앞으로 내민 두 손 위). 머리가 커서 머리 위로 들면 팔이 닿지 않는다.
 const SHOW_HOLD_POSITION: Vector3 = Vector3(0.0, 0.0, -0.44)
 ## set_cooking 으로 할 수 있는 요리 동작 (data/restaurant/recipes.json 의 steps.*.anim).
+## 휴대폰을 들고 보는 자세의 오른팔 각도 (gen_character_rig.py PH_AR) · 휴대폰 기울기(위가 앞으로) · 손에서 휴대폰 가운데까지.
+const PHONE_ARM: Vector3 = Vector3(1.42, 0.0, -0.66)
+const PHONE_TILT: float = -0.55
+const PHONE_GRIP: Vector3 = Vector3(0.0, 0.06, 0.04)
+## 캐릭터 손에 맞춘 크기 (모형은 17cm).
+const PHONE_SCALE: float = 1.75
 const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
 
 var held_item: String = "rod"
@@ -69,6 +75,11 @@ var _sit_target: float = 0.0
 var _sit_value: float = 0.0
 var _rummage_target: float = 0.0
 var _rummage_value: float = 0.0
+## 휴대폰을 들고 보는 중 (v0.14).
+var _phone_target: float = 0.0
+var _phone_value: float = 0.0
+var _phone: PhoneProp = null
+var _phone_tween: Tween = null
 var _tool_id: String = ""
 var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
@@ -158,12 +169,13 @@ func set_held(item_id: String) -> void:
 	if _show_target > 0.5:
 		_held_before_show = item_id
 		return
+	var free: bool = _cook_target < 0.5 and _rummage_target < 0.5 and _phone_target < 0.5
 	if rod != null:
-		rod.visible = item_id == "rod" and _cook_target < 0.5 and _rummage_target < 0.5
+		rod.visible = item_id == "rod" and free
 	if axe != null:
-		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and _cook_target < 0.5 and _rummage_target < 0.5
+		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and free
 	_set_swing(item_id if item_id in SWING_TOOLS else "")
-	if _cook_target < 0.5 and _rummage_target < 0.5:
+	if free:
 		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
 
@@ -225,9 +237,9 @@ func set_cooking(anim: String, tool_id: String = "") -> void:
 		tree.set("parameters/CookSwitch/transition_request", anim)
 	_set_tool(tool_id if active else (held_item if held_item in HAND_TOOLS else ""))
 	if rod != null:
-		rod.visible = not active and held_item == "rod" and _show_target < 0.5
+		rod.visible = not active and held_item == "rod" and _show_target < 0.5 and _phone_target < 0.5
 	if axe != null:
-		axe.visible = not active and (held_item == "axe" or held_item in SWING_TOOLS) and _show_target < 0.5
+		axe.visible = not active and (held_item == "axe" or held_item in SWING_TOOLS) and _show_target < 0.5 and _phone_target < 0.5
 
 
 func is_cooking() -> bool:
@@ -242,19 +254,97 @@ func set_sitting(active: bool) -> void:
 ## 가방을 여는 동안 주머니를 뒤진다 (고개를 숙여 주머니를 내려다본다). 손에 든 도구는 잠깐 숨긴다.
 func set_rummaging(active: bool) -> void:
 	_rummage_target = 1.0 if active else 0.0
-	var hide: bool = active or _cook_target > 0.5 or _show_target > 0.5
+	var hide: bool = active or _cook_target > 0.5 or _show_target > 0.5 or _phone_target > 0.5
 	if rod != null:
 		rod.visible = not hide and held_item == "rod"
 	if axe != null:
 		axe.visible = not hide and (held_item == "axe" or held_item in SWING_TOOLS)
 	if tool != null and active:
 		tool.visible = false
-	elif not active and _cook_target < 0.5:
+	elif not active and _cook_target < 0.5 and _phone_target < 0.5:
 		_set_tool(held_item if held_item in HAND_TOOLS else "")
 
 
 func is_rummaging() -> bool:
 	return _rummage_target > 0.5
+
+
+## 휴대폰 꺼내 보기 (v0.14): 손에 든 물건을 주머니에 쏙 넣고(작아지며 사라짐) 휴대폰을 꺼내 오른손에 들고 내려다본다.
+## 끄면 휴대폰을 넣고 들고 있던 물건을 다시 꺼낸다.
+func set_phone(active: bool) -> void:
+	if (_phone_target > 0.5) == active:
+		return
+	_phone_target = 1.0 if active else 0.0
+	var phone: PhoneProp = phone_prop()
+	var items: Array[Node3D] = []
+	for n: Node3D in [rod, axe, tool]:
+		if n != null and n.visible:
+			items.append(n)
+	if _phone_tween != null:
+		_phone_tween.kill()
+	_phone_tween = create_tween()
+	if active:
+		# 들고 있던 것을 넣고 → 휴대폰을 꺼낸다.
+		for n: Node3D in items:
+			_phone_tween.parallel().tween_property(n, "scale", Vector3.ONE * 0.01, 0.14).set_ease(Tween.EASE_IN)
+		_phone_tween.tween_callback(func() -> void:
+			for n: Node3D in [rod, axe, tool]:
+				if n != null:
+					n.visible = false
+					n.scale = Vector3.ONE
+			if phone != null:
+				phone.scale = Vector3.ONE * 0.01
+				phone.visible = true
+				phone.set_app(-1))
+		if phone != null:
+			_phone_tween.tween_property(phone, "scale", Vector3.ONE, 0.26).set_delay(0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		if phone != null and phone.visible:
+			_phone_tween.tween_property(phone, "scale", Vector3.ONE * 0.01, 0.14).set_ease(Tween.EASE_IN)
+		_phone_tween.tween_callback(func() -> void:
+			if phone != null:
+				phone.visible = false
+				phone.scale = Vector3.ONE
+			set_held(held_item)
+			for n: Node3D in [rod, axe, tool]:
+				if n != null and n.visible:
+					n.scale = Vector3.ONE * 0.01
+					create_tween().tween_property(n, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+
+
+func is_holding_phone() -> bool:
+	return _phone_target > 0.5
+
+
+## 화면을 톡: 왼손으로 누르고 휴대폰 든 손이 살짝 떨린다. 화면도 잠깐 밝아진다.
+func phone_tap() -> void:
+	if _phone_target < 0.5:
+		return
+	if tree != null:
+		tree.set("parameters/PhoneTapShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	if _phone != null:
+		_phone.flash()
+
+
+## 손에 드는 휴대폰 (처음 부를 때 오른손에 만든다).
+func phone_prop() -> PhoneProp:
+	if _phone != null or arm_right == null:
+		return _phone
+	# 손잡이 자리 (자세에 맞춘 방향 · 크기) 안에 휴대폰을 둔다 — 꺼내고 넣을 때는 휴대폰만 커졌다 작아진다.
+	var grip: Node3D = Node3D.new()
+	grip.name = "PhoneGrip"
+	arm_right.add_child(grip)
+	# 들고 보는 자세(phone 애니메이션)의 오른팔 각도에서, 화면이 얼굴 쪽(위 · 뒤)을 보도록 손 기준으로 되돌려 놓는다.
+	var hand: Basis = Basis.from_euler(PHONE_ARM)
+	var want: Basis = Basis(Vector3.UP, 0.22) * Basis(Vector3.RIGHT, PHONE_TILT)
+	var local: Basis = hand.inverse() * want
+	grip.basis = local.scaled(Vector3.ONE * PHONE_SCALE)
+	# 손바닥이 휴대폰 아래쪽 뒷면을 받친다.
+	grip.position = Vector3(0.0, -0.3, 0.0) + local * PHONE_GRIP
+	_phone = PhoneProp.new(clay_material)
+	_phone.visible = false
+	grip.add_child(_phone)
+	return _phone
 
 
 func _set_tool(tool_id: String) -> void:
@@ -400,6 +490,11 @@ func _process(delta: float) -> void:
 	tree.set("parameters/SitBlend/blend_amount", _sit_value)
 	_rummage_value = move_toward(_rummage_value, _rummage_target, 5.0 * delta)
 	tree.set("parameters/RummageBlend/blend_amount", _rummage_value)
+	_phone_value = move_toward(_phone_value, _phone_target, 4.0 * delta)
+	tree.set("parameters/PhoneBlend/blend_amount", _phone_value)
+	if _phone_value > 0.0:
+		# 휴대폰 화면을 내려다본다.
+		set_eye_offset(_eye_offset.lerp(Vector2(0.05, -0.85) * _phone_value, 1.0 - exp(-8.0 * delta)))
 	if _rummage_value > 0.0:
 		# 주머니를 내려다본다 (눈동자를 아래 오른쪽으로).
 		set_eye_offset(_eye_offset.lerp(Vector2(0.35, -0.8) * _rummage_value, 1.0 - exp(-8.0 * delta)))

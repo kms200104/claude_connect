@@ -3852,6 +3852,281 @@ tracks/10/keys = {
 "values": [Vector3(-0.04, -0.056, 0.012), Vector3(-0.048, -0.06, 0.014), Vector3(-0.042, -0.052, 0.01), Vector3(-0.05, -0.062, 0.014), Vector3(-0.04, -0.054, 0.012), Vector3(-0.02, -0.024, -0.008), Vector3(-0.028, -0.036, -0.004), Vector3(-0.04, -0.056, 0.012)]
 }
 
+[sub_resource type="Animation" id="Animation_phone"]
+resource_name = "phone"
+length = 2.8
+loop_mode = 1
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, -0.006, 0), Vector3(0, 0, 0), Vector3(0, -0.006, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.135, 0, 0), Vector3(-0.1395, 0, 0.0075), Vector3(-0.1305, 0, 0.015), Vector3(-0.1395, 0, 0.006), Vector3(-0.135, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1.005, 0.99, 1.005), Vector3(0.997, 1.006, 0.997), Vector3(1.005, 0.99, 1.005), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Waist/Upper/ArmL:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1.2, 0, 0.55), Vector3(1.22, 0, 0.56), Vector3(1.18, 0, 0.54), Vector3(1.21, 0, 0.56), Vector3(1.2, 0, 0.55)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Visual/Waist/Upper/ArmR:rotation")
+tracks/4/interp = 2
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1.42, 0, -0.66), Vector3(1.44, 0, -0.66), Vector3(1.41, 0, -0.65), Vector3(1.43, 0, -0.67), Vector3(1.42, 0, -0.66)]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Visual/LegL:rotation")
+tracks/5/interp = 2
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02)]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Visual/LegR:rotation")
+tracks/6/interp = 2
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02)]
+}
+tracks/7/type = "value"
+tracks/7/imported = false
+tracks/7/enabled = true
+tracks/7/path = NodePath("Visual/Waist/Upper/ArmR/Rod:rotation")
+tracks/7/interp = 2
+tracks/7/loop_wrap = true
+tracks/7/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0)]
+}
+tracks/8/type = "value"
+tracks/8/imported = false
+tracks/8/enabled = true
+tracks/8/path = NodePath("Visual/Waist/Upper/ArmR/Axe:rotation")
+tracks/8/interp = 2
+tracks/8/loop_wrap = true
+tracks/8/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0)]
+}
+tracks/9/type = "value"
+tracks/9/imported = false
+tracks/9/enabled = true
+tracks/9/path = NodePath("Visual/Waist:rotation")
+tracks/9/interp = 2
+tracks/9/loop_wrap = true
+tracks/9/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.105, 0, 0), Vector3(-0.1085, 0, 0.0045), Vector3(-0.1015, 0, 0.009), Vector3(-0.1085, 0, 0.0036), Vector3(-0.105, 0, 0)]
+}
+tracks/10/type = "value"
+tracks/10/imported = false
+tracks/10/enabled = true
+tracks/10/path = NodePath("Visual/Waist/Upper/Neck:rotation")
+tracks/10/interp = 2
+tracks/10/loop_wrap = true
+tracks/10/keys = {
+"times": PackedFloat32Array(0, 0.7, 1.4, 2.1, 2.8),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.06, 0, 0), Vector3(-0.062, 0, 0.003), Vector3(-0.058, 0, 0.006), Vector3(-0.062, 0, 0.0024), Vector3(-0.06, 0, 0)]
+}
+
+[sub_resource type="Animation" id="Animation_phone_tap"]
+resource_name = "phone_tap"
+length = 0.26
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, -0.003, 0), Vector3(0, -0.006, 0), Vector3(0, -0.003, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.135, 0, 0), Vector3(-0.1395, 0, 0), Vector3(-0.144, 0, 0), Vector3(-0.1395, 0, 0.004), Vector3(-0.135, 0, -0.003), Vector3(-0.135, 0, 0.0015), Vector3(-0.135, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1.0025, 0.995, 1.0025), Vector3(1.005, 0.99, 1.005), Vector3(1.002, 0.996, 1.002), Vector3(1, 1, 1), Vector3(1, 1, 1), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Waist/Upper/ArmL:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1.2, 0, 0.55), Vector3(1.32, 0, 0.63), Vector3(1.38, 0, 0.66), Vector3(1.3, 0, 0.61), Vector3(1.24, 0, 0.57), Vector3(1.21, 0, 0.56), Vector3(1.2, 0, 0.55)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Visual/Waist/Upper/ArmR:rotation")
+tracks/4/interp = 2
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1.42, 0, -0.66), Vector3(1.4, 0, -0.65), Vector3(1.32, 0, -0.62), Vector3(1.47, 0, -0.7), Vector3(1.39, 0, -0.64), Vector3(1.435, 0, -0.67), Vector3(1.42, 0, -0.66)]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Visual/LegL:rotation")
+tracks/5/interp = 2
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02), Vector3(0, 0, 0.02)]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Visual/LegR:rotation")
+tracks/6/interp = 2
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02), Vector3(0, 0, -0.02)]
+}
+tracks/7/type = "value"
+tracks/7/imported = false
+tracks/7/enabled = true
+tracks/7/path = NodePath("Visual/Waist/Upper/ArmR/Rod:rotation")
+tracks/7/interp = 2
+tracks/7/loop_wrap = true
+tracks/7/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0)]
+}
+tracks/8/type = "value"
+tracks/8/imported = false
+tracks/8/enabled = true
+tracks/8/path = NodePath("Visual/Waist/Upper/ArmR/Axe:rotation")
+tracks/8/interp = 2
+tracks/8/loop_wrap = true
+tracks/8/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.08, 0.12, 0.16, 0.2, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0)]
+}
+tracks/9/type = "value"
+tracks/9/imported = false
+tracks/9/enabled = true
+tracks/9/path = NodePath("Visual/Waist:rotation")
+tracks/9/interp = 2
+tracks/9/loop_wrap = true
+tracks/9/keys = {
+"times": PackedFloat32Array(0, 0.07, 0.1, 0.14, 0.18, 0.22, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.105, 0, 0), Vector3(-0.1085, 0, 0), Vector3(-0.112, 0, 0), Vector3(-0.1085, 0, 0.0024), Vector3(-0.105, 0, -0.0018), Vector3(-0.105, 0, 0.0009), Vector3(-0.105, 0, 0)]
+}
+tracks/10/type = "value"
+tracks/10/imported = false
+tracks/10/enabled = true
+tracks/10/path = NodePath("Visual/Waist/Upper/Neck:rotation")
+tracks/10/interp = 2
+tracks/10/loop_wrap = true
+tracks/10/keys = {
+"times": PackedFloat32Array(0, 0.105, 0.135, 0.175, 0.215, 0.248, 0.26),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.06, 0, 0), Vector3(-0.062, 0, 0), Vector3(-0.064, 0, 0), Vector3(-0.062, 0, 0.0016), Vector3(-0.06, 0, -0.0012), Vector3(-0.06, 0, 0.0006), Vector3(-0.06, 0, 0)]
+}
+
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_rig"]
 _data = {
 &"cast": SubResource("Animation_cast"),
@@ -3881,7 +4156,9 @@ _data = {
 &"cook_plate": SubResource("Animation_cook_plate"),
 &"sit": SubResource("Animation_sit"),
 &"dig": SubResource("Animation_dig"),
-&"rummage": SubResource("Animation_rummage")
+&"rummage": SubResource("Animation_rummage"),
+&"phone": SubResource("Animation_phone"),
+&"phone_tap": SubResource("Animation_phone_tap")
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -4031,6 +4308,12 @@ animation = &"dig"
 [sub_resource type="AnimationNodeAnimation" id="AN_rummage"]
 animation = &"rummage"
 
+[sub_resource type="AnimationNodeAnimation" id="AN_phone"]
+animation = &"phone"
+
+[sub_resource type="AnimationNodeAnimation" id="AN_phone_tap"]
+animation = &"phone_tap"
+
 [sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
 fadein_time = 0.06
 fadeout_time = 0.12
@@ -4063,6 +4346,12 @@ input_4/reset = true
 [sub_resource type="AnimationNodeBlend2" id="Blend2_sit"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_rummage"]
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_phone"]
+
+[sub_resource type="AnimationNodeOneShot" id="OneShot_phone_tap"]
+fadein_time = 0.03
+fadeout_time = 0.05
 
 [sub_resource type="AnimationNodeOneShot" id="OneShot_emote"]
 fadein_time = 0.1
@@ -4114,6 +4403,14 @@ nodes/Rummage/node = SubResource("AN_rummage")
 nodes/Rummage/position = Vector2(270, 200)
 nodes/RummageBlend/node = SubResource("Blend2_rummage")
 nodes/RummageBlend/position = Vector2(295, 40)
+nodes/Phone/node = SubResource("AN_phone")
+nodes/Phone/position = Vector2(295, 200)
+nodes/PhoneBlend/node = SubResource("Blend2_phone")
+nodes/PhoneBlend/position = Vector2(305, 40)
+nodes/PhoneTap/node = SubResource("AN_phone_tap")
+nodes/PhoneTap/position = Vector2(305, 200)
+nodes/PhoneTapShot/node = SubResource("OneShot_phone_tap")
+nodes/PhoneTapShot/position = Vector2(312, 40)
 nodes/Chop/node = SubResource("AN_chop")
 nodes/Chop/position = Vector2(120, 200)
 nodes/ChopShot/node = SubResource("OneShot_chop")
@@ -4161,7 +4458,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", &"CookSwitch", 0, &"K_cook_chop", &"CookSwitch", 1, &"K_cook_stir", &"CookSwitch", 2, &"K_cook_flip", &"CookSwitch", 3, &"K_cook_mix", &"CookSwitch", 4, &"K_cook_plate", &"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"ChopShot", 0, &"RummageBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", &"EmoteSwitch", 0, &"E_hello", &"EmoteSwitch", 1, &"E_happy", &"EmoteSwitch", 2, &"E_laugh", &"EmoteSwitch", 3, &"E_surprise", &"EmoteSwitch", 4, &"E_love", &"EmoteSwitch", 5, &"E_sad", &"EmoteSwitch", 6, &"E_angry", &"EmoteSwitch", 7, &"E_think", &"EmoteSwitch", 8, &"E_clap", &"EmoteSwitch", 9, &"E_bow", &"EmoteSwitch", 10, &"E_sleepy", &"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", &"CookSwitch", 0, &"K_cook_chop", &"CookSwitch", 1, &"K_cook_stir", &"CookSwitch", 2, &"K_cook_flip", &"CookSwitch", 3, &"K_cook_mix", &"CookSwitch", 4, &"K_cook_plate", &"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", &"EmoteSwitch", 0, &"E_hello", &"EmoteSwitch", 1, &"E_happy", &"EmoteSwitch", 2, &"E_laugh", &"EmoteSwitch", 3, &"E_surprise", &"EmoteSwitch", 4, &"E_love", &"EmoteSwitch", 5, &"E_sad", &"EmoteSwitch", 6, &"E_angry", &"EmoteSwitch", 7, &"E_think", &"EmoteSwitch", 8, &"E_clap", &"EmoteSwitch", 9, &"E_bow", &"EmoteSwitch", 10, &"E_sleepy", &"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
@@ -4263,3 +4560,7 @@ parameters/CookSwitch/transition_request = ""
 parameters/CookSwitch/current_index = 0
 parameters/SitBlend/blend_amount = 0.0
 parameters/RummageBlend/blend_amount = 0.0
+parameters/PhoneBlend/blend_amount = 0.0
+parameters/PhoneTapShot/active = false
+parameters/PhoneTapShot/internal_active = false
+parameters/PhoneTapShot/request = 0

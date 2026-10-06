@@ -208,6 +208,25 @@ func _ready() -> void:
 				rig.set_held("")
 				rig.play_emote(poses[i])
 			_camera(Vector3(40.0, 0.7, 0.0), Vector3(0.0, 0.7, 0.0), 4.0)
+		"phone":
+			# v0.14 휴대폰 들기: 앞 · 옆 · 어깨 너머(화면) · 톡 누르는 중, 오른쪽은 휴대폰 모형 앞 · 뒤 (4배).
+			for i: int in 4:
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				rig.position = Vector3((float(i) - 1.5) * 1.15, 0.0, 0.0)
+				rig.rotation.y = [0.0, PI * 0.5, PI * 0.85, 0.0][i]
+				rig.set_look(GameData.player_look(1, {"hair": "short", "hair_color": "brown"}))
+				rig.set_held("rod")
+				rig.set_phone(true)
+				if i == 3:
+					get_tree().create_timer(maxf(_wait - 0.07, 0.1)).timeout.connect(rig.phone_tap)
+			for side: int in 2:
+				var prop: PhoneProp = PhoneProp.new(load("res://assets/materials/foliage.tres"))
+				add_child(prop)
+				prop.scale = Vector3.ONE * 4.0
+				prop.position = Vector3(2.5 + side * 0.55, 0.75, 0.0)
+				prop.rotation.y = PI if side == 0 else 0.0
+			_camera(Vector3(0.55, 1.25, -4.6), Vector3(0.55, 0.65, 0.0), 40.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():

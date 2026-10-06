@@ -443,8 +443,9 @@ player = NodePath("../Player")
 hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
+[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "camera_rig", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
 script = ExtResource("66_economy")
+camera_rig = NodePath("../CameraRig")
 civic_site = NodePath("../Civic")
 player = NodePath("../Player")
 apartments = NodePath("../Apartments")
