@@ -310,6 +310,7 @@ glow_material = ExtResource("28_window")
 toast_hud = NodePath("../HUD/FishingHud")
 
 [node name="Lamps" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 66)
 script = ExtResource("47_lamps")
 clay_material = ExtResource("23_foliage")
 
@@ -380,7 +381,7 @@ light_color = Color(1, 0.8, 0.5, 1)
 omni_range = 7.0
 
 [node name="Player" parent="." instance=ExtResource("1_player") node_paths=PackedStringArray("joystick", "camera")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 66)
 joystick = NodePath("../HUD/Joystick")
 camera = NodePath("../CameraRig/Camera3D")
 
