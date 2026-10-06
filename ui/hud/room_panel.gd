@@ -42,7 +42,7 @@ func _ready() -> void:
 		_server_edit.text = Net.TEST_SERVER_URL
 		Net.play_on_test_server())
 	_form.add_child(_test_button)
-	# 방 정보 줄에 화질 단추 (창은 HUD 맨 위에 붙인다).
+	# 방 정보 줄에 설정 단추 — 닉네임 · 화질 (창은 HUD 맨 위에 붙인다).
 	var quality: QualityWindow = QualityWindow.attach(get_parent() if get_parent() != null else self)
 	var quality_button: Button = QualityWindow.make_button(quality, 26)
 	quality_button.name = "QualityButton"

@@ -4,7 +4,7 @@ extends Node
 ## 같은 프로세스 안에서 WebSocket 서버(127.0.0.1)를 연다. 클라이언트(Net)는 진짜 서버와 똑같이 접속·요청한다.
 ## 입장 정보는 진짜 서버에서 찍어 둔 것(data/testserver/welcome.json, server/tools/make_test_snapshot.js)을 쓰고,
 ## 혼자 노는 데 필요한 것을 직접 처리한다: 걷기 · 가방(옮기기·버리기·손에 들기) · 상점(드나들기·사고팔기) · 마을 가구 ·
-## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 씨앗 심기·꽃 따기 ·
+## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 닉네임 · 씨앗 심기·꽃 따기 ·
 ## 들판 채집 · 아파트 집 구경·꾸미기. 나무·꽃은 진짜 서버보다 10배 빨리 자란다.
 ## 여럿이 하는 일·경제(식당·증권·은행·동사무소·혼인신고·여울 그물·삽)는 "test_server" 오류로 알려 준다 — 판정이 너그럽고 다른 사람이 없다.
 ## 상태는 user://test_server.json 에 저장된다.
@@ -38,6 +38,8 @@ var _home_seq: int = 0
 var _placed: Dictionary = {}
 var _placed_seq: int = 0
 var _outfit: Dictionary = {"hat": "", "top": ""}
+## 닉네임 (v14).
+var _name: String = ""
 var _face: Dictionary = {}
 var _friends: Dictionary = {}
 ## 친한 주민이 먼저 말 걸기 (테스트 서버의 주민은 걷지 않으니, 가까이 서 있을 때만): 주민 id → 마지막으로 건 시각.
@@ -170,6 +172,9 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if int(msg.get("v", 0)) != NetProtocol.VERSION:
 				fail.call(NetProtocol.ERR_BAD_VERSION)
 				return
+			var join_name: String = NetProtocol.clean_name(str(msg.get("name", "")))
+			if not join_name.is_empty():
+				_name = join_name
 			_send(peer, _welcome(t == "resume"))
 			if not _home.is_empty():
 				_send(peer, _home_message(null))
@@ -296,6 +301,15 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 				_face = ((_snapshot.get("players", [{}]) as Array)[0] as Dictionary).get("face", {}).duplicate()
 			_face.merge(face, true)
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
+			_save()
+		"set_name":
+			var raw: String = str(msg.get("name", ""))
+			var clean: String = NetProtocol.clean_name(raw)
+			if raw.strip_edges().length() > NetProtocol.NAME_MAX or (clean.is_empty() and not raw.strip_edges().is_empty()):
+				fail.call(NetProtocol.ERR_BAD_NAME)
+				return
+			_name = clean
+			_send(peer, {"t": "name", "rid": rid, "id": 1, "name": _name})
 			_save()
 		"plant":
 			_plant(peer, msg, fail)
@@ -865,6 +879,9 @@ func _welcome(resumed: bool) -> Dictionary:
 		players[0]["face"] = _face
 		prof["face"] = _face
 	prof["outfit"] = _outfit
+	prof["name"] = _name
+	if not players.is_empty():
+		players[0]["name"] = _name
 	if not players.is_empty():
 		players[0]["hat"] = _outfit["hat"]
 		players[0]["top"] = _outfit["top"]
@@ -991,6 +1008,7 @@ func _load() -> void:
 		_outfit = saved["outfit"]
 	if saved.get("face") is Dictionary:
 		_face = saved["face"]
+	_name = NetProtocol.clean_name(str(saved.get("name", "")))
 	if saved.get("friends") is Dictionary:
 		_friends = saved["friends"]
 	if saved.get("talk_days") is Dictionary:
@@ -1016,7 +1034,7 @@ func _save() -> void:
 		return
 	f.store_string(JSON.stringify({"slots": _slots, "held": _held, "sol": _sol, "pos": [_pos.x, _pos.z], "home": _home,
 		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
-		"outfit": _outfit, "face": _face, "friends": _friends, "talk_days": _talk_days,
+		"outfit": _outfit, "face": _face, "name": _name, "friends": _friends, "talk_days": _talk_days,
 		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats,
 		"ground": _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "item"), "drop_seq": _drop_seq}))
 

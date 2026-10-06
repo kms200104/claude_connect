@@ -233,6 +233,13 @@ func npc_name(id: String) -> String:
 
 
 func player_name(slot: int) -> String:
+	# v14: 정한 닉네임이 있으면 그것.
+	var nick: String = str(Net.names.get(slot, ""))
+	return nick if not nick.is_empty() else default_player_name(slot)
+
+
+## 닉네임을 정하지 않았을 때의 자리 기본 이름.
+func default_player_name(slot: int) -> String:
 	return PLAYER_NAMES[(slot - 1) % PLAYER_NAMES.size()] if slot >= 1 else "친구"
 
 

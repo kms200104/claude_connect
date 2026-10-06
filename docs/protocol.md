@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v13
+# 네트워크 프로토콜 v14
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -13,13 +13,14 @@ v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`res
 v10 → v11: 낚시 끌어올리기 — `fish_started.shadow`(물고기 그림자 크기), 챔질 뒤 `fish_reel{taps, ms}` → 클라이언트 `fish_reel{rid, taps[]}`, 실패 사유 `snapped`. 요리 동작 `grill`(면마다 뒤집기) · `steam`(재료 담기 → 물 붓기 → 뚜껑 열기). 주민이 먼저 다가와 말 걸기(`npcs` 의 `ap`, `npc_greet`). 마을톡(`msg_send` `msg_read` → `msg`, `welcome.chats`). 저장 파일은 schema 5 그대로 (프로필에 `chats`, 주민 관계에 `msgReplyDay` — 없으면 빈 값).
 v11 → v12: 말풍선(`say`) · 다른 사람 몸짓(`act`) · 배달 일거리(`job_*`) · 예적금(`dep_open` `dep_close` `park_move`) · 주간 경제 소식. 버전이 다르면 `error{code: "bad_version", server_v}` 로 서버 버전을 알려 준다.
 v12 → v13: 가방 30칸(퀵 5 + 가방 30, 옛 저장의 칸 자리는 그대로) · 버린 물건이 바닥에 남음(`inv_discard` → `drop{kind: "item", n}` · 일부만 줍기 `collect_result.n left`, 에러 `cant_drop_here` `ground_full`) · 10개씩 사기와 식당 창고(`shop_result.stored`, `rest.store`, 에러 `storage_full`) · 식재료 배달(`deliv_order` → `deliv_ok`, 마을톡 `sys:shop`, `couriers`, `deliv_done`, 에러 `delivery_busy`) · 물 밑 물고기 그림자와 겨눠 던지기(`fishes`, `fish_cast.x z`, `fish_started.fid size ms bx bz`, `fish_found`, 에러 `bad_cast`). 저장 파일은 schema 6 그대로 (world 에 `ground groundSeq deliveries delivSeq`, `restaurant.storage`).
+v13 → v14: 닉네임 — `set_name{rid name}` → `name{rid? id name}`(방 전체), `create`/`join` 의 `name?`(처음 화면 설정에 적어 둔 이름), 플레이어 정보·프로필의 `name`(빈 문자열 = 자리 기본 이름), 에러 `bad_name`. 저장 파일은 schema 6 그대로 (프로필에 `name` 이 없으면 빈 이름).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
 |---|---|---|
-| `create` | `v uid` | 방 생성 + 입장. `uid`는 기기에 저장된 영구 ID(8~64자 `[A-Za-z0-9_-]`) |
-| `join` | `v uid code` | 방 코드(대소문자 무관)로 입장. 같은 `uid`는 쓰던 자리·인벤토리를 되찾는다 |
+| `create` | `v uid name?` | 방 생성 + 입장. `uid`는 기기에 저장된 영구 ID(8~64자 `[A-Za-z0-9_-]`). v14 `name` = 쓸 닉네임 (비었거나 쓸 수 없으면 무시) |
+| `join` | `v uid code name?` | 방 코드(대소문자 무관)로 입장. 같은 `uid`는 쓰던 자리·인벤토리를 되찾는다. `name` 은 `create` 와 같다 |
 | `resume` | `v`, `token` | 끊긴 자리로 복귀 (유예 시간 안에서만) |
 | `move` | `x y z yaw vx vz` | 내 위치 요청 (m, rad). 서버가 속도·경계 검사 |
 | `ping` | `c` | 클라이언트 시각. `pong`으로 RTT·서버 시계 추정 |
@@ -80,6 +81,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `home_move` | `rid id x z rot` | 집 가구 옮기기·돌리기 (같은 검사) → `home_f` |
 | `home_pickup` | `rid id` | 집 가구를 가방에 넣기 (`inventory_full`) → `home_f`, `inventory` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
+| `set_name` | `rid name` | 닉네임 바꾸기 (v14, 어디서나). 앞뒤 공백을 지우고 띄어쓰기는 한 칸으로, 글자·숫자·띄어쓰기·`_ - .` 만 10자까지 — 아니면 `bad_name`. 빈 문자열 = 자리 기본 이름으로 |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -139,6 +141,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `plant_result` | `rid id kind x z` | 내가 심었다 (`kind` = `tree`/`flower`) |
 | `pick_result` | `rid id item` | 내가 꽃을 땄다 |
 | `face` | `rid? id face{}` | 누군가 얼굴을 바꿨다 (v7, 방 전체 — 바꾼 사람에게는 `rid` 와 함께). `face` = 일곱 항목 전부 |
+| `name` | `rid? id name` | 누군가 닉네임을 바꿨다 (v14, 방 전체 — 바꾼 사람에게는 `rid` 와 함께). 이어받은 자리로 `join` 하며 이름이 바뀌어도 다른 사람에게 온다 |
 | `museum` | `fish{} id by` | 박물관 기증 목록이 바뀌었다 (방 전체, v6). `fish` = 물고기 id → 기증한 사람 자리 번호 |
 | `donate_result` | `rid fish reward sol count gifts[]` | 내가 기증했다: 감사 `reward`솔, 지금까지 `count`종, 문턱을 넘어 받은 기념품 `gifts` |
 | `talk_closed` | `npc` | 서버가 대화를 끝냄 (멀어짐·시간 초과) |
@@ -162,12 +165,12 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지).
+`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full cant_drop_here ground_full delivery_busy storage_full bad_cast` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face bad_name market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full cant_drop_here ground_full delivery_busy storage_full bad_cast` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.

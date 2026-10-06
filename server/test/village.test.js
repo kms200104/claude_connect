@@ -71,7 +71,7 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.ok(w.npcs.every((n) => typeof n.m === 'string'), '주민 기분이 함께 온다');
     const { stocks, trades, loans, credit, income, worth, civ, ...prof } = w.prof;
     assert.deepEqual({ partner: civ.partner, resident: civ.resident, card: civ.card }, { partner: 0, resident: false, card: false }, '처음엔 혼자 · 전입 전 · 카드 없음');
-    assert.deepEqual(prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' } });
+    assert.deepEqual(prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' }, name: '' });
     assert.deepEqual({ stocks, trades, loans, income, worth }, { stocks: {}, trades: [], loans: [], income: { week: 0, year: 0 }, worth: { assets: 0, debt: 0, net: 0 } }, '처음엔 주식·대출·소득이 없다');
     assert.ok(credit.score > 0 && credit.grade >= 1 && credit.grade <= 10);
     assert.equal(w.market.stocks.length, server.data.market.stocks.length, '입장하면 증권 시세를 받는다');

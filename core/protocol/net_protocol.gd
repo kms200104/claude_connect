@@ -2,7 +2,10 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 13
+const VERSION: int = 14
+
+## v14 닉네임: 최대 글자 수 (서버 nickname.js NAME_MAX 와 같다).
+const NAME_MAX: int = 10
 
 ## v12 말풍선(say): 대사 간격(ms)과 최대 글자 수 (서버와 같다).
 const SAY_GAP_MS: int = 250
@@ -27,6 +30,8 @@ const ERR_BAD_ITEM: String = "bad_item"
 const ERR_CANT_DISCARD: String = "cant_discard"
 ## v13: 겨눈 자리가 물이 아니거나 너무 멂.
 const ERR_BAD_CAST: String = "bad_cast"
+## v14: 쓸 수 없는 닉네임.
+const ERR_BAD_NAME: String = "bad_name"
 ## v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다 / 마을 바닥에 물건이 너무 많다.
 const ERR_CANT_DROP_HERE: String = "cant_drop_here"
 const ERR_GROUND_FULL: String = "ground_full"
@@ -167,3 +172,25 @@ const ERR_HOME_FULL: String = "home_full"
 const MOTION_BRAKE: String = "brake"
 ## 대화 주제 (talk_topic.topic).
 const TOPICS: PackedStringArray = ["mood", "hobby", "gossip", "fish", "past", "dream", "food", "you", "worry", "mbti"]
+
+
+## 닉네임 정리 (서버 nickname.js cleanName 과 같은 규칙): 띄어쓰기를 한 칸으로, 앞뒤 공백 지우기,
+## 글자 · 숫자 · 띄어쓰기 · _ - . 만 남기고, NAME_MAX 글자까지.
+static func clean_name(raw: String) -> String:
+	var out: String = ""
+	var space: bool = false
+	for ch: String in raw.strip_edges():
+		var code: int = ch.unicode_at(0)
+		if ch == " " or ch == "\t" or ch == "\n" or ch == "\r":
+			space = true
+			continue
+		var ok: bool = ch == "_" or ch == "-" or ch == "." or (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122) \
+			or (code >= 0xAC00 and code <= 0xD7A3) or (code >= 0x3131 and code <= 0x318E) or (code >= 0x00C0 and code <= 0x024F) \
+			or (code >= 0x3040 and code <= 0x30FF) or (code >= 0x4E00 and code <= 0x9FFF)
+		if not ok:
+			continue
+		if space and not out.is_empty():
+			out += " "
+		space = false
+		out += ch
+	return out.substr(0, NAME_MAX).strip_edges()

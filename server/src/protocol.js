@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -64,6 +64,7 @@ export const ErrorCode = Object.freeze({
   notNearKeeper: 'not_near_keeper', // 관장·조종사 곁이 아님
   notNearMirror: 'not_near_mirror', // 거울 앞이 아님
   badFace: 'bad_face', // 모르는 얼굴 항목·모양
+  badName: 'bad_name', // 쓸 수 없는 닉네임 (v14: 너무 길거나 기호)
   marketClosed: 'market_closed', // 장이 닫혔다 (MARKET_HOURS=krx)
   badOrder: 'bad_order', // 모르는 종목·수량
   notEnoughShares: 'not_enough_shares', // 가진 주식보다 많이 팔려고 함

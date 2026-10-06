@@ -11,6 +11,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_button.pressed.connect(func() -> void: action_pressed.emit())
 	_button.add_to_group(&"blocks_joystick")
+	# 가로 화면: 오른쪽 단추 줄(휴대폰 · 감정표현) 왼쪽으로 비킨다.
+	HudLayout.landscape_shift(_button, -170.0)
 	hide_action()
 
 

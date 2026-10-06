@@ -23,6 +23,9 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_action.pressed.connect(func() -> void: action_pressed.emit())
 	_cancel.pressed.connect(func() -> void: cancel_pressed.emit())
+	# 가로 화면: 상황 버튼(ActionHud)과 같은 자리로 비킨다.
+	HudLayout.landscape_shift(_action, -170.0)
+	HudLayout.landscape_shift(_cancel, -170.0)
 	reset()
 
 

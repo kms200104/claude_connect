@@ -21,6 +21,7 @@ import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js
 import { activeEvents, buyMultiplier, dropPosition, eventsWire, findKind, planDay, sellMultiplier } from './events.js';
 import { weekOf } from './bank.js';
 import { applyFaceRequest, nearMirror } from './face.js';
+import { cleanName } from './nickname.js';
 import { createMarket } from './market.js';
 import { createEconomy, earn } from './economy.js';
 import { createKitchen } from './kitchen.js';
@@ -73,6 +74,7 @@ export function createServer(overrides = {}) {
       outfit: { ...player.profile.outfit },
       emotes: { known: [...player.profile.emotes.known], quick: [...player.profile.emotes.quick] },
       face: { ...player.profile.face },
+      name: player.profile.name ?? '',
       ...economy.profileWire(roomOf(player), player.profile),
     };
   };
@@ -1035,6 +1037,26 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  /** 닉네임 (v14): 어디서나 바꿀 수 있다 (거울 창 · 처음 화면 설정). 빈 이름이면 기본 이름으로 돌아간다. */
+  function handleName(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const name = cleanName(msg.name);
+    if (name === null) return fail(ErrorCode.badName);
+    player.profile.name = name;
+    sendTo(player, { t: 'name', rid: msg.rid, id: player.id, name });
+    room.broadcast({ t: 'name', id: player.id, name }, player.id);
+    rooms.save(room);
+  }
+
+  /** 입장할 때 같이 보낸 닉네임 (처음 화면 설정). 쓸 수 없거나 비었으면 그대로 둔다. */
+  function applyJoinName(player, raw) {
+    const name = cleanName(raw);
+    if (!name || name === player.profile.name) return false;
+    player.profile.name = name;
+    return true;
+  }
+
   // ---- 가구 설치 · 옷 ----
 
   function handleFurniture(ctx, msg, fail) {
@@ -1451,6 +1473,8 @@ export function createServer(overrides = {}) {
         return handleDonate(ctx, msg, fail);
       case 'set_face':
         return handleFace(ctx, msg, fail);
+      case 'set_name':
+        return handleName(ctx, msg, fail);
       case 'stock_order':
         return economy.handleStock(ctx, msg, fail);
       case 'apt_buy':
@@ -1557,6 +1581,7 @@ export function createServer(overrides = {}) {
         if (!validUid(ctx, msg)) return;
         const room = rooms.createRoom();
         const { player } = rooms.addPlayer(room, msg.uid);
+        applyJoinName(player, msg.name);
         return bind(ctx, room, player, false);
       }
       case 'join': {
@@ -1568,8 +1593,12 @@ export function createServer(overrides = {}) {
         if (!room) return sendError(ctx.ws, ErrorCode.roomNotFound);
         const added = rooms.addPlayer(room, msg.uid);
         if (!added) return sendError(ctx.ws, ErrorCode.roomFull);
+        const renamed = applyJoinName(added.player, msg.name);
         // 같은 uid가 이미 방에 있으면(다른 기기/재접속) 그 자리를 이어받는다.
-        return bind(ctx, room, added.player, added.existing);
+        bind(ctx, room, added.player, added.existing);
+        // 이어받은 자리는 다른 사람이 이미 알고 있으니 바뀐 이름만 따로 알린다.
+        if (renamed && added.existing) room.broadcast({ t: 'name', id: added.player.id, name: added.player.profile.name }, added.player.id);
+        return;
       }
       case 'resume': {
         if (!checkVersion(ctx, msg)) return;
@@ -1612,6 +1641,7 @@ export function createServer(overrides = {}) {
       case 'emote_quick':
       case 'donate':
       case 'set_face':
+      case 'set_name':
       case 'talk_topic':
       case 'stock_order':
       case 'apt_buy':

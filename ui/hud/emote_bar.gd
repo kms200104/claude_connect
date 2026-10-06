@@ -87,7 +87,7 @@ func _refresh() -> void:
 
 func _place_strip() -> void:
 	_strip.reset_size()
-	_strip.position = Vector2(_toggle.position.x - 12.0 - _strip.size.x, anchor_y + (button_size - _strip.size.y) * 0.5)
+	_strip.position = Vector2(_toggle.position.x - 12.0 - _strip.size.x, _toggle.position.y + (button_size - _strip.size.y) * 0.5)
 
 
 func _round_button(icon: Texture2D, size: float) -> Button:

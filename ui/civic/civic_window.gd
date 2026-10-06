@@ -42,7 +42,7 @@ func _ready() -> void:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", EventHud._box(BG, EDGE, 40, 6, 26))
 	HudLayout.center_top(panel, 1000.0, 160.0)
-	panel.offset_bottom = 1740.0
+	HudLayout.fit_bottom(panel, 1740.0)
 	add_child(panel)
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)

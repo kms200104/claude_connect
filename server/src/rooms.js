@@ -7,6 +7,7 @@ import { addItem, emptySlots, hasItem, sanitize } from './inventory.js';
 import { sanitizePlanted, sanitizeTrees } from './trees.js';
 import { sanitizeFlowers } from './plants.js';
 import { defaultFace, sanitizeFace } from './face.js';
+import { sanitizeName } from './nickname.js';
 import { sanitizeHoldings } from './market.js';
 import { sanitizeHomes } from './realestate.js';
 import { sanitizeChats } from './messenger.js';
@@ -87,6 +88,7 @@ function newProfile(uid, slot, cfg, data) {
     outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
     emotes: { known: ['hello'], quick: ['hello'] }, // 배운 감정표현과 감정표현 퀵슬롯
     face: data ? defaultFace(data.face, slot) : {}, // 거울에서 고른 얼굴 (눈·코·입·피부·머리)
+    name: '', // 닉네임 (v14, 빈 이름이면 기본 이름)
     stocks: {}, // 가진 주식 { 종목: { q, cost } }
     trades: [], // 최근 거래 (보기용)
     loans: [], // 대출 [{ id, kind, principal, rate, unit, since }]
@@ -207,6 +209,7 @@ export class Player {
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
       face: { ...this.profile.face },
+      name: this.profile.name ?? '',
       x: this.x,
       y: this.y,
       z: this.z,
@@ -358,6 +361,7 @@ export class Room {
         outfit: sanitizeOutfit(p.outfit, data),
         emotes: sanitizeEmotes(p.emotes, data, cfg),
         face: sanitizeFace(p.face, data.face, base.slot),
+        name: sanitizeName(p.name),
         stocks: sanitizeHoldings(p.stocks, data.market),
         trades: Array.isArray(p.trades) ? p.trades.slice(-20) : [],
         loans: sanitizeLoans(p.loans),

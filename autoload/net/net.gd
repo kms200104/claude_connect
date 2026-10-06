@@ -90,6 +90,8 @@ signal flower_picked(item_id: String)
 signal peer_emoted(player_id: int, emote_id: String)
 ## 누군가(나 포함) 거울에서 얼굴을 바꿨다.
 signal face_changed(player_id: int, face: Dictionary)
+## 누군가(나 포함) 닉네임을 바꿨다 (v14). 빈 이름이면 기본 이름.
+signal name_changed(player_id: int, display_name: String)
 ## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
 ## from = 그 사람이 한 감정표현 (주민 반응은 그에 대한 것).
 ## 친한 주민이 먼저 다가와 나에게 말을 걸었다 (v0.11).
@@ -193,6 +195,8 @@ var npc_moods: Dictionary[String, String] = {}
 var server_version: int = 0
 ## 자리 번호 → 거울에서 고른 얼굴 (FaceCatalog id 사전). 없으면 자리 기본 얼굴.
 var faces: Dictionary[int, Dictionary] = {}
+## 자리 번호 → 닉네임 (v14). 없거나 빈 이름이면 GameData.player_name 의 기본 이름.
+var names: Dictionary[int, String] = {}
 
 var _ws: WebSocketPeer = null
 ## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
@@ -515,6 +519,38 @@ func talk_topic(topic: String) -> void:
 	_send({"t": "talk_topic", "topic": topic})
 
 
+## 닉네임을 바꾼다 (v14, 어디서나). 빈 이름이면 기본 이름으로. 결과는 name_changed. 처음 화면 설정에도 같이 기억한다.
+func set_nickname(display_name: String) -> void:
+	var clean: String = NetProtocol.clean_name(display_name)
+	save_nickname(clean)
+	if state == State.ONLINE:
+		_request("set_name", {"name": clean})
+
+
+## 들어온 뒤: 처음 화면 설정에서 바꾼 이름이 서버와 다르면(이어하기는 이름을 안 보낸다) 보내고,
+## 설정에 이름이 없으면 서버 이름을 기억해 둔다.
+func _sync_nickname() -> void:
+	var local: String = nickname()
+	var remote: String = str(names.get(my_id, ""))
+	if local == remote:
+		return
+	if local.is_empty():
+		save_nickname(remote)
+	else:
+		_request("set_name", {"name": local})
+
+
+## 처음 화면 설정에 적어 둔 닉네임 (입장할 때 같이 보낸다). 없으면 빈 문자열.
+func nickname() -> String:
+	return str(_load_settings().get_value("settings", "nickname", ""))
+
+
+func save_nickname(display_name: String) -> void:
+	var cfg: ConfigFile = _load_settings()
+	cfg.set_value("settings", "nickname", NetProtocol.clean_name(display_name))
+	cfg.save(_settings_path())
+
+
 ## 거울 앞에서 얼굴을 바꾼다 (바꿀 항목만 보내도 된다). 결과는 face_changed.
 func set_face(face: Dictionary) -> void:
 	_request("set_face", {"face": face})
@@ -695,9 +731,9 @@ func _on_socket_open() -> void:
 	_set_state(State.JOINING if state != State.RECONNECTING else State.RECONNECTING)
 	match _intent:
 		Intent.CREATE:
-			_send({"t": "create", "v": NetProtocol.VERSION, "uid": uid})
+			_send({"t": "create", "v": NetProtocol.VERSION, "uid": uid, "name": nickname()})
 		Intent.JOIN:
-			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code})
+			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code, "name": nickname()})
 		Intent.RESUME:
 			_send({"t": "resume", "v": NetProtocol.VERSION, "token": _token})
 
@@ -764,6 +800,7 @@ func _handle_text(text: String) -> void:
 				partner_online = true
 				var joined: NetPlayerState = NetPlayerState.from_dict(joined_data)
 				faces[joined.id] = joined.face
+				names[joined.id] = joined.display_name
 				peer_joined.emit(joined)
 		"peer_status":
 			var pid: int = int(msg.get("id", 0))
@@ -788,6 +825,13 @@ func _handle_text(text: String) -> void:
 			if face_data is Dictionary:
 				faces[face_id] = face_data
 				face_changed.emit(face_id, face_data)
+		"name":
+			var name_id: int = int(msg.get("id", 0))
+			_pending.erase(str(msg.get("rid", "")))
+			names[name_id] = str(msg.get("name", ""))
+			if name_id == my_id:
+				save_nickname(names[name_id])
+			name_changed.emit(name_id, names[name_id])
 		"weather":
 			weather = str(msg.get("w", weather))
 			weather_changed.emit(weather)
@@ -974,8 +1018,10 @@ func _on_welcome(msg: Dictionary) -> void:
 	var me: NetPlayerState = null
 	var others: Array[NetPlayerState] = []
 	faces.clear()
+	names.clear()
 	for player_state: NetPlayerState in _parse_states(msg.get("players", [])):
 		faces[player_state.id] = player_state.face
+		names[player_state.id] = player_state.display_name
 		if player_state.id == my_id:
 			me = player_state
 		else:
@@ -987,6 +1033,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	_pending.clear()
 	_apply_inventory(msg.get("inv", {}))
 	_apply_profile(msg.get("prof", {}))
+	_sync_nickname()
 	_apply_clock(msg.get("clock", {}))
 	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
 	tree_stages.clear()
@@ -1130,6 +1177,8 @@ func _apply_profile(data: Variant) -> void:
 	var my_face: Variant = data.get("face", null)
 	if my_face is Dictionary and my_id > 0:
 		faces[my_id] = my_face
+	if data.has("name") and my_id > 0:
+		names[my_id] = str(data.get("name", ""))
 	profile_updated.emit()
 
 

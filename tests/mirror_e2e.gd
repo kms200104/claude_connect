@@ -53,9 +53,12 @@ func _run() -> void:
 	var window: MirrorWindow = _village.get_node("HUD/MirrorWindow")
 	var camera: FollowCamera = _village.get_node("CameraRig")
 	var mirrors: MirrorSite = _village.get_node("Mirrors")
+	# v14 닉네임: 처음 화면 설정에 적어 둔 이름은 입장할 때 같이 간다.
+	Net.save_nickname("  단풍   잎 ")
 	Net.create_room(_server)
 	await Net.welcomed
 	await get_tree().create_timer(0.5).timeout
+	_check(Net.names.get(Net.my_id, "") == "단풍 잎" and GameData.player_name(Net.my_id) == "단풍 잎", "설정의 닉네임으로 들어온다: %s" % GameData.player_name(Net.my_id))
 
 	_check(Net.faces.get(Net.my_id, {}).get("hair", "") == "bob", "처음엔 자리 기본 얼굴 (단발): %s" % str(Net.faces.get(Net.my_id)))
 	_check(player.rig.look.eyes == "round" and player.rig.look.hair_style == "bob", "내 캐릭터도 기본 얼굴")
@@ -101,6 +104,26 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.faces.get(Net.my_id, {}).get("hair", "") == "pigtails", 3.0), "완료하면 서버가 저장: %s" % str(Net.faces.get(Net.my_id)))
 	_check(await _wait_until(func() -> bool: return not window.is_open(), 2.0), "저장되면 창이 닫힌다")
 	_check(player.rig.look.eyes == "sparkle" and player.rig.look.hair_style == "pigtails" and player.rig.look.mouth == "open", "내 캐릭터에 새 얼굴")
+
+	# 거울 '이름' 탭에서 닉네임 바꾸기
+	await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.MIRROR, 2.0)
+	interaction.action_hud.action_pressed.emit()
+	window.select_tab_key("name")
+	_check(window.name_edit().is_visible_in_tree() and window.name_edit().text == "단풍 잎", "이름 탭: 지금 닉네임이 적혀 있다")
+	window.name_edit().text = "솔바람"
+	window.save()
+	_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "") == "솔바람" and not window.is_open(), 3.0), "완료하면 닉네임이 바뀌고 창이 닫힌다: %s" % Net.names.get(Net.my_id, ""))
+	_check(Net.nickname() == "솔바람", "처음 화면 설정에도 기억된다")
+	# 설정 창에서도 (어디서나)
+	var settings: QualityWindow = _village.get_node("HUD").find_child("QualityWindow", true, false)
+	_check(settings != null, "마을의 설정 창")
+	if settings != null:
+		settings.open()
+		_check(settings.name_edit().text == "솔바람", "설정 창에 지금 닉네임")
+		settings.name_edit().text = ""
+		settings.save_name()
+		settings.close()
+		_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "x") == "", 3.0) and GameData.player_name(Net.my_id) == GameData.default_player_name(Net.my_id), "비우면 기본 이름으로: %s" % GameData.player_name(Net.my_id))
 
 	# 거울에서 멀면 서버가 거절
 	await _teleport(Vector3(20.0, 0.1, 30.0))

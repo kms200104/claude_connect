@@ -21,6 +21,8 @@ signal closed
 ## 캐릭터 발에서 머리 꼭대기까지 (m). 창 꼬리가 여기를 가리킨다.
 const HEAD_TOP: float = 1.75
 const TAIL_SIZE: Vector2 = Vector2(56, 34)
+## 가로 화면: 머리 옆으로 이만큼(화면 px) 비켜 창을 띄운다 (머리를 가리지 않게).
+const HEAD_HALF_WIDTH: float = 110.0
 const PANEL_COLOR: Color = Color(0.99, 0.95, 0.86, 0.97)
 const BORDER_COLOR: Color = Color(0.55, 0.4, 0.28, 1)
 const TITLE_COLOR: Color = Color(0.4, 0.27, 0.17, 1)
@@ -48,6 +50,10 @@ var _outfit_slots: Dictionary[String, ItemSlot] = {}
 var _pop: Tween = null
 ## 꼬리 끝 (창 기준 x). 머리 바로 위를 가리킨다.
 var _tail_tip: Vector2 = Vector2.ZERO
+## 꼬리가 창의 어느 쪽에 붙는지: 세로 화면은 아래(머리 위에 뜬 창), 가로 화면은 왼쪽(머리 오른쪽에 뜬 창).
+var _tail_left: bool = false
+## 톡 튀어나오는 크기 (0.4 → 1). 화면에 맞춘 배율(가로 화면에서 창이 높으면 줄인다)과 곱해 창 크기가 된다.
+var _pop_k: float = 1.0
 
 
 func _ready() -> void:
@@ -92,11 +98,11 @@ func open() -> void:
 	set_process(true)
 	# 주머니를 뒤적이기 시작한 뒤에 머리 위로 톡 튀어나온다.
 	_panel.modulate.a = 0.0
-	_panel.scale = Vector2.ONE * 0.4
+	_pop_k = 0.4
 	_tail.modulate.a = 0.0
 	_kill_pop()
 	_pop = create_tween().set_parallel(true)
-	_pop.tween_property(_panel, "scale", Vector2.ONE, 0.32).set_delay(0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_pop.tween_property(self, "_pop_k", 1.0, 0.32).set_delay(0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_pop.tween_property(_panel, "modulate:a", 1.0, 0.16).set_delay(0.3)
 	_pop.tween_property(_tail, "modulate:a", 1.0, 0.16).set_delay(0.4)
 
@@ -115,7 +121,7 @@ func close() -> void:
 		camera_rig.set_bag_view(false)
 	_kill_pop()
 	_pop = create_tween().set_parallel(true)
-	_pop.tween_property(_panel, "scale", Vector2.ONE * 0.6, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_pop.tween_property(self, "_pop_k", 0.6, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	_pop.tween_property(_panel, "modulate:a", 0.0, 0.14)
 	_pop.tween_property(_tail, "modulate:a", 0.0, 0.1)
 	_pop.chain().tween_callback(func() -> void:
@@ -179,35 +185,59 @@ func _process(_delta: float) -> void:
 	_follow_head()
 
 
-## 말풍선을 캐릭터 머리 위에 붙인다. 화면 밖으로 나가지 않게 가둔다.
+## 말풍선을 캐릭터 머리 위에 붙인다 (가로 화면은 머리 오른쪽에). 화면 밖으로 나가지 않게 가둔다.
 func _follow_head() -> void:
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	var area: Vector2 = size
 	var panel_size: Vector2 = _panel.get_combined_minimum_size()
 	_panel.size = panel_size
-	_panel.pivot_offset = Vector2(panel_size.x * 0.5, panel_size.y)
 	var head: Vector2 = Vector2(area.x * 0.5, area.y * 0.62)
 	if cam != null and player != null and not cam.is_position_behind(player.global_position + Vector3.UP * HEAD_TOP):
 		head = cam.unproject_position(player.global_position + Vector3.UP * HEAD_TOP)
-	var bottom: float = head.y - head_gap - TAIL_SIZE.y
-	var top: float = clampf(bottom - panel_size.y, top_margin, maxf(area.y - panel_size.y - 20.0, top_margin))
-	var left: float = clampf(head.x - panel_size.x * 0.5, 16.0, maxf(area.x - panel_size.x - 16.0, 16.0))
-	_panel.position = Vector2(left, top)
-	# 꼬리는 창 아래 가운데 근처에서 머리 쪽을 가리킨다.
-	var base_y: float = top + panel_size.y - 8.0
-	var base_x: float = clampf(head.x, left + 60.0, left + panel_size.x - 60.0)
-	_tail.position = Vector2(base_x, base_y)
-	_tail_tip = Vector2(clampf(head.x - base_x, -TAIL_SIZE.x, TAIL_SIZE.x), maxf(TAIL_SIZE.y, minf(head.y - head_gap - base_y, TAIL_SIZE.y * 1.6)))
-	_tail.scale = _panel.scale
+	_tail_left = area.x > area.y
+	# 화면보다 높으면 줄인다 (가로 화면).
+	var fit: float = minf(1.0, (area.y - 60.0) / maxf(panel_size.y, 1.0))
+	var shown: Vector2 = panel_size * fit
+	_panel.scale = Vector2.ONE * fit * _pop_k
+	var left: float
+	var top: float
+	if _tail_left:
+		# 가로: 머리 오른쪽, 꼬리가 왼쪽에서 머리를 가리킨다.
+		_panel.pivot_offset = Vector2(0.0, panel_size.y * 0.5)
+		left = clampf(head.x + HEAD_HALF_WIDTH + head_gap + TAIL_SIZE.y, 16.0, maxf(area.x - shown.x - 16.0, 16.0))
+		top = clampf(head.y - shown.y * 0.5, 30.0, maxf(area.y - shown.y - 30.0, 30.0))
+		_panel.position = Vector2(left, top)
+		var base: Vector2 = Vector2(left + 8.0, clampf(head.y, top + 60.0, top + shown.y - 60.0))
+		_tail.position = base
+		_tail_tip = Vector2(-maxf(TAIL_SIZE.y, minf(base.x - head.x - HEAD_HALF_WIDTH - head_gap, TAIL_SIZE.y * 1.6)), clampf(head.y - base.y, -TAIL_SIZE.x, TAIL_SIZE.x))
+	else:
+		_panel.pivot_offset = Vector2(panel_size.x * 0.5, panel_size.y)
+		var bottom: float = head.y - head_gap - TAIL_SIZE.y
+		top = clampf(bottom - shown.y, top_margin, maxf(area.y - shown.y - 20.0, top_margin))
+		left = clampf(head.x - shown.x * 0.5, 16.0, maxf(area.x - shown.x - 16.0, 16.0))
+		# pivot 이 아래 가운데라 줄어든 만큼 위치를 보정한다.
+		_panel.position = Vector2(left, top) - (Vector2.ONE - Vector2.ONE * fit) * _panel.pivot_offset
+		# 꼬리는 창 아래 가운데 근처에서 머리 쪽을 가리킨다.
+		var base_y: float = top + shown.y - 8.0
+		var base_x: float = clampf(head.x, left + 60.0, left + shown.x - 60.0)
+		_tail.position = Vector2(base_x, base_y)
+		_tail_tip = Vector2(clampf(head.x - base_x, -TAIL_SIZE.x, TAIL_SIZE.x), maxf(TAIL_SIZE.y, minf(head.y - head_gap - base_y, TAIL_SIZE.y * 1.6)))
+	if _tail_left:
+		_panel.position -= (Vector2.ONE - Vector2.ONE * fit) * _panel.pivot_offset
+	_tail.scale = Vector2.ONE * _pop_k
 	_tail.queue_redraw()
 
 
 func _draw_tail() -> void:
 	var half: float = TAIL_SIZE.x * 0.5
-	var pts: PackedVector2Array = PackedVector2Array([Vector2(-half, 0), Vector2(half, 0), _tail_tip])
+	# 꼬리 밑변: 세로 화면은 창 아래 가장자리(가로선), 가로 화면은 왼쪽 가장자리(세로선).
+	var a: Vector2 = Vector2(0, -half) if _tail_left else Vector2(-half, 0)
+	var b: Vector2 = Vector2(0, half) if _tail_left else Vector2(half, 0)
+	var inward: Vector2 = Vector2(-6, 0) if _tail_left else Vector2(0, 6)
+	var pts: PackedVector2Array = PackedVector2Array([a, b, _tail_tip])
 	_tail.draw_colored_polygon(pts, PANEL_COLOR)
-	_tail.draw_line(Vector2(-half, 0) + Vector2(0, 6), _tail_tip, BORDER_COLOR, 7.0, true)
-	_tail.draw_line(Vector2(half, 0) + Vector2(0, 6), _tail_tip, BORDER_COLOR, 7.0, true)
+	_tail.draw_line(a - inward + inward * 2.0, _tail_tip, BORDER_COLOR, 7.0, true)
+	_tail.draw_line(b - inward + inward * 2.0, _tail_tip, BORDER_COLOR, 7.0, true)
 	_tail.draw_circle(_tail_tip, 3.5, BORDER_COLOR)
 
 

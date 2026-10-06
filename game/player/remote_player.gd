@@ -71,6 +71,13 @@ func set_outfit(hat: String, top: String) -> void:
 		rig.set_outfit(hat, top)
 
 
+func _ready() -> void:
+	# 닉네임이 바뀌면 머리 위 이름도 바꾼다 (v14).
+	Net.name_changed.connect(func(id: int, _n: String) -> void:
+		if id == player_id:
+			set_online(online))
+
+
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
 	if rig != null:
@@ -86,7 +93,8 @@ func setup(state: NetPlayerState) -> void:
 func set_online(value: bool) -> void:
 	online = value
 	if name_label != null:
-		name_label.text = "플레이어 %d" % player_id if online else "플레이어 %d · 연결 끊김" % player_id
+		var shown: String = GameData.player_name(player_id)
+		name_label.text = shown if online else "%s · 연결 끊김" % shown
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
