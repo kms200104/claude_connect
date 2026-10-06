@@ -125,7 +125,7 @@ static func hips(look: CharacterLook) -> ArrayMesh:
 
 ## 머리 (목 위): 머리 · 귀 · 얼굴 · 머리카락.
 static func head(look: CharacterLook) -> ArrayMesh:
-	var key: String = "head|%d|%s" % [detail, look.key()]
+	var key: String = "head|%d|%d|%s" % [detail, 1 if hair_models else 0, look.key()]
 	if _cache.has(key):
 		return _cache[key]
 	var st: SurfaceTool = ClayMesh.begin()
@@ -520,7 +520,83 @@ static func _face_max_edge() -> float:
 
 ## 머리카락: 머리보다 조금 큰 껍질(얼굴 자리는 머리 속으로 눌러 넣고, 결을 따라 살짝 골이 진다) 위에 끝이 모이는 도톰한 다발을 얹는다.
 ## 다발은 껍질 겉면을 따라 내려오다 늘어뜨린다 (_lock). 앞머리·옆머리·뒷머리·묶은 머리가 모양마다 다르다.
+## 머리카락 모형 (v0.13, tools/blender/build_hair.py → assets/models/hair/<스타일>.glb): 있으면 절차 가닥 대신 쓴다.
+## 끄면(비교용) 예전 절차 머리카락.
+static var hair_models: bool = true
+const HAIR_MODEL_DIR: String = "res://assets/models/hair"
+static var _hair_meshes: Dictionary[String, ArrayMesh] = {}
+
+
+## 이 스타일의 머리카락 모형 (없으면 null). 촘촘함 0 · 1 · 2 단계에 _low · _mid · 원본 (캐릭터 삼각형 예산).
+static func hair_model(style: String) -> ArrayMesh:
+	if not hair_models:
+		return null
+	var key: String = style + (["_low", "_mid", ""] as Array[String])[clampi(detail, 0, MAX_DETAIL)]
+	if _hair_meshes.has(key):
+		return _hair_meshes[key]
+	var path: String = "%s/%s.glb" % [HAIR_MODEL_DIR, key]
+	if not ResourceLoader.exists(path):
+		path = "%s/%s.glb" % [HAIR_MODEL_DIR, style]
+	var mesh: ArrayMesh = null
+	if ResourceLoader.exists(path):
+		var scene: PackedScene = load(path) as PackedScene
+		var root: Node = scene.instantiate() if scene != null else null
+		if root != null:
+			var found: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+			mesh = (found[0] as MeshInstance3D).mesh as ArrayMesh if not found.is_empty() else null
+			root.free()
+	_hair_meshes[key] = mesh
+	return mesh
+
+
+## 머리카락 모형을 머리 메시에 덧붙이며 머리 색을 입힌다. 모형의 정점 색: R = 그늘(AO), G = 윤기 띠.
+## 위를 보는 면은 밝게, 그늘진 곳은 어둡게, 윤기 띠는 밝게 (알파 1 — 툰 셰이더의 가는 결 선은 그리지 않는다).
+static func _append_hair_model(st: SurfaceTool, mesh: ArrayMesh, hair: Color) -> void:
+	var dark: Color = hair.darkened(0.2)
+	var light: Color = hair.lightened(0.08)
+	var shine: Color = hair.lightened(0.3)
+	for surface: int in mesh.get_surface_count():
+		var arrays: Array = mesh.surface_get_arrays(surface)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR] if arrays[Mesh.ARRAY_COLOR] != null else PackedColorArray()
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		var order: PackedInt32Array = indices
+		if order.is_empty():
+			order.resize(verts.size())
+			for i: int in verts.size():
+				order[i] = i
+		for i: int in order:
+			var n: Vector3 = normals[i]
+			var data: Color = colors[i] if i < colors.size() else Color.WHITE
+			var c: Color = dark.lerp(light, clampf(n.y * 0.5 + 0.5, 0.0, 1.0))
+			c = c.darkened(0.32 * (1.0 - clampf(data.r, 0.0, 1.0)))
+			c = c.lerp(shine, clampf(data.g, 0.0, 1.0) * 0.5)
+			c.a = 1.0
+			st.set_color(c)
+			st.set_normal(n)
+			st.add_vertex(verts[i])
+
+
+## 모형 머리카락에 다는 것 (색이 머리와 달라 절차로 그린다): 단발 리본 · 포니테일 머리끈.
+static func _hair_accessories(st: SurfaceTool, look: CharacterLook) -> void:
+	match look.hair_style:
+		"ponytail":
+			ClayMesh.add_ellipsoid(st, HAIR_CENTER + Vector3(0.0, 0.27, 0.32), Vector3(0.075, 0.065, 0.06), Color("#F07A8A"), 8, 5)
+		"bob":
+			var bow: Color = look.hair.darkened(0.22)
+			var knot: Vector3 = HAIR_CENTER + Vector3(0.0, 0.39, -0.06)
+			for side: float in [-1.0, 1.0]:
+				ClayMesh.add_ellipsoid(st, knot + Vector3(0.075 * side, 0.02, 0.0), Vector3(0.075, 0.05, 0.035), bow, 7, 4, Basis(Vector3.BACK, -0.35 * side) * Basis(Vector3.RIGHT, -0.4))
+			ClayMesh.add_ellipsoid(st, knot, Vector3(0.035, 0.035, 0.035), bow.darkened(0.08), 6, 4)
+
+
 static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
+	var model: ArrayMesh = hair_model(look.hair_style)
+	if model != null:
+		_append_hair_model(st, model, look.hair)
+		_hair_accessories(st, look)
+		return
 	var color: Callable = _hair_paint(look.hair)
 	var lock_seg: Vector2i = LOCK_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var one: Callable = func(_d: Vector3) -> float: return 1.0
