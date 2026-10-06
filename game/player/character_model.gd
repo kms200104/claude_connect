@@ -4,7 +4,9 @@ extends RefCounted
 ## 2.5등신 점토 인형 비율 — 옆으로 살짝 넓은 큰 머리와 작은 귀, 덩어리진 가닥으로 만든 머리(10가지), 니트 스웨터, 반바지, 부츠.
 ## 눈·코·입은 data/looks/face_parts.json 의 도형을 머리 겉면에 촘촘히 붙인 얇은 판 (FaceShapes).
 ## 좌표는 리그(Visual) 기준: 발바닥 y = -0.8, 머리 꼭대기 ≈ 0.8, 정면 = -Z.
-## 정점 색만 쓰므로 머티리얼은 흰 툰 머티리얼 하나 (캐릭터 하나 = 드로우콜 6: 몸, 눈, 팔 2, 다리 2).
+## 정점 색만 쓰므로 머티리얼은 흰 툰 머티리얼 하나 (캐릭터 하나 = 드로우콜 8: 몸통, 머리, 골반, 눈, 팔 2, 다리 2).
+## v0.13: 허리·목 관절 — 몸통(body: 스웨터)은 허리 위, 머리(head: 머리·얼굴·머리카락·귀)는 목 위, 반바지(hips)는 골반에 단다.
+## 세 메시 모두 같은 Visual 좌표로 만들고, 리그가 관절 노드 안에서 원래 자리를 되돌려 놓는다.
 
 const HEAD_CENTER: Vector3 = Vector3(0.0, 0.4, 0.0)
 ## 옆으로 넓고 앞뒤로 살짝 납작한 찹쌀떡 머리 (얼굴이 덜 휘어 눈코입이 평평하게 보인다). x·z 는 정수리 쪽 반지름이고
@@ -87,6 +89,7 @@ static func clear_cache() -> void:
 	_cache.clear()
 
 
+## 몸통 (허리 위): 스웨터 + 밑단 고무단 + 목폴라.
 static func body(look: CharacterLook) -> ArrayMesh:
 	var key: String = "body|%d|%s" % [detail, look.key()]
 	if _cache.has(key):
@@ -100,20 +103,41 @@ static func body(look: CharacterLook) -> ArrayMesh:
 	ClayMesh.add_lathe(st, _smooth_profile(torso), _seg(16), Transform3D(), knit)
 	ClayMesh.add_torus(st, Vector3(0.0, -0.345, 0.0), 0.205, 0.03, look.top.darkened(0.08), _seg(16), _seg(4))
 	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.125, 0.115, -0.01, 0.1, 0.03, _round_steps(1)), _seg(12), Transform3D(), _knit(look.top.darkened(0.04)))
-	# 반바지: 허리에서 두 다리 통으로 갈라지고, 끝단을 접어 올렸다.
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## 골반 (허리 아래): 반바지 — 허리에서 두 다리 통으로 갈라지고, 끝단을 접어 올렸다.
+static func hips(look: CharacterLook) -> ArrayMesh:
+	var key: String = "hips|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
 	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.205, 0.215, -0.47, -0.3, 0.05, _round_steps(2)), _seg(14), Transform3D(), look.bottom)
 	for side: float in [-1.0, 1.0]:
 		ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.1, 0.1, -0.53, -0.42, 0.03, _round_steps(1)), _seg(8), Transform3D(Basis(), Vector3(HIP.x * side, 0.0, 0.0)), look.bottom)
 		ClayMesh.add_torus(st, Vector3(HIP.x * side, -0.525, 0.0), 0.095, 0.022, look.bottom.lightened(0.12), _seg(8), _seg(4))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## 머리 (목 위): 머리 · 귀 · 얼굴 · 머리카락.
+static func head(look: CharacterLook) -> ArrayMesh:
+	var key: String = "head|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
 	# 머리: 볼·턱 쪽이 넓은 찹쌀떡 (높이마다 옆·앞뒤 반지름에 head_width 를 곱한 회전체). 둘레를 촘촘히 나눠
 	# 얼굴 부품과 겉면 사이가 벌어지거나 파묻히지 않게 한다. 얼굴 부품은 같은 겉면(face_point)에 붙는다.
-	var head: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
+	var segs: Vector2i = HEAD_SEGMENTS[clampi(detail, 0, MAX_DETAIL)]
 	var cover: float = _hair_cover_bottom(look.hair_style)
 	var head_profile: PackedVector2Array = PackedVector2Array()
-	for i: int in head.y + 1:
-		var a: float = -PI * 0.5 + PI * float(i) / float(head.y)
+	for i: int in segs.y + 1:
+		var a: float = -PI * 0.5 + PI * float(i) / float(segs.y)
 		head_profile.append(Vector2(cos(a) * head_width(sin(a)), sin(a) * HEAD_RADII.y))
-	ClayMesh.add_lathe(st, head_profile, head.x, Transform3D(Basis.from_scale(Vector3(HEAD_RADII.x, 1.0, HEAD_RADII.z)), HEAD_CENTER), look.skin)
+	ClayMesh.add_lathe(st, head_profile, segs.x, Transform3D(Basis.from_scale(Vector3(HEAD_RADII.x, 1.0, HEAD_RADII.z)), HEAD_CENTER), look.skin)
 	# 귀: 머리카락이 옆을 다 덮는 긴 머리에서는 만들지 않는다.
 	if cover > -0.4:
 		for side: float in [-1.0, 1.0]:

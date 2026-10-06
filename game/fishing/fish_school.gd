@@ -4,15 +4,21 @@ extends Node3D
 ## 모양은 모두 같고(어떤 물고기인지는 모른다) 몸 크기(S·M·L)만큼 크기가 다르며, 희귀할수록 둘레에 아우라가 감돈다
 ##   (조금 귀함: 맑은 하늘빛 · 아주 귀함: 금빛 + 반짝임). 서버 위치를 부드럽게 따라가며 헤엄치는 쪽으로 꼬리를 흔든다.
 ## 내가 낚는 중인 물고기(hidden_id)는 FishShadow 가 이어받아 그리므로 여기서는 숨긴다.
+## v0.13.1: 그림자는 불투명하고, 등뼈가 머리에서 꼬리로 차례로 좌우로 휘며 헤엄친다 (fish_silhouette 셰이더).
+##   서버 자리를 그냥 미끄러져 따라가지 않는다 — 꼬리를 칠 때마다 앞으로 밀려 나가고(힘껏 칠수록 빨리),
+##   꼬리를 멈추면 미끄러지며 느려진다. 방향도 몸을 돌려서 바꾼다.
 
 ## 몸 크기별 그림자 배율 (서버 swimmers.js SIZE_SCALE 과 같다).
 const SIZE_SCALE: Dictionary[String, float] = {"S": 0.75, "M": 1.0, "L": 1.35}
 const SHADOW_COLOR: Color = Color(0.03, 0.08, 0.12)
 const AURA_COLORS: Dictionary[String, Color] = {"uncommon": Color(0.62, 0.9, 1.0), "rare": Color(1.0, 0.82, 0.32)}
 
-@export_range(0.05, 1.0, 0.05) var opacity: float = 0.5
-## 클수록 서버 위치에 딱 붙는다.
-@export_range(1.0, 20.0, 0.5) var follow_smoothing: float = 5.0
+## 꼬리 한 번 칠 때 미는 힘 (m/s², 꼬리를 세게 칠수록 비례).
+@export_range(0.5, 20.0, 0.5) var thrust: float = 5.5
+## 물의 저항 (꼬리를 멈추면 이 비율로 느려진다).
+@export_range(0.1, 10.0, 0.1) var drag: float = 1.8
+## 몸을 돌리는 빠르기.
+@export_range(0.5, 10.0, 0.1) var turn_speed: float = 3.0
 
 ## 내가 낚는 중이라 FishShadow 가 대신 그리는 물고기 id.
 var hidden_id: String = ""
@@ -20,7 +26,8 @@ var hidden_id: String = ""
 var _nodes: Dictionary[String, Node3D] = {}
 var _state: Dictionary[String, Dictionary] = {}
 var _time: float = 0.0
-static var _body_material: StandardMaterial3D = null
+static var _body_material: ShaderMaterial = null
+static var _fish_mesh: ArrayMesh = null
 static var _aura_materials: Dictionary[String, StandardMaterial3D] = {}
 static var _aura_mesh: QuadMesh = null
 static var _sparkle_mesh: SphereMesh = null
@@ -89,6 +96,9 @@ func _on_fishes(spot_id: String, list: Array[Dictionary]) -> void:
 			node.global_position = target
 			node.rotation.y = float(f.get("yaw", 0.0))
 			node.set_meta("fade", 0.0)
+			node.set_meta("v", 0.0)
+			node.set_meta("phase", randf() * TAU)
+			node.set_meta("amp", 0.05)
 			_nodes[id] = node
 		_state[id] = {"spot": spot_id, "target": target, "yaw": float(f.get("yaw", 0.0)), "size": str(f.get("s", "M")),
 			"rarity": str(f.get("r", "common")), "st": str(f.get("st", "roam")), "o": int(f.get("o", 0))}
@@ -99,21 +109,16 @@ func _on_fishes(spot_id: String, list: Array[Dictionary]) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	var weight: float = 1.0 - exp(-follow_smoothing * delta)
 	for id: String in _nodes:
 		var node: Node3D = _nodes[id]
 		var st: Dictionary = _state[id]
-		var before: Vector3 = node.global_position
-		node.global_position = before.lerp(st["target"], weight)
-		node.rotation.y = lerp_angle(node.rotation.y, float(st["yaw"]), 1.0 - exp(-6.0 * delta))
-		var speed: float = (node.global_position - before).length() / maxf(delta, 0.001)
-		var body: Node3D = node.get_child(0)
-		body.rotation.y = sin(_time * (5.0 + speed * 5.0) + float(id.hash() % 50)) * clampf(0.06 + speed * 0.12, 0.06, 0.32)
+		_swim(node, st, delta)
 		# 나타날 때 스르르, 내가 낚는 중이면 숨긴다 (FishShadow 가 그린다).
 		var fade: float = move_toward(float(node.get_meta("fade", 0.0)), 0.0 if id == hidden_id else 1.0, delta * 1.5)
 		node.set_meta("fade", fade)
 		node.visible = fade > 0.01
-		node.scale = Vector3.ONE * (0.7 + 0.3 * fade)
+		var body: GeometryInstance3D = node.get_child(0)
+		body.set_instance_shader_parameter("alpha", fade)
 		var aura: Node3D = node.get_node_or_null("Aura")
 		if aura != null:
 			var pulse: float = 1.0 + sin(_time * (3.2 if st["rarity"] == "rare" else 2.2) + float(id.hash() % 30)) * 0.12
@@ -123,6 +128,46 @@ func _process(delta: float) -> void:
 				var k: float = fmod(_time * 0.9 + float(id.hash() % 10) * 0.1, 1.0)
 				sparkle.position = Vector3(cos(k * TAU) * 0.35, 0.05 + k * 0.25, sin(k * TAU) * 0.55)
 				sparkle.scale = Vector3.ONE * (1.0 - k)
+
+
+## 꼬리 헤엄: 서버 자리(target) 쪽으로 몸을 돌리고, 꼬리를 칠 때만 앞으로 나간다.
+func _swim(node: Node3D, st: Dictionary, delta: float) -> void:
+	var target: Vector3 = st["target"]
+	var to: Vector3 = Vector3(target.x - node.global_position.x, 0.0, target.z - node.global_position.z)
+	var dist: float = to.length()
+	var v: float = float(node.get_meta("v", 0.0))
+	var phase: float = float(node.get_meta("phase", 0.0))
+	var amp: float = float(node.get_meta("amp", 0.05))
+	if dist > 3.0:
+		# 너무 멀면(처음 · 순간이동) 바로 그 자리로.
+		node.global_position = Vector3(target.x, target.y, target.z)
+		dist = 0.0
+	var size_scale: float = float(SIZE_SCALE.get(str(st["size"]), 1.0))
+	var effort: float = 0.0
+	if dist > 0.06:
+		var want_yaw: float = atan2(-to.x, -to.z)
+		node.rotation.y = lerp_angle(node.rotation.y, want_yaw, 1.0 - exp(-turn_speed * delta))
+		var facing: float = cos(angle_difference(node.rotation.y, want_yaw))
+		# 멀수록 힘껏 (작은 물고기는 더 바지런히 친다). 몸이 아직 돌아가는 중이면 덜 민다.
+		effort = clampf(dist * 1.4, 0.15, 1.0) * clampf(facing, 0.0, 1.0) + 0.15
+	else:
+		node.rotation.y = lerp_angle(node.rotation.y, float(st["yaw"]), 1.0 - exp(-1.5 * delta))
+	# 꼬리 치기: 세기(amp)와 빠르기(위상 속도)가 effort 를 따라간다. 쉬면 살랑살랑.
+	amp = lerpf(amp, 0.035 + 0.13 * effort, 1.0 - exp(-4.0 * delta))
+	phase += delta * (4.0 + 11.0 * effort) / sqrt(size_scale)
+	# 미는 힘은 꼬리가 한가운데를 지날 때 가장 크다 (한 번 칠 때마다 쑥).
+	var push: float = absf(cos(phase)) * amp / 0.165
+	v += (thrust * push * effort - drag * v) * delta
+	v = minf(v, dist * 3.0 + 0.05)
+	var forward: Vector3 = Vector3(-sin(node.rotation.y), 0.0, -cos(node.rotation.y))
+	node.global_position += forward * v * delta
+	node.global_position.y = target.y
+	node.set_meta("v", v)
+	node.set_meta("phase", phase)
+	node.set_meta("amp", amp)
+	var body: GeometryInstance3D = node.get_child(0)
+	body.set_instance_shader_parameter("phase", phase)
+	body.set_instance_shader_parameter("amp", amp)
 
 
 func _remove(id: String) -> void:
@@ -155,7 +200,7 @@ static func make_visual(size_code: String, rarity: String) -> Node3D:
 	var root: Node3D = Node3D.new()
 	var body: MeshInstance3D = MeshInstance3D.new()
 	body.name = "Body"
-	body.mesh = FishShadow._shape()
+	body.mesh = fish_mesh()
 	body.material_override = body_material()
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.scale = Vector3.ONE * float(SIZE_SCALE.get(size_code, 1.0))
@@ -166,15 +211,57 @@ static func make_visual(size_code: String, rarity: String) -> Node3D:
 	return root
 
 
-static func body_material() -> StandardMaterial3D:
+static func body_material() -> ShaderMaterial:
 	if _body_material == null:
-		_body_material = StandardMaterial3D.new()
-		_body_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_body_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_body_material.albedo_color = Color(SHADOW_COLOR, 0.5)
-		_body_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_body_material = ShaderMaterial.new()
+		_body_material.shader = load("res://assets/shaders/fish_silhouette.gdshader")
+		_body_material.set_shader_parameter("shadow_color", SHADOW_COLOR)
 		_body_material.render_priority = 2
 	return _body_material
+
+
+## 위에서 본 물고기 (머리 -Z, 꼬리 +Z). 셰이더가 휠 수 있게 몸을 앞뒤로 여러 마디로 나눈다:
+## 통통한 머리 → 가늘어지는 꼬리자루 → 두 갈래 꼬리지느러미, 가슴지느러미 한 쌍, 등지느러미 자국.
+static func fish_mesh() -> ArrayMesh:
+	if _fish_mesh != null:
+		return _fish_mesh
+	var st: SurfaceTool = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	# 몸통 반폭 (z, w): 둥근 주둥이 → 가장 넓은 어깨 → 꼬리자루.
+	var profile: Array[Vector2] = [Vector2(-0.36, 0.0), Vector2(-0.335, 0.055), Vector2(-0.29, 0.095), Vector2(-0.22, 0.123),
+		Vector2(-0.14, 0.135), Vector2(-0.05, 0.13), Vector2(0.04, 0.113), Vector2(0.12, 0.088), Vector2(0.2, 0.062),
+		Vector2(0.27, 0.04), Vector2(0.32, 0.03), Vector2(0.36, 0.034)]
+	for i: int in profile.size() - 1:
+		var a: Vector2 = profile[i]
+		var b: Vector2 = profile[i + 1]
+		_quad(st, Vector3(-a.y, 0.0, a.x), Vector3(a.y, 0.0, a.x), Vector3(b.y, 0.0, b.x), Vector3(-b.y, 0.0, b.x))
+	# 꼬리지느러미: 꼬리자루에서 두 갈래로 벌어진다 (휘어지게 세 마디).
+	var fork: Array[Vector3] = [Vector3(0.034, 0.0, 0.36), Vector3(0.09, 0.0, 0.44), Vector3(0.15, 0.0, 0.52), Vector3(0.19, 0.0, 0.58)]
+	var notch: Array[Vector3] = [Vector3(0.0, 0.0, 0.36), Vector3(0.02, 0.0, 0.43), Vector3(0.03, 0.0, 0.48), Vector3(0.0, 0.0, 0.5)]
+	for side: float in [-1.0, 1.0]:
+		var m: Vector3 = Vector3(side, 1.0, 1.0)
+		for i: int in fork.size() - 1:
+			_quad(st, notch[i] * m, fork[i] * m, fork[i + 1] * m, notch[i + 1] * m)
+	# 가슴지느러미 (어깨 옆으로 비스듬히).
+	for side: float in [-1.0, 1.0]:
+		var m: Vector3 = Vector3(side, 1.0, 1.0)
+		_tri(st, Vector3(0.11, 0.0, -0.17) * m, Vector3(0.24, 0.0, -0.08) * m, Vector3(0.12, 0.0, -0.06) * m)
+		# 배지느러미 (작게).
+		_tri(st, Vector3(0.09, 0.0, 0.06) * m, Vector3(0.16, 0.0, 0.14) * m, Vector3(0.08, 0.0, 0.12) * m)
+	_fish_mesh = st.commit()
+	return _fish_mesh
+
+
+static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	_tri(st, a, b, c)
+	_tri(st, a, c, d)
+
+
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+	st.add_vertex(a)
+	st.add_vertex(b)
+	st.add_vertex(c)
 
 
 ## 희귀도 아우라: 몸을 감싸는 길쭉한 빛무리 (더하기 섞기). 흔한 물고기는 없음.

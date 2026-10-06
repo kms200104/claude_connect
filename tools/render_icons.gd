@@ -127,7 +127,11 @@ func _build_studio() -> void:
 
 ## 캐릭터 머리 (몸 메시 + 눈 메시)를 같은 각도로.
 func _shoot_head(id: String, look: CharacterLook) -> void:
-	_holder.mesh = CharacterModel.body(look)
+	_holder.mesh = CharacterModel.head(look)
+	var torso: MeshInstance3D = MeshInstance3D.new()
+	torso.mesh = CharacterModel.body(look)
+	torso.material_override = _material
+	_viewport.add_child(torso)
 	var eyes: MeshInstance3D = MeshInstance3D.new()
 	eyes.mesh = CharacterModel.eyes(look)
 	eyes.material_override = _material
@@ -144,6 +148,7 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 	image.save_png(path)
 	print("[icons] %s" % path)
 	eyes.queue_free()
+	torso.queue_free()
 
 
 func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:

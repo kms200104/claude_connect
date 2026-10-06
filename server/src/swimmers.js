@@ -6,7 +6,7 @@
 //   알아챈 물고기는 찌 쪽으로 몸을 돌려 천천히 다가와 찌 앞에 멈추고(engaged), 톡·톡 건드리다가 문다. 그 물고기가 곧 낚일 물고기다.
 //   아무도 못 알아채면 기다리는 동안 notice 가 조금씩 넓어져, 지나가던 물고기가 결국 찾아온다.
 //   낚으면 그 물고기는 사라지고 잠시 뒤 새로 나타난다. 놓치면 휙 달아나 한동안 찌를 무시한다.
-import { pickFish } from './gamedata.js';
+import { SEA_STAND_MAX, pickFish } from './gamedata.js';
 import { islandShape } from './world.js';
 import { shallowAt } from './shoal.js';
 import { yawToward } from './npcs.js';
@@ -143,7 +143,8 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
       const list = [...room.swimmers.values()].filter((s) => s.spot === id);
       if (spot.kind === 'sea') {
         if (!spot.island) continue;
-        const shore = people.filter((p) => !p.home && Math.hypot(p.x, p.z) > 0 && islandShape(spot.island, p.x, p.z) > 0.82);
+        // 바닷가에 선 사람만 (바다 건너 실내 — 상점 · 집 안 — 는 빼고).
+        const shore = people.filter((p) => !p.home && islandShape(spot.island, p.x, p.z) > 0.82 && islandShape(spot.island, p.x, p.z) <= SEA_STAND_MAX);
         for (const s of list) {
           if (s.st !== 'engaged' && !shore.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < SWIM.seaRange)) {
             room.swimmers.delete(s.id);

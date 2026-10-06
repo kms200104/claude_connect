@@ -11,6 +11,8 @@ var cast_range: float = 3.5
 var shallows: Array[Dictionary] = []
 ## 바다 (v0.12, kind: sea): 사각형 대신 섬 모양으로 — 해안선까지의 거리로 판정하고, 찌는 바다 쪽으로 던진다.
 var is_sea: bool = false
+## 바닷가에 설 수 있는 섬 모양 값의 끝 (서버 gamedata.js SEA_STAND_MAX).
+const SEA_STAND_MAX: float = 1.06
 var island: VillageLayout = null
 ## 낚이는 물고기 id.
 var fish_ids: PackedStringArray = []
@@ -37,7 +39,11 @@ func distance_to(position: Vector3) -> float:
 	if is_sea:
 		if island == null:
 			return INF
-		return maxf(0.0, (1.0 - island.island_shape(Vector2(position.x, position.z))) * island.island_half)
+		# 해안선 너머 멀리 서 있다면 바다 건너 실내(상점 · 집 안)다 → 바다 낚시 아님 (서버 SEA_STAND_MAX 와 같다).
+		var shape: float = island.island_shape(Vector2(position.x, position.z))
+		if shape > SEA_STAND_MAX:
+			return INF
+		return maxf(0.0, (1.0 - shape) * island.island_half)
 	var dx: float = maxf(absf(position.x - center.x) - half_extent.x, 0.0)
 	var dz: float = maxf(absf(position.z - center.y) - half_extent.y, 0.0)
 	return Vector2(dx, dz).length()

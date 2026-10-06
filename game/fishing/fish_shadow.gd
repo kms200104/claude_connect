@@ -14,8 +14,8 @@ signal touched(strong: bool)
 @export_range(0.3, 3.0, 0.05, "suffix:m") var circle_distance: float = 1.05
 ## 몇 초에 걸쳐 맴도는 거리까지 다가오는지.
 @export_range(0.5, 20.0, 0.5, "suffix:s") var approach_time: float = 5.0
-@export_range(0.05, 1.0, 0.05) var opacity: float = 0.55
-@export var color: Color = Color(0.03, 0.08, 0.12)
+## v0.13.1: 그림자는 불투명 (1.0). 나타나고 사라질 때만 옅어진다.
+@export_range(0.05, 1.0, 0.05) var opacity: float = 1.0
 
 enum Mode { HIDDEN, APPROACH, DART, BITE, STRUGGLE, LEAVE }
 
@@ -28,9 +28,11 @@ var _mode_time: float = 0.0
 var _size: float = 1.0
 var _swim_dir: float = 1.0
 var _mesh: MeshInstance3D = null
-var _material: StandardMaterial3D = null
+## 지금 불투명도 (나타남·사라짐), 꼬리 물결의 위상·세기 (fish_silhouette 셰이더).
+var _alpha: float = 0.0
+var _phase: float = 0.0
+var _amp: float = 0.04
 var _prev: Vector3 = Vector3.ZERO
-static var _fish_mesh: ArrayMesh = null
 ## v13: 찌를 향해 곧장 다가오는 모드. _dir = 물고기 → 찌 방향 (찌를 바라본다).
 var _line: bool = false
 var _dir: Vector3 = Vector3.FORWARD
@@ -42,15 +44,9 @@ const LINE_SPEED: float = 0.8
 
 
 func _ready() -> void:
-	_material = StandardMaterial3D.new()
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.albedo_color = Color(color, 0.0)
-	_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_material.render_priority = 2
 	_mesh = MeshInstance3D.new()
-	_mesh.mesh = _shape()
-	_mesh.material_override = _material
+	_mesh.mesh = FishSchool.fish_mesh()
+	_mesh.material_override = FishSchool.body_material()
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mesh)
 	visible = false
@@ -73,7 +69,7 @@ func appear_from(center: Vector3, start: Vector3, size_code: String, rarity: Str
 	_time = 0.0
 	_set_aura(rarity)
 	_set_mode(Mode.APPROACH)
-	_material.albedo_color.a = opacity
+	_alpha = opacity
 	visible = true
 	global_position = Vector3(start.x, center.y, start.z)
 	_prev = global_position
@@ -105,7 +101,7 @@ func appear(center: Vector3, size: float) -> void:
 	_distance = start_distance
 	_time = 0.0
 	_set_mode(Mode.APPROACH)
-	_material.albedo_color.a = 0.0
+	_alpha = 0.0
 	visible = true
 	_place(0.0)
 	_prev = global_position
@@ -165,7 +161,7 @@ func _process(delta: float) -> void:
 		return
 	_time += delta
 	_mode_time += delta
-	var alpha: float = opacity * (0.75 + 0.25 * _size / 1.35)
+	var alpha: float = opacity
 	if _line:
 		_process_line(delta, alpha)
 		return
@@ -241,13 +237,23 @@ func _process_line(delta: float, alpha: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(-_dir.x, -_dir.z), 1.0 - exp(-delta * 8.0))
 	var speed: float = (global_position - _prev).length() / maxf(delta, 0.001)
 	_prev = global_position
-	_mesh.rotation.y = sin(_time * (6.0 + speed * 4.0)) * clampf(0.08 + speed * 0.05, 0.08, 0.3)
+	_beat(delta, speed)
 	if _aura != null:
 		_aura.scale = Vector3.ONE * (1.0 + sin(_time * 3.0) * 0.1)
 
 
 func _fade_to(a: float, delta: float) -> void:
-	_material.albedo_color.a = lerpf(_material.albedo_color.a, a, 1.0 - exp(-delta * 6.0))
+	_alpha = lerpf(_alpha, a, 1.0 - exp(-delta * 6.0))
+
+
+## 꼬리 물결: 빨리 움직일수록 세게 · 빠르게 친다 (움직임은 꼬리 치기와 함께만 보인다). 멈추면 살랑.
+func _beat(delta: float, speed: float) -> void:
+	var effort: float = clampf(speed / 1.2, 0.0, 1.0)
+	_amp = lerpf(_amp, 0.035 + 0.13 * effort, 1.0 - exp(-6.0 * delta))
+	_phase += delta * (4.0 + 12.0 * effort) / sqrt(maxf(_size, 0.3))
+	_mesh.set_instance_shader_parameter("phase", _phase)
+	_mesh.set_instance_shader_parameter("amp", _amp)
+	_mesh.set_instance_shader_parameter("alpha", clampf(_alpha, 0.0, 1.0))
 
 
 func _place(delta: float) -> void:
@@ -260,37 +266,9 @@ func _place(delta: float) -> void:
 		var target_yaw: float = atan2(-vel.x, -vel.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-delta * 10.0))
 	var speed: float = vel.length() / maxf(delta, 0.001)
-	_mesh.rotation.y = sin(_time * (6.0 + speed * 4.0)) * clampf(0.08 + speed * 0.05, 0.08, 0.3)
+	_beat(delta, speed)
 
 
 ## 위에서 본 물고기 모양 (몸통 타원 + 꼬리 + 지느러미). 머리가 -Z.
 static func _shape() -> ArrayMesh:
-	if _fish_mesh != null:
-		return _fish_mesh
-	var st: SurfaceTool = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_normal(Vector3.UP)
-	var ring: PackedVector3Array = PackedVector3Array()
-	var n: int = 20
-	for i: int in n:
-		var a: float = TAU * float(i) / n
-		var z: float = cos(a) * 0.36
-		# 머리 쪽(-Z)이 조금 더 통통하다.
-		var w: float = sin(a) * (0.13 if z < 0.0 else 0.1)
-		ring.append(Vector3(w, 0.0, z))
-	for i: int in n:
-		st.add_vertex(Vector3.ZERO)
-		st.add_vertex(ring[i])
-		st.add_vertex(ring[(i + 1) % n])
-	# 꼬리 (두 갈래)
-	for side: float in [-1.0, 1.0]:
-		st.add_vertex(Vector3(0.0, 0.0, 0.3))
-		st.add_vertex(Vector3(0.17 * side, 0.0, 0.58))
-		st.add_vertex(Vector3(0.03 * side, 0.0, 0.5))
-	# 가슴지느러미
-	for side: float in [-1.0, 1.0]:
-		st.add_vertex(Vector3(0.1 * side, 0.0, -0.08))
-		st.add_vertex(Vector3(0.21 * side, 0.0, 0.02))
-		st.add_vertex(Vector3(0.09 * side, 0.0, 0.06))
-	_fish_mesh = st.commit()
-	return _fish_mesh
+	return FishSchool.fish_mesh()

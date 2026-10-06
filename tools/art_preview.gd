@@ -172,6 +172,17 @@ func _ready() -> void:
 				# 애니메이션 트리를 멈춰 두었으니 표정이 바로 감춰지지 않게 리그 갱신을 끈다.
 				rig.set_process(false)
 			_camera(Vector3(0.0, 0.6, -24.0), Vector3(0.0, 0.55, 0.0), 5.0)
+		"poses":
+			# v0.13 허리·목 관절 확인: 감정표현 한가운데를 옆에서 (--wait 로 시점을 고른다).
+			var poses: PackedStringArray = ["bow", "sad", "think", "laugh", "surprise", "sleepy", "clap"]
+			for i: int in poses.size():
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				rig.position = Vector3(0.0, 0.0, (3.0 - float(i)) * 1.1)
+				rig.set_look(GameData.player_look(1, {"hair": "short", "hair_color": "brown"}))
+				rig.set_held("")
+				rig.play_emote(poses[i])
+			_camera(Vector3(40.0, 0.7, 0.0), Vector3(0.0, 0.7, 0.0), 4.0)
 		"outfits":
 			var worn: Array[ItemInfo] = []
 			for info: ItemInfo in GameData.items.values():

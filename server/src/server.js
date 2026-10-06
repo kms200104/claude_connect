@@ -1397,6 +1397,8 @@ export function createServer(overrides = {}) {
       case 'fish_cast': {
         if (!player.acceptRid(msg.rid)) return; // 중복 요청 무시
         if (player.talkingTo !== null) return fail(ErrorCode.alreadyFishing);
+        // 상점 · 집 안에서는 낚시를 못 한다 (실내는 바다 건너에 있어서 바다 낚시터로 잘못 잡히던 버그).
+        if (player.home || inShop(player)) return fail(ErrorCode.notAtSpot);
         const target = Number.isFinite(msg.x) && Number.isFinite(msg.z) ? { x: msg.x, z: msg.z } : null;
         const err = fishing.cast(player, msg.rid, msg.spot, target);
         if (err) fail(err);

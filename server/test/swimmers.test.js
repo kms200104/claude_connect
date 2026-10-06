@@ -137,6 +137,20 @@ describe('v13 물고기 그림자 · 겨눠 던지기', () => {
     }
   });
 
+  it('상점 · 집 안에서는 낚시를 못 한다 (실내가 바다 건너에 있어도)', async () => {
+    const a = await open();
+    await enter(a);
+    const door = server.data.shop.door;
+    a.send({ t: 'move', x: door.x, y: 0.1, z: door.z + 1, yaw: 0, vx: 0, vz: 0 });
+    await a.next((m) => m.t === 'snap' && m.p.some((p) => p.x === door.x && p.z === door.z + 1));
+    a.send({ t: 'shop_enter' });
+    await a.type('shop_door');
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'sea' });
+    assert.equal((await a.type('error')).code, 'not_at_spot');
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'sea', x: 0, z: 300 });
+    assert.equal((await a.type('error')).code, 'not_at_spot');
+  });
+
   it('겨눈 자리가 땅이거나 너무 멀면 거절 (bad_cast)', async () => {
     const a = await open();
     await enter(a);

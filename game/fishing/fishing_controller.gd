@@ -95,7 +95,9 @@ func _process(_delta: float) -> void:
 	if phase == Phase.IDLE:
 		# 낚싯대를 손에 들고 물가에 있어야 던질 수 있다.
 		spot = _nearest_spot(player.global_position)
-		var ready_to_cast: bool = Net.state == Net.State.ONLINE and spot != null and spot.can_cast_from(player.global_position) \
+		# 상점 · 집 안에서는 낚시하지 않는다 (실내는 바다 건너에 있어 바다로 잘못 잡히던 버그).
+		var indoors: bool = Home.is_inside() or (GameData.shop != null and GameData.shop.is_inside(player.global_position))
+		var ready_to_cast: bool = Net.state == Net.State.ONLINE and spot != null and not indoors and spot.can_cast_from(player.global_position) \
 			and not player.is_input_locked() and player.held_item == "rod" \
 			and (interaction == null or not interaction.has_target())
 		hud.show_cast_available(ready_to_cast)

@@ -52,7 +52,7 @@ func _ready() -> void:
 			look.eyes = "sparkle"
 			look.mouth = "laugh"
 			look.nose = "freckle"
-			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look)) + expr_tris
+			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.head(look)) + _tris(CharacterModel.hips(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look)) + expr_tris
 			if tris > most:
 				most = tris
 				most_name = hair.id

@@ -9,9 +9,18 @@ extends Node3D
 
 @export_group("References")
 @export var tree: AnimationTree
-## 애니메이션이 흔드는 몸통. 머리·눈·팔다리가 여기에 붙어 같이 움직인다.
+## 애니메이션이 흔드는 몸 전체(골반 기준). 다리와 허리 관절이 여기에 붙는다.
 @export var visual: Node3D
+## 몸통(스웨터) 메시 — 허리 위(upper)에 있다.
 @export var body_mesh: MeshInstance3D
+## v0.13 관절: 골반(반바지) 메시, 허리(waist → upper: 몸통·팔), 목(neck → head: 머리·눈·표정·모자).
+## upper 와 head 는 관절 안에서 Visual 좌표를 되돌려 놓은 자리라, 메시와 붙는 것들은 예전 Visual 좌표를 그대로 쓴다.
+@export var hips_mesh: MeshInstance3D
+@export var head_mesh: MeshInstance3D
+@export var waist: Node3D
+@export var upper: Node3D
+@export var neck: Node3D
+@export var head: Node3D
 @export var arm_left: Node3D
 @export var arm_right: Node3D
 @export var leg_left: Node3D
@@ -179,7 +188,7 @@ func play_emote(emote_id: String) -> void:
 	# 머리 둘레 효과 (눈물 · Zzz · 하트 …) — 감정표현 동작 길이만큼.
 	var anims: AnimationPlayer = get_node_or_null("AnimationPlayer")
 	var length: float = anims.get_animation(emote_id).length if anims != null and anims.has_animation(emote_id) else 1.5
-	EmoteFx.play(visual, emote_id, length)
+	EmoteFx.play(_head_root(), emote_id, length)
 
 
 func is_emoting() -> bool:
@@ -313,7 +322,7 @@ func show_off(mesh: Mesh, mesh_scale: float = 1.0, material: Material = null) ->
 	if _hold == null:
 		_hold = Node3D.new()
 		_hold.name = "ShowHold"
-		visual.add_child(_hold)
+		_upper_root().add_child(_hold)
 		_hold.position = SHOW_HOLD_POSITION
 		var mi: MeshInstance3D = MeshInstance3D.new()
 		mi.name = "Mesh"
@@ -401,6 +410,16 @@ func _process(delta: float) -> void:
 			rotation.x = 0.0
 
 
+## 허리 위 (없으면 Visual — 옛 리그).
+func _upper_root() -> Node3D:
+	return upper if upper != null else visual
+
+
+## 목 위 (없으면 Visual — 옛 리그).
+func _head_root() -> Node3D:
+	return head if head != null else visual
+
+
 ## 겉모습과 상관없는 부분: 눈, 도구, 팔다리 메시 자리.
 func _build_static_parts() -> void:
 	if visual == null:
@@ -410,14 +429,14 @@ func _build_static_parts() -> void:
 	_eyes.mesh = CharacterModel.eyes(look)
 	_eyes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_eyes.material_override = clay_material
-	visual.add_child(_eyes)
+	_head_root().add_child(_eyes)
 	_eyes.position = CharacterModel.HEAD_CENTER
 	_expression = MeshInstance3D.new()
 	_expression.name = "Expression"
 	_expression.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_expression.material_override = clay_material
 	_expression.visible = false
-	visual.add_child(_expression)
+	_head_root().add_child(_expression)
 	_add_tool_mesh(rod, CharacterModel.rod())
 	_add_tool_mesh(axe, CharacterModel.axe())
 	for limb: Node3D in [arm_left, arm_right, leg_left, leg_right]:
@@ -465,6 +484,12 @@ func _apply_look() -> void:
 	if body_mesh != null:
 		body_mesh.mesh = CharacterModel.body(worn)
 		body_mesh.material_override = clay_material
+	if hips_mesh != null:
+		hips_mesh.mesh = CharacterModel.hips(worn)
+		hips_mesh.material_override = clay_material
+	if head_mesh != null:
+		head_mesh.mesh = CharacterModel.head(worn)
+		head_mesh.material_override = clay_material
 	var arm_mesh: ArrayMesh = CharacterModel.arm(worn)
 	var leg_mesh: ArrayMesh = CharacterModel.leg(worn)
 	for mi: MeshInstance3D in _limbs:
@@ -486,7 +511,8 @@ func _set_outfit_part(part: String, item_id: String) -> void:
 		mi = MeshInstance3D.new()
 		mi.name = "Outfit_%s" % part
 		mi.material_override = clay_material
-		visual.add_child(mi)
+		# 모자는 머리(목 관절)를, 상의는 몸통(허리 관절)을 따라 움직인다.
+		(_head_root() if part == "hat" else _upper_root()).add_child(mi)
 		_outfit[part] = mi
 	var info: ItemInfo = GameData.item(item_id) if not item_id.is_empty() else null
 	mi.visible = info != null and not info.model.is_empty()

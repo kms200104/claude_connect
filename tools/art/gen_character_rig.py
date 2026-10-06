@@ -2,8 +2,14 @@
 """game/player/character_rig.tscn 을 만든다 (애니메이션 키 표를 한 곳에서 관리). 사용: python3 tools/art/gen_character_rig.py"""
 from pathlib import Path
 OUT=str(Path(__file__).resolve().parents[2] / 'game/player/character_rig.tscn')
-TRACKS=['Visual:position','Visual:rotation','Visual:scale','Visual/ArmL:rotation','Visual/ArmR:rotation',
-        'Visual/LegL:rotation','Visual/LegR:rotation','Visual/ArmR/Rod:rotation','Visual/ArmR/Axe:rotation']
+# v0.13: 허리(Waist)와 목(Neck) 관절. 팔·도구는 허리 위(Upper)에, 머리는 목 위(Head)에 달린다.
+UP='Visual/Waist/Upper'
+TRACKS=['Visual:position','Visual:rotation','Visual:scale',UP+'/ArmL:rotation',UP+'/ArmR:rotation',
+        'Visual/LegL:rotation','Visual/LegR:rotation',UP+'/ArmR/Rod:rotation',UP+'/ArmR/Axe:rotation']
+# 허리 · 목 트랙은 동작 표를 다 만든 뒤 split_spine() 이 Visual:rotation 에서 나눠 만든다.
+SPINE_TRACKS=['Visual/Waist:rotation',UP+'/Neck:rotation']
+WAIST_Y=-0.34  # 허리 관절 높이 (반바지 허리 · 스웨터 밑단이 겹치는 곳)
+NECK_Y=0.06    # 목 관절 높이 (목폴라 위, 머리 밑)
 AL=-0.16; AR=0.16  # 팔 벌림(z)
 ROD=-0.6; AXE=-0.5
 def V(x,y,z): return (x,y,z)
@@ -248,6 +254,41 @@ anim('rummage', 1.6, [
  (1.3, RM(-0.01,-0.14,-0.18,-0.02,0.0,(0.12,0,-0.08),(0.38,0,-0.12))),
  (1.6, RM(-0.015,-0.2,-0.28,0.06,-0.01,(0.12,0,-0.05),(0.12,0,0.02)))], loop=True)
 
+# ---- 허리 · 목 나누기 (v0.13) ----
+# 예전에는 몸 전체(Visual)가 한 덩어리로 기울어 뻣뻣해 보였다. 몸통 회전을 골반(Visual) · 허리 · 목에 나눠 맡긴다:
+# 숙이기·젖히기(x) 는 골반 45% · 허리 35% · 목 20%, 비틀기(y) 는 40 · 40 · 20, 갸웃(z) 은 50 · 30 · 20.
+# 목은 허리보다 조금 늦게(따라가기), 허리는 골반보다 조금 늦게 움직여 끝동작이 부드럽게 흐른다.
+SHARE=((0.45,0.4,0.5),(0.35,0.4,0.3),(0.2,0.2,0.2))
+SPINE_LAG=(0.02,0.055)  # 허리 · 목이 골반보다 늦는 시간 (반복 동작은 늦추지 않는다)
+# 걷기·달리기: 팔과 반대로 허리를 비틀고(어깨가 앞으로 나온 팔 쪽으로) 목은 반대로 돌려 시선을 앞에 둔다.
+TWIST={'walk':0.07,'run':0.11}
+def split_spine():
+    for name,a in anims.items():
+        R=a['keys'][1]
+        a['keys'][1]=[V(r[0]*SHARE[0][0],r[1]*SHARE[0][1],r[2]*SHARE[0][2]) for r in R]
+        waist=[V(r[0]*SHARE[1][0],r[1]*SHARE[1][1],r[2]*SHARE[1][2]) for r in R]
+        neck=[V(r[0]*SHARE[2][0],r[1]*SHARE[2][1],r[2]*SHARE[2][2]) for r in R]
+        if name in TWIST:
+            # ArmR 가 앞으로(+x) 나온 만큼 오른쪽 어깨가 앞으로 (+y).
+            arm=a['keys'][4]
+            m=max(abs(k[0]) for k in arm) or 1.0
+            waist=[V(w[0],w[1]+TWIST[name]*k[0]/m,w[2]) for w,k in zip(waist,arm)]
+            neck=[V(n[0],n[1]-0.6*TWIST[name]*k[0]/m,n[2]) for n,k in zip(neck,arm)]
+        if name=='idle':
+            # 숨 쉴 때 고개가 살짝 끄덕인다.
+            neck=[V(n[0]+d,n[1],n[2]) for n,d in zip(neck,[0,0.03,0.0,0.03,0])]
+        a['keys'].append(waist)
+        a['keys'].append(neck)
+        if 'ttimes' in a:
+            n=len(a['times'])
+            for lag in SPINE_LAG:
+                ts=[]
+                for j,t in enumerate(a['times']):
+                    ts.append(t if (j==0 or j==n-1 or a['loop']) else round(min(t+lag,a['length']-0.012*(n-1-j)),4))
+                a['ttimes'].append(ts)
+split_spine()
+TRACKS=TRACKS+SPINE_TRACKS
+
 def fmt(v):
     def f(x):
         s=('%.4f'%x).rstrip('0').rstrip('.')
@@ -418,38 +459,60 @@ nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
 node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"ChopShot", 0, &"RummageBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
-[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
+[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
 tree = NodePath("AnimationTree")
 visual = NodePath("Visual")
-body_mesh = NodePath("Visual/Body")
-arm_left = NodePath("Visual/ArmL")
-arm_right = NodePath("Visual/ArmR")
+body_mesh = NodePath("Visual/Waist/Upper/Body")
+hips_mesh = NodePath("Visual/Hips")
+head_mesh = NodePath("Visual/Waist/Upper/Neck/Head/HeadMesh")
+waist = NodePath("Visual/Waist")
+upper = NodePath("Visual/Waist/Upper")
+neck = NodePath("Visual/Waist/Upper/Neck")
+head = NodePath("Visual/Waist/Upper/Neck/Head")
+arm_left = NodePath("Visual/Waist/Upper/ArmL")
+arm_right = NodePath("Visual/Waist/Upper/ArmR")
 leg_left = NodePath("Visual/LegL")
 leg_right = NodePath("Visual/LegR")
-rod = NodePath("Visual/ArmR/Rod")
-axe = NodePath("Visual/ArmR/Axe")
-tool = NodePath("Visual/ArmR/Tool")
+rod = NodePath("Visual/Waist/Upper/ArmR/Rod")
+axe = NodePath("Visual/Waist/Upper/ArmR/Axe")
+tool = NodePath("Visual/Waist/Upper/ArmR/Tool")
 clay_material = ExtResource("2_clay")
 
 [node name="Visual" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="Visual"]
+[node name="Hips" type="MeshInstance3D" parent="Visual"]
 
-[node name="ArmL" type="Node3D" parent="Visual"]
+[node name="Waist" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(WAIST_Y) + ''', 0)
+
+[node name="Upper" type="Node3D" parent="Visual/Waist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(-WAIST_Y) + ''', 0)
+
+[node name="Body" type="MeshInstance3D" parent="Visual/Waist/Upper"]
+
+[node name="Neck" type="Node3D" parent="Visual/Waist/Upper"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(NECK_Y) + ''', 0)
+
+[node name="Head" type="Node3D" parent="Visual/Waist/Upper/Neck"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(-NECK_Y) + ''', 0)
+
+[node name="HeadMesh" type="MeshInstance3D" parent="Visual/Waist/Upper/Neck/Head"]
+
+[node name="ArmL" type="Node3D" parent="Visual/Waist/Upper"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.23, -0.05, 0)
 
-[node name="ArmR" type="Node3D" parent="Visual"]
+[node name="ArmR" type="Node3D" parent="Visual/Waist/Upper"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.23, -0.05, 0)
 
-[node name="Rod" type="Node3D" parent="Visual/ArmR"]
+[node name="Rod" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
-[node name="Axe" type="Node3D" parent="Visual/ArmR"]
+[node name="Axe" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
-[node name="Tool" type="Node3D" parent="Visual/ArmR"]
+[node name="Tool" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
@@ -495,6 +558,7 @@ parameters/CookSwitch/current_state = "cook_chop"
 parameters/CookSwitch/transition_request = ""
 parameters/CookSwitch/current_index = 0
 parameters/SitBlend/blend_amount = 0.0
+parameters/RummageBlend/blend_amount = 0.0
 ''')
 open(OUT,'w').write('\n'.join(out))
 print('ok')

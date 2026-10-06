@@ -230,9 +230,17 @@ export function loadGameData(dataDir, cfg) {
 }
 
 /** 점과 낚시터 사각형 사이의 거리(안쪽이면 0). */
+/** 바닷가에 설 수 있는 섬 모양 값의 끝 (젖은 모래까지). 이보다 바깥이면 바다 건너 실내다. */
+export const SEA_STAND_MAX = 1.06;
+
 export function distanceToSpot(spot, x, z) {
   // 바다: 해안선까지의 거리 (바다 쪽이면 0). 섬 모양은 로드할 때 붙인다 (spot.island).
-  if (spot.kind === 'sea') return spot.island ? Math.max(0, (1 - islandShape(spot.island, x, z)) * spot.island.half) : Infinity;
+  // 해안선 너머 멀리(섬 모양 1.06 넘게) 서 있다면 물 위가 아니라 바다 건너 실내(상점 · 아파트 집 안)다 → 바다 낚시 아님.
+  if (spot.kind === 'sea') {
+    if (!spot.island) return Infinity;
+    const shape = islandShape(spot.island, x, z);
+    return shape > SEA_STAND_MAX ? Infinity : Math.max(0, (1 - shape) * spot.island.half);
+  }
   const dx = Math.max(Math.abs(x - spot.x) - spot.half_x, 0);
   const dz = Math.max(Math.abs(z - spot.z) - spot.half_z, 0);
   return Math.hypot(dx, dz);
