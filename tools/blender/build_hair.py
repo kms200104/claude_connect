@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """캐릭터 머리카락 모형을 Blender(bpy)로 만든다 → assets/models/hair/<스타일>.glb (+ _mid · _low).
 
-절차 머리(CharacterModel._add_hair)는 얇은 리본 가닥과 갈라진 끝 때문에 떡진 것처럼 보였다. 여기서는
-  - 머리 둘레의 껍질과 앞머리·옆머리·꼬리를 큼직한 덩어리 몇 개로 빚고(두께를 주고, 모서리는 둥글게),
-  - 다발 끝은 둥글게 모으고(갈라지지 않게), 덩어리 사이에만 얕은 골을 두며,
-  - Cycles AO 를 머리(두상) 모형을 함께 둔 채 구워 머리에 닿는 안쪽이 자연스럽게 어두워지게 한다.
+절차 머리(CharacterModel._add_hair)는 얇은 리본 가닥과 갈라진 끝 때문에 떡진 것처럼 보였고, 큰 덩어리 몇 개로 빚으면
+헬멧처럼 보였다. 여기서는
+  - 머리카락 100올쯤이 모인 가는 다발(너비 4~7cm) 수십 개를 두 겹으로 엇갈려 얹고(얇은 속껍질 위),
+  - 다발마다 끝이 따로 가늘어져 한 점으로 모이며(갈라지지 않게), 길이·휨이 조금씩 달라 결이 살아 있고,
+  - Cycles AO 를 머리(두상) 모형과 함께 구워 다발 사이·머리에 닿는 안쪽이 어두워져 다발이 한 줄씩 보인다.
 색은 게임이 입힌다 (머리 색 10가지): 정점 색 R = 그늘(1 밝음 ~ 0 어두움), G = 윤기 띠(천사링) 세기, B·A = 1.
 리본·머리끈은 색이 따로라 게임(절차)에서 그린다.
 
@@ -30,7 +31,7 @@ HAIR_CENTER = Vector((0.0, 0.43, 0.02))
 HAIR_RADII = Vector((0.44, 0.39, 0.36))
 
 # 삼각형 예산 (캐릭터 예산 8,000 / 12,000 / 24,000 안에서 머리카락 몫, 캐릭터 촘촘함 0 / 1 / 2 단계).
-BUDGETS = {'_low': 1800, '_mid': 3300, '': 6500}
+BUDGETS = {'_low': 2600, '_mid': 3600, '': 8000}
 
 
 def rad(d):
@@ -139,72 +140,221 @@ def tube(bm, path, radius, rings=12, sides=10):
             bm.faces.new(f)
 
 
+# ---- 다발 ----
+#
+# 한 다발 = 머리카락 100올쯤이 모인 가늘고 납작한 묶음 (너비 4~7cm, 두께 1.5~2.5cm). 단면은 렌즈 모양(가운데 두껍고
+# 가장자리 얇음), 뿌리는 껍질 속에 묻히고, 끝으로 갈수록 가늘어져 한 점으로 모인다(갈라지지 않는다).
+# 스타일마다 다발 수십 개를 두 겹으로 엇갈려 얹어, 다발 사이로 그늘이 지며 결이 보인다.
+# 화질(q = 0 절약 · 1 중간 · 2 고화질)에 따라 다발 수는 같고 마디·둘레 점 수만 줄인다 (가는 다발을 줄이기(decimate)로
+# 깎으면 모양이 깨진다).
+
+SEG = {0: (4, 3), 1: (6, 3), 2: (8, 4)}  # 화질별 (마디 수, 단면 점 수)
+
+
+def dir_of(a, e):
+    ce = math.cos(rad(e))
+    return Vector((ce * math.sin(rad(a)), math.sin(rad(e)), -ce * math.cos(rad(a))))
+
+
+def ae_of(d):
+    d = d.normalized()
+    return math.degrees(math.atan2(d.x, -d.z)), math.degrees(math.asin(max(-1.0, min(1.0, d.y))))
+
+
+def slerp(d0, d1, t):
+    d0, d1 = d0.normalized(), d1.normalized()
+    dot = max(-1.0, min(1.0, d0.dot(d1)))
+    om = math.acos(dot)
+    if om < 1e-4:
+        return d0
+    return (d0 * math.sin((1 - t) * om) + d1 * math.sin(t * om)) / math.sin(om)
+
+
+def strand(bm, path, outward, width, thick, q, taper=0.5, flat=0.35, end=0.35):
+    """path(v) → 점 (v: 뿌리 0 ~ 끝 1), outward(v) → 바깥 방향. 렌즈 단면 튜브, 뿌리는 막는다.
+    end = 끝 너비 비율: 끝은 바늘처럼 뾰족하지 않고 이만큼 남긴 채 둥글게 막는다 (자른 단발은 크게, 묶은 꼬리 끝은 작게)."""
+    rows, sides = SEG[q]
+    rings = []
+    for i in range(rows + 1):
+        v = i / rows
+        p = path(v)
+        t = (path(min(1.0, v + 0.02)) - path(max(0.0, v - 0.02))).normalized()
+        n = outward(v)
+        side = t.cross(n)
+        if side.length < 1e-5:
+            side = t.orthogonal()
+        side.normalize()
+        up = side.cross(t).normalized()
+        if up.dot(n) < 0.0:
+            up = -up
+        k = (0.8 + 0.2 * smoothstep(0.0, 0.15, v)) * (1.0 - (1.0 - end) * smoothstep(taper, 1.0, v))
+        w, th = width * k, thick * k
+        ring = []
+        for j in range(sides):
+            ang = math.tau * j / sides + (math.pi / 2.0 if sides == 3 else 0.0)
+            c, sn = math.cos(ang), math.sin(ang)
+            # 위쪽(바깥)은 볼록, 아래쪽(머리 쪽)은 납작.
+            lift = th * (0.5 * sn if sn > 0 else flat * sn)
+            ring.append(bm.verts.new(p + side * (0.5 * w * c) + up * lift))
+        rings.append(ring)
+    for i in range(rows):
+        a, b = rings[i], rings[i + 1]
+        for j in range(sides):
+            j2 = (j + 1) % sides
+            bm.faces.new((a[j], a[j2], b[j2], b[j]))
+    t_end = (path(1.0) - path(0.97)).normalized()
+    tip = bm.verts.new(path(1.0) + t_end * (thick * end * 0.6))
+    for j in range(sides):
+        bm.faces.new((rings[-1][j], rings[-1][(j + 1) % sides], tip))
+    root = bm.verts.new(path(0.0) - outward(0.0) * thick)
+    for j in range(sides):
+        bm.faces.new((rings[0][(j + 1) % sides], rings[0][j], root))
+
+
+def lock(bm, q, root, tip, width=0.06, thick=0.02, rf=1.0, bend=0.0, taper=0.5, mid=None, end=0.35):
+    """머리 겉면을 따라 흐르는 다발: root·tip = (a, e). mid = 거쳐 가는 (a, e) (뒤로 빗어 넘긴 머리처럼 휘게).
+    bend = 옆으로 휘는 정도(도). 뿌리는 껍질 속에 조금 묻힌다."""
+    d0, d1 = dir_of(*root), dir_of(*tip)
+    dm = dir_of(*mid) if mid else None
+
+    def ae(v):
+        if dm is not None:
+            d = slerp(d0, dm, v * 2.0) if v < 0.5 else slerp(dm, d1, v * 2.0 - 1.0)
+        else:
+            d = slerp(d0, d1, v)
+        a, e = ae_of(d)
+        if e < -5.0 or tip[1] < -5.0:
+            # 적도 아래(늘어진 머리)는 높이를 직선으로 이어 surface 의 늘어진 모양을 따른다.
+            e = root[1] + (tip[1] - root[1]) * v if (mid is None) else e
+        return a + bend * math.sin(math.pi * v), e
+
+    def path(v):
+        a, e = ae(v)
+        return surface(a, e, rf * (0.985 + 0.015 * smoothstep(0.0, 0.2, v)))
+
+    def outward(v):
+        a, e = ae(v)
+        p = surface(a, e, 1.0)
+        n = p - HAIR_CENTER
+        if e < 0.0:
+            n.y *= 0.3
+        return n.normalized()
+    strand(bm, path, outward, width, thick, q, taper, end=end)
+
+
+def under_shell(bm, rim, rf=0.975, rows=8, cols=28):
+    """다발 사이로 머리가 비쳐 보이지 않게 까는 얇은 속껍질 (그늘이 지는 머리색). 따로 만들어 바깥을 보게 맞추고
+    두께를 줘 닫는다 (한 겹이면 면이 뒤집혀 앞에서 안 보일 수 있다)."""
+    sb = bmesh.new()
+    shell(sb, rim, rows=rows, cols=cols, rf=rf)
+    bmesh.ops.recalc_face_normals(sb, faces=sb.faces)
+    sb.faces.ensure_lookup_table()
+    f = sb.faces[len(sb.faces) // 2]
+    if f.normal.dot(f.calc_center_median() - HAIR_CENTER) < 0.0:
+        bmesh.ops.reverse_faces(sb, faces=sb.faces)
+    bmesh.ops.solidify(sb, geom=sb.faces[:], thickness=0.012)
+    me = bpy.data.meshes.new('shell')
+    sb.to_mesh(me)
+    sb.free()
+    bm.from_mesh(me)
+    bpy.data.meshes.remove(me)
+
+
 # ---- 스타일 ----
 
-def lobe(a, count, phase=0.0):
-    """둘레를 count 개 덩어리로: 덩어리 가운데 1, 덩어리 사이(골) 0. 골은 좁고 덩어리는 넓다."""
-    g = abs(math.cos(rad(a) * count / 2.0 + phase))
-    return 1.0 - (1.0 - g) ** 3
+def style_bob(bm, q, rnd):
+    """청록 히메컷(단발): 일자 앞머리, 턱선에서 자른 옆·뒷머리 (리본은 게임이 단다)."""
+    def rim(a):
+        return 50.0 - (50.0 + 50.0) * smoothstep(52.0, 70.0, abs(a))
+    under_shell(bm, rim)
+    # 옆·뒷머리: 정수리에서 턱선까지 두 겹 (바깥 겹은 반 칸 어긋나게).
+    for layer, (step, off, rf, w) in enumerate(((9.0, 0.0, 1.0, 0.105), (9.0, 4.5, 1.025, 0.095))):
+        a = 58.0 + off
+        while a <= 302.0:
+            aa = a if a <= 180.0 else a - 360.0
+            tip_e = -55.0 + rnd.uniform(-3.5, 3.5) + (2.0 if layer else 0.0)
+            lock(bm, q, (aa * 0.9, 76.0 + rnd.uniform(-4, 4)), (aa + rnd.uniform(-2.5, 2.5), tip_e),
+                 width=w, thick=0.014, rf=rf, bend=rnd.uniform(-2.5, 2.5), taper=0.72, end=0.5)
+            a += step
+    # 얼굴 옆 히메 다발 (볼 옆으로 곧게).
+    for side in (-1.0, 1.0):
+        for k, a in enumerate((60.0, 67.0, 74.0)):
+            lock(bm, q, (side * (a - 8.0), 60.0), (side * a, -48.0 + k * 2.0 + rnd.uniform(-2, 2)),
+                 width=0.075, thick=0.014, rf=1.045, bend=side * 2.0, taper=0.72, end=0.5)
+    # 일자 앞머리: 정수리 앞에서 이마로 모여 내려와 눈썹 위에서 끝난다. 두 겹.
+    for layer, (step, off, rf) in enumerate(((8.0, 0.0, 1.04), (8.0, 4.0, 1.055))):
+        a = -60.0 + off
+        while a <= 60.0:
+            lock(bm, q, (a * 0.35, 80.0 + rnd.uniform(-3, 3)), (a + rnd.uniform(-1.5, 1.5), 12.0 + rnd.uniform(-2.0, 2.5) + layer * 1.5),
+                 width=0.09 if layer == 0 else 0.08, thick=0.014, rf=rf, bend=rnd.uniform(-2, 2), taper=0.8, end=0.65)
+            a += step
 
 
-def groove(count, depth, start=0.12, phase=0.0):
-    """덩어리 사이의 좁고 깊은 골 (정수리에서 시작해 아래로 갈수록 뚜렷)."""
-    return lambda a, v: 1.0 + depth * (lobe(a, count, phase) - 1.0) * smoothstep(start, 0.85, v)
-
-
-def notches(count, height, phase=0.0, where=lambda a: 1.0):
-    """골 자리의 가장자리를 height 도 만큼 올린다 → 다발 끝이 둥글게 나뉜다."""
-    return lambda a: height * (1.0 - lobe(a, count, phase)) * where(a)
-
-
-def style_bob(bm):
-    """청록 히메컷(단발): 일자 앞머리, 턱선에서 똑 자른 옆·뒷머리 (리본은 게임이 단다)."""
+def style_ponytail(bm, q, rnd):
+    """검정 포니테일: 머리 전체를 뒤통수 위(묶은 자리)로 빗어 넘기고, 옆으로 넘긴 앞머리, 휘어 내린 꼬리."""
     def rim(a):
         f = abs(a)
-        # 앞(얼굴)은 이마 위에서 끝나고(앞머리가 덮는다), 귀 앞부터 턱선까지 뚝 떨어진다.
-        return 38.0 - (38.0 + 56.0) * smoothstep(52.0, 70.0, f)
-    back = lambda a: smoothstep(60.0, 80.0, abs(a))
-    shell(bm, rim, bump=groove(14, 0.07), notch=notches(14, 7.0, where=back))
-    # 일자 앞머리: 이마를 덮고 눈썹 위에서 똑 자른다. 아래 가장자리는 아주 얕은 물결 (덩어리 다섯).
-    def bangs_point(v, s):
-        a = (s - 0.5) * 124.0
-        # 다섯 덩어리: 덩어리 사이가 살짝 파이고, 아래 끝은 덩어리마다 둥글게.
-        k = lobe(a, 7.2, math.pi / 2.0)
-        bottom = 12.0 + 5.0 * (1.0 - k)
-        e = 58.0 - (58.0 - bottom) * v
-        return surface(a, e, (1.045 + 0.014 * math.sin(v * math.pi)) * (1.0 - 0.03 * (1.0 - k) * v))
-    grid(bm, 8, 30, bangs_point)
-    # 얼굴 옆 히메 다발: 볼 옆으로 곧게 내려와 턱선에서 자른다.
-    for side in (-1.0, 1.0):
-        panel(bm, [(66.0 * side, 34.0), (64.0 * side, 0.0), (62.0 * side, -50.0)], lambda v: 16.0 - 2.0 * v, rows=9, cols=4, rf=1.04, tip=0.12, bow=0.03)
-
-
-def style_ponytail(bm):
-    """검정 포니테일: 매끈하게 빗어 넘긴 머리, 옆으로 넘긴 앞머리, 뒤통수 위에서 묶어 휘어 내린 꼬리."""
-    def rim(a):
+        front = 22.0 - 4.0 * math.cos(rad(a) * 2.0)
+        e = front + (-12.0 - front) * smoothstep(48.0, 78.0, f)
+        return e + (-36.0 - e) * smoothstep(105.0, 160.0, f)
+    under_shell(bm, rim)
+    tie = (180.0, 44.0)
+    # 이마선·옆·목덜미에서 묶은 자리로 빗어 넘긴 다발 (위쪽은 정수리를 넘어서 간다).
+    a = -172.0
+    while a <= 172.0:
+        e0 = rim(a) + 3.0
         f = abs(a)
-        front = 36.0 - 6.0 * math.cos(rad(a) * 2.0)  # 이마 선이 살짝 둥글게
-        side = -12.0  # 귀 위
-        back = -36.0  # 목덜미
-        e = front + (side - front) * smoothstep(48.0, 78.0, f)
-        return e + (back - e) * smoothstep(105.0, 160.0, f)
-    # 뒤로 빗어 넘긴 결: 얕은 골이 정수리에서 뒤로 흐른다 (묶은 머리라 다발 끝은 나뉘지 않는다).
-    shell(bm, rim, rf=0.99, bump=groove(16, 0.035, start=0.05))
-    # 옆으로 넘긴 앞머리: 오른쪽 위 가르마에서 왼쪽 눈썹 위로 크게 쓸어 넘긴 덩어리 하나 + 작은 덩어리 하나.
-    panel(bm, [(40.0, 74.0), (14.0, 56.0), (-20.0, 36.0), (-50.0, 20.0), (-64.0, 8.0)], lambda v: 40.0 - 16.0 * v, rows=14, cols=8, rf=1.045, tip=0.3, bow=0.07)
-    panel(bm, [(50.0, 66.0), (46.0, 44.0), (42.0, 22.0)], lambda v: 20.0, rows=8, cols=5, rf=1.04, tip=0.45, bow=0.05)
-    # 귀 앞으로 내려온 짧은 옆머리.
+        if f < 100.0:
+            mid = (a * 0.55, 72.0 - 0.15 * f)  # 정수리 쪽으로 올라갔다가 뒤로
+        else:
+            mid = None
+        tip = (180.0 + rnd.uniform(-8.0, 8.0) - (360.0 if a < 0 and f > 150 else 0.0), tie[1] + rnd.uniform(-4.0, 3.0))
+        lock(bm, q, (a, e0), tip, width=0.095, thick=0.015, rf=1.0 + 0.02 * (int(a / 8.0) % 2), mid=mid,
+             bend=rnd.uniform(-2.0, 2.0), taper=0.88, end=0.5)
+        a += 8.0
+    # 정수리 위 겹: 앞쪽에서 뒤로.
+    for a in (-48.0, -32.0, -16.0, 0.0, 16.0, 32.0, 48.0):
+        lock(bm, q, (a, 50.0), (180.0 + a * 0.12, tie[1] + 2.0), width=0.09, thick=0.015, rf=1.035, mid=(a * 0.4, 86.0), taper=0.9, end=0.5)
+    # 옆으로 넘긴 앞머리: 오른쪽 가르마에서 왼쪽 눈썹 위로 쓸어 넘긴 다발 여러 개 (부채꼴).
+    for k in range(8):
+        t = k / 7.0
+        lock(bm, q, (34.0 + 6.0 * t, 74.0 - 4.0 * t), (-64.0 + 26.0 * t, 4.0 + 14.0 * t), width=0.085, thick=0.016,
+             rf=1.05 + 0.008 * (k % 2), mid=(-8.0 + 18.0 * t, 46.0 + 4.0 * t), taper=0.65, end=0.4)
+    # 귀 앞 짧은 옆머리.
     for side in (-1.0, 1.0):
-        panel(bm, [(74.0 * side, 26.0), (76.0 * side, 4.0), (77.0 * side, -18.0)], lambda v: 11.0, rows=6, cols=3, rf=1.025, tip=0.4, bow=0.02)
-    # 꼬리: 게임 절차 꼬리와 같은 길 (CharacterModel._add_hair "ponytail").
-    def path(u):
-        return HAIR_CENTER + Vector((0.1 + 0.28 * math.sin(u * math.pi * 0.6) - 0.1, 0.28 + 0.16 * u - 0.72 * u * u, 0.3 + 0.08 * math.sin(u * math.pi)))
+        for k in range(3):
+            lock(bm, q, (side * (66.0 + k * 5.0), 34.0), (side * (72.0 + k * 5.0), -16.0 + rnd.uniform(-3, 3)),
+                 width=0.045, thick=0.018, rf=1.03, taper=0.6, end=0.35)
+    # 꼬리: 묶은 자리에서 휘어 내려오는 다발 10개가 꼬리 길을 따라 비틀려 감기고, 끝에서 하나로 모인다.
+    def tail(u):
+        return HAIR_CENTER + Vector((0.28 * math.sin(u * math.pi * 0.6), 0.28 + 0.16 * u - 0.72 * u * u, 0.3 + 0.08 * math.sin(u * math.pi)))
 
-    def radius(u):
-        body = 0.12 * (0.7 + 0.3 * min(u * 4.0, 1.0)) * (1.0 - 0.35 * smoothstep(0.35, 1.0, u))
-        tip = math.sqrt(max(0.0, 1.0 - smoothstep(0.82, 1.0, u) ** 2))
-        return max(0.004, body * tip)
-    tube(bm, path, radius, rings=14, sides=10)
+    def tail_radius(u):
+        return 0.075 * (0.75 + 0.25 * min(u * 4.0, 1.0)) * (1.0 - 0.45 * smoothstep(0.35, 1.0, u))
+
+    def frame(u):
+        t = (tail(min(1.0, u + 0.01)) - tail(max(0.0, u - 0.01))).normalized()
+        s1 = t.cross(Vector((0.0, 0.0, 1.0)))
+        if s1.length < 1e-4:
+            s1 = t.cross(Vector((1.0, 0.0, 0.0)))
+        s1.normalize()
+        return t, s1, s1.cross(t).normalized()
+    # 속 심 (다발 사이로 빈틈이 안 보이게).
+    strand(bm, tail, lambda v: frame(v)[2], 0.1, 0.1, q, taper=0.55, flat=0.5)
+    for k in range(10):
+        ang0 = math.tau * k / 10.0
+
+        def path(v, ang0=ang0):
+            _, s1, s2 = frame(v)
+            ang = ang0 + 0.9 * v
+            r = tail_radius(v) * (1.0 - 0.85 * smoothstep(0.7, 1.0, v))
+            return tail(v) + (s1 * math.cos(ang) + s2 * math.sin(ang)) * r
+
+        def out(v, ang0=ang0):
+            _, s1, s2 = frame(v)
+            ang = ang0 + 0.9 * v
+            return (s1 * math.cos(ang) + s2 * math.sin(ang)).normalized()
+        strand(bm, path, out, 0.06, 0.024, q, taper=0.72, end=0.15)
 
 
 STYLES = {'bob': style_bob, 'ponytail': style_ponytail}
@@ -244,27 +394,22 @@ def apply(ob, mod):
     bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
+QUALITY = {'_low': 0, '_mid': 1, '': 2}
+
+
 def build(style, suffix):
     budget = BUDGETS[suffix]
+    q = QUALITY[suffix]
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    import random
     bm = bmesh.new()
-    STYLES[style](bm)
+    STYLES[style](bm, q, random.Random(hash(style) & 0xFFFF))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     me = bpy.data.meshes.new(style)
     bm.to_mesh(me)
     bm.free()
     ob = bpy.data.objects.new(style, me)
     bpy.context.scene.collection.objects.link(ob)
-    # 두께 (안쪽으로) → 둥글게 (가장자리가 동그랗게 말린다).
-    sol = ob.modifiers.new('thick', 'SOLIDIFY')
-    sol.thickness = 0.03
-    sol.offset = -1.0
-    sol.use_even_offset = True
-    apply(ob, sol)
-    sub = ob.modifiers.new('smooth', 'SUBSURF')
-    sub.levels = 2 if budget > 3000 else 1
-    sub.render_levels = sub.levels
-    apply(ob, sub)
     tris = tri_count(ob)
     if tris > budget:
         dec = ob.modifiers.new('fit', 'DECIMATE')
