@@ -3,7 +3,7 @@ extends Button
 ## 휴대폰 홈 화면의 앱 아이콘 (v0.14): 둥근 네모 바탕(위가 밝은 광택) 위에 앱마다 그린 흰 그림.
 ## 누르면 톡 눌렸다가 돌아온다. 같은 그림 그리기로 아래 막대의 뒤로 · 홈 · 닫기 단추도 그린다 (kind = "nav_*").
 
-## stocks · homes · bank · assets · talk · jobs · delivery · nav_back · nav_home · nav_close
+## stocks · homes · bank · assets · talk · jobs · delivery · settings · nav_back · nav_home · nav_close
 var kind: String = ""
 var tint: Color = Color.WHITE
 var _press: Tween = null
@@ -123,6 +123,17 @@ func _glyph(o: Vector2, s: float, ink: Color) -> void:
 			draw_arc(p.call(0.5, 0.36), s * 0.1, PI, TAU, 12, ink, w * 1.2, true)
 			draw_rect(Rect2(p.call(0.18, 0.52), Vector2(0.64, 0.05) * s), tint)
 			draw_rect(Rect2(p.call(0.45, 0.49), Vector2(0.1, 0.1) * s), Color(ink, 0.9))
+		"settings":
+			# 톱니바퀴: 이 여덟 개 + 가운데 구멍.
+			var c: Vector2 = p.call(0.5, 0.5)
+			var gear: PackedVector2Array = PackedVector2Array()
+			var teeth: int = 8
+			for i: int in teeth * 4:
+				var a: float = TAU * (float(i) + 0.5) / float(teeth * 4)
+				var r: float = 0.33 if (i % 4) < 2 else 0.25
+				gear.append(c + Vector2(cos(a), sin(a)) * s * r)
+			draw_colored_polygon(gear, ink)
+			draw_circle(c, s * 0.11, tint)
 		"delivery":
 			# 상자 + 달리는 선.
 			draw_colored_polygon(PackedVector2Array([p.call(0.38, 0.36), p.call(0.82, 0.36), p.call(0.82, 0.76), p.call(0.38, 0.76)]), ink)

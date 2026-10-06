@@ -1,5 +1,5 @@
 extends Node
-## 화면 방향 (v0.13.4): 휴대폰을 가로로 돌리면 가로 화면으로 논다 (project: handheld orientation = sensor).
+## 화면 방향 (v0.13.4, 고정하기 v0.14.2): 휴대폰을 가로로 돌리면 가로 화면으로 논다 (project: handheld orientation = sensor).
 ## UI 는 세로 기준(1080 × 1920)으로 만들었다. 가로일 때는 논리 높이를 LANDSCAPE_HEIGHT 로 두고 옆으로 넓혀서
 ## (stretch aspect = expand) 글자 크기가 세로일 때와 비슷하게 보이게 한다. 창들은 changed 를 듣고 자리를 다시 잡는다.
 
@@ -11,11 +11,48 @@ const PORTRAIT_BASE: Vector2i = Vector2i(1080, 1920)
 const LANDSCAPE_HEIGHT: int = 1200
 
 var landscape: bool = false
+## 화면 방향 고정 (v0.14.2, 설정 앱): auto = 돌리는 대로 · portrait = 세로 고정 · landscape = 가로 고정.
+var orientation: String = ORIENT_AUTO
+
+const ORIENT_AUTO: String = "auto"
+const ORIENT_PORTRAIT: String = "portrait"
+const ORIENT_LANDSCAPE: String = "landscape"
+const ORIENT_NAMES: Dictionary[String, String] = {"auto": "돌리는 대로", "portrait": "세로 고정", "landscape": "가로 고정"}
+const SETTINGS_PATH: String = "user://settings.cfg"
 
 
 func _ready() -> void:
+	var cfg: ConfigFile = ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		orientation = str(cfg.get_value("screen", "orientation", ORIENT_AUTO))
+	_apply_orientation()
 	get_tree().root.size_changed.connect(_apply)
 	_apply()
+
+
+## 화면 방향 고르기: 기억해 두고 바로 적용한다.
+func set_orientation(value: String) -> void:
+	if not ORIENT_NAMES.has(value):
+		return
+	orientation = value
+	var cfg: ConfigFile = ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("screen", "orientation", orientation)
+	cfg.save(SETTINGS_PATH)
+	_apply_orientation()
+
+
+func _apply_orientation() -> void:
+	# 휴대폰에서만 (데스크톱 · 테스트 창은 그대로).
+	if not OS.has_feature("mobile"):
+		return
+	match orientation:
+		ORIENT_PORTRAIT:
+			DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_PORTRAIT)
+		ORIENT_LANDSCAPE:
+			DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+		_:
+			DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR)
 
 
 func _apply() -> void:

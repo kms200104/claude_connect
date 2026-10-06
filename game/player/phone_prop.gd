@@ -11,7 +11,7 @@ const BEZEL: Color = Color("#2A2830")
 const LENS: Color = Color("#1B1E2A")
 const METAL: Color = Color("#D5D9DE")
 ## 홈 화면 앱 아이콘 색 (PhoneWindow.APPS 와 같은 순서).
-const ICON_COLORS: Array[Color] = [Color("#E8594A"), Color("#4C8FE0"), Color("#3DAA6D"), Color("#F2B53A"), Color("#FFD84D"), Color("#9B6AD8"), Color("#F28A3C")]
+const ICON_COLORS: Array[Color] = [Color("#E8594A"), Color("#4C8FE0"), Color("#3DAA6D"), Color("#F2B53A"), Color("#FFD84D"), Color("#9B6AD8"), Color("#F28A3C"), Color("#8C97A6")]
 const SCREEN_ENERGY: float = 0.9
 
 static var _body_mesh: ArrayMesh = null
@@ -105,7 +105,7 @@ static func body_mesh() -> ArrayMesh:
 	return _body_mesh
 
 
-## 홈 화면 그림: 위 상태 막대 · 앱 아이콘 2줄(4 + 3) · 아래 홈 막대, 배경은 복숭아 → 하늘 그라데이션.
+## 홈 화면 그림: 위 상태 막대 · 앱 아이콘 2줄(4 + 4) · 아래 홈 막대, 배경은 복숭아 → 하늘 그라데이션.
 static func home_texture() -> Texture2D:
 	if _home_texture != null:
 		return _home_texture

@@ -1,7 +1,7 @@
 class_name PhoneWindow
 extends Control
 ## 휴대폰 (v0.14): 휴대폰 단추를 누르면 캐릭터가 들고 있던 물건을 넣고 휴대폰을 꺼내 들여다본다 (CharacterRig.set_phone).
-## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달)이 있고, 누르면 그 앱이
+## 화면은 진짜 휴대폰처럼 — 홈 화면에 앱 아이콘(증권 · 부동산 · 은행 · 자산 · 마을톡 · 일거리 · 배달 · 설정)이 있고, 누르면 그 앱이
 ## 아이콘 자리에서 커지며 열린다. 아래 막대의 ◁(뒤로: 앱 안의 한 단계 → 홈 → 닫기) · ○(홈) · ✕(넣기).
 ## 화면을 누를 때마다 캐릭터가 왼손으로 톡 누르고 휴대폰 든 손이 살짝 떨린다 (CharacterRig.phone_tap).
 ## 카메라는 가방 창처럼 캐릭터를 화면 아래(가로 화면은 왼쪽)에 두고 휴대폰 화면은 위(오른쪽)에 띄운다.
@@ -9,7 +9,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -20,10 +20,10 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정"]
 ## 앱 아이콘 그림 · 색 (Tab 순서, PhoneProp.ICON_COLORS 와 같은 색).
-const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery"]
-const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달"]
+const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings"]
+const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정"]
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")
 const THEIRS: Color = Color(1.0, 1.0, 1.0, 0.95)
@@ -85,6 +85,8 @@ var _draft: String = ""
 var _talk_badge: Label = null
 ## 글을 쓰는 중이었는지 (새 메시지로 화면을 다시 그려도 자판을 닫지 않는다).
 var _typing: bool = false
+## 설정 앱 내용 (v0.14.2, 닉네임 · 소리 · 화질 · 화면 방향).
+var _settings: SettingsPanel = null
 
 
 func _ready() -> void:
@@ -540,6 +542,8 @@ func close() -> void:
 		return
 	visible = false
 	_typing = false
+	if _settings != null and is_instance_valid(_settings):
+		_settings.release_focus_all()
 	_put_away()
 	Audio.play_sfx("ui_close", -6.0)
 	closed.emit()
@@ -569,7 +573,8 @@ func _process(_delta: float) -> void:
 		_refresh_home()
 	if _dirty:
 		_dirty = false
-		if not _on_home:
+		# 설정 앱은 다시 그리지 않는다 (막대를 끄는 중 · 이름을 쓰는 중일 수 있다).
+		if not _on_home and _tab != Tab.SETTINGS:
 			_rebuild()
 
 
@@ -590,6 +595,8 @@ func _rebuild() -> void:
 			_build_jobs()
 		Tab.DELIVERY:
 			_build_delivery()
+		Tab.SETTINGS:
+			_build_settings()
 		Tab.TALK:
 			_build_talk()
 			if not _thread.is_empty():
@@ -597,6 +604,18 @@ func _rebuild() -> void:
 				_scroll.set_deferred("scroll_vertical", 1 << 20)
 				return
 	_scroll.set_deferred("scroll_vertical", keep)
+
+
+# ---- 설정 (v0.14.2) ----
+
+func _build_settings() -> void:
+	_settings = SettingsPanel.new()
+	_body.add_child(_settings)
+
+
+## 설정 앱 내용 (테스트용, 열려 있을 때만).
+func settings_panel() -> SettingsPanel:
+	return _settings if visible and not _on_home and _tab == Tab.SETTINGS and is_instance_valid(_settings) else null
 
 
 # ---- 증권 ----

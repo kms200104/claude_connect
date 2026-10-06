@@ -99,6 +99,29 @@ func _run() -> void:
 	econ.phone.open_app(PhoneWindow.Tab.BANK)
 	econ.phone.go_home()
 	_check(econ.phone.is_on_home(), "홈 단추: 앱 → 홈 화면")
+	# 설정 앱 (v0.14.2): 소리 · 화질 · 닉네임
+	var settings_icon: PhoneAppIcon = econ.phone.find_child("App_settings", true, false)
+	_check(settings_icon != null, "홈 화면에 설정 앱 아이콘")
+	settings_icon.pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var sp: SettingsPanel = econ.phone.settings_panel()
+	_check(sp != null and sp.volume_slider("music") != null, "설정 앱: 닉네임 · 소리 · 화질 · 화면")
+	if sp != null:
+		var music0: float = Audio.volume("music")
+		sp.volume_slider("music").value = 40.0
+		var bus: int = AudioServer.get_bus_index("Music")
+		_check(is_equal_approx(Audio.volume("music"), 0.4) and AudioServer.get_bus_volume_db(bus) < Audio.music_volume_db - 5.0, "배경음악 40%% → 버스가 작아진다 (%.1fdB)" % AudioServer.get_bus_volume_db(bus))
+		sp.volume_slider("sfx").value = 0.0
+		_check(AudioServer.is_bus_mute(AudioServer.get_bus_index("Sfx")), "효과음 0% = 끔")
+		Audio.set_volume("music", music0)
+		Audio.set_volume("sfx", 1.0)
+		sp.name_edit().text = "휴대폰이름"
+		sp.save_name()
+		_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "") == "휴대폰이름", 3.0), "설정 앱에서 닉네임 저장")
+		sp.name_edit().text = ""
+		sp.save_name()
+	econ.phone.go_home()
 	econ.phone.open_app(PhoneWindow.Tab.STOCKS)
 	var sol0: int = Net.sol
 	var trades: Array = []
