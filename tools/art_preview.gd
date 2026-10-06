@@ -6,7 +6,7 @@ extends Node3D
 ##           faces / faces_side (눈·코·입·피부·머리 모양을 바꿔 가며 얼굴 12개, side 는 비스듬히) / hairs (머리 모양 10가지)
 ##           portraits (표정 6가지를 정면에서, 얼굴 비율 비교용)
 ##   --stats: 찍은 프레임의 그린 삼각형·드로우콜·물체 수를 함께 출력 (village 는 --at 자리에서 게임 카메라 구도: 거리 7.5m · 48° · FOV 55)
-##           hair_compare (--ids=<스타일>,<머리 색>: 머리카락 절차(왼쪽) ↔ 모형(오른쪽), 윗줄 앞 · 아랫줄 뒤)
+##           hair_compare (--ids=<스타일>,<머리 색>[,side]: 머리카락 절차(왼쪽) ↔ 모형(오른쪽), 윗줄 앞 · 아랫줄 뒤 (side 면 양옆))
 ##           grips (손에 드는 아이템 × 대기·걷기·사용 자세를 옆에서 — 쥐는 방향 확인용, --side=front 면 앞에서)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 
@@ -121,6 +121,8 @@ func _ready() -> void:
 					rig.set_held("")
 					rig.tree.active = false
 					rig.rotation.y = 0.45 if row == 0 else PI - 0.6
+					if _ids.size() > 2 and _ids[2] == "side":
+						rig.rotation.y = PI * 0.5 if row == 0 else -PI * 0.5
 			CharacterModel.hair_models = true
 			_camera(Vector3(0.0, 1.95, -4.6), Vector3(0.0, 1.95, 0.0), 42.0)
 		"portraits":

@@ -578,11 +578,17 @@ static func _append_hair_model(st: SurfaceTool, mesh: ArrayMesh, hair: Color) ->
 			st.add_vertex(verts[i])
 
 
-## 모형 머리카락에 다는 것 (색이 머리와 달라 절차로 그린다): 포니테일 머리끈. (모형 단발은 참고 그림처럼 리본 없이.)
+## 모형 머리카락에 다는 것 (색이 머리와 달라 절차로 그린다): 머리끈. 자리는 tools/blender/build_hair.py 의 TIE_* 와 같다.
 static func _hair_accessories(st: SurfaceTool, look: CharacterLook) -> void:
+	var tie: Color = Color("#F07A8A")
 	match look.hair_style:
 		"ponytail":
-			ClayMesh.add_ellipsoid(st, HAIR_CENTER + Vector3(0.0, 0.27, 0.32), Vector3(0.075, 0.065, 0.06), Color("#F07A8A"), 8, 5)
+			ClayMesh.add_ellipsoid(st, HAIR_CENTER + Vector3(0.0, 0.29, 0.41), Vector3(0.085, 0.085, 0.045), tie, 8, 5)
+		"pigtails":
+			for side: float in [-1.0, 1.0]:
+				var root: Vector3 = HAIR_CENTER + Vector3(0.4 * side, -0.05, 0.15)
+				ClayMesh.add_ellipsoid(st, root, Vector3(0.08, 0.045, 0.08), tie, 8, 5)
+				ClayMesh.add_ellipsoid(st, root + Vector3(0.059 * side, -0.353, 0.017), Vector3(0.06, 0.035, 0.06), tie, 8, 5)
 
 
 static func _add_hair(st: SurfaceTool, look: CharacterLook) -> void:
