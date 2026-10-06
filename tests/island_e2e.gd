@@ -80,7 +80,7 @@ func _run() -> void:
 	_check(Net.npc_moods.size() >= 6, "주민 기분을 받음: %s" % str(Net.npc_moods))
 
 	# 브레이크: 오른쪽으로 달리다가 왼쪽으로 확 꺾는다.
-	await _teleport(Vector3(30.0, 0.1, -36.0))
+	await _teleport(Vector3(20.0, 0.1, -62.0))
 	var braked: Array = [false]
 	player.braked.connect(func() -> void: braked[0] = true, CONNECT_ONE_SHOT)
 	Input.action_press("ui_right")
@@ -132,7 +132,7 @@ func _run() -> void:
 	Net.move_item(_slot_of("acorn"), 2)
 	await _wait_until(func() -> bool: return _slot_of("acorn") == 2, 2.0)
 	Net.equip(2)
-	await _teleport(Vector3(6.0, 0.1, 13.0), PI)
+	await _teleport(Vector3(-43.0, 0.1, 63.0), PI)
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.PLANT, 2.0), "도토리를 들면 '심기' (%s)" % str(interaction.plant_spot))
 	var planted: Array = []
 	Net.planted.connect(func(kind: String, id: String) -> void: planted.append([kind, id]), CONNECT_ONE_SHOT)
@@ -147,7 +147,7 @@ func _run() -> void:
 	Net.move_item(_slot_of("seed_tulip"), 3)
 	await _wait_until(func() -> bool: return _slot_of("seed_tulip") == 3, 2.0)
 	Net.equip(3)
-	await _teleport(Vector3(9.5, 0.1, 13.0), PI)
+	await _teleport(Vector3(-39.5, 0.1, 63.0), PI)
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.PLANT, 2.0), "알뿌리를 들면 '심기'")
 	planted.clear()
 	Net.planted.connect(func(kind: String, id: String) -> void: planted.append([kind, id]), CONNECT_ONE_SHOT)

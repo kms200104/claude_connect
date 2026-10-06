@@ -20,26 +20,31 @@ func _ready() -> void:
 	Net.weather = NetProtocol.WEATHER_CLEAR
 	var dock: Vector2 = GameData.layout.dock_center
 	var runway: Dictionary = GameData.airport.extra["runway"]
+	var plaza: Vector3 = Vector3(GameData.layout.plaza_center.x, 0.0, GameData.layout.plaza_center.y)
+	var museum_plaza: Vector3 = GameData.layout.plazas[0]
+	# 흙길: 박물관–동사무소 길 가운데, 풀밭: 그 길 바로 남쪽 빈 땅.
+	var dirt: Vector3 = Vector3(-42.0, 0.0, 68.2)
+	var grass: Vector3 = Vector3(-43.0, 0.0, 64.0)
 	var cases: Array[Array] = [
-		[Vector3(0.0, 0.0, 0.0), "stone", "광장 가운데"],
-		[Vector3(48.0, 0.0, -9.0), "stone", "박물관 앞 광장"],
-		[Vector3(1.5, 0.0, 9.0), "dirt", "흙길"],
+		[plaza, "stone", "광장 가운데"],
+		[Vector3(museum_plaza.x, 0.0, museum_plaza.y), "stone", "박물관 앞 광장"],
+		[dirt, "dirt", "흙길"],
 		[Vector3(dock.x, 0.0, dock.y), "wood", "선착장"],
 		[GameData.shop.inside_spawn, "wood", "상점 안"],
 		[Vector3((float(runway.x0) + float(runway.x1)) * 0.5, 0.0, float(runway.z)), "metal", "공항 활주로"],
 		[Vector3(0.0, 0.0, 94.0), "dirt", "모래사장"],
 		[Vector3(0.0, 0.0, 98.4), "water", "바닷가 젖은 모래"],
-		[Vector3(20.0, 0.0, 30.0), "grass", "풀밭"],
+		[grass, "grass", "풀밭"],
 	]
 	for c: Array in cases:
 		var got: String = Footsteps.surface_of(c[0])
 		_check(got == c[1], "%s → %s (%s)" % [c[2], c[1], got])
-	_check(Footsteps.surface_sound(Vector3(20.0, 0.0, 30.0), true) == "step_run", "풀밭에서 달리면 달리기 소리")
-	_check(Footsteps.surface_sound(Vector3.ZERO, true) == "step_stone", "돌 광장은 달려도 돌 소리")
+	_check(Footsteps.surface_sound(grass, true) == "step_run", "풀밭에서 달리면 달리기 소리")
+	_check(Footsteps.surface_sound(plaza, true) == "step_stone", "돌 광장은 달려도 돌 소리")
 	Net.weather = NetProtocol.WEATHER_RAIN
-	_check(Footsteps.surface_sound(Vector3.ZERO, false) == "step_water", "비 오는 날 광장은 물웅덩이")
-	_check(Footsteps.surface_sound(Vector3(1.5, 0.0, 9.0), true) == "step_water", "비 오는 날 흙길은 달려도 철벅")
-	_check(Footsteps.surface_sound(Vector3(20.0, 0.0, 30.0), false) == "step_grass", "비 와도 풀밭은 풀")
+	_check(Footsteps.surface_sound(plaza, false) == "step_water", "비 오는 날 광장은 물웅덩이")
+	_check(Footsteps.surface_sound(dirt, true) == "step_water", "비 오는 날 흙길은 달려도 철벅")
+	_check(Footsteps.surface_sound(grass, false) == "step_grass", "비 와도 풀밭은 풀")
 	_check(Footsteps.surface_sound(GameData.shop.inside_spawn, false) == "step_wood", "비 와도 상점 안은 나무")
 	Net.weather = NetProtocol.WEATHER_CLEAR
 

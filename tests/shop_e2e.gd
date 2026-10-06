@@ -61,7 +61,7 @@ func _run() -> void:
 	_check(shop.level == 1 and shop.level_name() == "솔바람 구멍가게", "광장에 구멍가게")
 
 	# ---- 달리기: 조이스틱을 끝까지 0.7초 ----
-	player.global_position = Vector3(20.0, 0.1, -40.0)
+	player.global_position = Vector3(24.0, 0.1, -54.0)
 	await get_tree().create_timer(0.3).timeout
 	joystick.output = Vector2(0.0, -1.0)
 	await get_tree().create_timer(0.45).timeout
@@ -159,7 +159,7 @@ func _run() -> void:
 
 	# ---- 가구 설치 · 줍기 ----
 	inventory.close()
-	player.global_position = Vector3(16.0, 0.1, 8.0)
+	player.global_position = Vector3(-44.0, 0.1, 66.0)
 	player.body.rotation.y = 0.0
 	await get_tree().create_timer(0.3).timeout
 	inventory.open()
@@ -168,7 +168,7 @@ func _run() -> void:
 	use.pressed.emit()
 	_check(await _wait_until(func() -> bool: return not Net.placed.is_empty(), 2.0), "통나무 스툴을 앞에 놓음")
 	var placed: PlacedInfo = Net.placed.values()[0] if not Net.placed.is_empty() else null
-	_check(placed != null and placed.position.distance_to(Vector3(16.0, 0.0, 6.5)) < 0.6 and furniture.has_furniture(placed.id), "캐릭터 앞 1.5m, 0.5m 격자에 생김")
+	_check(placed != null and placed.position.distance_to(Vector3(-44.0, 0.0, 64.5)) < 0.6 and furniture.has_furniture(placed.id), "캐릭터 앞 1.5m, 0.5m 격자에 생김")
 	_check(not inventory.is_open() and _slot_of("log_stool") < 0, "설치하면 가방 창이 닫히고 가방에서 빠짐")
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.PICKUP, 2.0), "내 가구 곁에서 '줍기'")
 	interaction.action_hud.action_pressed.emit()

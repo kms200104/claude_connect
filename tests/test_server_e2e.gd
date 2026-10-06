@@ -107,7 +107,7 @@ func _run() -> void:
 	# ---- 낚시 ----
 	Net.equip(0)
 	await _wait_until(func() -> bool: return player.held_item == "rod", 2.0)
-	await _teleport(Vector3(-9.0, 0.1, 2.0))
+	await _teleport(Vector3(-42.6, 0.1, 35.4))
 	var fish_before: int = _bag_total()
 	var pond: FishingSpot = _village.get_node("Terrain/Lake")
 	_check(await _wait_until(func() -> bool: return pond.can_cast_from(player.global_position), 2.0), "물가에 섬")

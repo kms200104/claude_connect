@@ -282,7 +282,8 @@ func _shallows() -> void:
 	var player: Player = _village.get_node("Player")
 	var interaction: InteractionController = _village.get_node("InteractionController")
 	var field: FieldController = _village.get_node("Field")
-	var zone: Dictionary = Field.zone_at(Vector3(-26.0, 0.0, 2.0))
+	var reeds: Dictionary = (GameData.spots["lake"] as SpotInfo).shallows[0]
+	var zone: Dictionary = Field.zone_at(Vector3(float(reeds["x"]), 0.0, float(reeds["z"])))
 	_check(not zone.is_empty(), "갈대 여울이 있다")
 	await _teleport(Vector3(float(zone["x"]) + _side(), 0.1, float(zone["z"]) + _side() * 3.0))
 	_check(await _wait_until(func() -> bool: return player.wading, 1.0), "얕은 물에 들어가 걷는다 (깊은 물은 못 들어감)")
@@ -387,13 +388,13 @@ func _clams() -> void:
 func _terrain() -> void:
 	var interaction: InteractionController = _village.get_node("InteractionController")
 	var field: FieldController = _village.get_node("Field")
-	# 마을 서쪽 풀밭 (길·건물 없는 곳).
-	var at: Vector3 = Vector3(-40.0 if _role == "a" else -44.0, 0.1, 22.0)
+	# 광장 남동쪽 풀밭 (길·건물 없는 곳).
+	var at: Vector3 = Vector3(14.0 if _role == "a" else 18.0, 0.1, 82.0)
 	# 바닥에 채집물이 있으면 '줍기'가 먼저라 조금 비켜 선다.
 	for i: int in 6:
 		if not Net.drops.values().any(func(d: DropInfo) -> bool: return d.position.distance_to(at) < 3.5):
 			break
-		at.z += 3.0
+		at.x += 3.0
 	await _teleport(at)
 	await _hold("shovel")
 	field.shovel_mode = FieldController.ShovelMode.HOLE

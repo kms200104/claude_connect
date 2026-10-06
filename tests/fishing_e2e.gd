@@ -49,7 +49,7 @@ func _run() -> void:
 	var hotbar: Hotbar = _village.get_node("HUD/Hotbar")
 	var pond: FishingSpot = _village.get_node("Terrain/Lake")
 
-	_check(pond.info != null and pond.global_position.is_equal_approx(Vector3(-20, 0, 2)), "호수가 spots.json 위치에 놓임")
+	_check(pond.info != null and pond.global_position.is_equal_approx(Vector3(-51.8, 0, 35.68)), "서쪽 연못이 spots.json 위치에 놓임")
 	Net.fish_result.connect(func(ok: bool, fish_id: String, reason: String) -> void: print("[fishing] result ok=%s fish=%s reason=%s" % [ok, fish_id, reason]))
 	Net.fish_bite.connect(func(window_ms: int) -> void: print("[fishing] bite window=%d" % window_ms))
 	Net.create_room(_server)
@@ -64,7 +64,7 @@ func _run() -> void:
 	_check(controller.phase == FishingController.Phase.IDLE, "처음엔 IDLE")
 
 	# 물가로 이동 (서버 이동 검사를 통과하도록 서버를 MOVE_SLACK_M 크게 띄워 둠)
-	player.global_position = Vector3(-9.0, 0.1, 2.0)
+	player.global_position = Vector3(-42.6, 0.1, 35.4)
 	await get_tree().create_timer(0.6).timeout
 	_check(await _wait_until(func() -> bool: return pond.can_cast_from(player.global_position), 1.0), "물가에서는 던질 수 있음")
 

@@ -109,7 +109,7 @@ func _run() -> void:
 	bag.close()
 
 	# 거울에서 멀면 서버가 거절
-	await _teleport(Vector3(20.0, 0.1, 30.0))
+	await _teleport(Vector3(-44.0, 0.1, 64.0))
 	var failed: Array[String] = []
 	Net.request_failed.connect(func(kind: String, code: String) -> void: failed.append("%s:%s" % [kind, code]))
 	Net.set_face({"eyes": "dot"})
@@ -121,7 +121,7 @@ func _run() -> void:
 		if Net.inventory[i] != null and Net.inventory[i].id == "standing_mirror":
 			slot = i
 	_check(slot >= 0, "가방에 전신 거울")
-	Net.place_furniture(slot, Vector3(21.0, 0.0, 31.0), 0)
+	Net.place_furniture(slot, Vector3(-43.0, 0.0, 65.0), 0)
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.MIRROR and not interaction.target_id.is_empty(), 3.0), "놓은 거울 가구 앞에서도 '거울 보기'")
 	interaction.action_hud.action_pressed.emit()
 	_check(window.is_open() and window.get_node_or_null(".") != null, "거울 가구로 거울 창")
