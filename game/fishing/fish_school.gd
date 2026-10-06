@@ -121,6 +121,8 @@ func _process(delta: float) -> void:
 		body.set_instance_shader_parameter("alpha", fade)
 		var aura: Node3D = node.get_node_or_null("Aura")
 		if aura != null:
+			# 오라는 일반 머티리얼이라 땅 휘기를 스크립트로 맞춘다 (몸통은 셰이더가 휜다).
+			aura.position.y = -WorldStyle.curve_drop(node.global_position)
 			var pulse: float = 1.0 + sin(_time * (3.2 if st["rarity"] == "rare" else 2.2) + float(id.hash() % 30)) * 0.12
 			aura.scale = Vector3(pulse, 1.0, pulse) * fade
 			var sparkle: Node3D = aura.get_node_or_null("Sparkle")

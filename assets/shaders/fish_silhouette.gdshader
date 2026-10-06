@@ -4,6 +4,8 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_opaque, shadows_disabled;
 
+#include "res://assets/shaders/include/world_curve.gdshaderinc"
+
 uniform vec3 shadow_color : source_color = vec3(0.03, 0.08, 0.12);
 instance uniform float phase = 0.0;
 instance uniform float amp = 0.04;
@@ -19,6 +21,8 @@ void vertex() {
 	float swing = sin(phase - VERTEX.z * 6.5) * amp * (u * u * 1.6 + 0.06);
 	float head = (1.0 - u) * (1.0 - u) * sin(phase + 2.2) * amp * 0.25;
 	VERTEX.x += swing + head;
+	// 땅·물과 같이 멀수록 가라앉는다 (빠지면 멀리 있는 물고기가 휜 수면 위로 떠 보인다).
+	VERTEX += world_curve_local_offset(MODEL_MATRIX, VERTEX);
 }
 
 void fragment() {

@@ -777,6 +777,7 @@ func _build_homes() -> void:
 	# 층 × 호 표 (위층부터).
 	var grid: GridContainer = GridContainer.new()
 	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	_body.add_child(grid)
@@ -789,7 +790,10 @@ func _build_homes() -> void:
 		var owner_slot: int = Economy.home_owners.get(unit.id, -1)
 		var tag: String = "" if owner_slot < 0 else ("내 집" if owner_slot == Net.my_id else "%s 집" % GameData.player_name(owner_slot))
 		var b: Button = _button("%s · %s㎡\n%s%s" % [unit.id, str(int(econ.type_info(unit.type).get("area", 0))), Money.short(econ.unit_price(unit, Economy.apt_index)), ("  [%s]" % tag) if not tag.is_empty() else ""], 26, INK, unit.id == _unit_id)
-		b.custom_minimum_size = Vector2(470, 100)
+		# 폭은 고정하지 않고 두 칸이 화면 폭을 나눠 갖는다 (고정 폭이면 휴대폰 화면보다 넓어져 잘린다).
+		b.custom_minimum_size = Vector2(0, 100)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
 		if owner_slot == Net.my_id:
 			b.add_theme_color_override("font_color", Color("#9A6A10"))
 		b.pressed.connect(func() -> void:
