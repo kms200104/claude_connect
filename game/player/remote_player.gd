@@ -135,8 +135,14 @@ func fish_event(msg: Dictionary) -> void:
 			var target: Vector3 = _cast_target(str(msg.get("spot", "")))
 			if target == Vector3.INF:
 				return
+			# v13: 겨눠 던진 자리 (물고기 머리 앞).
+			if msg.get("bx") != null and msg.get("bz") != null:
+				target = Vector3(float(msg["bx"]), target.y, float(msg["bz"]))
 			_ensure_bobber().cast_to(_rod_tip(), target, CAST_FLIGHT_S)
 			_bobber.landed.connect(func(at: Vector3) -> void: Audio.play_at("fish_plop", at, -4.0, 1.0, 0.08), CONNECT_ONE_SHOT)
+		"found":
+			# 지나가던 물고기가 찌를 알아챘다 (물고기 그림자는 FishSchool 이 그린다).
+			pass
 		"nibble":
 			if _bobber != null and _bobber.visible:
 				_bobber.nibble()

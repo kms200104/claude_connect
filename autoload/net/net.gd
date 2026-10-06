@@ -49,6 +49,10 @@ signal furniture_removed(id: String)
 signal request_failed(kind: String, code: String)
 ## 찌를 던졌다. shadow = 물 밑에 다가올 물고기 그림자 크기 (희귀하고 클수록 크다, 0.6~1.7).
 signal fish_started(shadow: float)
+## v13: 겨눠 던진 찌를 알아챈 물고기 (처음엔 없다가 지나가던 물고기가 찾아왔을 때). last_fish 에 fid · 크기 · 다가오는 시간.
+signal fish_found(shadow: float)
+## v13: 낚시터 물고기 그림자들 [{id, x, z, yaw, s(S·M·L), r(희귀도), st(roam·engaged·flee), o(낚는 사람)}].
+signal fishes_updated(spot_id: String, list: Array[Dictionary])
 ## 챔질 성공 → 끌어올리기: ms 안에 taps 번 연타해야 한다 (v0.11).
 signal fish_reel(taps: int, ms: int)
 signal fish_nibble
@@ -164,6 +168,10 @@ var last_collect_count: int = 1
 var last_collect_left: int = 0
 ## 마지막으로 산 것이 식당 창고로 갔는지 (v13: 식재료).
 var last_trade_stored: bool = false
+## v13: 지금 낚시를 알아챈 물고기 {fid, size, ms, bx, bz} (fish_started · fish_found 때 채운다). fid 가 비면 아직 없음.
+var last_fish: Dictionary = {}
+## 낚시터 id → 물고기 그림자 목록 (fishes_updated 와 같은 것).
+var fishes: Dictionary[String, Array] = {}
 ## 길 위의 배달 알바 [{id, x, z, yaw, ph, to, item}] 와 내 배달 주문 [{id, item, n, ph}] (v13).
 var couriers: Array[Dictionary] = []
 var my_deliveries: Array[Dictionary] = []
@@ -281,9 +289,15 @@ func send_move(position: Vector3, yaw: float, velocity: Vector3) -> void:
 
 
 ## 낚시터에 던지기 요청. 결과는 fish_started / action_rejected 로 온다.
-func cast_fishing(spot_id: String) -> void:
+## aim (v13): 찌를 떨어뜨릴 자리 (물고기 머리 앞). 주면 그 둘레의 물고기가 알아채고 다가온다.
+func cast_fishing(spot_id: String, aim: Variant = null) -> void:
 	_fishing_rid = _next_rid()
-	_send({"t": "fish_cast", "rid": _fishing_rid, "spot": spot_id})
+	last_fish = {}
+	var msg: Dictionary = {"t": "fish_cast", "rid": _fishing_rid, "spot": spot_id}
+	if aim is Vector3:
+		msg["x"] = snappedf((aim as Vector3).x, 0.001)
+		msg["z"] = snappedf((aim as Vector3).z, 0.001)
+	_send(msg)
 
 
 ## 챔질 요청. `reaction_ms`는 입질 연출이 보인 뒤 버튼을 누르기까지 걸린 시간(없으면 0).
@@ -864,7 +878,19 @@ func _handle_text(text: String) -> void:
 			sol = int(msg.get("sol", sol))
 			quest_completed.emit(str(msg.get("quest", "")), str(msg.get("npc", "")), int(msg.get("reward", 0)))
 		"fish_started":
+			last_fish = {"fid": str(msg.get("fid", "")), "size": str(msg.get("size", "")), "ms": int(msg.get("ms", 0)),
+				"bx": msg.get("bx"), "bz": msg.get("bz")}
 			fish_started.emit(float(msg.get("shadow", 1.0)))
+		"fish_found":
+			last_fish.merge({"fid": str(msg.get("fid", "")), "size": str(msg.get("size", "")), "ms": int(msg.get("ms", 0))}, true)
+			fish_found.emit(float(msg.get("shadow", 1.0)))
+		"fishes":
+			var school: Array[Dictionary] = []
+			for entry: Variant in msg.get("f", []):
+				if entry is Dictionary:
+					school.append(entry)
+			fishes[str(msg.get("spot", ""))] = school
+			fishes_updated.emit(str(msg.get("spot", "")), school)
 		"fish_reel":
 			fish_reel.emit(int(msg.get("taps", 6)), int(msg.get("ms", 2600)))
 		"fish_nibble":
@@ -1184,7 +1210,7 @@ func _on_server_error(code: String, msg: Dictionary = {}) -> void:
 		_pending.erase(rid)
 		if not kind.is_empty():
 			request_failed.emit(kind, code)
-		if (not rid.is_empty() and kind in ["", "fish_cast"]) or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL]:
+		if (not rid.is_empty() and kind in ["", "fish_cast"]) or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL, NetProtocol.ERR_BAD_CAST]:
 			action_rejected.emit(code)
 		return
 	_close_socket(1000, "error")

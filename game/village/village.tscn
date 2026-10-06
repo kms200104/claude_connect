@@ -1,4 +1,4 @@
-[gd_scene load_steps=73 format=3]
+[gd_scene load_steps=74 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://game/npc/npc_crowd.gd" id="24_crowd"]
 [ext_resource type="PackedScene" path="res://game/npc/npc_actor.tscn" id="25_actor"]
 [ext_resource type="Script" path="res://game/shop/courier_field.gd" id="72_couriers"]
+[ext_resource type="Script" path="res://game/fishing/fish_school.gd" id="73_school"]
 [ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="26_wall"]
 [ext_resource type="Material" path="res://assets/materials/house_roof.tres" id="27_roof"]
 [ext_resource type="Material" path="res://assets/materials/window_glow.tres" id="28_window"]
@@ -399,10 +400,14 @@ remote_parent = NodePath("..")
 
 [node name="Bobber" parent="." instance=ExtResource("18_bobber")]
 
-[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction", "camera_rig", "catch_card")]
+[node name="FishSchool" type="Node3D" parent="."]
+script = ExtResource("73_school")
+
+[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction", "camera_rig", "catch_card", "school")]
 script = ExtResource("19_fishing")
 camera_rig = NodePath("../CameraRig")
 catch_card = NodePath("../HUD/CatchCard")
+school = NodePath("../FishSchool")
 player = NodePath("../Player")
 spot = NodePath("../Terrain/Lake")
 bobber = NodePath("../Bobber")

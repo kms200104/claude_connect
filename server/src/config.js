@@ -64,6 +64,8 @@ export const defaultConfig = {
   fishReactionSlackMs: num('FISH_REACTION_SLACK_MS', 100),
   // 낚시 중 캐스팅 지점에서 이 이상 움직이면 낚시가 취소된다.
   fishMaxMoveMeters: num('FISH_MAX_MOVE_M', 1.5),
+  // v13: 찌를 겨눠 던질 수 있는 가장 먼 거리 (캐릭터에서).
+  fishCastMaxMeters: num('FISH_CAST_MAX_M', 7),
   // 끌어올리기 연타 (v0.11): 필요한 횟수 배율(0 이면 연타 없이 챔질만으로 낚는다 — 옛 테스트용), 연타 사이 최소 간격.
   fishReelScale: num('FISH_REEL_SCALE', 1),
   fishMinTapGapMs: num('FISH_MIN_TAP_GAP_MS', 40),

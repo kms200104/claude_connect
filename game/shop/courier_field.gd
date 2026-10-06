@@ -2,7 +2,7 @@ class_name CourierField
 extends Node3D
 ## 식재료 배달 알바 (v13). 서버가 정한 위치(couriers)를 주민처럼 부드럽게 따라 그린다.
 ## 상자를 들고 상점 문 앞에서 출발해 주문한 사람에게 뛰어가고(walk), 닿으면 꾸벅 인사하며 건네고(hand),
-## 빈손으로 상점에 돌아간다(back). 주문이 받아지거나 물건을 받으면 화면 위에 짧게 알린다.
+## 빈손으로 상점에 돌아간다(back). 주문이 받아지면 화면 위에 짧게 알린다 (받은 알림은 마을톡이 띄운다).
 
 @export var actor_scene: PackedScene
 @export var toast_hud: FishingHud
@@ -92,10 +92,6 @@ func _on_ordered(item_id: String, count: int, eta_s: int, amount: int) -> void:
 		toast_hud.show_toast("%s %d개 주문 완료 (%s) · 약 %d초 뒤 출발해요" % [GameData.item_name(item_id), count, Money.short(amount), eta_s], true)
 
 
-func _on_done(item_id: String, count: int, where: String) -> void:
-	if toast_hud == null:
-		return
-	if where == "bag":
-		toast_hud.show_toast("배달 받았어요! %s %d개" % [GameData.item_name(item_id), count], true)
-	else:
-		toast_hud.show_toast("%s %d개는 식당 창고에 넣어 두었대요" % [GameData.item_name(item_id), count], true)
+func _on_done(_item_id: String, _count: int, _where: String) -> void:
+	# 받았다는 알림은 마을톡("배달 완료!" · "식당 창고에 넣어 두었어요")이 띄운다 — 겹치지 않게 여기서는 소리만.
+	Audio.play_ui(Audio.SFX_CONFIRM)

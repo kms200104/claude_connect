@@ -29,6 +29,8 @@ import { TileKind, beachSpot, digSpotWire, diggers, hitSpot, lakeShoreSpot, onBe
 import { distanceToSpot } from './gamedata.js';
 import { createJobs } from './jobs.js';
 import { createDelivery, storeIngredients } from './delivery.js';
+import { SWIM, createSwimmers } from './swimmers.js';
+import { zoneWeight } from './fishing.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -317,10 +319,35 @@ export function createServer(overrides = {}) {
     room.broadcast({ t: 'say', id: player.id, npc: who === 'npc' ? msg.npc : '', tx: text }, player.id);
   }
 
+  // v13: 낚시터에 보이는 물고기 (swimmers.js). 낚시 대회가 열리면 희귀한 물고기가 더 자주 나타난다.
+  const swimSpots = [...data.spots.keys(), ...(data.fishingSpot?.('sea') ? ['sea'] : [])];
+  const swimmers = createSwimmers({
+    data,
+    random: overrides.random ?? Math.random,
+    now,
+    environment: (spot) => environment(null),
+    weightFor: (room, spot, zone) => {
+      const d = findKind(activeOf(room), 'derby');
+      const boost = d && (!Array.isArray(d.def.spots) || d.def.spots.includes(spot.id)) ? d.def.rare_boost ?? 1 : 1;
+      return (f) => f.weight * (f.rarity === 'rare' ? boost : 1) * zoneWeight(zone, f);
+    },
+    spotIds: () => swimSpots,
+  });
   const fishing = createFishing({
     cfg,
     data,
     random: overrides.random,
+    swim: {
+      inWater: (spot, x, z) => swimmers.inWater(spot, x, z, 0.3),
+      engage: (player, spot, x, z, waited = 0) => {
+        const room = roomOf(player);
+        return room ? swimmers.engage(room, spot.id, x, z, player.id, now(), SWIM.notice + SWIM.noticeGrowth * waited) : null;
+      },
+      release: (player, id, caught) => {
+        const room = roomOf(player);
+        if (room) swimmers.release(room, id, caught, now());
+      },
+    },
     notify: sendTo,
     heldItem: (player) => player.heldItem,
     environment: (player) => environment(roomOf(player)),
@@ -1370,7 +1397,8 @@ export function createServer(overrides = {}) {
       case 'fish_cast': {
         if (!player.acceptRid(msg.rid)) return; // 중복 요청 무시
         if (player.talkingTo !== null) return fail(ErrorCode.alreadyFishing);
-        const err = fishing.cast(player, msg.rid, msg.spot);
+        const target = Number.isFinite(msg.x) && Number.isFinite(msg.z) ? { x: msg.x, z: msg.z } : null;
+        const err = fishing.cast(player, msg.rid, msg.spot, target);
         if (err) fail(err);
         return;
       }
@@ -1733,6 +1761,7 @@ export function createServer(overrides = {}) {
       }
       tickShoals(room, dtMs / 1000, t);
       if (delivery.tick(room, dtMs, t)) room.broadcast({ t: 'couriers', c: delivery.wire(room) });
+      for (const spotId of swimmers.tick(room, dtMs, t, online)) room.broadcast({ t: 'fishes', spot: spotId, f: swimmers.wire(room, spotId) });
     }
   }, 1000 / cfg.npcTickRate);
 

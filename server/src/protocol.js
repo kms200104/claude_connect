@@ -19,6 +19,7 @@ export const ErrorCode = Object.freeze({
   alreadyFishing: 'already_fishing',
   notFishing: 'not_fishing',
   inventoryFull: 'inventory_full',
+  badCast: 'bad_cast', // v13: 겨눈 자리가 물이 아니거나 너무 멂
   badItem: 'bad_item',
   cantDiscard: 'cant_discard', // 도구는 버릴 수 없다
   cantDropHere: 'cant_drop_here', // v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다

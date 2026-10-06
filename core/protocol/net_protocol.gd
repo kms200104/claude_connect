@@ -25,6 +25,8 @@ const ERR_NOT_FISHING: String = "not_fishing"
 const ERR_INVENTORY_FULL: String = "inventory_full"
 const ERR_BAD_ITEM: String = "bad_item"
 const ERR_CANT_DISCARD: String = "cant_discard"
+## v13: 겨눈 자리가 물이 아니거나 너무 멂.
+const ERR_BAD_CAST: String = "bad_cast"
 ## v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다 / 마을 바닥에 물건이 너무 많다.
 const ERR_CANT_DROP_HERE: String = "cant_drop_here"
 const ERR_GROUND_FULL: String = "ground_full"

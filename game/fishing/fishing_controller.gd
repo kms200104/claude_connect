@@ -3,6 +3,8 @@ extends Node
 ## 낚시 한 판의 클라이언트 쪽 진행. 판정은 전부 서버가 하고, 여기서는 연출과 입력만 맡는다.
 ##   던지기 요청 → (대기: 물고기 그림자가 다가옴, 가짜 입질…) → 진짜 입질(강한 진동 + 찌가 쑥) → 챔질 요청(반응 시간 보고)
 ##   → 끌어올리기 연타(v0.11, 정해진 시간 안에 정해진 횟수) → 서버가 확정한 결과
+## v13 겨눠 던지기: 물 밑에 물고기 그림자들이 보인다(FishSchool). 던지면 어시스트가 가장 알맞은 물고기를 골라 캐릭터를 그쪽으로
+##   돌리고, 그 물고기 머리 앞에 찌를 떨어뜨린다. 물고기가 찌를 알아채 곧장 다가와 톡·톡 건드리다 문다. 그동안 카메라는 찌를 같이 비춘다.
 
 enum Phase { IDLE, CASTING, WAITING, BITE, REEL, RESULT }
 
@@ -17,6 +19,8 @@ enum Phase { IDLE, CASTING, WAITING, BITE, REEL, RESULT }
 ## 낚으면 카메라가 다가가 물고기를 든 캐릭터를 비추고, 자랑 카드를 띄운다 (없어도 된다).
 @export var camera_rig: FollowCamera
 @export var catch_card: CatchCard
+## 물 밑 물고기 그림자들 (v13, 없으면 옛 방식: 앞으로 던지면 그림자가 맴돌며 다가온다).
+@export var school: FishSchool
 
 @export_group("Feel")
 ## 캐릭터 앞쪽 몇 미터에 찌를 던질지 (수역 안쪽으로 잘라 쓴다).
@@ -35,6 +39,15 @@ enum Phase { IDLE, CASTING, WAITING, BITE, REEL, RESULT }
 @export var bite_vibration: Vector2 = Vector2(320.0, 1.0)
 @export var tap_vibration: Vector2 = Vector2(18.0, 0.5)
 
+@export_group("Assist")
+## 낚시 어시스트: 이 거리 안의 물고기를 골라 그 머리 앞에 던진다.
+@export_range(1.0, 7.0, 0.1, "suffix:m") var assist_reach: float = 5.5
+@export_range(0.0, 3.0, 0.1, "suffix:m") var assist_min: float = 1.2
+## 물고기 머리 앞 몇 미터에 찌를 떨어뜨릴지.
+@export_range(0.2, 2.0, 0.05, "suffix:m") var assist_lead: float = 0.85
+## 찌를 같이 비추는 세기 (0 = 끔).
+@export_range(0.0, 1.0, 0.05) var bobber_focus: float = 1.0
+
 var phase: Phase = Phase.IDLE
 
 var _bite_shown_ms: float = 0.0
@@ -48,6 +61,10 @@ var _reel_ms: int = 0
 var _reel_shown_ms: float = 0.0
 var _reel_taps: PackedFloat32Array = PackedFloat32Array()
 var _reel_sent: bool = false
+## 겨눠 던진 자리 (v13). null 이면 옛 방식.
+var _aim: Variant = null
+## 어시스트가 고른 물고기 id.
+var aimed_fish: String = ""
 
 
 func _ready() -> void:
@@ -57,6 +74,7 @@ func _ready() -> void:
 	Net.fish_started.connect(_on_started)
 	Net.fish_nibble.connect(_on_nibble)
 	Net.fish_bite.connect(_on_bite)
+	Net.fish_found.connect(_on_found)
 	Net.fish_reel.connect(_on_reel)
 	_shadow = FishShadow.new()
 	_shadow.name = "FishShadow"
@@ -105,9 +123,10 @@ func _on_action_pressed() -> void:
 			hud.show_casting()
 			# 낚싯대를 머리 뒤로 젖혔다가 휙 던진다. 휙 소리는 앞으로 내던지는 순간에 맞춘다.
 			_cast_pressed_ms = Time.get_ticks_msec()
+			_aim = _choose_aim()
 			player.play_cast()
 			_play_cast_whoosh()
-			Net.cast_fishing(spot.spot_id)
+			Net.cast_fishing(spot.spot_id, _aim)
 		Phase.WAITING:
 			# 입질 전에 당기면 서버가 early 로 실패 처리한다.
 			Net.hook_fishing(0.0)
@@ -123,6 +142,31 @@ func _on_action_pressed() -> void:
 			_reel_tap()
 
 
+## 낚시 어시스트 (v13): 물 밑에 보이는 물고기 가운데 캐릭터 앞쪽 · 가까운 것을 골라, 그 머리 앞에 찌를 떨어뜨릴 자리.
+## 고른 물고기 쪽으로 캐릭터를 돌린다. 물고기가 안 보이는 서버(테스트 서버)면 null (옛 방식).
+func _choose_aim() -> Variant:
+	aimed_fish = ""
+	if school == null or not Net.fishes.has(spot.spot_id):
+		return null
+	var forward: Vector3 = -player.body.global_basis.z
+	forward.y = 0.0
+	var id: String = school.pick_for_cast(spot.spot_id, player.global_position, forward, assist_min, assist_reach)
+	var aim: Vector3
+	if not id.is_empty():
+		var f: Dictionary = school.fish(id)
+		var yaw: float = float(f["yaw"])
+		var head: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+		aim = spot.info.clamp_inside(f["position"] + head * assist_lead, 0.5)
+		if Vector2(aim.x - player.global_position.x, aim.z - player.global_position.z).length() > assist_reach + 1.0:
+			aim = spot.info.clamp_inside(f["position"], 0.5)
+		aimed_fish = id
+	else:
+		aim = spot.info.clamp_inside(player.global_position + forward.normalized() * cast_distance, 0.5)
+	aim.y = spot.water_height + 0.02
+	player.look_toward(aim - player.global_position)
+	return aim
+
+
 func _on_started(shadow: float = 1.0) -> void:
 	phase = Phase.WAITING
 	_hooked = false
@@ -131,6 +175,8 @@ func _on_started(shadow: float = 1.0) -> void:
 	var forward: Vector3 = -player.body.global_basis.z
 	forward.y = 0.0
 	var target: Vector3 = spot.info.clamp_inside(player.global_position + forward.normalized() * cast_distance)
+	if _aim is Vector3:
+		target = _aim
 	target.y = spot.water_height + 0.02
 	player.look_toward(target - player.global_position)
 	player.set_fishing_pose(true)
@@ -151,10 +197,42 @@ func _play_cast_whoosh() -> void:
 
 
 ## 찌가 물에 닿았다: 퐁당. 곧 물 밑에서 물고기 그림자가 다가온다 (희귀할수록 크다).
+## 겨눠 던졌으면(v13) 알아챈 그 물고기가 곧장 다가오고, 카메라가 찌를 같이 비춘다.
 func _on_bobber_landed(landed_at: Vector3) -> void:
 	Audio.play_sfx("fish_plop", 0.0, 1.0, 0.08)
-	if phase == Phase.WAITING and _shadow != null:
+	if phase != Phase.WAITING and phase != Phase.BITE:
+		return
+	if camera_rig != null and bobber_focus > 0.0:
+		camera_rig.set_point_focus(landed_at, bobber_focus)
+	if _aim is Vector3:
+		_approach_from_school(str(Net.last_fish.get("fid", "")))
+	elif _shadow != null:
 		_shadow.appear(Vector3(landed_at.x, spot.water_height + 0.015, landed_at.z), _shadow_size)
+
+
+## 겨눈 찌에 처음엔 아무도 없다가 지나가던 물고기가 알아챘다.
+func _on_found(shadow: float) -> void:
+	_shadow_size = shadow
+	if (phase == Phase.WAITING) and bobber.visible:
+		_approach_from_school(str(Net.last_fish.get("fid", "")))
+
+
+## 보이던 물고기(FishSchool)를 FishShadow 가 이어받아 찌 쪽으로 곧장 헤엄쳐 오게 한다.
+func _approach_from_school(fid: String) -> void:
+	if fid.is_empty() or _shadow == null:
+		return
+	var center: Vector3 = Vector3(bobber.global_position.x, spot.water_height + 0.015, bobber.global_position.z)
+	var start: Vector3 = center + (center - player.global_position).normalized() * 1.6
+	var size_code: String = str(Net.last_fish.get("size", "M"))
+	var rarity: String = "common"
+	if school != null:
+		var f: Dictionary = school.fish(fid)
+		if not f.is_empty():
+			start = f["position"]
+			size_code = str(f["size"])
+			rarity = str(f["rarity"])
+		school.hidden_id = fid
+	_shadow.appear_from(center, start, size_code, rarity, int(Net.last_fish.get("ms", 0)))
 
 
 ## 가짜 입질: 그림자가 쏙 다가와 찌를 건드린다. 닿는 순간(_on_shadow_touched) 찌가 톡, 휴대폰이 살짝 떨린다.
@@ -253,6 +331,9 @@ func _on_result(success: bool, fish_id: String, reason: String) -> void:
 		return
 	phase = Phase.RESULT
 	bobber.hide_bobber()
+	if camera_rig != null:
+		camera_rig.clear_point_focus()
+	_release_school_fish()
 	if _shadow != null:
 		if success:
 			_shadow.hide_shadow()
@@ -323,8 +404,23 @@ func _on_net_state_changed(new_state: int) -> void:
 		_reset()
 
 
+## 낚시가 끝나면 숨겨 둔 물고기를 다시 FishSchool 이 그린다 (놓친 물고기는 휙 달아나는 게 보인다).
+func _release_school_fish() -> void:
+	if school == null or school.hidden_id.is_empty():
+		return
+	var id: String = school.hidden_id
+	await get_tree().create_timer(0.8).timeout
+	if school.hidden_id == id:
+		school.hidden_id = ""
+
+
 func _reset() -> void:
 	_end_show_off()
+	_aim = null
+	if camera_rig != null and camera_rig.point_weight > 0.0:
+		camera_rig.clear_point_focus()
+	if school != null:
+		school.hidden_id = ""
 	phase = Phase.IDLE
 	_hooked = false
 	_reel_sent = false
@@ -367,5 +463,7 @@ func _describe_error(code: String) -> String:
 			return "이미 낚시 중이에요"
 		NetProtocol.ERR_NO_TOOL:
 			return "낚싯대를 손에 들어야 해요"
+		NetProtocol.ERR_BAD_CAST:
+			return "거기에는 던질 수 없어요"
 		_:
 			return "지금은 낚시할 수 없어요"
