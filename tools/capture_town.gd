@@ -105,6 +105,16 @@ func _run() -> void:
 	camera.distance = base_distance
 	camera.pitch_degrees = base_pitch
 
+	# 호수 물고기 그림자를 멀리서 (v0.13): 땅 휘기와 함께 수면에 붙어 보여야 한다 (공중에 뜨면 안 된다).
+	if econ.kitchen.is_open():
+		econ.kitchen.close()
+	camera.distance = base_distance + 6.0
+	camera.pitch_degrees = 35.0
+	await _put(Vector3(-16.0, 0.1, 13.0), PI)
+	await _wait(3.0)
+	await _shot("t20_lake_fish_far")
+	camera.distance = base_distance
+	camera.pitch_degrees = base_pitch
 	# 바다 낚시 (v0.12): 동쪽 바닷가에서 바다로 던진다.
 	Economy.quit_job()
 	await _wait(0.4)

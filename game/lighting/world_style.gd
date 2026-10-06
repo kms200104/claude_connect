@@ -83,6 +83,17 @@ func _ready() -> void:
 	_apply_all()
 
 
+## 지금 땅 휘기 값 (셰이더가 아닌 머티리얼이 같이 가라앉을 때 스크립트가 쓴다 — curve_drop).
+static var curve_origin: Vector3 = Vector3.ZERO
+static var curve_strength_now: float = 0.0
+
+
+## 이 자리가 땅 휘기로 가라앉는 깊이 (world_curve.gdshaderinc 와 같은 식).
+static func curve_drop(at: Vector3) -> float:
+	var d: Vector2 = Vector2(at.x - curve_origin.x, at.z - curve_origin.z)
+	return curve_strength_now * d.length_squared()
+
+
 ## 땅 휘기를 잠깐 끈다 (창밖 풍경을 찍는 몇 프레임 동안 — HomeView. 멀리서 찍으면 마을이 지평선 아래로 휘어 안 보인다).
 static var curve_paused: bool = false
 var _curve_paused_applied: bool = false
@@ -91,6 +102,7 @@ var _curve_paused_applied: bool = false
 func _process(_delta: float) -> void:
 	if focus != null:
 		RenderingServer.global_shader_parameter_set("world_curve_origin", focus.global_position)
+		curve_origin = focus.global_position
 	if curve_paused != _curve_paused_applied:
 		_curve_paused_applied = curve_paused
 		_apply_curve()
@@ -118,7 +130,8 @@ func _apply_toon() -> void:
 func _apply_curve() -> void:
 	if not is_node_ready():
 		return
-	RenderingServer.global_shader_parameter_set("world_curve_strength", curve_strength if curve_enabled and not curve_paused else 0.0)
+	curve_strength_now = curve_strength if curve_enabled and not curve_paused else 0.0
+	RenderingServer.global_shader_parameter_set("world_curve_strength", curve_strength_now)
 
 
 func _apply_lighting() -> void:
