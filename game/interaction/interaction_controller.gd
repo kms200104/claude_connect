@@ -277,7 +277,7 @@ func can_plant_at(at: Vector3, is_tree: bool) -> bool:
 	if at.x > door.x - 5.2 and at.x < door.x + 5.2 and at.z > door.z - 7.5 and at.z < door.z + 2.5:
 		return false
 	for npc: NpcInfo in GameData.npcs.values():
-		if Vector2(npc.house_position.x, npc.house_position.z).distance_to(p) < 4.2:
+		if npc.has_house and Vector2(npc.house_position.x, npc.house_position.z).distance_to(p) < 4.2:
 			return false
 	if layout != null:
 		for mirror: Vector3 in layout.mirrors:

@@ -229,7 +229,10 @@ func lobby_of(building_id: String) -> Vector3:
 	var lobby: Dictionary = home_rules.get("lobby", {})
 	for b: Variant in buildings():
 		if b is Dictionary and str(b.get("id", "")) == building_id:
-			return Vector3(float(b.get("x", 0.0)), 0.0, float(b.get("z", 0.0)) + float(lobby.get("front", 4.2)))
+			# 앞면(로컬 +Z)으로 front 만큼. 기본 깊이(6m)보다 얕은 동은 그만큼 가깝게 (서버 lobbyOf 와 같다).
+			var front: float = float(lobby.get("front", 4.2)) - (6.0 - float(b.get("d", 6.0))) * 0.5
+			var yaw: float = float(b.get("yaw", 0.0))
+			return Vector3(float(b.get("x", 0.0)) + sin(yaw) * front, 0.0, float(b.get("z", 0.0)) + cos(yaw) * front)
 	return Vector3.ZERO
 
 

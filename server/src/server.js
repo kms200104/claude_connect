@@ -203,7 +203,8 @@ export function createServer(overrides = {}) {
       { x: data.restaurant.building.x, z: data.restaurant.building.z + 4, r: 12 },
       { x: data.museum.building.x, z: data.museum.building.z, r: 11 },
       { x: data.airport.building.x, z: data.airport.building.z, r: 11 },
-      ...data.realestate.buildings.map((b) => ({ x: b.x, z: b.z, r: 9 })),
+      ...data.realestate.buildings.map((b) => ({ x: b.x, z: b.z, r: b.w ? b.w / 2 + 3 : 9 })),
+      ...(data.realestate.samples ?? []).flatMap((c) => c.buildings.map((b) => ({ x: b.x, z: b.z, r: (b.w ?? c.w ?? 9) / 2 + 3 }))),
       { x: data.realestate.office.x, z: data.realestate.office.z, r: 4 },
       // 동사무소 건물(앞면 기준 뒤로 depth) + 앞 창구·광장.
       ...(data.civic?.building ? [{ x: data.civic.building.x, z: data.civic.building.z - (data.civic.building.depth ?? 8) * 0.5, r: 10 }] : []),

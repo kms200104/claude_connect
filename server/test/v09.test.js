@@ -251,7 +251,7 @@ describe('v0.9 서버 연동 (같이 하기 · 동사무소 · 여울 · 삽)', 
     assert.equal(sun.loan.fixed, true);
     // 디딤돌로 아파트 사기 (승인 한도·LTV 80% 안).
     const p = room.players.get(w.id).profile;
-    p.sol = 200000000;
+    p.sol = 400000000;
     a.send({ t: 'apt_buy', rid: newRid(), unit: '103-301', loan: 150000000, policy: 'didimdol' });
     const apt = await a.type('apt_result');
     assert.deepEqual([apt.policy, apt.rate], ['didimdol', 0.0285]);

@@ -5,7 +5,7 @@
   "wall_thickness": 0.14,
   "door_width": 0.9,
   "grid": 0.25,
-  "interiors": { "x0": -185.0, "dx": 26.0, "cols": 3, "z0": -190.0, "dz": 19.5 },
+  "interiors": { "x0": -185.0, "dx": 26.0, "cols": 15, "z0": 215.0, "dz": 19.5 },
   "lobby": { "front": 4.2, "range": 2.4 },
   "kinds": {
     "living": { "name": "거실", "open": true, "floor": "wood" },

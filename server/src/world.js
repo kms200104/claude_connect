@@ -15,6 +15,17 @@ export function onIsland(island, x, z, margin = 0) {
   return islandShape(island, x, z) <= 1 - margin / island.half;
 }
 
+/** 아파트 동 바닥(가운데 기준, w×d 를 yaw 만큼 돌린 것)을 감싸는 사각형. 앞 공동현관 쪽(+Z 로컬)은 front 만큼 더. */
+export function towerRect(b, defaults = {}, pad = 0.6, front = 1.6) {
+  const w = b.w ?? defaults.w ?? 9;
+  const d = b.d ?? defaults.d ?? 6;
+  const c = Math.cos(b.yaw ?? 0);
+  const s = Math.sin(b.yaw ?? 0);
+  const corners = [[-w / 2 - pad, -d / 2 - pad], [w / 2 + pad, -d / 2 - pad], [w / 2 + pad, d / 2 + front], [-w / 2 - pad, d / 2 + front]]
+    .map(([u, v]) => [b.x + u * c + v * s, b.z - u * s + v * c]);
+  return { x0: Math.min(...corners.map((q) => q[0])), x1: Math.max(...corners.map((q) => q[0])), z0: Math.min(...corners.map((q) => q[1])), z1: Math.max(...corners.map((q) => q[1])) };
+}
+
 /** 건물 바닥 사각형 (앞면 가운데 기준, 앞면이 +Z). 여유 pad 만큼 넓힌다. */
 function buildingRect(b, pad) {
   return { x0: b.x - b.width / 2 - pad, x1: b.x + b.width / 2 + pad, z0: b.z - b.depth - pad, z1: b.z + pad };
@@ -43,7 +54,9 @@ export function blockedAreas(data) {
   // v0.8~0.9 건물: 식당(앞 테라스까지), 아파트 동, 부동산 부스, 동사무소.
   const rest = data.restaurant?.building;
   if (rest) rects.push({ x0: rest.x - rest.width / 2 - 1, x1: rest.x + rest.width / 2 + 1, z0: rest.z - rest.depth / 2 - 1, z1: rest.z + rest.depth / 2 + 12 });
-  for (const b of data.realestate?.buildings ?? []) rects.push({ x0: b.x - 5.5, x1: b.x + 5.5, z0: b.z - 4, z1: b.z + 4.5 });
+  for (const b of data.realestate?.buildings ?? []) rects.push(b.w || b.d || b.yaw ? towerRect(b) : { x0: b.x - 5.5, x1: b.x + 5.5, z0: b.z - 4, z1: b.z + 4.5 });
+  // 둘레 단지 (겉모습만): 단지 기본 크기·층을 동마다 덮어쓸 수 있다.
+  for (const complex of data.realestate?.samples ?? []) for (const b of complex.buildings) rects.push(towerRect(b, complex, 0.6, 1.2));
   const office = data.realestate?.office;
   if (office) circles.push({ x: office.x, z: office.z - 1, r: 2.2 });
   const civic = data.civic?.building;

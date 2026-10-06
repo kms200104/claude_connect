@@ -8,6 +8,8 @@ var display_name: String = ""
 var personality: String = "kind"
 var color: Color = Color.WHITE
 var about: String = ""
+## 주민집이 있는지 (성성호수공원 재현부터 주민은 아파트에 사는 것으로 보고 집을 짓지 않는다).
+var has_house: bool = false
 var house_position: Vector3 = Vector3.ZERO
 var house_yaw: float = 0.0
 var home: Vector3 = Vector3.ZERO
@@ -63,7 +65,8 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 		for key: Variant in opinion_data:
 			info.opinions[str(key)] = str(opinion_data[key])
 	var house: Variant = data.get("house", {})
-	if house is Dictionary:
+	if house is Dictionary and not (house as Dictionary).is_empty():
+		info.has_house = true
 		info.house_position = Vector3(float(house.get("x", 0.0)), 0.0, float(house.get("z", 0.0)))
 		info.house_yaw = float(house.get("yaw", 0.0))
 	var waypoints: Variant = data.get("waypoints", [])

@@ -62,7 +62,10 @@ export function interiorOrigin(rules, units, unitId) {
 export function lobbyOf(realestate, rules, buildingId) {
   const b = realestate.buildings.find((x) => x.id === buildingId);
   if (!b) return null;
-  return { x: b.x, z: b.z + rules.lobby.front };
+  // 앞면(로컬 +Z)으로 front 만큼. 기본 깊이(6m)보다 얕은 동은 그만큼 가깝게.
+  const front = rules.lobby.front - (6 - (b.d ?? 6)) / 2;
+  const yaw = b.yaw ?? 0;
+  return { x: b.x + Math.sin(yaw) * front, z: b.z + Math.cos(yaw) * front };
 }
 
 /** 평면도 기준 (x, z) 가 바닥(방 사각형 하나) 안인지. margin 만큼 안쪽이어야 한다. */

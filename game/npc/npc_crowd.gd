@@ -27,7 +27,8 @@ var _actors: Dictionary[String, NpcActor] = {}
 
 func _ready() -> void:
 	for npc: NpcInfo in GameData.npcs.values():
-		_build_house(npc)
+		if npc.has_house:
+			_build_house(npc)
 		var actor: NpcActor = actor_scene.instantiate()
 		add_child(actor)
 		actor.setup(npc)

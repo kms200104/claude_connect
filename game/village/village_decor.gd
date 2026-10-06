@@ -223,7 +223,7 @@ func _blocked(p: Vector2, margin: float) -> bool:
 		if pow(q.x, _layout.lake_shape_power) + pow(q.y, _layout.lake_shape_power) < 1.0:
 			return true
 	for npc: NpcInfo in GameData.npcs.values():
-		if p.distance_to(Vector2(npc.house_position.x, npc.house_position.z)) < 3.2:
+		if npc.has_house and p.distance_to(Vector2(npc.house_position.x, npc.house_position.z)) < 3.2:
 			return true
 	for mirror: Vector3 in _layout.mirrors:
 		if p.distance_to(Vector2(mirror.x, mirror.y)) < 1.2 + margin:

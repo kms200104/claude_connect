@@ -29,14 +29,14 @@ describe('v0.10 집 안 계산', () => {
 
   it('동·라인마다 평형과 평면, 호수마다 겹치지 않는 집 안 자리', () => {
     const plan = (id) => planIdOf(data.realestate, data.units.find((u) => u.id === id));
-    assert.equal(plan('101-501'), '26a');
-    assert.equal(plan('101-502'), '27');
-    assert.equal(plan('102-301'), '34');
+    assert.equal(plan('101-501'), '34');
+    assert.equal(plan('101-502'), '34');
     assert.equal(plan('102-302'), '35');
-    assert.equal(plan('103-301'), '26b');
+    assert.equal(plan('104-301'), '35');
     const origins = data.units.map((u) => interiorOrigin(data.floorplans, data.units, u.id));
+    const edge = defaultConfig.worldHalfExtent;
     for (let i = 0; i < origins.length; i++) {
-      assert.ok(Math.abs(origins[i].x) <= 200 && origins[i].z + 10 <= 200 && origins[i].x < -110, '섬 밖, 서버 경계 안');
+      assert.ok(Math.abs(origins[i].x) + 20 <= edge && origins[i].z + 20 <= edge && origins[i].z > 200, '섬·상점 실내 밖, 서버 경계 안');
       for (let j = i + 1; j < origins.length; j++) {
         assert.ok(Math.abs(origins[i].x - origins[j].x) >= 15 || Math.abs(origins[i].z - origins[j].z) >= 12, '집끼리 겹치지 않는다');
       }

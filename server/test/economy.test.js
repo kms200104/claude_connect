@@ -62,18 +62,19 @@ describe('증권: 호가·수수료·시세', () => {
 });
 
 describe('아파트 · 은행 계산', () => {
-  it('3개 동 × 10층 × 2호, 동마다 라인별 평형(26·27·34·35평)이고 높을수록 비싸다', () => {
+  it('e편한세상 13개 동 × 10층 × 2호, 동마다 라인별 평형(84A~191㎡)이고 높을수록 비싸다', () => {
     const units = listUnits(data.realestate);
-    assert.equal(units.length, 60);
+    assert.equal(units.length, 260);
     const top = units.find((u) => u.id === '101-1001');
-    assert.equal(top.type, '26');
-    assert.equal(units.find((u) => u.id === '101-1002').type, '27');
-    assert.equal(units.find((u) => u.id === '102-501').type, '34');
-    assert.equal(units.find((u) => u.id === '102-502').type, '35');
+    assert.equal(top.type, '84A');
+    assert.equal(units.find((u) => u.id === '101-1002').type, '84B');
+    assert.equal(units.find((u) => u.id === '102-501').type, '84A');
+    assert.equal(units.find((u) => u.id === '102-502').type, '84C');
+    assert.equal(units.find((u) => u.id === '107-302').type, '191');
     const low = unitPrice(data.realestate, units.find((u) => u.id === '101-101'), 1);
     const mid = unitPrice(data.realestate, units.find((u) => u.id === '101-701'), 1);
     assert.ok(low < mid);
-    assert.equal(mid, 290000000);
+    assert.equal(mid, 485000000);
     const cost = purchaseCost(data.realestate, mid);
     assert.equal(cost.total, mid + Math.round(mid * 0.011) + Math.round(mid * 0.004));
     assert.equal(weeklyRent(data.realestate, mid), Math.round((mid * 0.035) / 52));

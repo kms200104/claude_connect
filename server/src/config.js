@@ -24,9 +24,9 @@ export const defaultConfig = {
   maxSpeed: num('MAX_SPEED', 7.2),
   speedTolerance: num('SPEED_TOLERANCE', 1.6),
   moveSlackMeters: num('MOVE_SLACK_M', 0.6),
-  // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위. 섬(±100m)과 바다 너머 상점 실내(z≈190)를 모두 담는다.
+  // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위. 섬(±100m)과 바다 너머 상점 실내(z≈190), 아파트 집 안(z 215~570)을 모두 담는다.
   // 설치·심기는 섬 경계(village_layout.json 의 island)로 따로 막는다.
-  worldHalfExtent: num('WORLD_HALF_EXTENT', 200),
+  worldHalfExtent: num('WORLD_HALF_EXTENT', 600),
   minY: num('MIN_Y', -5),
   maxY: num('MAX_Y', 30),
   // 연결당 초당 메시지 상한 (토큰 버킷).
