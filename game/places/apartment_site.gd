@@ -240,12 +240,12 @@ func _build_sample(complex: Dictionary) -> void:
 		]
 		for f: int in range(2, floors + 1, 2):
 			local.append(KeeperSite.p("box", [w + 0.1, 0.08, d + 0.1], Vector3(0.0, f * FLOOR_HEIGHT, 0.0), BAND))
-		parts.append_array(_placed(local, xf))
+		parts.append_array(place_parts(local, xf))
 		var lights: Array = []
 		for f: int in floors:
 			var y: float = f * FLOOR_HEIGHT + 0.85
 			lights.append(KeeperSite.p("box", [w * 0.78, 0.6, 0.04], Vector3(0.0, y, d * 0.5 + 0.02), "#FFFFFF"))
-		windows.append_array(_placed(lights, xf))
+		windows.append_array(place_parts(lights, xf))
 		var body: StaticBody3D = StaticBody3D.new()
 		var shape: CollisionShape3D = CollisionShape3D.new()
 		var box: BoxShape3D = BoxShape3D.new()
@@ -265,8 +265,8 @@ func _build_sample(complex: Dictionary) -> void:
 	label.position = center / float(list.size()) + Vector3(0.0, top + 2.5, 0.0)
 
 
-## 동 로컬 도형들을 그 동의 자리(xf: 회전 yaw + 위치)로 옮긴 도형들.
-static func _placed(local: Array, xf: Transform3D) -> Array:
+## 로컬 도형들을 그 자리(xf: 회전 yaw + 위치)로 옮긴 도형들 (at·to 를 옮기고 rot 에 yaw 를 더한다). 집 안 붙박이도 쓴다.
+static func place_parts(local: Array, xf: Transform3D) -> Array:
 	var out: Array = []
 	var yaw_deg: float = rad_to_deg(xf.basis.get_euler().y)
 	for part: Dictionary in local:
@@ -274,6 +274,10 @@ static func _placed(local: Array, xf: Transform3D) -> Array:
 		var moved: Vector3 = xf * Vector3(float(at[0]), float(at[1]), float(at[2]))
 		var q: Dictionary = part.duplicate()
 		q["at"] = [moved.x, moved.y, moved.z]
+		if part.has("to"):
+			var to: Array = part["to"]
+			var moved_to: Vector3 = xf * Vector3(float(to[0]), float(to[1]), float(to[2]))
+			q["to"] = [moved_to.x, moved_to.y, moved_to.z]
 		var rot: Array = part.get("rot", [0.0, 0.0, 0.0])
 		q["rot"] = [float(rot[0]), float(rot[1]) + yaw_deg, float(rot[2])]
 		out.append(q)

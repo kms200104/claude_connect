@@ -36,7 +36,7 @@ var _furniture_nodes: Dictionary[String, StaticBody3D] = {}
 var _labels: Array[Label3D] = []
 var _wall_height: float = 2.3
 var _wall_thickness: float = 0.14
-var _door_width: float = 0.9
+var _door_width: float = 1.2
 
 
 ## 평면도대로 짓는다. 원점(평면도 왼쪽 위)은 이 노드의 위치.
@@ -45,7 +45,7 @@ func build(new_plan: FloorPlan) -> void:
 	var rules: Dictionary = GameData.econ.home_rules
 	_wall_height = float(rules.get("wall_height", 2.3))
 	_wall_thickness = float(rules.get("wall_thickness", 0.14))
-	_door_width = float(rules.get("door_width", 0.9))
+	_door_width = float(rules.get("door_width", 1.2))
 	for c: Node in get_children():
 		c.queue_free()
 	_furniture_nodes.clear()
@@ -272,7 +272,10 @@ func _edge_key(label: PackedInt32Array, w: int, open: Array[bool], ai: int, aj: 
 	var mid: Vector2 = Vector2((ai + bi + 1) * 0.5 - 1.0, (aj + bj + 1) * 0.5 - 1.0) * CELL
 	if a > 0 and b > 0:
 		for d: Vector2 in plan.doors:
-			if mid.distance_to(d) <= _door_width * 0.5 and absf((mid - d).x if ai == bi else (mid - d).y) <= _door_width * 0.5:
+			# 벽을 따라 문 폭 안, 벽에서 수직으로는 조금 벗어나도 (평면도 문 점이 벽선에 딱 붙지 않을 수 있다).
+			var along: float = (mid - d).x if ai == bi else (mid - d).y
+			var across: float = (mid - d).y if ai == bi else (mid - d).x
+			if absf(along) <= _door_width * 0.5 and absf(across) <= 0.35:
 				return "door"
 	# 바깥 벽의 창 (집 밖 = 0 과 맞닿은 거실·침실·주방·발코니).
 	if a == 0 or b == 0:
@@ -342,90 +345,254 @@ func _build_fixtures(parts: Array, colliders: Array[AABB]) -> void:
 			"bath":
 				_bath(parts, colliders, r)
 			"entry":
-				# 신발장 (현관 한쪽 벽, 들어오는 길을 막지 않게 얇게).
-				var cab: AABB = AABB(Vector3(r.end.x - 0.38, 0.0, r.position.y + 0.25), Vector3(0.32, 1.1, maxf(r.size.y - 0.6, 0.4)))
-				parts.append(KeeperSite.p("rbox", [cab.size.x, cab.size.y, cab.size.z], cab.get_center(), ["#E6DCCC", "#F4EEE4"], 0.08))
-				parts.append(KeeperSite.p("box", [0.01, 1.0, cab.size.z - 0.1], cab.get_center() + Vector3(-cab.size.x * 0.5, 0.0, 0.0), "#C4B49E"))
-				colliders.append(cab)
-				# 현관 턱 (복도와 높이 차).
-				parts.append(KeeperSite.p("box", [r.size.x, 0.05, 0.08], Vector3(r.get_center().x, 0.025, r.end.y - 0.04), "#A89C8C"))
+				_entry(parts, colliders, r)
 			"dress":
-				# 옷 거는 행거 + 걸린 옷.
-				var long_x: bool = r.size.x >= r.size.y
-				var rail_len: float = (r.size.x if long_x else r.size.y) - 0.3
-				var a: Vector3 = Vector3(r.get_center().x, 1.7, r.position.y + 0.3) if long_x else Vector3(r.position.x + 0.3, 1.7, r.get_center().y)
-				parts.append(KeeperSite.p("box", [rail_len, 0.03, 0.03] if long_x else [0.03, 0.03, rail_len], a, "#A8A8A8"))
-				var colors: PackedStringArray = ["#E8A890", "#8EAED2", "#F2D68A", "#A8C8A0", "#C8A0C8", "#F4F0E8"]
-				var n: int = int(rail_len / 0.18)
-				for k: int in n:
-					var off: float = -rail_len * 0.5 + 0.1 + k * 0.18
-					var at: Vector3 = a + (Vector3(off, -0.45, 0.0) if long_x else Vector3(0.0, -0.45, off))
-					parts.append(KeeperSite.p("rbox", [0.06, 0.8, 0.4] if long_x else [0.4, 0.8, 0.06], at, colors[k % colors.size()], 0.3))
-				var hang: AABB = AABB(Vector3(r.position.x + 0.05, 0.0, r.position.y + 0.05), Vector3(r.size.x - 0.1 if long_x else 0.5, 1.8, 0.5 if long_x else r.size.y - 0.1))
-				colliders.append(hang)
+				_dress(parts, colliders, r)
 			"balcony":
 				# 화분 두 개.
 				for k: int in 2:
 					var at: Vector3 = Vector3(r.position.x + 0.35 + k * (r.size.x - 0.7), 0.0, r.end.y - 0.35)
 					parts.append(KeeperSite.p("cyl", [0.16, 0.32], at + Vector3(0.0, 0.16, 0.0), ["#B87A50", "#D0946A"], 0.05))
 					parts.append(KeeperSite.p("blob", [0.24, 0.4, 0.24], at + Vector3(0.0, 0.55, 0.0), ["#4E8A4A", "#7AB46A"]))
-			"utility":
-				# 선반 (다용도실 안쪽 벽).
-				var shelf: AABB = AABB(Vector3(r.position.x + 0.1, 0.0, r.position.y + 0.08), Vector3(r.size.x - 0.2, 1.6, 0.35))
-				parts.append(KeeperSite.p("box", [shelf.size.x, 0.04, shelf.size.z], shelf.get_center() + Vector3(0.0, -0.4, 0.0), "#C8C0B4"))
-				parts.append(KeeperSite.p("box", [shelf.size.x, 0.04, shelf.size.z], shelf.get_center() + Vector3(0.0, 0.3, 0.0), "#C8C0B4"))
-				parts.append(KeeperSite.p("rbox", [0.4, 0.3, 0.3], shelf.get_center() + Vector3(-0.2, -0.2, 0.0), "#E8D8B8", 0.2))
-				colliders.append(shelf)
+			"utility", "pantry":
+				_shelf(parts, colliders, r)
 
 
 func _kitchen(parts: Array, colliders: Array[AABB], r: Rect2) -> void:
-	# 북쪽 벽을 따라 ㄱ자 조리대 (싱크대 · 쿡탑) + 위 수납장.
+	# 막힌 벽(북쪽이 되면 북쪽)을 따라 조리대 (싱크대 · 쿡탑) + 위 수납장, 옆 벽이 막혀 있으면 ㄱ자로 꺾는다.
+	var sides: Array[Vector2] = _closed_sides(r)
+	if sides.is_empty():
+		return
+	var n: Vector2 = Vector2(0.0, -1.0) if Vector2(0.0, -1.0) in sides else sides[0]
 	var depth: float = 0.6
-	var top: AABB = AABB(Vector3(r.position.x + 0.07, 0.0, r.position.y + 0.07), Vector3(r.size.x - 0.14, 0.9, depth))
-	parts.append(KeeperSite.p("box", [top.size.x, 0.86, depth], top.get_center() + Vector3(0.0, -0.02, 0.0), ["#E8E2D8", "#F6F2EC"]))
-	parts.append(KeeperSite.p("box", [top.size.x + 0.02, 0.04, depth + 0.02], Vector3(top.get_center().x, 0.9, top.get_center().z), "#7A746C"))
-	parts.append(KeeperSite.p("box", [0.55, 0.02, 0.4], Vector3(top.position.x + top.size.x * 0.3, 0.915, top.get_center().z), "#B8C2C8"))
-	parts.append(KeeperSite.p("rod", [0.015, 0.012], Vector3(top.position.x + top.size.x * 0.3, 0.92, top.position.z + 0.08), "#9AA4AA"))
-	parts[-1]["to"] = [top.position.x + top.size.x * 0.3, 1.15, top.position.z + 0.12]
-	parts.append(KeeperSite.p("box", [0.6, 0.02, 0.5], Vector3(top.end.x - 0.5, 0.915, top.get_center().z), "#24282C"))
+	var xf: Transform3D = _wall_xf(r, n)
+	var span: Vector2 = _wall_span(xf, _side_length(r, n), depth)
+	var w: float = span.y - span.x
+	if w < 1.2:
+		return
+	var cx: float = (span.x + span.y) * 0.5
+	var cz: float = 0.07 + depth * 0.5
+	var sink_x: float = span.x + w * 0.3
+	var cook_x: float = span.y - 0.5
+	var local: Array = [
+		KeeperSite.p("box", [w, 0.86, depth], Vector3(cx, 0.43, cz), ["#E8E2D8", "#F6F2EC"]),
+		KeeperSite.p("box", [w + 0.02, 0.04, depth + 0.02], Vector3(cx, 0.9, cz), "#7A746C"),
+		KeeperSite.p("box", [0.55, 0.02, 0.4], Vector3(sink_x, 0.915, cz), "#B8C2C8"),
+		KeeperSite.p("rod", [0.015, 0.012], Vector3(sink_x, 0.92, 0.15), "#9AA4AA"),
+		KeeperSite.p("box", [0.6, 0.02, 0.5], Vector3(cook_x, 0.915, cz), "#24282C"),
+		KeeperSite.p("box", [w, 0.6, 0.35], Vector3(cx, 1.75, 0.07 + 0.175), ["#E2DACE", "#F2ECE4"]),
+	]
+	local[3]["to"] = [sink_x, 1.15, 0.19]
 	for k: int in 2:
-		parts.append(KeeperSite.p("cyl", [0.09, 0.01], Vector3(top.end.x - 0.65 + k * 0.3, 0.93, top.get_center().z), "#4A4E52"))
-	parts.append(KeeperSite.p("box", [top.size.x, 0.6, 0.35], Vector3(top.get_center().x, 1.75, top.position.z + 0.175), ["#E2DACE", "#F2ECE4"]))
-	colliders.append(top)
-	if r.size.y > 2.2:
-		# 서쪽 벽을 따라 꺾이는 조리대 (ㄱ자).
-		var side: AABB = AABB(Vector3(r.position.x + 0.07, 0.0, r.position.y + 0.07 + depth), Vector3(depth, 0.9, minf(r.size.y * 0.45, 1.6)))
-		parts.append(KeeperSite.p("box", [depth, 0.86, side.size.z], side.get_center() + Vector3(0.0, -0.02, 0.0), ["#E8E2D8", "#F6F2EC"]))
-		parts.append(KeeperSite.p("box", [depth + 0.02, 0.04, side.size.z], Vector3(side.get_center().x, 0.9, side.get_center().z), "#7A746C"))
-		colliders.append(side)
+		local.append(KeeperSite.p("cyl", [0.09, 0.01], Vector3(cook_x - 0.15 + k * 0.3, 0.93, cz), "#4A4E52"))
+	parts.append_array(ApartmentSite.place_parts(local, xf))
+	colliders.append(xf * AABB(Vector3(span.x, 0.0, 0.07), Vector3(w, 0.9, depth)))
+	# ㄱ자: 조리대가 닿은 쪽 끝의 옆 벽이 막혀 있으면 그 벽을 따라 꺾는다.
+	var along: Vector2 = Vector2(xf.basis.x.x, xf.basis.x.z)
+	for end: int in 2:
+		var side_n: Vector2 = -along if end == 0 else along
+		var reaches: bool = span.x < 0.2 if end == 0 else span.y > _side_length(r, n) - 0.2
+		if not reaches or not side_n in sides:
+			continue
+		var xf2: Transform3D = _wall_xf(r, side_n)
+		var length2: float = _side_length(r, side_n)
+		var corner: Vector3 = xf2.affine_inverse() * (xf * Vector3(0.0 if end == 0 else _side_length(r, n), 0.0, 0.0))
+		var span2: Vector2 = _wall_span(xf2, length2, depth)
+		var run: float = minf(length2 * 0.45, 1.6)
+		var a: float = (0.07 + depth) if corner.x < length2 * 0.5 else (length2 - 0.07 - depth - run)
+		var b: float = a + run
+		a = maxf(a, span2.x)
+		b = minf(b, span2.y)
+		if b - a < 0.6:
+			continue
+		var side_local: Array = [
+			KeeperSite.p("box", [b - a, 0.86, depth], Vector3((a + b) * 0.5, 0.43, cz), ["#E8E2D8", "#F6F2EC"]),
+			KeeperSite.p("box", [b - a, 0.04, depth + 0.02], Vector3((a + b) * 0.5, 0.9, cz), "#7A746C"),
+		]
+		parts.append_array(ApartmentSite.place_parts(side_local, xf2))
+		colliders.append(xf2 * AABB(Vector3(a, 0.0, 0.07), Vector3(b - a, 0.9, depth)))
+		break
 
 
 func _bath(parts: Array, colliders: Array[AABB], r: Rect2) -> void:
-	# 욕조 (긴 쪽 벽, 1.5m 이상이면) · 변기 · 세면대.
-	var long_x: bool = r.size.x >= r.size.y
-	var long: float = r.size.x if long_x else r.size.y
-	if long >= 1.7:
-		var tub: AABB = AABB(Vector3(r.position.x + 0.08, 0.0, r.position.y + 0.08), Vector3(minf(long - 0.16, 1.5), 0.55, 0.72)) if long_x else AABB(Vector3(r.position.x + 0.08, 0.0, r.position.y + 0.08), Vector3(0.72, 0.55, minf(long - 0.16, 1.5)))
-		parts.append(KeeperSite.p("rbox", [tub.size.x, tub.size.y, tub.size.z], tub.get_center(), ["#E6EEF2", "#FFFFFF"], 0.2))
-		parts.append(KeeperSite.p("rbox", [tub.size.x - 0.14, 0.04, tub.size.z - 0.14], tub.get_center() + Vector3(0.0, 0.26, 0.0), "#9CCCE0", 0.6))
-		colliders.append(tub)
-	var corner: Vector3 = Vector3(r.end.x - 0.3, 0.0, r.end.y - 0.35)
-	parts.append(KeeperSite.p("rbox", [0.38, 0.4, 0.5], corner + Vector3(0.0, 0.2, 0.0), ["#E8EEF2", "#FFFFFF"], 0.5))
-	parts.append(KeeperSite.p("rbox", [0.36, 0.42, 0.16], corner + Vector3(0.0, 0.55, 0.22), ["#E8EEF2", "#FFFFFF"], 0.3))
-	colliders.append(AABB(corner - Vector3(0.2, 0.0, 0.25), Vector3(0.4, 0.6, 0.55)))
-	var sink: Vector3 = Vector3(r.end.x - 0.3, 0.0, r.position.y + (0.95 if long >= 1.7 and not long_x else 0.3))
-	if sink.z + 0.25 < corner.z - 0.25:
-		parts.append(KeeperSite.p("cyl", [0.06, 0.8], sink + Vector3(0.0, 0.4, 0.0), "#E8EEF2", 0.02))
-		parts.append(KeeperSite.p("rbox", [0.5, 0.12, 0.42], sink + Vector3(0.0, 0.84, 0.0), ["#E8EEF2", "#FFFFFF"], 0.4))
-		parts.append(KeeperSite.p("box", [0.04, 0.6, 0.45], sink + Vector3(0.27, 1.45, 0.0), "#C8E4F0"))
+	# 욕조 (가장 긴 막힌 벽, 1.7m 이상이면 문에서 먼 쪽 끝) · 변기 · 세면대 (문에서 먼 구석부터).
+	var used: Array[AABB] = []
+	var sides: Array[Vector2] = _closed_sides(r)
+	if not sides.is_empty() and _side_length(r, sides[0]) >= 1.7:
+		var n: Vector2 = sides[0]
+		var xf: Transform3D = _wall_xf(r, n)
+		var length: float = _side_length(r, n)
+		var span: Vector2 = _wall_span(xf, length, 0.72)
+		var tl: float = minf(span.y - span.x, 1.5)
+		if tl >= 1.2:
+			var door_x: float = 0.0
+			var count: int = 0
+			for d: Vector2 in _all_doors(r):
+				door_x += (xf.affine_inverse() * Vector3(d.x, 0.0, d.y)).x
+				count += 1
+			var x0: float = span.x if count == 0 or door_x / count > length * 0.5 else span.y - tl
+			var local: Array = [
+				KeeperSite.p("rbox", [tl, 0.55, 0.72], Vector3(x0 + tl * 0.5, 0.275, 0.08 + 0.36), ["#E6EEF2", "#FFFFFF"], 0.2),
+				KeeperSite.p("rbox", [tl - 0.14, 0.04, 0.58], Vector3(x0 + tl * 0.5, 0.535, 0.08 + 0.36), "#9CCCE0", 0.6),
+			]
+			parts.append_array(ApartmentSite.place_parts(local, xf))
+			var tub: AABB = xf * AABB(Vector3(x0, 0.0, 0.08), Vector3(tl, 0.55, 0.72))
+			colliders.append(tub)
+			used.append(tub)
+	# 구석 넷: 문(과 그 앞 지나갈 자리)에서 먼 순서.
+	var corners: Array[Vector3] = []
+	for cx: float in [r.position.x + 0.3, r.end.x - 0.3]:
+		for cz: float in [r.position.y + 0.35, r.end.y - 0.35]:
+			corners.append(Vector3(cx, 0.0, cz))
+	var doors: Array[Vector2] = _all_doors(r)
+	corners.sort_custom(func(a: Vector3, b: Vector3) -> bool: return _door_distance(a, doors) > _door_distance(b, doors))
+	var toilet_done: bool = false
+	for c: Vector3 in corners:
+		var box: AABB = AABB(c - Vector3(0.2, 0.0, 0.25), Vector3(0.4, 0.6, 0.55))
+		if _hits(box.grow(0.05), used) or _door_distance(c, doors) < _door_width * 0.5 + 0.7:
+			continue
+		if not toilet_done:
+			# 변기: 물탱크는 가까운 벽 쪽.
+			var back: float = 0.22 if c.z > r.get_center().y else -0.22
+			parts.append(KeeperSite.p("rbox", [0.38, 0.4, 0.5], c + Vector3(0.0, 0.2, 0.0), ["#E8EEF2", "#FFFFFF"], 0.5))
+			parts.append(KeeperSite.p("rbox", [0.36, 0.42, 0.16], c + Vector3(0.0, 0.55, back), ["#E8EEF2", "#FFFFFF"], 0.3))
+			colliders.append(box)
+			used.append(box)
+			toilet_done = true
+		else:
+			# 세면대 (지나갈 수 있게 충돌체 없이).
+			var wall_x: float = 0.27 if c.x > r.get_center().x else -0.27
+			parts.append(KeeperSite.p("cyl", [0.06, 0.8], c + Vector3(0.0, 0.4, 0.0), "#E8EEF2", 0.02))
+			parts.append(KeeperSite.p("rbox", [0.5, 0.12, 0.42], c + Vector3(0.0, 0.84, 0.0), ["#E8EEF2", "#FFFFFF"], 0.4))
+			parts.append(KeeperSite.p("box", [0.04, 0.6, 0.45], c + Vector3(wall_x, 1.45, 0.0), "#C8E4F0"))
+			break
+
+
+## 드레스룸: 막힌 벽을 따라 행거 + 걸린 옷.
+func _dress(parts: Array, colliders: Array[AABB], r: Rect2) -> void:
+	var sides: Array[Vector2] = _closed_sides(r)
+	if sides.is_empty():
+		return
+	var n: Vector2 = sides[0]
+	var xf: Transform3D = _wall_xf(r, n)
+	var span: Vector2 = _wall_span(xf, _side_length(r, n), 0.5)
+	var rail: float = span.y - span.x - 0.2
+	if rail < 0.6:
+		return
+	var cx: float = (span.x + span.y) * 0.5
+	var local: Array = [KeeperSite.p("box", [rail, 0.03, 0.03], Vector3(cx, 1.7, 0.3), "#A8A8A8")]
+	var colors: PackedStringArray = ["#E8A890", "#8EAED2", "#F2D68A", "#A8C8A0", "#C8A0C8", "#F4F0E8"]
+	for k: int in int(rail / 0.18):
+		local.append(KeeperSite.p("rbox", [0.06, 0.8, 0.4], Vector3(cx - rail * 0.5 + 0.1 + k * 0.18, 1.25, 0.3), colors[k % colors.size()], 0.3))
+	parts.append_array(ApartmentSite.place_parts(local, xf))
+	colliders.append(xf * AABB(Vector3(span.x, 0.0, 0.05), Vector3(span.y - span.x, 1.8, 0.5)))
+
+
+## 다용도실·팬트리: 막힌 벽을 따라 선반.
+func _shelf(parts: Array, colliders: Array[AABB], r: Rect2) -> void:
+	var sides: Array[Vector2] = _closed_sides(r)
+	if sides.is_empty():
+		return
+	var n: Vector2 = sides[0]
+	var xf: Transform3D = _wall_xf(r, n)
+	var span: Vector2 = _wall_span(xf, _side_length(r, n), 0.35)
+	var w: float = span.y - span.x
+	if w < 0.5:
+		return
+	var cx: float = (span.x + span.y) * 0.5
+	var local: Array = [
+		KeeperSite.p("box", [w, 0.04, 0.35], Vector3(cx, 0.4, 0.255), "#C8C0B4"),
+		KeeperSite.p("box", [w, 0.04, 0.35], Vector3(cx, 1.1, 0.255), "#C8C0B4"),
+		KeeperSite.p("rbox", [0.4, 0.3, 0.3], Vector3(cx - 0.2, 0.6, 0.255), "#E8D8B8", 0.2),
+	]
+	parts.append_array(ApartmentSite.place_parts(local, xf))
+	colliders.append(xf * AABB(Vector3(span.x, 0.0, 0.08), Vector3(w, 1.6, 0.35)))
 
 
 func _build_front_door(parts: Array) -> void:
-	# 현관문: 바깥 벽 위의 짙은 나무 문 + 손잡이 (나가기는 상황 버튼).
+	# 현관문: 바깥 벽 위의 짙은 나무 문 + 손잡이 + 발판 (나가기는 상황 버튼). 문이 놓인 현관 변 방향으로 돌린다.
 	var f: Vector3 = Vector3(plan.front.x, 0.0, plan.front.y)
-	parts.append(KeeperSite.p("rbox", [0.92, 2.05, _wall_thickness + 0.06], f + Vector3(0.0, 1.025, 0.0), ["#5A4A3E", "#7A6656"], 0.06))
-	parts.append(KeeperSite.p("box", [0.05, 0.18, 0.06], f + Vector3(0.32, 1.0, _wall_thickness * 0.5 + 0.05), "#C8B080"))
-	parts.append(KeeperSite.p("box", [0.6, 0.02, 0.4], f + Vector3(0.0, 0.01, 0.4), "#9A8C7C"))
+	var entry: FloorPlan.Room = plan.first_room("entry")
+	var n: Vector2 = _front_side(entry.main_rect()) if entry != null else Vector2(0.0, -1.0)
+	var local: Array = [
+		KeeperSite.p("rbox", [0.92, 2.05, _wall_thickness + 0.06], Vector3(0.0, 1.025, 0.0), ["#5A4A3E", "#7A6656"], 0.06),
+		KeeperSite.p("box", [0.05, 0.18, 0.06], Vector3(0.32, 1.0, _wall_thickness * 0.5 + 0.05), "#C8B080"),
+		KeeperSite.p("box", [0.6, 0.02, 0.4], Vector3(0.0, 0.01, 0.4), "#9A8C7C"),
+	]
+	# 로컬 +Z = 집 안쪽 (변의 바깥 방향 n 의 반대).
+	parts.append_array(ApartmentSite.place_parts(local, Transform3D(Basis(Vector3.UP, atan2(-n.x, -n.y)), f)))
+
+
+# ---- 현관 ----
+
+const SIDES: Array[Vector2] = [Vector2(0.0, -1.0), Vector2(0.0, 1.0), Vector2(-1.0, 0.0), Vector2(1.0, 0.0)]
+
+
+## 현관: 신발장은 현관문·열린 쪽(복도로 이어짐)·방문이 없는 막힌 벽 가운데 가장 긴 곳에, 현관 턱은 열린 쪽에.
+## (평면마다 현관이 열리는 방향이 다르다 — 125㎡ 는 동쪽 복도로 열린다.)
+func _entry(parts: Array, colliders: Array[AABB], r: Rect2) -> void:
+	var sides: Array[Vector2] = _closed_sides(r)
+	if not sides.is_empty():
+		var n: Vector2 = sides[0]
+		var xf: Transform3D = _wall_xf(r, n)
+		var span: Vector2 = _wall_span(xf, _side_length(r, n), 0.32)
+		span = Vector2(maxf(span.x, 0.3), minf(span.y, _side_length(r, n) - 0.3))
+		var w: float = span.y - span.x
+		if w >= 0.4:
+			var cx: float = (span.x + span.y) * 0.5
+			var local: Array = [
+				KeeperSite.p("rbox", [w, 1.1, 0.32], Vector3(cx, 0.55, 0.06 + 0.16), ["#E6DCCC", "#F4EEE4"], 0.08),
+				# 문짝 줄눈 (현관 쪽 면).
+				KeeperSite.p("box", [w - 0.1, 1.0, 0.01], Vector3(cx, 0.55, 0.06 + 0.325), "#C4B49E"),
+			]
+			parts.append_array(ApartmentSite.place_parts(local, xf))
+			colliders.append(xf * AABB(Vector3(span.x, 0.0, 0.06), Vector3(w, 1.1, 0.32)))
+	# 현관 턱 (복도와 높이 차): 열린 변마다.
+	for n: Vector2 in SIDES:
+		if not _side_open(r, n):
+			continue
+		var mid: Vector2 = _side_point(r, n, 0.5) - n * 0.04
+		var size: Array = [0.08, 0.05, r.size.y] if n.x != 0.0 else [r.size.x, 0.05, 0.08]
+		parts.append(KeeperSite.p("box", size, Vector3(mid.x, 0.025, mid.y), "#A89C8C"))
+
+
+## 현관문(plan.front)이 놓인 현관 변의 바깥 방향.
+func _front_side(r: Rect2) -> Vector2:
+	var best: Vector2 = SIDES[0]
+	var best_d: float = INF
+	for n: Vector2 in SIDES:
+		var d: float = absf(plan.front.x - _side_point(r, n, 0.5).x) if n.x != 0.0 else absf(plan.front.y - _side_point(r, n, 0.5).y)
+		if d < best_d:
+			best_d = d
+			best = n
+	return best
+
+
+## 그 변 너머가 벽 없이 이어지는 방(복도·거실 같은 open 종류)인지.
+func _side_open(r: Rect2, n: Vector2) -> bool:
+	for k: float in [0.25, 0.5, 0.75]:
+		var room: FloorPlan.Room = plan.room_at(_side_point(r, n, k) + n * 0.12)
+		if room != null and room.kind != "entry" and bool(GameData.econ.room_kind(room.kind).get("open", false)):
+			return true
+	return false
+
+
+## 그 변 위에 방문 자리(plan.doors)나 현관문(plan.front)이 있는지.
+func _side_has_door(r: Rect2, n: Vector2) -> bool:
+	for d: Vector2 in plan.doors + [plan.front]:
+		if n.x != 0.0:
+			if absf(d.x - _side_point(r, n, 0.5).x) < 0.15 and d.y > r.position.y - 0.1 and d.y < r.end.y + 0.1:
+				return true
+		elif absf(d.y - _side_point(r, n, 0.5).y) < 0.15 and d.x > r.position.x - 0.1 and d.x < r.end.x + 0.1:
+			return true
+	return false
+
+
+## 변 위의 점 (k = 0~1, 변을 따라).
+static func _side_point(r: Rect2, n: Vector2, k: float) -> Vector2:
+	if n.x == 0.0:
+		return Vector2(lerpf(r.position.x, r.end.x, k), r.position.y if n.y < 0.0 else r.end.y)
+	return Vector2(r.position.x if n.x < 0.0 else r.end.x, lerpf(r.position.y, r.end.y, k))
 
 
 func _build_lights() -> void:
@@ -468,3 +635,71 @@ func _mesh(mesh: Mesh, material: Material) -> MeshInstance3D:
 	mi.material_override = material
 	mi.material_overlay = sight_overlay
 	return mi
+
+
+# ---- 벽에 붙는 붙박이 자리 ----
+
+static func _side_length(r: Rect2, n: Vector2) -> float:
+	return r.size.y if n.x != 0.0 else r.size.x
+
+
+## 붙박이를 붙일 수 있는 벽 (열린 쪽도 아니고 방문·현관문도 없는 변), 긴 순서.
+func _closed_sides(r: Rect2) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for n: Vector2 in SIDES:
+		if not _side_open(r, n) and not _side_has_door(r, n):
+			out.append(n)
+	out.sort_custom(func(a: Vector2, b: Vector2) -> bool: return _side_length(r, a) > _side_length(r, b) + 0.01)
+	return out
+
+
+## 그 변(바깥 방향 n)의 벽 좌표계: 로컬 +X 는 벽을 따라, +Z 는 방 안쪽, 원점은 벽의 한쪽 끝.
+func _wall_xf(r: Rect2, n: Vector2) -> Transform3D:
+	var basis: Basis = Basis(Vector3.UP, atan2(-n.x, -n.y))
+	var mid: Vector2 = _side_point(r, n, 0.5)
+	return Transform3D(basis, Vector3(mid.x, 0.0, mid.y) - basis.x * _side_length(r, n) * 0.5)
+
+
+## 벽 좌표계에서 붙박이(깊이 depth)가 차지해도 되는 구간 [x0, x1]: 옆 벽 문으로 들어온 몸이 지나갈 자리는 비운다.
+func _wall_span(xf: Transform3D, length: float, depth: float) -> Vector2:
+	var x0: float = 0.07
+	var x1: float = length - 0.07
+	var inv: Transform3D = xf.affine_inverse()
+	var half: float = _door_width * 0.5 + 0.45
+	for d: Vector2 in plan.doors + [plan.front]:
+		var l: Vector3 = inv * Vector3(d.x, 0.0, d.y)
+		if l.z < -0.3 or l.z > depth + half + 0.45 or l.x < -0.3 or l.x > length + 0.3:
+			continue
+		if l.x <= 0.3:
+			x0 = maxf(x0, 0.95)
+		elif l.x >= length - 0.3:
+			x1 = minf(x1, length - 0.95)
+		elif l.x + half > x0 and l.x - half < x1:
+			if (l.x - half) - x0 >= x1 - (l.x + half):
+				x1 = l.x - half
+			else:
+				x0 = l.x + half
+	return Vector2(x0, x1)
+
+
+## 그 방 사각형 둘레에 걸친 방문·현관문 자리.
+func _all_doors(r: Rect2) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for d: Vector2 in plan.doors + [plan.front]:
+		if r.grow(0.2).has_point(d):
+			out.append(d)
+	return out
+
+
+static func _door_distance(at: Vector3, doors: Array[Vector2]) -> float:
+	var best: float = INF
+	for d: Vector2 in doors:
+		best = minf(best, Vector2(at.x, at.z).distance_to(d))
+	return best
+
+
+static func _hits(box: AABB, list: Array[AABB]) -> bool:
+	for b: AABB in list:
+		if b.intersects(box):
+			return true
+	return false
