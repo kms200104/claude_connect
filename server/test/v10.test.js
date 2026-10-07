@@ -39,12 +39,20 @@ describe('v0.10 집 안 계산', () => {
     assert.equal(plan('102-302'), '35');
     assert.equal(plan('104-301'), '105');
     assert.equal(plan('105-302'), '125');
-    const origins = data.units.map((u) => interiorOrigin(data.floorplans, data.units, u.id));
+    // 집 안 상자 (시작점 + 그 집 평면 크기, size_scale 반영): 서로 1m 이상 떨어지고, 섬·상점 실내 밖, 서버 경계 안.
+    const boxes = data.units.map((u) => {
+      const o = interiorOrigin(data.floorplans, data.units, u.id);
+      const p = data.planOf(u);
+      return { id: u.id, x0: o.x, z0: o.z, x1: o.x + p.size.x, z1: o.z + p.size.z };
+    });
     const edge = defaultConfig.worldHalfExtent;
-    for (let i = 0; i < origins.length; i++) {
-      assert.ok(Math.abs(origins[i].x) + 20 <= edge && origins[i].z + 20 <= edge && origins[i].z > 200, '섬·상점 실내 밖, 서버 경계 안');
-      for (let j = i + 1; j < origins.length; j++) {
-        assert.ok(Math.abs(origins[i].x - origins[j].x) >= 15 || Math.abs(origins[i].z - origins[j].z) >= 12, '집끼리 겹치지 않는다');
+    for (let i = 0; i < boxes.length; i++) {
+      const a = boxes[i];
+      assert.ok(Math.max(Math.abs(a.x0), Math.abs(a.x1)) <= edge && a.z1 <= edge && a.z0 > 200, `${a.id}: 섬·상점 실내 밖, 서버 경계 안`);
+      for (let j = i + 1; j < boxes.length; j++) {
+        const b = boxes[j];
+        const apart = a.x1 + 1 <= b.x0 || b.x1 + 1 <= a.x0 || a.z1 + 1 <= b.z0 || b.z1 + 1 <= a.z0;
+        assert.ok(apart, `집끼리 겹치지 않는다: ${a.id} ↔ ${b.id}`);
       }
     }
   });

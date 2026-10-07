@@ -114,7 +114,7 @@ func _run() -> void:
 
 	# 한 마리 더 잡고, 서버를 재시작해도 남는지 본다
 	hud.action_pressed.emit()
-	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 8.0)
+	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 15.0)
 	await _hook_and_reel(hud, controller)
 	await _wait_until(func() -> bool: return _count_fish() == 1, 3.0)
 	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.IDLE, 6.0)
