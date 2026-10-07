@@ -4,7 +4,7 @@ extends Node3D
 ## 로컬 플레이어·원격 플레이어·주민·가방 창 미리보기가 같은 리그를 쓰고,
 ## 게임 로직은 set_look / set_move_speed / set_fishing / set_held / play_chop / set_eye_offset / set_outfit,
 ## 그리고 set_braking(미끄러지며 멈춤) / play_emote(감정표현) / play_plant(심기) / show_off(잡은 물고기 자랑),
-## set_cooking(요리 동작 + 칼·팬·국자) / set_sitting(식당 의자에 앉기) 만 호출한다.
+## set_cooking(요리 동작 + 칼·팬·국자) / set_sitting(식당 의자에 앉기) / set_riding(자전거·전기오토바이 타기) 만 호출한다.
 ## 몸·팔·다리 메시는 CharacterModel 이 겉모습(CharacterLook)마다 한 번 만들어 공유한다.
 
 @export_group("References")
@@ -25,10 +25,15 @@ extends Node3D
 @export var arm_right: Node3D
 @export var leg_left: Node3D
 @export var leg_right: Node3D
-## 오른손에 쥐는 도구 (ArmR 아래).
+## v0.15 팔꿈치 · 무릎 관절 (아래팔·손은 팔꿈치 아래, 정강이·부츠는 무릎 아래). 없으면 예전처럼 팔·다리 한 덩어리.
+@export var elbow_left: Node3D
+@export var elbow_right: Node3D
+@export var knee_left: Node3D
+@export var knee_right: Node3D
+## 오른손에 쥐는 도구 (ElbowR 아래).
 @export var rod: Node3D
 @export var axe: Node3D
-## 요리 도구(칼·팬·국자)를 쥐는 자리 (ArmR 아래). 메시는 set_cooking 이 바꿔 끼운다.
+## 요리 도구(칼·팬·국자)를 쥐는 자리 (ElbowR 아래). 메시는 set_cooking 이 바꿔 끼운다.
 @export var tool: Node3D
 ## 정점 색을 쓰는 흰 툰 머티리얼 (몸·옷·도구 모두).
 @export var clay_material: Material
@@ -57,6 +62,8 @@ const PHONE_GRIP: Vector3 = Vector3(0.0, 0.06, 0.04)
 ## 캐릭터 손에 맞춘 크기 (모형은 17cm).
 const PHONE_SCALE: float = 1.75
 const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
+## set_riding 으로 탈 수 있는 자세 (탈것 데이터 data/vehicles/vehicles.json 의 kind → 애니메이션).
+const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto"}
 
 var held_item: String = "rod"
 var look: CharacterLook = CharacterLook.for_player(1)
@@ -80,6 +87,11 @@ var _phone_target: float = 0.0
 var _phone_value: float = 0.0
 var _phone: PhoneProp = null
 var _phone_tween: Tween = null
+## 탈것에 앉은 자세 (v0.15). 빈 문자열 = 안 탐.
+var _ride_kind: String = ""
+var _ride_target: float = 0.0
+var _ride_value: float = 0.0
+var _pedal_rate: float = 0.0
 var _tool_id: String = ""
 var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
@@ -93,6 +105,8 @@ var _expression_id: String = ""
 var _expression_hold: float = 0.0
 var _eye_offset: Vector2 = Vector2.ZERO
 var _limbs: Array[MeshInstance3D] = []
+## _limbs 와 같은 순서의 마디 이름 (arm · leg · arm_up · arm_low · leg_up · leg_low).
+var _limb_parts: PackedStringArray = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
 var _outfit_ids: Dictionary[String, String] = {"hat": "", "top": ""}
 
@@ -169,7 +183,7 @@ func set_held(item_id: String) -> void:
 	if _show_target > 0.5:
 		_held_before_show = item_id
 		return
-	var free: bool = _cook_target < 0.5 and _rummage_target < 0.5 and _phone_target < 0.5
+	var free: bool = _cook_target < 0.5 and _rummage_target < 0.5 and _phone_target < 0.5 and _ride_target < 0.5
 	if rod != null:
 		rod.visible = item_id == "rod" and free
 	if axe != null:
@@ -269,6 +283,32 @@ func is_rummaging() -> bool:
 	return _rummage_target > 0.5
 
 
+## 탈것에 올라타기 (RIDE_ANIMS 의 kind, 빈 문자열 = 내림). 타는 동안 손에 든 도구는 숨기고 두 손은 핸들을 잡는다.
+func set_riding(kind: String) -> void:
+	var active: bool = RIDE_ANIMS.has(kind)
+	if active == (_ride_target > 0.5) and (not active or kind == _ride_kind):
+		return
+	_ride_kind = kind if active else ""
+	_ride_target = 1.0 if active else 0.0
+	if active and tree != null:
+		tree.set("parameters/RideSwitch/transition_request", RIDE_ANIMS[kind])
+	if active:
+		for n: Node3D in [rod, axe, tool]:
+			if n != null:
+				n.visible = false
+	else:
+		set_held(held_item)
+
+
+func riding_kind() -> String:
+	return _ride_kind
+
+
+## 페달 밟는 빠르기 (초당 바퀴 수). 자전거 바퀴 속도에 맞춰 ride_bike 한 바퀴(1초)를 빠르게·느리게 돌린다. 0 = 멈춤.
+func set_pedal_rate(rev_per_sec: float) -> void:
+	_pedal_rate = maxf(rev_per_sec, 0.0)
+
+
 ## 휴대폰 꺼내 보기 (v0.14): 손에 든 물건을 주머니에 쏙 넣고(작아지며 사라짐) 휴대폰을 꺼내 오른손에 들고 내려다본다.
 ## 끄면 휴대폰을 넣고 들고 있던 물건을 다시 꺼낸다.
 func set_phone(active: bool) -> void:
@@ -330,17 +370,20 @@ func phone_tap() -> void:
 func phone_prop() -> PhoneProp:
 	if _phone != null or arm_right == null:
 		return _phone
+	# 손은 팔꿈치 아래에 달린다 (휴대폰 자세에서 팔꿈치는 펴져 있어 방향은 어깨와 같다).
+	var hand_parent: Node3D = elbow_right if elbow_right != null else arm_right
+	var hand_at: Vector3 = CharacterModel.HAND_OFFSET - (elbow_right.position if elbow_right != null else Vector3.ZERO)
 	# 손잡이 자리 (자세에 맞춘 방향 · 크기) 안에 휴대폰을 둔다 — 꺼내고 넣을 때는 휴대폰만 커졌다 작아진다.
 	var grip: Node3D = Node3D.new()
 	grip.name = "PhoneGrip"
-	arm_right.add_child(grip)
+	hand_parent.add_child(grip)
 	# 들고 보는 자세(phone 애니메이션)의 오른팔 각도에서, 화면이 얼굴 쪽(위 · 뒤)을 보도록 손 기준으로 되돌려 놓는다.
 	var hand: Basis = Basis.from_euler(PHONE_ARM)
 	var want: Basis = Basis(Vector3.UP, 0.22) * Basis(Vector3.RIGHT, PHONE_TILT)
 	var local: Basis = hand.inverse() * want
 	grip.basis = local.scaled(Vector3.ONE * PHONE_SCALE)
 	# 손바닥이 휴대폰 아래쪽 뒷면을 받친다.
-	grip.position = Vector3(0.0, -0.3, 0.0) + local * PHONE_GRIP
+	grip.position = hand_at + local * PHONE_GRIP
 	_phone = PhoneProp.new(clay_material)
 	_phone.visible = false
 	grip.add_child(_phone)
@@ -482,6 +525,9 @@ func _process(delta: float) -> void:
 	tree.set("parameters/FishBlend/blend_amount", _fishing_value)
 	_brake_value = move_toward(_brake_value, _brake_target, brake_blend_speed * delta)
 	tree.set("parameters/BrakeBlend/blend_amount", _brake_value)
+	_ride_value = move_toward(_ride_value, _ride_target, 5.0 * delta)
+	tree.set("parameters/RideBlend/blend_amount", _ride_value)
+	tree.set("parameters/RideScale/scale", _pedal_rate if _ride_kind == "bike" else 1.0)
 	_show_value = lerpf(_show_value, _show_target, 1.0 - exp(-10.0 * delta))
 	tree.set("parameters/ShowBlend/blend_amount", _show_value)
 	_cook_value = move_toward(_cook_value, _cook_target, 8.0 * delta)
@@ -534,7 +580,14 @@ func _build_static_parts() -> void:
 	_head_root().add_child(_expression)
 	_add_tool_mesh(rod, CharacterModel.rod())
 	_add_tool_mesh(axe, CharacterModel.axe())
-	for limb: Node3D in [arm_left, arm_right, leg_left, leg_right]:
+	# 관절이 있으면 위 · 아래 마디를 따로, 없으면(옛 리그) 한 덩어리.
+	var arms_split: bool = elbow_left != null and elbow_right != null
+	var legs_split: bool = knee_left != null and knee_right != null
+	for pair: Array in [[arm_left, "arm_up" if arms_split else "arm"], [arm_right, "arm_up" if arms_split else "arm"],
+			[leg_left, "leg_up" if legs_split else "leg"], [leg_right, "leg_up" if legs_split else "leg"],
+			[elbow_left if arms_split else null, "arm_low"], [elbow_right if arms_split else null, "arm_low"],
+			[knee_left if legs_split else null, "leg_low"], [knee_right if legs_split else null, "leg_low"]]:
+		var limb: Node3D = pair[0]
 		if limb == null:
 			continue
 		var mi: MeshInstance3D = MeshInstance3D.new()
@@ -542,6 +595,7 @@ func _build_static_parts() -> void:
 		mi.material_override = clay_material
 		limb.add_child(mi)
 		_limbs.append(mi)
+		_limb_parts.append(pair[1])
 
 
 ## 감정표현의 표정 (빈 문자열 = 감춘다). 표정이 없는 감정표현도 감춘다.
@@ -585,11 +639,8 @@ func _apply_look() -> void:
 	if head_mesh != null:
 		head_mesh.mesh = CharacterModel.head(worn)
 		head_mesh.material_override = clay_material
-	var arm_mesh: ArrayMesh = CharacterModel.arm(worn)
-	var leg_mesh: ArrayMesh = CharacterModel.leg(worn)
-	for mi: MeshInstance3D in _limbs:
-		var parent: Node = mi.get_parent()
-		mi.mesh = arm_mesh if parent == arm_left or parent == arm_right else leg_mesh
+	for i: int in _limbs.size():
+		_limbs[i].mesh = CharacterModel.limb(worn, _limb_parts[i])
 	# 화질이 바뀌면 손에 든 도구도 그 화질의 모형으로 다시 끼운다.
 	if not _tool_id.is_empty():
 		var held_tool: String = _tool_id

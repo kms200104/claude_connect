@@ -4,7 +4,7 @@ extends RefCounted
 ## 2.5등신 점토 인형 비율 — 옆으로 살짝 넓은 큰 머리와 작은 귀, 덩어리진 가닥으로 만든 머리(10가지), 니트 스웨터, 반바지, 부츠.
 ## 눈·코·입은 data/looks/face_parts.json 의 도형을 머리 겉면에 촘촘히 붙인 얇은 판 (FaceShapes).
 ## 좌표는 리그(Visual) 기준: 발바닥 y = -0.8, 머리 꼭대기 ≈ 0.8, 정면 = -Z.
-## 정점 색만 쓰므로 머티리얼은 흰 툰 머티리얼 하나 (캐릭터 하나 = 드로우콜 8: 몸통, 머리, 골반, 눈, 팔 2, 다리 2).
+## 정점 색만 쓰므로 머티리얼은 흰 툰 머티리얼 하나 (캐릭터 하나 = 드로우콜 12: 몸통, 머리, 골반, 눈, 위팔·아래팔 2씩, 허벅지·정강이 2씩).
 ## v0.13: 허리·목 관절 — 몸통(body: 스웨터)은 허리 위, 머리(head: 머리·얼굴·머리카락·귀)는 목 위, 반바지(hips)는 골반에 단다.
 ## 세 메시 모두 같은 Visual 좌표로 만들고, 리그가 관절 노드 안에서 원래 자리를 되돌려 놓는다.
 
@@ -19,6 +19,9 @@ const SHOULDER: Vector3 = Vector3(0.23, -0.05, 0.0)
 const HIP: Vector3 = Vector3(0.1, -0.42, 0.0)
 ## 어깨에서 손(도구를 쥐는 곳)까지.
 const HAND_OFFSET: Vector3 = Vector3(0.0, -0.3, 0.0)
+## v0.15 관절: 어깨 → 팔꿈치, 골반 → 무릎 (리그 씬의 ElbowL/R · KneeL/R 자리와 같아야 한다, gen_character_rig.py).
+const ELBOW: Vector3 = Vector3(0.0, -0.11, 0.0)
+const KNEE: Vector3 = Vector3(0.0, -0.18, 0.0)
 const EYE_CENTER: Vector3 = Vector3(0.0, 0.35, -0.3)
 
 const MOUTH_COLOR: Color = Color("#5A3326")
@@ -163,6 +166,48 @@ static func arm(look: CharacterLook) -> ArrayMesh:
 	return mesh
 
 
+## 팔·다리 마디 하나 (CharacterRig 의 마디 이름: arm · leg · arm_up · arm_low · leg_up · leg_low).
+static func limb(look: CharacterLook, part: String) -> ArrayMesh:
+	match part:
+		"arm_up":
+			return arm_upper(look)
+		"arm_low":
+			return arm_lower(look)
+		"leg_up":
+			return leg_upper(look)
+		"leg_low":
+			return leg_lower(look)
+		"arm":
+			return arm(look)
+	return leg(look)
+
+
+## v0.15 팔꿈치 관절: 위팔 (어깨 기준, 어깨 → 팔꿈치 소매).
+static func arm_upper(look: CharacterLook) -> ArrayMesh:
+	var key: String = "arm_up|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, ELBOW.y, 0.0), 0.068, _knit(look.top), _seg(8), _round_steps(2))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## 아래팔 (팔꿈치 기준): 소매 + 소매 끝단 + 손. 위팔과 이음매는 둥근 끝이 겹쳐 가린다.
+static func arm_lower(look: CharacterLook) -> ArrayMesh:
+	var key: String = "arm_low|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, -0.21 - ELBOW.y, 0.0), 0.066, _knit(look.top), _seg(8), _round_steps(2))
+	ClayMesh.add_torus(st, Vector3(0.0, -0.225 - ELBOW.y, 0.0), 0.06, 0.022, look.top.darkened(0.08), _seg(8), _seg(4))
+	ClayMesh.add_ellipsoid(st, HAND_OFFSET - ELBOW + Vector3(0.0, 0.02, 0.0), Vector3(0.062, 0.066, 0.062), look.skin, _seg(7), _seg(4))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
 ## 다리 하나 (골반 기준): 짧은 다리 + 접은 단이 있는 부츠.
 static func leg(look: CharacterLook) -> ArrayMesh:
 	var key: String = "leg|%d|%s" % [detail, look.key()]
@@ -173,6 +218,34 @@ static func leg(look: CharacterLook) -> ArrayMesh:
 	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.082, 0.078, -0.37, -0.17, 0.03, _round_steps(1)), _seg(8), Transform3D(), look.shoes)
 	ClayMesh.add_torus(st, Vector3(0.0, -0.175, 0.0), 0.08, 0.024, look.shoes.lightened(0.1), _seg(8), _seg(4))
 	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.335, -0.045), Vector3(0.155, 0.09, 0.24), 0.45, look.shoes, Basis(), _seg(8), _seg(4))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## v0.15 무릎 관절: 허벅지 (골반 기준, 골반 → 무릎).
+static func leg_upper(look: CharacterLook) -> ArrayMesh:
+	var key: String = "leg_up|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_capsule(st, Vector3(0.0, -0.02, 0.0), Vector3(0.0, KNEE.y, 0.0), 0.058, look.skin, _seg(6), _round_steps(1))
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_cache[key] = mesh
+	return mesh
+
+
+## 정강이 (무릎 기준): 무릎 살 + 접은 단이 있는 부츠 + 발.
+static func leg_lower(look: CharacterLook) -> ArrayMesh:
+	var key: String = "leg_low|%d|%s" % [detail, look.key()]
+	if _cache.has(key):
+		return _cache[key]
+	var st: SurfaceTool = ClayMesh.begin()
+	var k: float = KNEE.y
+	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, -0.03, 0.0), 0.057, look.skin, _seg(6), _round_steps(1))
+	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(0.082, 0.078, -0.37 - k, -0.17 - k, 0.03, _round_steps(1)), _seg(8), Transform3D(), look.shoes)
+	ClayMesh.add_torus(st, Vector3(0.0, -0.175 - k, 0.0), 0.08, 0.024, look.shoes.lightened(0.1), _seg(8), _seg(4))
+	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.335 - k, -0.045), Vector3(0.155, 0.09, 0.24), 0.45, look.shoes, Basis(), _seg(8), _seg(4))
 	var mesh: ArrayMesh = ClayMesh.commit(st)
 	_cache[key] = mesh
 	return mesh
