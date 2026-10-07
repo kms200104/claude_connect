@@ -128,9 +128,9 @@ func _run() -> void:
 	await _shot("08_quest_log")
 	(_village.get_node("HUD/TopBar/%QuestButton") as Button).pressed.emit()
 
-	# 9. 가방 창: 목재를 고르면 캐릭터가 그 칸을 바라본다
+	# 9. 가방 창 (v0.13): 주머니를 뒤지는 캐릭터 머리 위에 말풍선 창, 목재를 고른 모습
 	hotbar.bag_pressed.emit()
-	await _wait(0.4)
+	await _wait(1.2)
 	var wood_slot: int = -1
 	for i: int in range(Net.quick_slot_count, Net.inventory.size()):
 		if Net.inventory[i] != null and not GameData.item(Net.inventory[i].id).is_tool():
@@ -138,10 +138,7 @@ func _run() -> void:
 			break
 	if wood_slot >= 0:
 		window.press_slot(wood_slot)
-	await _wait(1.0)
-	await _shot("09_inventory_look_bag")
+	await _wait(0.4)
+	await _shot("09_inventory_bag")
 	window.press_slot(wood_slot)
-	window.press_slot(0)
-	await _wait(1.0)
-	await _shot("10_inventory_look_quickslot")
 	window.close()

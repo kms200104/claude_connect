@@ -5,6 +5,7 @@ extends RefCounted
 ## 비가 오면 바깥의 흙·돌 바닥은 물웅덩이(water) 소리. 풀·흙에서 달리면 쿵쿵 더 센 달리기 소리(step_run),
 ## 그 밖의 재질은 달려도 그 재질 소리를 조금 크게 낸다.
 ## 내 캐릭터는 위치 없는 소리, 상대 플레이어는 그 자리에서 나는 3D 소리로 낸다 (RemotePlayer 도 이 클래스).
+## v0.13.3: 같은 박자에 발밑 파티클(FootFx)도 튄다 — 흙먼지 · 모래 · 풀잎 · 물방울. 걸으면 살짝, 달리면 세게.
 
 ## 보폭: 걷기 애니메이션(0.6초에 두 걸음)·달리기 애니메이션(0.4초에 두 걸음)과 발이 땅에 닿는 박자가 맞도록
 ## 걷기 4.5m/s ÷ 초당 3.3걸음, 달리기 7m/s ÷ 초당 5걸음.
@@ -19,10 +20,19 @@ const WET_BEACH: float = 2.5
 
 var _travelled: float = 0.0
 var _index: int = 0
+## 지난 프레임 자리 (걸어가는 방향 → 발 뒤로 차올리는 쪽).
+var _last: Vector3 = Vector3.INF
+## 파티클을 낼지 (헤드리스 테스트 · 끄고 싶을 때).
+var particles: bool = true
 
 
 ## moved: 이번 프레임에 수평으로 움직인 거리.
 func advance(moved: float, running: bool, position: Vector3, positional: bool) -> void:
+	var back: Vector3 = Vector3.ZERO
+	if _last != Vector3.INF:
+		back = Vector3(_last.x - position.x, 0.0, _last.z - position.z)
+		back = back.normalized() if back.length() > 0.0001 else Vector3.ZERO
+	_last = position
 	if moved < 0.0005:
 		_travelled = minf(_travelled, WALK_STRIDE * 0.5)
 		return
@@ -40,6 +50,18 @@ func advance(moved: float, running: bool, position: Vector3, positional: bool) -
 		Audio.play_at(id, position, volume - 2.0)
 	else:
 		Audio.play_sfx(id, volume)
+	if particles and DisplayServer.get_name() != "headless":
+		FootFx.step(position, particle_surface(position), running, back)
+
+
+## 파티클 재질: 발소리 재질에서 모래사장(밝은 모래)과 비 오는 날 물기를 따로 고른다.
+static func particle_surface(position: Vector3) -> String:
+	var surface: String = surface_of(position)
+	if (surface == "dirt" or surface == "stone") and is_raining_outside(position):
+		return "water"
+	if surface == "dirt" and GameData.layout != null and not GameData.layout.on_grass_land(Vector2(position.x, position.z), -1.0):
+		return "sand"
+	return surface
 
 
 ## 이 자리·이 걸음에 낼 소리 이름 (step_grass, step_run, step_stone …). 비 오는 바깥의 흙·돌은 물웅덩이.
@@ -68,6 +90,9 @@ static func surface_of(position: Vector3) -> String:
 	var layout: VillageLayout = GameData.layout
 	if layout == null:
 		return "grass"
+	# 해안선 너머 멀리 = 바다 건너 실내 (아파트 집 안): 마루.
+	if layout.island_half > 0.0 and layout.island_shape(p) > SpotInfo.SEA_STAND_MAX:
+		return "wood"
 	if layout.dock_size.x > 0.0 and layout.dock_rect().grow(0.1).has_point(p):
 		return "wood"
 	if GameData.airport != null:

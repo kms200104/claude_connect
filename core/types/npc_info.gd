@@ -10,6 +10,8 @@ var color: Color = Color.WHITE
 var about: String = ""
 ## 주민집이 있는지 (성성호수공원 재현부터 주민은 아파트에 사는 것으로 보고 집을 짓지 않는다).
 var has_house: bool = false
+## 생일 (v16, 달 · 날, 없으면 (0, 0)).
+var birthday: Vector2i = Vector2i.ZERO
 var house_position: Vector3 = Vector3.ZERO
 var house_yaw: float = 0.0
 var home: Vector3 = Vector3.ZERO
@@ -36,6 +38,9 @@ var mbti_self: String = ""
 
 static func from_dict(data: Dictionary) -> NpcInfo:
 	var info: NpcInfo = NpcInfo.new()
+	var bday: PackedStringArray = str(data.get("birthday", "")).split("-")
+	if bday.size() == 2 and bday[0].is_valid_int() and bday[1].is_valid_int():
+		info.birthday = Vector2i(int(bday[0]), int(bday[1]))
 	info.id = str(data.get("id", ""))
 	info.display_name = str(data.get("name", info.id))
 	info.personality = str(data.get("personality", "kind"))

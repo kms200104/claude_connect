@@ -42,7 +42,7 @@ func _ready() -> void:
 		_server_edit.text = Net.TEST_SERVER_URL
 		Net.play_on_test_server())
 	_form.add_child(_test_button)
-	# 방 정보 줄에 화질 단추 (창은 HUD 맨 위에 붙인다).
+	# 방 정보 줄에 설정 단추 — 닉네임 · 화질 (창은 HUD 맨 위에 붙인다).
 	var quality: QualityWindow = QualityWindow.attach(get_parent() if get_parent() != null else self)
 	var quality_button: Button = QualityWindow.make_button(quality, 26)
 	quality_button.name = "QualityButton"
@@ -130,7 +130,13 @@ func _describe_error(code: String) -> String:
 		NetProtocol.ERR_ROOM_FULL:
 			return "방이 가득 찼어요"
 		NetProtocol.ERR_BAD_VERSION:
-			return "앱 버전이 서버와 달라요"
+			# 어느 쪽이 옛날 것인지까지 알려 준다: 앱이 낮으면 앱을 새로 설치, 서버가 낮으면 서버 폴더에서 git pull 뒤 다시 켜기.
+			var server_v: int = Net.server_version
+			if server_v <= 0:
+				return "앱 버전(v%d)이 서버와 달라요" % NetProtocol.VERSION
+			if server_v > NetProtocol.VERSION:
+				return "앱이 옛날 버전이에요 (앱 v%d · 서버 v%d) — 최신 코드로 앱을 다시 설치하세요" % [NetProtocol.VERSION, server_v]
+			return "서버가 옛날 버전이에요 (앱 v%d · 서버 v%d) — 서버 폴더에서 git pull 뒤 다시 켜세요" % [NetProtocol.VERSION, server_v]
 		NetProtocol.ERR_CONNECT_FAILED:
 			return "서버에 연결하지 못했어요 — 아래 '테스트 서버로 하기'로 서버 없이 해 볼 수 있어요"
 		NetProtocol.ERR_RESUME_FAILED, NetProtocol.ERR_RECONNECT_TIMEOUT:

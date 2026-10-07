@@ -16,6 +16,7 @@ const MUSEUM_PATH: String = "res://data/places/museum.json"
 const AIRPORT_PATH: String = "res://data/places/airport.json"
 const FACE_PATH: String = "res://data/looks/face_parts.json"
 const MBTI_PATH: String = "res://data/npcs/mbti.json"
+const ACHIEVEMENTS_PATH: String = "res://data/achievements/achievements.json"
 const ICON_DIR: String = "res://assets/icons/items"
 
 ## 자리(slot) 번호별 플레이어 캐릭터 이름. 대사의 {player} 자리에 들어간다.
@@ -23,6 +24,8 @@ const PLAYER_NAMES: PackedStringArray = ["보리", "새미"]
 
 var fish: Dictionary[String, FishInfo] = {}
 var spots: Dictionary[String, SpotInfo] = {}
+## 바다 낚시터 (v0.12, 섬 둘레 바닷가 어디서나). 없으면 null.
+var sea_spot: SpotInfo = null
 ## 물고기를 포함한 인벤토리 아이템 전체.
 var items: Dictionary[String, ItemInfo] = {}
 var trees: Dictionary[String, TreeInfo] = {}
@@ -62,6 +65,12 @@ var mbti: Dictionary = {}
 var airport: KeeperPlace = null
 ## 경제 (v8): 증권 종목 · 아파트 · 은행 · 식당 요리와 손님.
 var econ: EconData = null
+## 일거리 (v0.12): 배달 알바 거리.
+var jobs: JobRules = JobRules.new()
+## v16 업적 (데이터 순서 그대로) · id → 업적 · 판정 값 이름 → 설명.
+var achievements: Array[AchievementInfo] = []
+var achievement_by_id: Dictionary[String, AchievementInfo] = {}
+var stat_names: Dictionary[String, String] = {}
 
 var _icons: Dictionary[String, Texture2D] = {}
 var _dialogue: Dictionary = {}
@@ -79,7 +88,11 @@ func _ready() -> void:
 	for entry: Variant in _read_json(SPOTS_PATH).get("spots", []):
 		if entry is Dictionary:
 			var spot: SpotInfo = SpotInfo.from_dict(entry)
-			spots[spot.id] = spot
+			# 바다(v0.12)는 사각형 낚시터 목록과 따로 둔다 (호수 둘레를 도는 코드가 바다를 사각형으로 보지 않게).
+			if spot.is_sea:
+				sea_spot = spot
+			else:
+				spots[spot.id] = spot
 	for entry: Variant in _read_json(ITEMS_PATH).get("items", []):
 		if entry is Dictionary:
 			var item: ItemInfo = ItemInfo.from_item_dict(entry)
@@ -104,6 +117,8 @@ func _ready() -> void:
 	_catch_shouts = dialogue_file.get("catch_shouts", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
+	if sea_spot != null:
+		sea_spot.island = layout
 	var plants_file: Dictionary = _read_json(PLANTS_PATH)
 	plant_range = float(plants_file.get("plant_range", plant_range))
 	tree_clearance = float(plants_file.get("tree_clearance", tree_clearance))
@@ -122,10 +137,19 @@ func _ready() -> void:
 	mbti = _read_json(MBTI_PATH)
 	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
 	econ = EconData.load_all()
+	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
 	econ.build_customers(npcs)
+	var ach_file: Dictionary = _read_json(ACHIEVEMENTS_PATH)
+	for key: Variant in ach_file.get("stats", {}):
+		stat_names[str(key)] = str(ach_file["stats"][key])
+	for entry: Variant in ach_file.get("list", []):
+		if entry is Dictionary:
+			var a: AchievementInfo = AchievementInfo.from_dict(entry)
+			achievements.append(a)
+			achievement_by_id[a.id] = a
 	var events_file: Dictionary = _read_json(EVENTS_PATH)
 	collect_range = float(events_file.get("collect_range", collect_range))
-	for group: String in ["daily", "night"]:
+	for group: String in ["daily", "night", "economy"]:
 		for entry: Variant in events_file.get(group, []):
 			if entry is Dictionary:
 				var ev: EventInfo = EventInfo.from_dict(entry)
@@ -135,6 +159,27 @@ func _ready() -> void:
 func fish_name(id: String) -> String:
 	var info: FishInfo = fish.get(id)
 	return info.display_name if info != null else id
+
+
+## 이 물고기가 낚이는 곳 이름 (v0.12: 마을 호수 · 성성호수 · 바다).
+func fish_places(fish_id: String) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for spot: SpotInfo in spots.values():
+		if fish_id in spot.fish_ids:
+			out.append(spot.display_name)
+	if sea_spot != null and fish_id in sea_spot.fish_ids:
+		out.append(sea_spot.display_name)
+	return out
+
+
+## 바다에서만 낚이는 물고기인지.
+func is_sea_fish(fish_id: String) -> bool:
+	if sea_spot == null or not fish_id in sea_spot.fish_ids:
+		return false
+	for spot: SpotInfo in spots.values():
+		if fish_id in spot.fish_ids:
+			return false
+	return true
 
 
 func item(id: String) -> ItemInfo:
@@ -173,6 +218,10 @@ func any_npc(id: String) -> NpcInfo:
 		return museum.keeper
 	if airport != null and airport.keeper.id == id:
 		return airport.keeper
+	# 광장 손님 (v0.12: 누리 · 바우 · 갈매).
+	for ev: EventInfo in events.values():
+		if ev.npc != null and ev.npc.id == id:
+			return ev.npc
 	return null
 
 
@@ -197,6 +246,13 @@ func npc_name(id: String) -> String:
 
 
 func player_name(slot: int) -> String:
+	# v14: 정한 닉네임이 있으면 그것.
+	var nick: String = str(Net.names.get(slot, ""))
+	return nick if not nick.is_empty() else default_player_name(slot)
+
+
+## 닉네임을 정하지 않았을 때의 자리 기본 이름.
+func default_player_name(slot: int) -> String:
 	return PLAYER_NAMES[(slot - 1) % PLAYER_NAMES.size()] if slot >= 1 else "친구"
 
 

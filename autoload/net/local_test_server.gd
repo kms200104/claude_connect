@@ -4,7 +4,7 @@ extends Node
 ## 같은 프로세스 안에서 WebSocket 서버(127.0.0.1)를 연다. 클라이언트(Net)는 진짜 서버와 똑같이 접속·요청한다.
 ## 입장 정보는 진짜 서버에서 찍어 둔 것(data/testserver/welcome.json, server/tools/make_test_snapshot.js)을 쓰고,
 ## 혼자 노는 데 필요한 것을 직접 처리한다: 걷기 · 가방(옮기기·버리기·손에 들기) · 상점(드나들기·사고팔기) · 마을 가구 ·
-## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 씨앗 심기·꽃 따기 ·
+## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 닉네임 · 씨앗 심기·꽃 따기 ·
 ## 들판 채집 · 아파트 집 구경·꾸미기. 나무·꽃은 진짜 서버보다 10배 빨리 자란다.
 ## 여럿이 하는 일·경제(식당·증권·은행·동사무소·혼인신고·여울 그물·삽)는 "test_server" 오류로 알려 준다 — 판정이 너그럽고 다른 사람이 없다.
 ## 상태는 user://test_server.json 에 저장된다.
@@ -38,6 +38,8 @@ var _home_seq: int = 0
 var _placed: Dictionary = {}
 var _placed_seq: int = 0
 var _outfit: Dictionary = {"hat": "", "top": ""}
+## 닉네임 (v14).
+var _name: String = ""
 var _face: Dictionary = {}
 var _friends: Dictionary = {}
 ## 친한 주민이 먼저 말 걸기 (테스트 서버의 주민은 걷지 않으니, 가까이 서 있을 때만): 주민 id → 마지막으로 건 시각.
@@ -170,6 +172,9 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if int(msg.get("v", 0)) != NetProtocol.VERSION:
 				fail.call(NetProtocol.ERR_BAD_VERSION)
 				return
+			var join_name: String = NetProtocol.clean_name(str(msg.get("name", "")))
+			if not join_name.is_empty():
+				_name = join_name
 			_send(peer, _welcome(t == "resume"))
 			if not _home.is_empty():
 				_send(peer, _home_message(null))
@@ -185,9 +190,18 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send_inventory(peer)
 			_save()
 		"inv_discard":
+			# v13: 버린 물건은 발밑에 남는다 (다시 주울 수 있다).
 			var slot: int = int(msg.get("slot", -1))
 			if slot >= 0 and slot < _slots.size() and _slots[slot] != null and not _is_tool(str(_slots[slot]["id"])):
-				_remove(slot, maxi(1, int(msg.get("n", 1))))
+				var n: int = clampi(int(msg.get("n", 1)), 1, int(_slots[slot]["n"]))
+				var item: String = str(_slots[slot]["id"])
+				_remove(slot, n)
+				_drop_seq += 1
+				var k: float = float(_drop_seq % 12)
+				var g: Dictionary = {"id": "g%d" % _drop_seq, "kind": "item", "item": item, "n": n,
+					"x": _pos.x + cos(k * 2.4) * (0.25 + 0.2 * sqrt(k)), "z": _pos.z + sin(k * 2.4) * (0.25 + 0.2 * sqrt(k))}
+				_drops[g["id"]] = g
+				_send(peer, {"t": "drop", "d": g, "by": 1})
 				_save()
 			_send_inventory(peer)
 		"shop_enter", "shop_exit":
@@ -288,6 +302,18 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_face.merge(face, true)
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
 			_save()
+		"phone", "phone_tap":
+			# 혼자 노는 테스트 서버: 다른 사람이 없으니 알릴 곳이 없다.
+			pass
+		"set_name":
+			var raw: String = str(msg.get("name", ""))
+			var clean: String = NetProtocol.clean_name(raw)
+			if raw.strip_edges().length() > NetProtocol.NAME_MAX or (clean.is_empty() and not raw.strip_edges().is_empty()):
+				fail.call(NetProtocol.ERR_BAD_NAME)
+				return
+			_name = clean
+			_send(peer, {"t": "name", "rid": rid, "id": 1, "name": _name})
+			_save()
 		"plant":
 			_plant(peer, msg, fail)
 		"pick":
@@ -297,21 +323,41 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if d.is_empty():
 				fail.call(NetProtocol.ERR_NO_DROP)
 				return
-			if not _add(str(d["item"]), 1):
+			var n: int = int(d.get("n", 1))
+			if not _add(str(d["item"]), n):
 				fail.call(NetProtocol.ERR_INVENTORY_FULL)
 				return
 			_drops.erase(d["id"])
-			_send(peer, {"t": "collect_result", "rid": rid, "id": d["id"], "kind": d["kind"], "item": d["item"]})
+			_send(peer, {"t": "collect_result", "rid": rid, "id": d["id"], "kind": d["kind"], "item": d["item"], "n": n, "left": 0})
 			_send_inventory(peer)
 			_send(peer, {"t": "drop_gone", "id": d["id"], "by": 1})
 			_save()
 		"talk_end":
 			_talking = ""
-		"bank_quote", "civic_info", "emote", "emote_quick":
+		"bank_quote", "civic_info", "emote", "emote_quick", "say":
 			pass
+		"cal_info":
+			_send(peer, _calendar())
 		_:
 			if rid != null:
 				fail.call(ERR_TEST_ONLY)
+
+
+# ---- 날씨 · 달력 (v16): 테스트 서버는 늘 맑고 이벤트가 없다. 주민 생일만 달력에 ----
+
+func _calendar() -> Dictionary:
+	var today: int = VillageClock.day_index(Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS)
+	var days: Array = []
+	for i: int in 7:
+		var date: Dictionary = VillageClock.date_of_day(today + i)
+		var npcs: Array = []
+		for npc: NpcInfo in GameData.npcs.values():
+			if npc.birthday == Vector2i(int(date["month"]), int(date["day"])):
+				npcs.append(npc.id)
+		var noon: float = (float(today + i) * VillageClock.DAY_MS) + 12.0 * VillageClock.HOUR_MS
+		days.append({"day": today + i, "y": int(date["year"]), "m": int(date["month"]), "d": int(date["day"]), "wd": int(date["weekday"]),
+			"season": VillageClock.season_of(noon), "w": ["clear", "clear", "clear", "clear", "clear", "clear", "clear", "clear"], "ev": "", "meteor": false, "npc": npcs, "pl": []})
+	return {"t": "cal", "today": today, "days": days, "econ": ""}
 
 
 # ---- 마을톡 (주민과만: 친구는 테스트 서버에 없다) ----
@@ -496,6 +542,13 @@ func _fish_cast(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 	if pool.is_empty():
 		fail.call(NetProtocol.ERR_NOT_AT_SPOT)
 		return
+	# 제철 물고기만 (v0.12, 진짜 서버의 availableFish 처럼). 하나도 없으면 낚시터 전체에서.
+	var season: String = VillageClock.season_of(Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS)
+	var in_season: Array = pool.filter(func(id: Variant) -> bool:
+		var f: FishInfo = GameData.fish.get(str(id))
+		return f == null or f.seasons.is_empty() or season in f.seasons)
+	if not in_season.is_empty():
+		pool = in_season
 	var entries: Array = pool.map(func(id: Variant) -> Dictionary: return {"id": str(id), "weight": _fish_weights.get(str(id), 10.0)})
 	var fish: String = _weighted(entries)
 	var info: FishInfo = GameData.fish.get(fish)
@@ -694,7 +747,7 @@ static func _flower_wire(f: Dictionary) -> Dictionary:
 # ---- 들판 채집 (나무 곁 풀숲에 돋는다 — 섬 안 땅이 틀림없는 자리) ----
 
 func _spawn_forage() -> void:
-	if _drops.size() >= FORAGE_MAX or GameData.trees.is_empty():
+	if _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "forage").size() >= FORAGE_MAX or GameData.trees.is_empty():
 		return
 	var items: Array = (_read_json("res://data/restaurant/restaurant.json").get("forage", {}) as Dictionary).get("items", [])
 	var trees: Array = GameData.trees.values()
@@ -848,6 +901,9 @@ func _welcome(resumed: bool) -> Dictionary:
 		players[0]["face"] = _face
 		prof["face"] = _face
 	prof["outfit"] = _outfit
+	prof["name"] = _name
+	if not players.is_empty():
+		players[0]["name"] = _name
 	if not players.is_empty():
 		players[0]["hat"] = _outfit["hat"]
 		players[0]["top"] = _outfit["top"]
@@ -954,8 +1010,15 @@ func _load() -> void:
 	var saved: Dictionary = _read_json(SAVE_PATH)
 	if saved.is_empty():
 		return
-	if saved.get("slots") is Array and (saved["slots"] as Array).size() == _slots.size():
-		_slots = saved["slots"]
+	if saved.get("slots") is Array:
+		# 가방 칸 수가 바뀌었어도(v13: 20 → 30) 있던 칸은 같은 자리에 둔다.
+		var old_slots: Array = saved["slots"]
+		for i: int in mini(old_slots.size(), _slots.size()):
+			_slots[i] = old_slots[i]
+	for g: Variant in saved.get("ground", []):
+		if g is Dictionary and str(g.get("id", "")).begins_with("g") and GameData.item(str(g.get("item", ""))) != null:
+			_drops[str(g["id"])] = g
+	_drop_seq = int(saved.get("drop_seq", _drop_seq))
 	_held = int(saved.get("held", _held))
 	_sol = int(saved.get("sol", _sol))
 	var p: Array = saved.get("pos", [0, 0])
@@ -970,6 +1033,7 @@ func _load() -> void:
 		_outfit = saved["outfit"]
 	if saved.get("face") is Dictionary:
 		_face = saved["face"]
+	_name = NetProtocol.clean_name(str(saved.get("name", "")))
 	if saved.get("friends") is Dictionary:
 		_friends = saved["friends"]
 	if saved.get("talk_days") is Dictionary:
@@ -995,8 +1059,9 @@ func _save() -> void:
 		return
 	f.store_string(JSON.stringify({"slots": _slots, "held": _held, "sol": _sol, "pos": [_pos.x, _pos.z], "home": _home,
 		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
-		"outfit": _outfit, "face": _face, "friends": _friends, "talk_days": _talk_days,
-		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats}))
+		"outfit": _outfit, "face": _face, "name": _name, "friends": _friends, "talk_days": _talk_days,
+		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats,
+		"ground": _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "item"), "drop_seq": _drop_seq}))
 
 
 static func _read_json(path: String) -> Dictionary:

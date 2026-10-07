@@ -24,3 +24,4 @@
 | 가구 아이콘 11장 (v0.10) | `assets/icons/items/` (TV · 스탠드 에어컨 · 선풍기 · 더블/싱글 침대 · 4인 식탁 · 양문형 냉장고 · 옷장 · 책상 세트 · 패브릭 소파 · 드럼 세탁기) | 게임 모형(`items.json` 의 model)을 `tools/render_icons.tscn` 으로 찍음 | 프로젝트 자체 제작 | 아이템 칸 · 꾸미기 |
 | 아파트 평면도 데이터 (v0.10) | `data/realestate/floorplans.json` (방 사각형 · 문 · 현관 좌표) | 프로젝트 오너가 준 푸르지오 평면도 그림 4장(네이버 부동산 평면도 이미지)을 보고 좌표만 옮겨 적음 — 그림 자체는 저장소에 넣지 않았다 | 평면 배치 참고 — 공개 전 사용 범위 확인 필요 | 집 안 벽·바닥 |
 | 집 안 벽·바닥·붙박이 (v0.10) | `game/home/home_interior.gd` | 평면도 데이터로 코드가 빚음 (`PartMesh`) | 프로젝트 | 아파트 집 안 |
+| 프라이팬 · 국자 · 식칼 · 주민 집 · 상점 3단계 · 계산대 모형 (v0.11) | 원본 `art_source/tripo/*.glb` → `assets/models/items/{tool_pan,tool_ladle,tool_knife,npc_house,shop_ext_1~3,shop_counter}{,_low}.glb` | 프로젝트 오너가 Tripo(생성형 AI 3D)로 만들어 준 모형을 `tools/blender/import_tripo.py` 로 정점 색에 굽고 줄임 | Tripo 이용 약관 확인 필요 (상업 이용 가능 요금제 여부) | 요리 도구 · 주민 집 |

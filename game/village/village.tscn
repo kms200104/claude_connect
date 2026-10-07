@@ -1,4 +1,4 @@
-[gd_scene load_steps=70 format=3]
+[gd_scene load_steps=75 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -21,6 +21,8 @@
 [ext_resource type="Material" path="res://assets/materials/foliage.tres" id="23_foliage"]
 [ext_resource type="Script" path="res://game/npc/npc_crowd.gd" id="24_crowd"]
 [ext_resource type="PackedScene" path="res://game/npc/npc_actor.tscn" id="25_actor"]
+[ext_resource type="Script" path="res://game/shop/courier_field.gd" id="72_couriers"]
+[ext_resource type="Script" path="res://game/fishing/fish_school.gd" id="73_school"]
 [ext_resource type="Material" path="res://assets/materials/house_wall.tres" id="26_wall"]
 [ext_resource type="Material" path="res://assets/materials/house_roof.tres" id="27_roof"]
 [ext_resource type="Material" path="res://assets/materials/window_glow.tres" id="28_window"]
@@ -64,6 +66,9 @@
 [ext_resource type="Script" path="res://game/places/park_site.gd" id="99_park"]
 [ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
+[ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
+[ext_resource type="Script" path="res://game/fishing/sea_spot.gd" id="71_sea"]
+[ext_resource type="Script" path="res://game/journal/journal_controller.gd" id="72_journal"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -164,6 +169,10 @@ ground_shape = NodePath("../Ground/Shape")
 water_material = ExtResource("16_water")
 player = NodePath("../../Player")
 
+[node name="Sea" type="Node3D" parent="Terrain"]
+script = ExtResource("71_sea")
+spot_id = "sea"
+
 [node name="Lake" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
 spot_id = "lake"
@@ -224,6 +233,12 @@ actor_scene = ExtResource("25_actor")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
 
+[node name="Couriers" type="Node3D" parent="." node_paths=PackedStringArray("toast_hud", "player")]
+script = ExtResource("72_couriers")
+actor_scene = ExtResource("25_actor")
+toast_hud = NodePath("../HUD/FishingHud")
+player = NodePath("../Player")
+
 [node name="Drops" type="Node3D" parent="."]
 script = ExtResource("48_drops")
 clay_material = ExtResource("23_foliage")
@@ -277,7 +292,7 @@ toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 interaction = NodePath("../InteractionController")
 
-[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud")]
+[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud", "apartments")]
 script = ExtResource("69_home")
 player = NodePath("../Player")
 camera_rig = NodePath("../CameraRig")
@@ -286,6 +301,7 @@ hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
+apartments = NodePath("../Apartments")
 
 [node name="Mirrors" type="Node3D" parent="."]
 script = ExtResource("62_mirror_site")
@@ -393,18 +409,23 @@ remote_parent = NodePath("..")
 
 [node name="Bobber" parent="." instance=ExtResource("18_bobber")]
 
-[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction", "camera_rig", "catch_card")]
+[node name="FishSchool" type="Node3D" parent="."]
+script = ExtResource("73_school")
+
+[node name="FishingController" type="Node" parent="." node_paths=PackedStringArray("player", "spot", "bobber", "hud", "interaction", "camera_rig", "catch_card", "school")]
 script = ExtResource("19_fishing")
 camera_rig = NodePath("../CameraRig")
 catch_card = NodePath("../HUD/CatchCard")
+school = NodePath("../FishSchool")
 player = NodePath("../Player")
 spot = NodePath("../Terrain/Lake")
 bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs")]
 script = ExtResource("34_interaction")
+jobs = NodePath("../Jobs")
 economy = NodePath("../EconomyController")
 field = NodePath("../Field")
 home = NodePath("../Home")
@@ -425,8 +446,19 @@ fishing = NodePath("../FishingController")
 action_hud = NodePath("../HUD/ActionHud")
 toast_hud = NodePath("../HUD/FishingHud")
 
-[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
+[node name="Jobs" type="Node" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud")]
+script = ExtResource("70_jobs")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
+toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="JournalNotices" type="Node" parent="." node_paths=PackedStringArray("hud")]
+script = ExtResource("72_journal")
+hud = NodePath("../HUD")
+
+[node name="EconomyController" type="Node" parent="." node_paths=PackedStringArray("player", "camera_rig", "apartments", "restaurant", "civic_site", "hud", "toast_hud")]
 script = ExtResource("66_economy")
+camera_rig = NodePath("../CameraRig")
 civic_site = NodePath("../Civic")
 player = NodePath("../Player")
 apartments = NodePath("../Apartments")
@@ -542,8 +574,9 @@ script = ExtResource("61_catch_card")
 
 [node name="DialogueBox" parent="HUD" instance=ExtResource("38_dialogue_box")]
 
-[node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("21_inventory")]
+[node name="InventoryWindow" parent="HUD" node_paths=PackedStringArray("player", "camera_rig") instance=ExtResource("21_inventory")]
 player = NodePath("../../Player")
+camera_rig = NodePath("../../CameraRig")
 
 [node name="ShopWindow" parent="HUD" node_paths=PackedStringArray("player") instance=ExtResource("44_shop_window")]
 player = NodePath("../../Player")

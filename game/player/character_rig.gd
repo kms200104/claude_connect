@@ -9,9 +9,18 @@ extends Node3D
 
 @export_group("References")
 @export var tree: AnimationTree
-## 애니메이션이 흔드는 몸통. 머리·눈·팔다리가 여기에 붙어 같이 움직인다.
+## 애니메이션이 흔드는 몸 전체(골반 기준). 다리와 허리 관절이 여기에 붙는다.
 @export var visual: Node3D
+## 몸통(스웨터) 메시 — 허리 위(upper)에 있다.
 @export var body_mesh: MeshInstance3D
+## v0.13 관절: 골반(반바지) 메시, 허리(waist → upper: 몸통·팔), 목(neck → head: 머리·눈·표정·모자).
+## upper 와 head 는 관절 안에서 Visual 좌표를 되돌려 놓은 자리라, 메시와 붙는 것들은 예전 Visual 좌표를 그대로 쓴다.
+@export var hips_mesh: MeshInstance3D
+@export var head_mesh: MeshInstance3D
+@export var waist: Node3D
+@export var upper: Node3D
+@export var neck: Node3D
+@export var head: Node3D
 @export var arm_left: Node3D
 @export var arm_right: Node3D
 @export var leg_left: Node3D
@@ -41,6 +50,12 @@ const EMOTES: PackedStringArray = ["hello", "happy", "laugh", "surprise", "love"
 ## 자랑할 때 손에 든 물건의 자리 (몸통 기준, 턱 아래 앞으로 내민 두 손 위). 머리가 커서 머리 위로 들면 팔이 닿지 않는다.
 const SHOW_HOLD_POSITION: Vector3 = Vector3(0.0, 0.0, -0.44)
 ## set_cooking 으로 할 수 있는 요리 동작 (data/restaurant/recipes.json 의 steps.*.anim).
+## 휴대폰을 들고 보는 자세의 오른팔 각도 (gen_character_rig.py PH_AR) · 휴대폰 기울기(위가 앞으로) · 손에서 휴대폰 가운데까지.
+const PHONE_ARM: Vector3 = Vector3(1.42, 0.0, -0.66)
+const PHONE_TILT: float = -0.55
+const PHONE_GRIP: Vector3 = Vector3(0.0, 0.06, 0.04)
+## 캐릭터 손에 맞춘 크기 (모형은 17cm).
+const PHONE_SCALE: float = 1.75
 const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
 
 var held_item: String = "rod"
@@ -58,12 +73,24 @@ var _cook_target: float = 0.0
 var _cook_value: float = 0.0
 var _sit_target: float = 0.0
 var _sit_value: float = 0.0
+var _rummage_target: float = 0.0
+var _rummage_value: float = 0.0
+## 휴대폰을 들고 보는 중 (v0.14).
+var _phone_target: float = 0.0
+var _phone_value: float = 0.0
+var _phone: PhoneProp = null
+var _phone_tween: Tween = null
 var _tool_id: String = ""
 var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
 var _hold: Node3D = null
 var _held_before_show: String = ""
 var _eyes: MeshInstance3D = null
+## 감정표현 하는 동안만 보이는 눈썹·눈물·땀방울 (CharacterModel.expression).
+var _expression: MeshInstance3D = null
+var _expression_id: String = ""
+## 감정표현 요청 직후 애니메이션 트리가 아직 원샷을 시작하기 전에 표정을 감추지 않도록 잠깐 기다린다.
+var _expression_hold: float = 0.0
 var _eye_offset: Vector2 = Vector2.ZERO
 var _limbs: Array[MeshInstance3D] = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
@@ -117,12 +144,24 @@ func set_fishing(active: bool) -> void:
 
 
 ## 손에 든 아이템 (rod, axe, 그 밖은 빈손으로 보인다).
-## 손에 든 도구 가운데 Tool 자리에 끼우는 것 (v9 뜰채 · 삽). 요리 중이면 요리 도구가 먼저다.
-const HAND_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
-## 뜰채를 도구 자리 안에서 돌리는 각도 (X축) — 손에서 위·조금 앞으로 뻗게.
-const NET_PITCH_DEG: float = -163.0
-## 얼굴을 가리지 않게 바깥(오른쪽)으로 기울이는 각도 (Z축).
-const NET_ROLL_DEG: float = -24.0
+## 손에 든 도구 가운데 Tool 자리(손에 고정)에 끼우는 것. 요리 중이면 요리 도구가 먼저다.
+const HAND_TOOLS: PackedStringArray = ["parcel", "lunchbox", "envelope"]
+## 휘둘러 쓰는 도구 — 도끼 자리(Axe)에 끼워, 사용 동작이 손목(Axe 트랙)을 돌리는 대로 따라간다
+## (뜰채: 도끼질 chop 으로 떠 올리기, 삽: dig 가 날을 뒤집어 꽂고 퍼 올린다). 들고 다닐 땐 도끼처럼 위·앞으로 세운다.
+const SWING_TOOLS: PackedStringArray = ["fishing_net", "shovel"]
+## Tripo 모형이 있는 도구 (텍스처 머티리얼 이름, tools/blender/import_tripo.py).
+const TOOL_MODELS: Dictionary[String, String] = {"knife": "tool_knife", "pan": "tool_pan", "ladle": "tool_ladle"}
+## Tool 자리 도구를 쥐는 각도 (도): x = 팔 끝에서 앞(-Z)으로 숙이는 각도, y = 자루를 축으로 돌리는 각도.
+## 도구 메시는 손에서 +Y 로 뻗으니 180° + x 만큼 X 축으로 돌려 팔이 뻗은 방향(-Y)으로 잇는다.
+## 사용 동작에서 팔은 앞으로 0.8~1.3 rad 들리므로, x 를 더하면 칼·팬은 거의 수평(날·바닥이 아래), 국자는 냄비 쪽 아래를 향한다.
+## 팔을 내린 대기·걷기에서는 같은 각도라 몸 앞쪽 아래로 든다 (예전엔 126° 고정이라 몸 뒤로 뻗었다).
+const TOOL_GRIPS: Dictionary[String, Vector2] = {
+	"knife": Vector2(50.0, 0.0), "pan": Vector2(30.0, 0.0), "ladle": Vector2(15.0, 0.0),
+	"parcel": Vector2(-10.0, 0.0), "lunchbox": Vector2(-10.0, 0.0), "envelope": Vector2(-10.0, 90.0),
+}
+## 도끼 자리 도구의 각도 (도): x = 앞뒤로 숙임, y = 자루를 축으로 돌림 (뜰채 입구가 휘두르는 쪽을 보게),
+## z = 바깥(캐릭터 오른쪽)으로 눕힘 — 1m 가까운 뜰채·삽을 세워 들면 망·날이 얼굴을 가린다.
+const SWING_GRIPS: Dictionary[String, Vector3] = {"fishing_net": Vector3(0.0, 180.0, -25.0), "shovel": Vector3(0.0, 0.0, -25.0)}
 
 
 func set_held(item_id: String) -> void:
@@ -130,11 +169,13 @@ func set_held(item_id: String) -> void:
 	if _show_target > 0.5:
 		_held_before_show = item_id
 		return
+	var free: bool = _cook_target < 0.5 and _rummage_target < 0.5 and _phone_target < 0.5
 	if rod != null:
-		rod.visible = item_id == "rod" and _cook_target < 0.5
+		rod.visible = item_id == "rod" and free
 	if axe != null:
-		axe.visible = item_id == "axe" and _cook_target < 0.5
-	if _cook_target < 0.5:
+		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and free
+	_set_swing(item_id if item_id in SWING_TOOLS else "")
+	if free:
 		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
 
@@ -155,6 +196,11 @@ func play_emote(emote_id: String) -> void:
 		return
 	tree.set("parameters/EmoteSwitch/transition_request", emote_id)
 	tree.set("parameters/EmoteShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	_show_expression(emote_id)
+	# 머리 둘레 효과 (눈물 · Zzz · 하트 …) — 감정표현 동작 길이만큼.
+	var anims: AnimationPlayer = get_node_or_null("AnimationPlayer")
+	var length: float = anims.get_animation(emote_id).length if anims != null and anims.has_animation(emote_id) else 1.5
+	EmoteFx.play(_head_root(), emote_id, length)
 
 
 func is_emoting() -> bool:
@@ -191,9 +237,9 @@ func set_cooking(anim: String, tool_id: String = "") -> void:
 		tree.set("parameters/CookSwitch/transition_request", anim)
 	_set_tool(tool_id if active else (held_item if held_item in HAND_TOOLS else ""))
 	if rod != null:
-		rod.visible = not active and held_item == "rod" and _show_target < 0.5
+		rod.visible = not active and held_item == "rod" and _show_target < 0.5 and _phone_target < 0.5
 	if axe != null:
-		axe.visible = not active and held_item == "axe" and _show_target < 0.5
+		axe.visible = not active and (held_item == "axe" or held_item in SWING_TOOLS) and _show_target < 0.5 and _phone_target < 0.5
 
 
 func is_cooking() -> bool:
@@ -205,8 +251,107 @@ func set_sitting(active: bool) -> void:
 	_sit_target = 1.0 if active else 0.0
 
 
+## 가방을 여는 동안 주머니를 뒤진다 (고개를 숙여 주머니를 내려다본다). 손에 든 도구는 잠깐 숨긴다.
+func set_rummaging(active: bool) -> void:
+	_rummage_target = 1.0 if active else 0.0
+	var hide: bool = active or _cook_target > 0.5 or _show_target > 0.5 or _phone_target > 0.5
+	if rod != null:
+		rod.visible = not hide and held_item == "rod"
+	if axe != null:
+		axe.visible = not hide and (held_item == "axe" or held_item in SWING_TOOLS)
+	if tool != null and active:
+		tool.visible = false
+	elif not active and _cook_target < 0.5 and _phone_target < 0.5:
+		_set_tool(held_item if held_item in HAND_TOOLS else "")
+
+
+func is_rummaging() -> bool:
+	return _rummage_target > 0.5
+
+
+## 휴대폰 꺼내 보기 (v0.14): 손에 든 물건을 주머니에 쏙 넣고(작아지며 사라짐) 휴대폰을 꺼내 오른손에 들고 내려다본다.
+## 끄면 휴대폰을 넣고 들고 있던 물건을 다시 꺼낸다.
+func set_phone(active: bool) -> void:
+	if (_phone_target > 0.5) == active:
+		return
+	_phone_target = 1.0 if active else 0.0
+	var phone: PhoneProp = phone_prop()
+	var items: Array[Node3D] = []
+	for n: Node3D in [rod, axe, tool]:
+		if n != null and n.visible:
+			items.append(n)
+	if _phone_tween != null:
+		_phone_tween.kill()
+	_phone_tween = create_tween()
+	if active:
+		# 들고 있던 것을 넣고 → 휴대폰을 꺼낸다.
+		for n: Node3D in items:
+			_phone_tween.parallel().tween_property(n, "scale", Vector3.ONE * 0.01, 0.14).set_ease(Tween.EASE_IN)
+		_phone_tween.tween_callback(func() -> void:
+			for n: Node3D in [rod, axe, tool]:
+				if n != null:
+					n.visible = false
+					n.scale = Vector3.ONE
+			if phone != null:
+				phone.scale = Vector3.ONE * 0.01
+				phone.visible = true
+				phone.set_app(-1))
+		if phone != null:
+			_phone_tween.tween_property(phone, "scale", Vector3.ONE, 0.26).set_delay(0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		if phone != null and phone.visible:
+			_phone_tween.tween_property(phone, "scale", Vector3.ONE * 0.01, 0.14).set_ease(Tween.EASE_IN)
+		_phone_tween.tween_callback(func() -> void:
+			if phone != null:
+				phone.visible = false
+				phone.scale = Vector3.ONE
+			set_held(held_item)
+			for n: Node3D in [rod, axe, tool]:
+				if n != null and n.visible:
+					n.scale = Vector3.ONE * 0.01
+					create_tween().tween_property(n, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+
+
+func is_holding_phone() -> bool:
+	return _phone_target > 0.5
+
+
+## 화면을 톡: 왼손으로 누르고 휴대폰 든 손이 살짝 떨린다. 화면도 잠깐 밝아진다.
+func phone_tap() -> void:
+	if _phone_target < 0.5:
+		return
+	if tree != null:
+		tree.set("parameters/PhoneTapShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	if _phone != null:
+		_phone.flash()
+
+
+## 손에 드는 휴대폰 (처음 부를 때 오른손에 만든다).
+func phone_prop() -> PhoneProp:
+	if _phone != null or arm_right == null:
+		return _phone
+	# 손잡이 자리 (자세에 맞춘 방향 · 크기) 안에 휴대폰을 둔다 — 꺼내고 넣을 때는 휴대폰만 커졌다 작아진다.
+	var grip: Node3D = Node3D.new()
+	grip.name = "PhoneGrip"
+	arm_right.add_child(grip)
+	# 들고 보는 자세(phone 애니메이션)의 오른팔 각도에서, 화면이 얼굴 쪽(위 · 뒤)을 보도록 손 기준으로 되돌려 놓는다.
+	var hand: Basis = Basis.from_euler(PHONE_ARM)
+	var want: Basis = Basis(Vector3.UP, 0.22) * Basis(Vector3.RIGHT, PHONE_TILT)
+	var local: Basis = hand.inverse() * want
+	grip.basis = local.scaled(Vector3.ONE * PHONE_SCALE)
+	# 손바닥이 휴대폰 아래쪽 뒷면을 받친다.
+	grip.position = Vector3(0.0, -0.3, 0.0) + local * PHONE_GRIP
+	_phone = PhoneProp.new(clay_material)
+	_phone.visible = false
+	grip.add_child(_phone)
+	return _phone
+
+
 func _set_tool(tool_id: String) -> void:
-	if tool == null or tool_id == _tool_id:
+	if tool == null:
+		return
+	if tool_id == _tool_id:
+		tool.visible = tool.get_node_or_null("Mesh") != null and (tool.get_node("Mesh") as MeshInstance3D).mesh != null and _show_target < 0.5
 		return
 	_tool_id = tool_id
 	var mi: MeshInstance3D = tool.get_node_or_null("Mesh")
@@ -216,6 +361,7 @@ func _set_tool(tool_id: String) -> void:
 		mi.material_override = clay_material
 		tool.add_child(mi)
 	var mesh: ArrayMesh = null
+	mi.material_override = PartMesh.material_for(TOOL_MODELS.get(tool_id, ""), clay_material)
 	match tool_id:
 		"knife":
 			mesh = CharacterModel.knife()
@@ -227,11 +373,36 @@ func _set_tool(tool_id: String) -> void:
 			mesh = CharacterModel.landing_net()
 		"shovel":
 			mesh = CharacterModel.shovel()
+		"parcel", "lunchbox", "envelope":
+			mesh = CharacterModel.carry_prop(tool_id)
 	mi.mesh = mesh
-	# 도구 자리(Tool)는 칼·국자처럼 손 아래 앞으로 향한다. 긴 뜰채는 그대로면 몸 뒤 물속으로 꽂히므로
-	# 위로 세워 들고(살짝 앞으로), 휘두르면(도끼질 동작) 앞으로 떠 올리는 모양이 된다.
-	mi.rotation = Vector3(deg_to_rad(NET_PITCH_DEG), 0.0, deg_to_rad(NET_ROLL_DEG)) if tool_id == "fishing_net" else Vector3.ZERO
-	tool.visible = mesh != null
+	var grip: Vector2 = TOOL_GRIPS.get(tool_id, Vector2.ZERO)
+	mi.basis = Basis(Vector3.RIGHT, deg_to_rad(180.0 + grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
+	tool.visible = mesh != null and _show_target < 0.5
+
+
+## 도끼 자리에 끼우는 휘두르는 도구 (빈 문자열 = 없음). 그동안 도끼 메시는 숨긴다.
+func _set_swing(tool_id: String) -> void:
+	if axe == null:
+		return
+	var axe_mesh: MeshInstance3D = axe.get_node_or_null("Mesh")
+	if axe_mesh != null:
+		axe_mesh.visible = tool_id.is_empty()
+	var swing: MeshInstance3D = axe.get_node_or_null("Swing")
+	if swing == null:
+		swing = MeshInstance3D.new()
+		swing.name = "Swing"
+		swing.material_override = clay_material
+		axe.add_child(swing)
+	match tool_id:
+		"fishing_net":
+			swing.mesh = CharacterModel.landing_net()
+		"shovel":
+			swing.mesh = CharacterModel.shovel()
+		_:
+			swing.mesh = null
+	var grip: Vector3 = SWING_GRIPS.get(tool_id, Vector3.ZERO)
+	swing.basis = Basis(Vector3.BACK, deg_to_rad(grip.z)) * Basis(Vector3.RIGHT, deg_to_rad(grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
 
 
 ## 잡은 물건을 두 손으로 앞으로 쭉 내밀어 들고 자랑한다. mesh 가 null 이면 내려놓는다. 드는 동안 도구는 숨긴다.
@@ -241,7 +412,7 @@ func show_off(mesh: Mesh, mesh_scale: float = 1.0, material: Material = null) ->
 	if _hold == null:
 		_hold = Node3D.new()
 		_hold.name = "ShowHold"
-		visual.add_child(_hold)
+		_upper_root().add_child(_hold)
 		_hold.position = SHOW_HOLD_POSITION
 		var mi: MeshInstance3D = MeshInstance3D.new()
 		mi.name = "Mesh"
@@ -266,6 +437,8 @@ func show_off(mesh: Mesh, mesh_scale: float = 1.0, material: Material = null) ->
 		rod.visible = false
 	if axe != null:
 		axe.visible = false
+	if tool != null:
+		tool.visible = false
 
 
 func is_showing_off() -> bool:
@@ -299,6 +472,10 @@ func get_eye_offset() -> Vector2:
 func _process(delta: float) -> void:
 	if tree == null:
 		return
+	if _expression != null and _expression.visible:
+		_expression_hold -= delta
+		if _expression_hold <= 0.0 and not is_emoting():
+			_show_expression("")
 	_move_value = lerpf(_move_value, _move_target, 1.0 - exp(-speed_smoothing * delta))
 	_fishing_value = lerpf(_fishing_value, _fishing_target, 1.0 - exp(-fishing_blend_speed * delta))
 	tree.set("parameters/Locomotion/blend_position", _move_value)
@@ -311,11 +488,31 @@ func _process(delta: float) -> void:
 	tree.set("parameters/CookBlend/blend_amount", _cook_value)
 	_sit_value = move_toward(_sit_value, _sit_target, 6.0 * delta)
 	tree.set("parameters/SitBlend/blend_amount", _sit_value)
+	_rummage_value = move_toward(_rummage_value, _rummage_target, 5.0 * delta)
+	tree.set("parameters/RummageBlend/blend_amount", _rummage_value)
+	_phone_value = move_toward(_phone_value, _phone_target, 4.0 * delta)
+	tree.set("parameters/PhoneBlend/blend_amount", _phone_value)
+	if _phone_value > 0.0:
+		# 휴대폰 화면을 내려다본다.
+		set_eye_offset(_eye_offset.lerp(Vector2(0.05, -0.85) * _phone_value, 1.0 - exp(-8.0 * delta)))
+	if _rummage_value > 0.0:
+		# 주머니를 내려다본다 (눈동자를 아래 오른쪽으로).
+		set_eye_offset(_eye_offset.lerp(Vector2(0.35, -0.8) * _rummage_value, 1.0 - exp(-8.0 * delta)))
 	if _tug > 0.0 or rotation.x != 0.0:
 		_tug = move_toward(_tug, 0.0, 0.9 * delta)
 		rotation.x = lerpf(rotation.x, _tug, 1.0 - exp(-30.0 * delta))
 		if _tug == 0.0 and absf(rotation.x) < 0.002:
 			rotation.x = 0.0
+
+
+## 허리 위 (없으면 Visual — 옛 리그).
+func _upper_root() -> Node3D:
+	return upper if upper != null else visual
+
+
+## 목 위 (없으면 Visual — 옛 리그).
+func _head_root() -> Node3D:
+	return head if head != null else visual
 
 
 ## 겉모습과 상관없는 부분: 눈, 도구, 팔다리 메시 자리.
@@ -327,8 +524,14 @@ func _build_static_parts() -> void:
 	_eyes.mesh = CharacterModel.eyes(look)
 	_eyes.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_eyes.material_override = clay_material
-	visual.add_child(_eyes)
+	_head_root().add_child(_eyes)
 	_eyes.position = CharacterModel.HEAD_CENTER
+	_expression = MeshInstance3D.new()
+	_expression.name = "Expression"
+	_expression.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_expression.material_override = clay_material
+	_expression.visible = false
+	_head_root().add_child(_expression)
 	_add_tool_mesh(rod, CharacterModel.rod())
 	_add_tool_mesh(axe, CharacterModel.axe())
 	for limb: Node3D in [arm_left, arm_right, leg_left, leg_right]:
@@ -339,6 +542,17 @@ func _build_static_parts() -> void:
 		mi.material_override = clay_material
 		limb.add_child(mi)
 		_limbs.append(mi)
+
+
+## 감정표현의 표정 (빈 문자열 = 감춘다). 표정이 없는 감정표현도 감춘다.
+func _show_expression(emote_id: String) -> void:
+	if _expression == null:
+		return
+	_expression_id = emote_id
+	_expression_hold = 0.3
+	var mesh: ArrayMesh = CharacterModel.expression(look, emote_id) if not emote_id.is_empty() else null
+	_expression.mesh = mesh
+	_expression.visible = mesh != null
 
 
 func _add_tool_mesh(holder: Node3D, mesh: Mesh) -> void:
@@ -360,14 +574,27 @@ func _apply_look() -> void:
 		worn.top = top.tint
 	if _eyes != null:
 		_eyes.mesh = CharacterModel.eyes(worn)
+	if _expression != null and _expression.visible:
+		_expression.mesh = CharacterModel.expression(worn, _expression_id)
 	if body_mesh != null:
 		body_mesh.mesh = CharacterModel.body(worn)
 		body_mesh.material_override = clay_material
+	if hips_mesh != null:
+		hips_mesh.mesh = CharacterModel.hips(worn)
+		hips_mesh.material_override = clay_material
+	if head_mesh != null:
+		head_mesh.mesh = CharacterModel.head(worn)
+		head_mesh.material_override = clay_material
 	var arm_mesh: ArrayMesh = CharacterModel.arm(worn)
 	var leg_mesh: ArrayMesh = CharacterModel.leg(worn)
 	for mi: MeshInstance3D in _limbs:
 		var parent: Node = mi.get_parent()
 		mi.mesh = arm_mesh if parent == arm_left or parent == arm_right else leg_mesh
+	# 화질이 바뀌면 손에 든 도구도 그 화질의 모형으로 다시 끼운다.
+	if not _tool_id.is_empty():
+		var held_tool: String = _tool_id
+		_tool_id = ""
+		_set_tool(held_tool)
 
 
 func _set_outfit_part(part: String, item_id: String) -> void:
@@ -379,7 +606,8 @@ func _set_outfit_part(part: String, item_id: String) -> void:
 		mi = MeshInstance3D.new()
 		mi.name = "Outfit_%s" % part
 		mi.material_override = clay_material
-		visual.add_child(mi)
+		# 모자는 머리(목 관절)를, 상의는 몸통(허리 관절)을 따라 움직인다.
+		(_head_root() if part == "hat" else _upper_root()).add_child(mi)
 		_outfit[part] = mi
 	var info: ItemInfo = GameData.item(item_id) if not item_id.is_empty() else null
 	mi.visible = info != null and not info.model.is_empty()

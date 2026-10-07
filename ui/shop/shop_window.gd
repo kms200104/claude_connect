@@ -33,6 +33,9 @@ var at: String = ""
 func _ready() -> void:
 	visible = false
 	add_to_group(&"blocks_joystick")
+	# 가로 화면 (v0.14.3): 화면 끝까지 늘어나지 않게 가운데 1240 폭으로.
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit())
+	_fit()
 	_close.pressed.connect(close)
 	_buy_tab.pressed.connect(func() -> void: set_mode(MODE_BUY))
 	_sell_tab.pressed.connect(func() -> void: set_mode(MODE_SELL))
@@ -42,6 +45,26 @@ func _ready() -> void:
 	Net.shop_traded.connect(_on_traded)
 	Net.request_failed.connect(_on_request_failed)
 	Net.state_changed.connect(_on_net_state_changed)
+
+
+func _fit() -> void:
+	var panel: Control = get_node_or_null("Panel")
+	if panel == null:
+		return
+	if ScreenFit.landscape:
+		panel.anchor_left = 0.5
+		panel.anchor_right = 0.5
+		panel.offset_left = -620.0
+		panel.offset_right = 620.0
+		panel.offset_top = 150.0
+		panel.offset_bottom = -40.0
+	else:
+		panel.anchor_left = 0.0
+		panel.anchor_right = 1.0
+		panel.offset_left = 30.0
+		panel.offset_right = -30.0
+		panel.offset_top = 280.0
+		panel.offset_bottom = -80.0
 
 
 func is_open() -> bool:
@@ -89,9 +112,10 @@ func _refresh() -> void:
 	if not visible:
 		return
 	var shop: ShopData = GameData.shop
-	var merchant: ActiveEvent = Net.event_active(EventInfo.MERCHANT) if at == AT_MERCHANT else null
+	var merchant: ActiveEvent = Net.event_of_kind(EventInfo.KIND_VISITOR) if at == AT_MERCHANT else null
 	if at == AT_MERCHANT:
-		_title.text = "떠돌이 상인 누리의 보따리"
+		var who: String = merchant.info().npc.display_name if merchant != null and merchant.info() != null and merchant.info().npc != null else "떠돌이 상인"
+		_title.text = "%s의 보따리" % who
 	elif at == AT_AIRPORT:
 		_title.text = "%s 기념품 가게" % GameData.airport.display_name
 	else:
@@ -118,7 +142,8 @@ func _refresh() -> void:
 			any = true
 		if not any:
 			if merchant != null:
-				_list.add_child(_note("누리가 찾는 물건은 %s 이에요. 구해 오면 2배 값에 사 줄 거예요!" % DialogueController.wanted_names(merchant)))
+				var who_note: String = merchant.info().npc.display_name if merchant.info() != null and merchant.info().npc != null else "상인"
+				_list.add_child(_note("%s이(가) 찾는 물건은 %s 이에요. 구해 오면 %s배 값에 사 줄 거예요!" % [who_note, DialogueController.wanted_names(merchant), EventHud._format_mult(merchant.multiplier)]))
 			else:
 				_list.add_child(_note("팔 수 있는 물건이 없어요. 나무를 베거나 물고기를 낚아 오세요!"))
 
@@ -135,11 +160,23 @@ func _refresh_points() -> void:
 
 
 func _buy_row(info: ItemInfo) -> Control:
-	var row: HBoxContainer = _row_base(info, "%s · %s솔" % [info.kind_label(), InventoryWindow._format_number(info.buy_price)])
-	var button: Button = _action_button("사기")
-	button.disabled = Net.sol < info.buy_price
+	var price: int = roundi(info.buy_price * Net.buy_multiplier(info.id, at))
+	var note: String = ""
+	if price < info.buy_price:
+		note = " (%d%% 할인)" % roundi((1.0 - float(price) / float(info.buy_price)) * 100.0)
+	elif price > info.buy_price:
+		note = " (물가 ↑)"
+	var row: HBoxContainer = _row_base(info, "%s · %s솔%s" % [info.kind_label(), InventoryWindow._format_number(price), note])
+	var button: Button = _action_button("1개")
+	button.disabled = Net.sol < price
 	button.pressed.connect(func() -> void: Net.buy_item(info.id, 1, at))
 	row.add_child(button)
+	# v13: 10개씩 사기 (식재료는 가방 대신 식당 창고로 간다).
+	if not (info.is_furniture() or info.is_clothing() or info.is_tool()):
+		var ten: Button = _action_button("10개")
+		ten.disabled = Net.sol < price * 10
+		ten.pressed.connect(func() -> void: Net.buy_item(info.id, 10, at))
+		row.add_child(ten)
 	return row
 
 
@@ -149,6 +186,8 @@ func _sell_row(slot: int, item: InventoryItem, info: ItemInfo) -> Control:
 	var detail: String = "%d개 · 하나에 %s솔" % [item.count, InventoryWindow._format_number(each)]
 	if mult > 1.0:
 		detail = "×%s 특가! %s" % [EventHud._format_mult(mult), detail]
+	elif mult < 1.0:
+		detail = "×%s 값 내림 · %s" % [EventHud._format_mult(mult), detail]
 	var row: HBoxContainer = _row_base(info, detail)
 	if mult > 1.0:
 		(row.get_child(1).get_child(1) as Label).add_theme_color_override("font_color", Color(0.86, 0.36, 0.3))
@@ -214,8 +253,10 @@ func _on_traded(kind: String, item_id: String, count: int, amount: int) -> void:
 	var name_text: String = GameData.item_name(item_id)
 	if kind == "sell":
 		_message.text = "%s %d개를 %s솔에 팔았어요" % [name_text, count, InventoryWindow._format_number(amount)]
+	elif Net.last_trade_stored:
+		_message.text = "%s %d개를 %s솔에 샀어요 → 식당 창고에 보관" % [name_text, count, InventoryWindow._format_number(amount)]
 	else:
-		_message.text = "%s을(를) %s솔에 샀어요" % [name_text, InventoryWindow._format_number(amount)]
+		_message.text = "%s %d개를 %s솔에 샀어요" % [name_text, count, InventoryWindow._format_number(amount)]
 	_refresh()
 
 
@@ -232,6 +273,8 @@ func _on_request_failed(kind: String, code: String) -> void:
 			_message.text = "솔이 모자라요"
 		NetProtocol.ERR_INVENTORY_FULL:
 			_message.text = "가방이 가득 찼어요"
+		NetProtocol.ERR_STORAGE_FULL:
+			_message.text = "식당 창고에 그 재료가 가득해요"
 		NetProtocol.ERR_CANT_SELL:
 			_message.text = "그건 팔 수 없어요"
 		NetProtocol.ERR_NOT_FOR_SALE:

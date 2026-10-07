@@ -1,5 +1,9 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 16;
+
+// v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
+export const SAY_GAP_MS = 250;
+export const SAY_MAX_CHARS = 90;
 
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
@@ -15,8 +19,13 @@ export const ErrorCode = Object.freeze({
   alreadyFishing: 'already_fishing',
   notFishing: 'not_fishing',
   inventoryFull: 'inventory_full',
+  badCast: 'bad_cast', // v13: 겨눈 자리가 물이 아니거나 너무 멂
   badItem: 'bad_item',
   cantDiscard: 'cant_discard', // 도구는 버릴 수 없다
+  cantDropHere: 'cant_drop_here', // v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다
+  groundFull: 'ground_full', // v13: 마을 바닥에 놓인 물건이 너무 많다
+  deliveryBusy: 'delivery_busy', // v13: 이미 배달 중인 주문이 많다
+  storageFull: 'storage_full', // v13: 식당 창고에 그 재료가 가득하다
   // 도구 / 나무 베기
   noTool: 'no_tool', // 알맞은 도구를 손에 들고 있지 않음
   notNearTree: 'not_near_tree',
@@ -55,9 +64,14 @@ export const ErrorCode = Object.freeze({
   notNearKeeper: 'not_near_keeper', // 관장·조종사 곁이 아님
   notNearMirror: 'not_near_mirror', // 거울 앞이 아님
   badFace: 'bad_face', // 모르는 얼굴 항목·모양
+  badName: 'bad_name', // 쓸 수 없는 닉네임 (v14: 너무 길거나 기호)
   marketClosed: 'market_closed', // 장이 닫혔다 (MARKET_HOURS=krx)
   badOrder: 'bad_order', // 모르는 종목·수량
   notEnoughShares: 'not_enough_shares', // 가진 주식보다 많이 팔려고 함
+  // 예적금 (v0.12)
+  badProduct: 'bad_product', // 모르는 상품·기간·금액
+  badAccount: 'bad_account', // 없는 계좌
+  accountLimit: 'account_limit', // 계좌를 더 만들 수 없음
   badUnit: 'bad_unit', // 모르는 호수
   unitTaken: 'unit_taken', // 이미 누가 가진 집
   notYourUnit: 'not_your_unit', // 내 집이 아님
@@ -86,8 +100,21 @@ export const ErrorCode = Object.freeze({
   homeFull: 'home_full', // 집 안 가구가 너무 많음
   alreadyDonated: 'already_donated', // 이미 기증한 물고기
   notFish: 'not_fish',
+  // v12: 일거리 (배달 알바)
+  jobBusy: 'job_busy', // 이미 하던 배달이 있다
+  jobLimit: 'job_limit', // 오늘 일거리를 다 했다
+  noJob: 'no_job', // 받은(또는 그 단계의) 배달이 없다
+  notAtJob: 'not_at_job', // 받을 곳·갖다줄 집 곁이 아니다
+  badLease: 'bad_lease', // 이미 전세(또는 월세)이거나 모르는 임대 방식
+  bankClosed: 'bank_closed', // 영업정지한 금융기관 (경제 소식)
   // 대화 주제
   badTopic: 'bad_topic',
+  // v16: 칭호 · 생일 · 방명록 · 놀러 가기 · 사진
+  badTitle: 'bad_title', // 이루지 않은 업적의 칭호
+  badBirthday: 'bad_birthday', // 없는 날짜
+  notVisitable: 'not_visitable', // 놀러 갈 수 없는 집 (주인 없음 · 다른 마을)
+  badPhoto: 'bad_photo', // JPEG 가 아니거나 너무 큼
+  noPhoto: 'no_photo', // 없는(지워진) 사진
 });
 
 // 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).

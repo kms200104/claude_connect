@@ -66,7 +66,7 @@ static func load_all() -> EconData:
 	e.home_rules = _read(FLOORPLANS_PATH)
 	var raw_plans: Dictionary = e.home_rules.get("plans", {})
 	for plan_id: String in raw_plans:
-		e.plans[plan_id] = FloorPlan.from_dict(plan_id, raw_plans[plan_id])
+		e.plans[plan_id] = FloorPlan.from_dict(plan_id, raw_plans[plan_id], float(e.home_rules.get("size_scale", 1.0)))
 	var recipes_file: Dictionary = _read(RECIPES_PATH)
 	e.cook_steps = recipes_file.get("steps", {})
 	for entry: Variant in recipes_file.get("recipes", []):

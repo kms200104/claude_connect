@@ -32,6 +32,16 @@ export function dayIndex(gameMs) {
   return Math.floor((gameMs - DAY_START_HOUR * HOUR_MS) / DAY_MS);
 }
 
+/** 계절 (v0.12): 마을 날짜의 달로 — 봄 3~5월 · 여름 6~8월 · 가을 9~11월 · 겨울 12~2월. 클라이언트 VillageClock.season_of 와 같은 규칙. */
+export const SEASONS = Object.freeze(['spring', 'summer', 'autumn', 'winter']);
+export function seasonOf(gameMs) {
+  const month = new Date(gameMs).getUTCMonth() + 1;
+  if (month >= 3 && month <= 5) return 'spring';
+  if (month >= 6 && month <= 8) return 'summer';
+  if (month >= 9 && month <= 11) return 'autumn';
+  return 'winter';
+}
+
 /** 시간대 구간: morning(5–10) day(10–17) evening(17–20) night(20–5). */
 export function timeBand(hour) {
   if (hour >= 5 && hour < 10) return 'morning';

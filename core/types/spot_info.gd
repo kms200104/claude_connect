@@ -12,6 +12,13 @@ var cast_range: float = 3.5
 var outline: PackedVector2Array = PackedVector2Array()
 ## 여울 (얕은 물, v9): [{ id, name, x, z, half_x, half_z, max, fish[] }] — 들어가서 뜰채로 물고기를 몬다. 나머지는 깊은 물.
 var shallows: Array[Dictionary] = []
+## 바다 (v0.12, kind: sea): 사각형 대신 섬 모양으로 — 해안선까지의 거리로 판정하고, 찌는 바다 쪽으로 던진다.
+var is_sea: bool = false
+## 바닷가에 설 수 있는 섬 모양 값의 끝 (서버 gamedata.js SEA_STAND_MAX).
+const SEA_STAND_MAX: float = 1.06
+var island: VillageLayout = null
+## 낚이는 물고기 id.
+var fish_ids: PackedStringArray = []
 
 
 static func from_dict(data: Dictionary) -> SpotInfo:
@@ -24,6 +31,9 @@ static func from_dict(data: Dictionary) -> SpotInfo:
 	for pt: Variant in data.get("outline", []):
 		if pt is Array and (pt as Array).size() >= 2:
 			info.outline.append(Vector2(float(pt[0]), float(pt[1])))
+	info.is_sea = str(data.get("kind", "")) == "sea"
+	for id: Variant in data.get("fish", []):
+		info.fish_ids.append(str(id))
 	for z: Variant in data.get("shallows", []):
 		if z is Dictionary:
 			info.shallows.append(z)
@@ -35,8 +45,16 @@ func has_outline() -> bool:
 	return outline.size() >= 3
 
 
-## 수역까지의 거리 (안쪽이면 0). 서버의 distanceToSpot 과 같은 식.
+## 수역까지의 거리 (안쪽이면 0). 서버의 distanceToSpot 과 같은 식. 바다는 해안선까지의 거리.
 func distance_to(position: Vector3) -> float:
+	if is_sea:
+		if island == null:
+			return INF
+		# 해안선 너머 멀리 서 있다면 바다 건너 실내(상점 · 집 안)다 → 바다 낚시 아님 (서버 SEA_STAND_MAX 와 같다).
+		var shape: float = island.island_shape(Vector2(position.x, position.z))
+		if shape > SEA_STAND_MAX:
+			return INF
+		return maxf(0.0, (1.0 - shape) * island.island_half)
 	return maxf(signed_distance(Vector2(position.x, position.z)), 0.0)
 
 
@@ -79,6 +97,8 @@ func boundary_nearest(p: Vector2) -> Vector2:
 
 ## 수역 안쪽(가장자리에서 margin 만큼 들어간) 가장 가까운 점.
 func clamp_inside(position: Vector3, margin: float = 0.4) -> Vector3:
+	if is_sea:
+		return _sea_point(position, margin)
 	if has_outline():
 		var p: Vector2 = Vector2(position.x, position.z)
 		if signed_distance(p) <= -margin:
@@ -99,6 +119,19 @@ func clamp_inside(position: Vector3, margin: float = 0.4) -> Vector3:
 		clampf(position.x, center.x - hx, center.x + hx),
 		position.y,
 		clampf(position.z, center.y - hz, center.y + hz))
+
+
+## 바다: 섬 가운데에서 이 자리를 지나는 방향으로, 해안선 바깥 margin + 1.5m 이상 나간 점 (이미 바다면 그대로).
+func _sea_point(position: Vector3, margin: float) -> Vector3:
+	if island == null:
+		return position
+	var flat: Vector2 = Vector2(position.x, position.z)
+	var shape: float = island.island_shape(flat)
+	var want: float = 1.0 + (margin + 1.5) / island.island_half
+	if shape >= want or shape <= 0.0001:
+		return position
+	var out: Vector2 = flat * (want / shape)
+	return Vector3(out.x, position.y, out.y)
 
 
 ## 이 자리에서 가장 가까운 물이 여울인지 (서버 shallowAt 과 같은 식) — 얕은 곳에서 낚으면 작은 물고기.

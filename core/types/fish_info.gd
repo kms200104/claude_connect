@@ -14,6 +14,8 @@ var description: String = ""
 var hours: PackedInt32Array = []
 ## 잡히는 날씨. 비어 있으면 아무 날씨.
 var weathers: PackedStringArray = []
+## 잡히는 계절 (v0.12: spring/summer/autumn/winter). 비어 있으면 사계절.
+var seasons: PackedStringArray = []
 ## 겉모습 (아이콘·모형용): 몸 모양 slim / carp / perch / trout / eel / catfish / goldfish / puffer / sturgeon.
 var shape: String = "slim"
 var body_color: Color = Color("#9A9A7A")
@@ -40,6 +42,10 @@ static func from_dict(data: Dictionary) -> FishInfo:
 	if w is Array:
 		for entry: Variant in w:
 			info.weathers.append(str(entry))
+	var se: Variant = data.get("seasons")
+	if se is Array:
+		for entry: Variant in se:
+			info.seasons.append(str(entry))
 	var look: Variant = data.get("look", {})
 	if look is Dictionary:
 		info.shape = str(look.get("shape", info.shape))
@@ -51,9 +57,11 @@ static func from_dict(data: Dictionary) -> FishInfo:
 	return info
 
 
-## 이 시각·날씨에 잡히는지 (서버 availableFish 와 같은 규칙).
-func available(hour: float, weather: String) -> bool:
+## 이 시각·날씨(·계절)에 잡히는지 (서버 availableFish 와 같은 규칙). season 이 비어 있으면 계절은 보지 않는다.
+func available(hour: float, weather: String, season: String = "") -> bool:
 	if not weathers.is_empty() and not weather in weathers:
+		return false
+	if not season.is_empty() and not seasons.is_empty() and not season in seasons:
 		return false
 	if hours.size() != 2:
 		return true

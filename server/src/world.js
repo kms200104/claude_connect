@@ -31,10 +31,21 @@ function buildingRect(b, pad) {
   return { x0: b.x - b.width / 2 - pad, x1: b.x + b.width / 2 + pad, z0: b.z - b.depth - pad, z1: b.z + pad };
 }
 
-/** 무엇이든 놓거나 심으면 안 되는 자리 목록 (사각형과 원). data 로 한 번 만든다. */
+/** 무엇이든 놓거나 심으면 안 되는 자리 목록 (사각형 · 원 · 선분 둘레). data 로 한 번 만든다. */
 export function blockedAreas(data) {
   const rects = [];
   const circles = [];
+  const segments = [];
+  // v0.12: 꾸밈 (village_layout.json) — 바위 둘레 · 선착장 · 울타리 줄. 예전엔 서버가 몰라 그 위에 가구를 놓을 수 있었다.
+  const layout = data.layout;
+  for (const r of layout?.rocks ?? []) if (Number.isFinite(r.x) && Number.isFinite(r.z)) circles.push({ x: r.x, z: r.z, r: (r.size ?? 1) * 1.2 });
+  if (layout?.dock) {
+    const d = layout.dock;
+    rects.push({ x0: d.x - d.length / 2 - 0.3, x1: d.x + d.length / 2 + 0.3, z0: d.z - d.width / 2 - 0.3, z1: d.z + d.width / 2 + 0.3 });
+  }
+  for (const line of layout?.fences ?? []) {
+    for (let i = 0; i + 1 < line.length; i++) segments.push({ ax: line[i][0], az: line[i][1], bx: line[i + 1][0], bz: line[i + 1][1], r: 0.6 });
+  }
   const shop = data.shop;
   // 상점은 단계마다 커지므로 가장 큰 건물 크기로 막는다.
   rects.push({ x0: shop.door.x - 5.2, x1: shop.door.x + 5.2, z0: shop.door.z - 7.5, z1: shop.door.z + 2.5 });
@@ -75,15 +86,25 @@ export function blockedAreas(data) {
     rects.push({ x0: Math.min(...corners.map((q) => q[0])), x1: Math.max(...corners.map((q) => q[0])), z0: Math.min(...corners.map((q) => q[1])), z1: Math.max(...corners.map((q) => q[1])) });
   }
   if (park?.pavilion) circles.push({ x: park.pavilion.x, z: park.pavilion.z, r: park.pavilion.size / 2 + 0.8 });
-  return { rects, circles };
+  return { rects, circles, segments };
+}
+
+/** 점에서 선분까지 거리. */
+function segmentDistance(x, z, s) {
+  const dx = s.bx - s.ax;
+  const dz = s.bz - s.az;
+  const len2 = dx * dx + dz * dz;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / len2)) : 0;
+  return Math.hypot(x - (s.ax + dx * t), z - (s.az + dz * t));
 }
 
 /** 이 자리가 물·섬 밖·건물 자리인지. 문제 이름(문자열) 또는 null. */
 export function groundProblem(data, x, z) {
   if (!onIsland(data.layout?.island, x, z, data.layout?.island?.beach ?? 0)) return 'edge';
   for (const spot of data.spots.values()) if (distanceToSpot(spot, x, z) < 0.6) return 'water';
-  const { rects, circles } = data.blocked;
+  const { rects, circles, segments = [] } = data.blocked;
   for (const r of rects) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return 'building';
   for (const c of circles) if (Math.hypot(x - c.x, z - c.z) < c.r) return 'building';
+  for (const sg of segments) if (segmentDistance(x, z, sg) < sg.r) return 'fence';
   return null;
 }

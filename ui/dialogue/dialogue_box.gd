@@ -29,7 +29,40 @@ func _ready() -> void:
 	_panel.gui_input.connect(_on_panel_input)
 	_panel.add_to_group(&"blocks_joystick")
 	_choices.add_to_group(&"blocks_joystick")
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit())
+	_fit()
 	close()
+
+
+## 가로 화면 (v0.13.4): 대화창을 가운데 1500 폭으로 좁히고 조금 아래로 (캐릭터를 덜 가린다). 세로는 원래 자리.
+func _fit() -> void:
+	if ScreenFit.landscape:
+		_panel.anchor_left = 0.5
+		_panel.anchor_right = 0.5
+		_panel.offset_left = -750.0
+		_panel.offset_right = 750.0
+		_panel.offset_top = -460.0
+		_panel.offset_bottom = -175.0
+		_choices.offset_top = -720.0
+		_choices.offset_bottom = -480.0
+		# 선택지는 대화창 오른쪽 끝에 맞춰 그 위에.
+		_choices.anchor_left = 0.5
+		_choices.anchor_right = 0.5
+		_choices.offset_left = 230.0
+		_choices.offset_right = 750.0
+	else:
+		_panel.anchor_left = 0.0
+		_panel.anchor_right = 1.0
+		_panel.offset_left = 30.0
+		_panel.offset_right = -30.0
+		_panel.offset_top = -620.0
+		_panel.offset_bottom = -260.0
+		_choices.anchor_left = 1.0
+		_choices.anchor_right = 1.0
+		_choices.offset_top = -860.0
+		_choices.offset_bottom = -640.0
+		_choices.offset_left = -560.0
+		_choices.offset_right = -40.0
 
 
 func is_open() -> bool:

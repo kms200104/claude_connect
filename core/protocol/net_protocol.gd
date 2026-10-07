@@ -2,7 +2,14 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 11
+const VERSION: int = 16
+
+## v14 닉네임: 최대 글자 수 (서버 nickname.js NAME_MAX 와 같다).
+const NAME_MAX: int = 10
+
+## v12 말풍선(say): 대사 간격(ms)과 최대 글자 수 (서버와 같다).
+const SAY_GAP_MS: int = 250
+const SAY_MAX_CHARS: int = 90
 
 # 에러 코드 (서버 → 클라이언트 `error.code`)
 const ERR_BAD_VERSION: String = "bad_version"
@@ -21,6 +28,16 @@ const ERR_NOT_FISHING: String = "not_fishing"
 const ERR_INVENTORY_FULL: String = "inventory_full"
 const ERR_BAD_ITEM: String = "bad_item"
 const ERR_CANT_DISCARD: String = "cant_discard"
+## v13: 겨눈 자리가 물이 아니거나 너무 멂.
+const ERR_BAD_CAST: String = "bad_cast"
+## v14: 쓸 수 없는 닉네임.
+const ERR_BAD_NAME: String = "bad_name"
+## v13: 집 안 · 상점 안에서는 바닥에 내려놓을 수 없다 / 마을 바닥에 물건이 너무 많다.
+const ERR_CANT_DROP_HERE: String = "cant_drop_here"
+const ERR_GROUND_FULL: String = "ground_full"
+## v13: 이미 배달 중인 주문이 많다 / 식당 창고에 그 재료가 가득하다.
+const ERR_DELIVERY_BUSY: String = "delivery_busy"
+const ERR_STORAGE_FULL: String = "storage_full"
 
 # 도구 / 나무 베기
 const ERR_NO_TOOL: String = "no_tool"
@@ -119,6 +136,15 @@ const ERR_UNIT_TAKEN: String = "unit_taken"
 const ERR_NOT_YOUR_UNIT: String = "not_your_unit"
 const ERR_LOAN_LIMIT: String = "loan_limit"
 const ERR_BAD_LOAN: String = "bad_loan"
+const ERR_BAD_PRODUCT: String = "bad_product"
+const ERR_BAD_ACCOUNT: String = "bad_account"
+const ERR_ACCOUNT_LIMIT: String = "account_limit"
+const ERR_JOB_BUSY: String = "job_busy"
+const ERR_JOB_LIMIT: String = "job_limit"
+const ERR_NO_JOB: String = "no_job"
+const ERR_NOT_AT_JOB: String = "not_at_job"
+const ERR_BAD_LEASE: String = "bad_lease"
+const ERR_BANK_CLOSED: String = "bank_closed"
 const ERR_REST_CLOSED: String = "rest_closed"
 const ERR_REST_BUSY: String = "rest_busy"
 const ERR_NOT_AT_RESTAURANT: String = "not_at_restaurant"
@@ -141,8 +167,36 @@ const ERR_NOT_AT_LOBBY: String = "not_at_lobby"
 const ERR_NOT_HOME: String = "not_home"
 const ERR_NOT_EDITABLE: String = "not_editable"
 const ERR_HOME_FULL: String = "home_full"
+## v16: 칭호 · 생일 · 놀러 가기 · 사진
+const ERR_BAD_TITLE: String = "bad_title"
+const ERR_BAD_BIRTHDAY: String = "bad_birthday"
+const ERR_NOT_VISITABLE: String = "not_visitable"
+const ERR_BAD_PHOTO: String = "bad_photo"
+const ERR_NO_PHOTO: String = "no_photo"
 
 ## 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).
 const MOTION_BRAKE: String = "brake"
 ## 대화 주제 (talk_topic.topic).
 const TOPICS: PackedStringArray = ["mood", "hobby", "gossip", "fish", "past", "dream", "food", "you", "worry", "mbti"]
+
+
+## 닉네임 정리 (서버 nickname.js cleanName 과 같은 규칙): 띄어쓰기를 한 칸으로, 앞뒤 공백 지우기,
+## 글자 · 숫자 · 띄어쓰기 · _ - . 만 남기고, NAME_MAX 글자까지.
+static func clean_name(raw: String) -> String:
+	var out: String = ""
+	var space: bool = false
+	for ch: String in raw.strip_edges():
+		var code: int = ch.unicode_at(0)
+		if ch == " " or ch == "\t" or ch == "\n" or ch == "\r":
+			space = true
+			continue
+		var ok: bool = ch == "_" or ch == "-" or ch == "." or (code >= 48 and code <= 57) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122) \
+			or (code >= 0xAC00 and code <= 0xD7A3) or (code >= 0x3131 and code <= 0x318E) or (code >= 0x00C0 and code <= 0x024F) \
+			or (code >= 0x3040 and code <= 0x30FF) or (code >= 0x4E00 and code <= 0x9FFF)
+		if not ok:
+			continue
+		if space and not out.is_empty():
+			out += " "
+		space = false
+		out += ch
+	return out.substr(0, NAME_MAX).strip_edges()

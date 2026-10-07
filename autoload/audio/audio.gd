@@ -3,6 +3,9 @@ extends Node
 ## 버스: Music / Sfx / Ambient (Master 아래). 소리 파일 출처는 assets/audio/CREDITS.md
 ## (대부분 tools/audio/gen_audio.py 로 합성, 발소리와 마을 음악 4곡은 받은 파일).
 ## 게임 코드는 play_sfx / play_at / play_ui / play_music / set_loop / babble 만 부른다.
+## 볼륨 (v0.14.2): 전체 · 음악 · 효과음 · 환경음을 0~100% 로 고르면(설정 앱) 버스 기본 크기에 곱해 적용하고 기억한다.
+
+signal volume_changed
 
 const MUSIC_TITLE: String = "title_theme"
 ## 마을 음악: 낮 · 밤 · 비 · 이벤트 (SoundDirector 가 고른다).
@@ -46,6 +49,12 @@ var _voices_3d: Array[AudioStreamPlayer3D] = []
 var _next_voice: int = 0
 var _next_voice_3d: int = 0
 var _loops: Dictionary[String, AudioStreamPlayer] = {}
+## 볼륨 (0 ~ 1). 키 = VOLUME_KINDS.
+var _volume: Dictionary[String, float] = {"master": 1.0, "music": 1.0, "sfx": 1.0, "ambient": 1.0}
+
+const VOLUME_KINDS: PackedStringArray = ["master", "music", "sfx", "ambient"]
+const VOLUME_NAMES: Dictionary[String, String] = {"master": "전체", "music": "배경음악", "sfx": "효과음", "ambient": "환경음"}
+const SETTINGS_PATH: String = "user://settings.cfg"
 
 
 func _ready() -> void:
@@ -53,6 +62,11 @@ func _ready() -> void:
 	_ensure_bus("Music", music_volume_db)
 	_ensure_bus("Sfx", sfx_volume_db)
 	_ensure_bus("Ambient", ambient_volume_db)
+	var cfg: ConfigFile = ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		for kind: String in VOLUME_KINDS:
+			_volume[kind] = clampf(float(cfg.get_value("audio", kind, 1.0)), 0.0, 1.0)
+	_apply_volume()
 	_music_a = _make_player("Music")
 	_music_b = _make_player("Music")
 	_music_active = _music_a
@@ -71,9 +85,50 @@ func _ready() -> void:
 		_voices_3d.append(p)
 
 
+## 볼륨 (0 ~ 1).
+func volume(kind: String) -> float:
+	return _volume.get(kind, 1.0)
+
+
+## 볼륨 바꾸기 (0 ~ 1): 바로 적용하고 기억한다.
+func set_volume(kind: String, value: float) -> void:
+	if not _volume.has(kind):
+		return
+	_volume[kind] = clampf(value, 0.0, 1.0)
+	_apply_volume()
+	var cfg: ConfigFile = ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("audio", kind, _volume[kind])
+	cfg.save(SETTINGS_PATH)
+	volume_changed.emit()
+
+
+## 버스 크기 = 기본 크기 + 고른 볼륨 (0% 는 끔).
+func _apply_volume() -> void:
+	var base: Dictionary[String, float] = {"Master": 0.0, "Music": music_volume_db, "Sfx": sfx_volume_db, "Ambient": ambient_volume_db}
+	var kinds: Dictionary[String, String] = {"Master": "master", "Music": "music", "Sfx": "sfx", "Ambient": "ambient"}
+	for bus: String in base:
+		var index: int = AudioServer.get_bus_index(bus)
+		if index < 0:
+			continue
+		var v: float = _volume[kinds[bus]]
+		AudioServer.set_bus_mute(index, v <= 0.001)
+		# 귀에 고르게 들리도록 제곱 곡선 (50% ≈ -12dB).
+		AudioServer.set_bus_volume_db(index, base[bus] + linear_to_db(maxf(v * v, 0.0001)))
+
+
 ## 지금 흐르는 배경음악 이름 (없으면 빈 문자열).
 func current_music() -> String:
 	return _music_current
+
+
+## 음악 앱 (v16): 지금 곡이 흐른 시간 · 길이 (초, 곡이 없으면 0).
+func music_position() -> float:
+	return _music_active.get_playback_position() if _music_active != null and _music_active.playing else 0.0
+
+
+func music_length() -> float:
+	return _music_active.stream.get_length() if _music_active != null and _music_active.stream != null and _music_active.playing else 0.0
 
 
 ## 배경음악 바꾸기 (같은 곡이면 그대로). 빈 문자열이면 끈다. fade 가 0 보다 크면 그만큼 엇갈린다 (기본 music_fade).

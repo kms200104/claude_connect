@@ -2,12 +2,13 @@
 //   npc:<주민>  — 친한 주민이 하루 한두 번 먼저 연락한다 (안부 · "식당 언제 열어?" · 비 오는 날). 내가 보내면 잠시 뒤 답장.
 //   sys:bank    — 은행·동사무소 알림 (매주 이자 · 연체 · 월세 수입 · 지원금).
 //   sys:town    — 마을 공지 (처음 들어오면 환영 인사).
+//   sys:shop    — 솔바람 상점 배달 알림 (v13: "배달 가고 있습니다~").
 //   pl:<자리>   — 같은 마을 친구(플레이어)와 주고받는 대화.
-// 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 보낸 시각(유닉스 ms) }.
+// 메시지 = { f: 보낸 쪽('me' | 주민 id | 'bank' | 'town' | 'p<자리>'), tx: 글, at: 보낸 시각(유닉스 ms), ph?: 사진 id (v16, photos.js) }.
 import { ErrorCode } from './protocol.js';
 import { addFriendship, relationOf } from './quests.js';
 
-const THREAD = /^(npc:[a-z_]+|sys:(bank|town)|pl:[1-9][0-9]?)$/;
+const THREAD = /^(npc:[a-z_]+|sys:(bank|town|shop)|pl:[1-9][0-9]?)$/;
 
 export function sanitizeChats(raw, rules) {
   const out = {};
@@ -17,7 +18,7 @@ export function sanitizeChats(raw, rules) {
     const m = t.m
       .filter((x) => x && typeof x.f === 'string' && typeof x.tx === 'string' && Number.isFinite(x.at))
       .slice(-rules.max_messages)
-      .map((x) => ({ f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at }));
+      .map((x) => (typeof x.ph === 'string' && /^p[0-9a-z]{4,20}$/.test(x.ph) ? { f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at, ph: x.ph } : { f: x.f, tx: x.tx.slice(0, rules.max_text), at: x.at }));
     out[th] = { m, read: Math.max(0, Math.min(m.length, Number.isInteger(t.read) ? t.read : m.length)) };
   }
   return out;
@@ -39,10 +40,11 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     return profile.chats[th];
   }
 
-  /** 메시지 하나를 넣고, 그 사람이 접속 중이면 바로 보낸다. */
-  function push(room, profile, th, from, text, mine = false) {
+  /** 메시지 하나를 넣고, 그 사람이 접속 중이면 바로 보낸다. photo = 사진 id (v16). */
+  function push(room, profile, th, from, text, mine = false, photo = '') {
     const t = threadOf(profile, th);
     const m = { f: from, tx: String(text).slice(0, rules.max_text), at: wallNow() };
+    if (photo) m.ph = photo;
     t.m.push(m);
     if (mine) t.read = t.m.length;
     if (t.m.length > rules.max_messages) {
@@ -98,6 +100,29 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     if (report.missed && report.capitalized > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.missed, { sol: sol(report.capitalized) }));
     if (report.rent > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.rent, { sol: sol(report.rent) }));
     if (report.grant > 0) push(room, profile, 'sys:bank', 'bank', fillLine(rules.bank.grant, { sol: sol(report.grant) }));
+    // v0.12 예적금 만기 (저절로 해지해 지갑으로).
+    for (const m of report.matured ?? []) {
+      const product = data.savings?.products.get(m.product);
+      const bank = data.savings?.institutions.get(product?.bank)?.name ?? '은행';
+      let line = fillLine(rules.bank.matured ?? '', { bank, name: m.name, interest: sol(m.gross - m.tax), sol: sol(m.net) });
+      const names = (m.got ?? []).map((k) => data.savings?.bonuses?.[k]?.name ?? k);
+      if (names.length > 0 && rules.bank.matured_bonus) line += ` ${fillLine(rules.bank.matured_bonus, { bonus: names.join(' · ') })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
+    // v0.12 경제 소식: 마을 공지 방에 한 줄, 저축은행 영업정지로 돌려받은 돈은 은행 방에.
+    if (report.econ && rules.bank.news) push(room, profile, 'sys:town', 'town', fillLine(rules.bank.news, { name: report.econ.name, desc: report.econ.desc }));
+    if (report.failed) {
+      const bank = data.savings?.institutions.get(report.failed.bank)?.name ?? '저축은행';
+      let line = fillLine(rules.bank.failed ?? '', { bank, total: sol(report.failed.total), paid: sol(report.failed.paid) });
+      if (report.failed.lost > 0 && rules.bank.failed_loss) line += ` ${fillLine(rules.bank.failed_loss, { lost: sol(report.failed.lost) })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
+    // v0.12 전세 만기: 보증금을 세입자에게 돌려줬다 (모자란 만큼은 전세금 반환 대출).
+    for (const j of report.jeonse ?? []) {
+      let line = fillLine(rules.bank.jeonse_end ?? '', { unit: j.unit, sol: sol(j.deposit) });
+      if (j.loan > 0 && rules.bank.jeonse_loan) line += ` ${fillLine(rules.bank.jeonse_loan, { sol: sol(j.loan) })}`;
+      if (line) push(room, profile, 'sys:bank', 'bank', line);
+    }
   }
 
   function handle(ctx, msg, fail) {
@@ -140,5 +165,48 @@ export function createMessenger({ data, cfg, random, sendTo, clock, wallNow = ()
     push(room, target, `pl:${player.profile.slot}`, `p${player.profile.slot}`, text);
   }
 
-  return { push, wire, tick, weekly, handle, sanitize: (raw) => sanitizeChats(raw, rules) };
+  /**
+   * v16 생일: 플레이어 생일이면 친한 주민이 축하 마을톡과 선물(give(item) → 가방에 들어갔는지)을 보낸다. 같은 마을 친구들에게는 마을 소식.
+   * 한 해에 한 번 (profile.bdayYear). 보냈으면 true.
+   */
+  function birthday(room, player, year, give) {
+    const b = rules.birthday;
+    const p = player.profile;
+    if (!b || p.bdayYear === year) return false;
+    p.bdayYear = year;
+    push(room, p, 'sys:town', 'town', b.town_self);
+    let full = false;
+    for (const npc of room.npcs.values()) {
+      const def = npc.def;
+      if ((p.npcs?.[def.id]?.f ?? 0) < b.min_friendship) continue;
+      const lines = linesOf(def, 'birthday');
+      if (lines.length === 0) continue;
+      const gift = (def.gifts ?? []).length > 0 ? pick(def.gifts) : '';
+      const ok = gift ? give(gift) : false;
+      if (gift && !ok) full = true;
+      push(room, p, `npc:${def.id}`, def.id, pick(lines));
+    }
+    if (full && b.gift_full) push(room, p, 'sys:town', 'town', b.gift_full);
+    const name = p.name || '';
+    for (const other of room.profiles.values()) {
+      if (other === p) continue;
+      push(room, other, 'sys:town', 'town', fillLine(b.town_friend, { name: name || `친구 ${p.slot}` }));
+    }
+    return true;
+  }
+
+  /** v16 주민 생일 알림 (그날 처음 날짜가 바뀔 때 한 번): 모두의 마을 소식 방에. */
+  function npcBirthday(room, def) {
+    const b = rules.birthday;
+    if (!b?.npc_day) return;
+    for (const p of room.profiles.values()) push(room, p, 'sys:town', 'town', fillLine(b.npc_day, { name: def.name }));
+  }
+
+  /** v16 방명록 · 놀러 오기 알림 (집 주인의 마을 소식 방). */
+  function homeNote(room, ownerProfile, kind, values) {
+    const line = rules.guestbook?.[kind];
+    if (line) push(room, ownerProfile, 'sys:town', 'town', fillLine(line, values));
+  }
+
+  return { push, wire, tick, weekly, handle, birthday, npcBirthday, homeNote, sanitize: (raw) => sanitizeChats(raw, rules) };
 }

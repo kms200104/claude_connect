@@ -24,6 +24,9 @@ const WINDOW_KINDS: PackedStringArray = ["living", "master", "bedroom", "kitchen
 @export var window_material: Material
 
 var plan: FloorPlan = null
+## 창유리: 바깥 풍경 사진을 읽는 머티리얼 (set_view). 하나를 모든 창이 같이 쓴다.
+const WINDOW_VIEW_SHADER: String = "res://assets/shaders/window_view.gdshader"
+var _view_material: ShaderMaterial = null
 var _furniture_root: Node3D = null
 var _furniture_nodes: Dictionary[String, StaticBody3D] = {}
 var _labels: Array[Label3D] = []
@@ -52,7 +55,7 @@ func build(new_plan: FloorPlan) -> void:
 	_build_front_door(parts)
 	add_child(_mesh(PartMesh.build(parts), clay_material))
 	if not glass.is_empty():
-		add_child(_mesh(PartMesh.build(glass), window_material))
+		add_child(_mesh(PartMesh.build(glass), _window_view_material()))
 	var body: StaticBody3D = StaticBody3D.new()
 	body.name = "Walls"
 	add_child(body)
@@ -72,6 +75,25 @@ func build(new_plan: FloorPlan) -> void:
 
 
 ## 방 이름표 (꾸미기 모드의 위에서 본 화면에서만).
+## 창밖 풍경 (HomeView 가 찍은 사진 여섯 장). null 이면 하늘색 유리.
+func set_view(view: HomeView.View) -> void:
+	var material: ShaderMaterial = _window_view_material()
+	material.set_shader_parameter("has_view", 1.0 if view != null else 0.0)
+	if view == null:
+		return
+	material.set_shader_parameter("faces", view.faces)
+	material.set_shader_parameter("face_dir", view.dirs)
+	material.set_shader_parameter("face_right", view.rights)
+	material.set_shader_parameter("face_up", view.ups)
+
+
+func _window_view_material() -> ShaderMaterial:
+	if _view_material == null:
+		_view_material = ShaderMaterial.new()
+		_view_material.shader = load(WINDOW_VIEW_SHADER)
+	return _view_material
+
+
 func set_labels_visible(on: bool) -> void:
 	for l: Label3D in _labels:
 		l.visible = on

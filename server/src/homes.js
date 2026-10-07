@@ -1,9 +1,12 @@
 // 아파트 집 안 (v0.10): 평면도(data/realestate/floorplans.json)를 미터로 바꾸고, 호수마다 집 안이 놓이는 자리(섬 바깥 먼 곳),
 // 바닥 안인지 검사, 처음 놓이는 가구를 만든다. 가구 위치는 평면도 기준(왼쪽 위 = 0, 0) 미터, rot 는 45° 단위(0~7).
 
-/** 평면도 하나를 미터 단위로: { id, name, pyeong, size{x,z}, rooms[{id, kind, rects[[x0,z0,x1,z1]]}], doors[[x,z]], front[x,z], spawn[x,z], defaults[] } */
-export function planInMeters(id, raw) {
-  const s = raw.scale;
+/**
+ * 평면도 하나를 미터 단위로: { id, name, pyeong, size{x,z}, rooms[{id, kind, rects[[x0,z0,x1,z1]]}], doors[[x,z]], front[x,z], spawn[x,z], defaults[] }
+ * sizeScale (v0.12, floorplans.json 의 size_scale): 평면도 모두를 가로·세로 이만큼 키운다.
+ */
+export function planInMeters(id, raw, sizeScale = 1) {
+  const s = raw.scale * sizeScale;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -36,7 +39,7 @@ export function planInMeters(id, raw) {
 
 export function loadPlans(raw) {
   const plans = new Map();
-  for (const [id, p] of Object.entries(raw.plans)) plans.set(id, planInMeters(id, p));
+  for (const [id, p] of Object.entries(raw.plans)) plans.set(id, planInMeters(id, p, raw.size_scale ?? 1));
   return plans;
 }
 

@@ -104,6 +104,31 @@ func _run() -> void:
 	await _wait(0.5)
 	camera.distance = base_distance
 	camera.pitch_degrees = base_pitch
+
+	# 호수 물고기 그림자를 멀리서 (v0.13): 땅 휘기와 함께 수면에 붙어 보여야 한다 (공중에 뜨면 안 된다).
+	if econ.kitchen.is_open():
+		econ.kitchen.close()
+	camera.distance = base_distance + 6.0
+	camera.pitch_degrees = 35.0
+	await _put(Vector3(-16.0, 0.1, 13.0), PI)
+	await _wait(3.0)
+	await _shot("t20_lake_fish_far")
+	camera.distance = base_distance
+	camera.pitch_degrees = base_pitch
+	# 바다 낚시 (v0.12): 동쪽 바닷가에서 바다로 던진다.
+	Economy.quit_job()
+	await _wait(0.4)
+	Net.equip(0)
+	var fishing: FishingController = _village.get_node("FishingController")
+	if econ.kitchen.is_open():
+		econ.kitchen.close()
+	await _put(Vector3(-20.0, 0.1, -(GameData.layout.island_half - 2.0)), 0.0)
+	camera.distance = base_distance + 2.0
+	await _wait(0.6)
+	fishing.call("_on_action_pressed")
+	await _wait(2.5)
+	await _shot("t19_sea_fishing")
+	camera.distance = base_distance
 	camera.snap_to_target()
 	await _shot("t06_kitchen_orders")
 	var first: String = ""
@@ -152,6 +177,23 @@ func _run() -> void:
 	econ.phone.open(PhoneWindow.Tab.BANK)
 	await _wait(0.8)
 	await _shot("t12_phone_bank")
+	Economy.open_deposit("byeolbit_special", 12, 20000000)
+	Economy.open_deposit("sol_savings", 12, 500000)
+	Economy.park_move(10000000)
+	await _wait(1.0)
+	econ.phone.set("_bank_savings", true)
+	econ.phone.set("_sv_bank", "solbaram")
+	econ.phone.set("_sv_product", "sol_deposit")
+	econ.phone.set("_sv_weeks", 12)
+	econ.phone.set("_sv_amount", 10000000)
+	econ.phone.call("_rebuild")
+	await _wait(0.6)
+	await _shot("t12b_phone_savings")
+	var scroll: ScrollContainer = econ.phone.get("_scroll")
+	scroll.scroll_vertical = 1 << 20
+	await _wait(0.4)
+	await _shot("t12c_phone_savings_products")
+	econ.phone.set("_bank_savings", false)
 	econ.phone.open(PhoneWindow.Tab.ASSETS)
 	await _wait(0.6)
 	await _shot("t13_phone_assets")
@@ -169,6 +211,37 @@ func _run() -> void:
 	await _put(Vector3(shore.x - 2.0, 0.1, shore.y - 0.9), PI)
 	await _shot("t15_seongseong")
 	player.rig.set_sitting(false)
+
+	# 일거리 (v0.12): 일거리 앱 → 받을 곳 빛기둥 → 도시락을 들고 가는 모습.
+	hud.visible = true
+	econ.phone.open(PhoneWindow.Tab.JOBS)
+	await _wait(0.8)
+	await _shot("t16_phone_jobs")
+	econ.phone.close()
+	Economy.take_job("lunchbox")
+	await _wait_until(func() -> bool: return not Economy.job().is_empty(), 3.0)
+	var from: Dictionary = Economy.job().get("from", {})
+	var pickup: Vector3 = Vector3(float(from.get("x", 0.0)), 0.1, float(from.get("z", 0.0)))
+	camera.distance = base_distance + 6.0
+	await _put(pickup + Vector3(0.0, 0.0, 6.0), PI)
+	await _wait(0.6)
+	await _shot("t17_job_beacon")
+	await _put(pickup + Vector3(0.0, 0.0, 0.5), PI)
+	Economy.pick_job()
+	await _wait_until(func() -> bool: return Economy.carry_item() == "lunchbox", 3.0)
+	camera.distance = base_distance - 3.0
+	camera.pitch_degrees = base_pitch - 10.0
+	await _put(pickup + Vector3(0.0, 0.0, 3.0), 0.0)
+	await _wait(0.8)
+	await _shot("t18_job_carry")
+	player.rig.set_held("parcel")
+	await _wait(0.3)
+	await _shot("t18b_job_parcel")
+	player.rig.set_held("envelope")
+	await _wait(0.3)
+	await _shot("t18c_job_envelope")
+	camera.distance = base_distance
+	camera.pitch_degrees = base_pitch
 
 
 ## 미니게임을 솜씨 좋게 친다 (상차림·별점 장면이 높은 별로 나오게).

@@ -9,6 +9,7 @@ import { ErrorCode } from './protocol.js';
 import { capacity, chooseOrder, cookQuality, stepMinMs, menuOf, pantryOf, payFor, ratingOf, starsFor, tasteMatch, tierOf, updateRegular } from './restaurant.js';
 import { countWhere, removeWhere } from './inventory.js';
 import { earn } from './economy.js';
+import { bump } from './progress.js';
 
 export { stepMinMs };
 
@@ -24,6 +25,8 @@ export const TEAM = { patience: 1.25, spawn: 0.8, window: 1.15, bonus: 0.1 };
 
 export function createKitchen(deps) {
   const { data, cfg, random, now, send, sendTo, sendProfile, sendInventory } = deps;
+  /** 지금 계절·시각 (v0.12 제철·시간 메뉴). */
+  const when = () => deps.when?.() ?? {};
   const rest = data.restaurant;
   const steps = data.cookSteps;
 
@@ -31,9 +34,9 @@ export function createKitchen(deps) {
   const staffOf = (room) => (room.shift ? [...room.shift.staff].map((id) => room.players.get(id)).filter((p) => p && p.online) : []);
   const nearCounter = (player) => Math.hypot(player.x - rest.counter.x, player.z - rest.counter.z) <= rest.open_range + 0.5;
 
-  /** 직원 모두의 가방 재료 − 이미 주문에 떼어 둔 재료. */
+  /** 식당 창고(v13) + 직원 모두의 가방 재료 − 이미 주문에 떼어 둔 재료. */
   function available(room) {
-    const avail = {};
+    const avail = { ...(room.restaurant.storage ?? {}) };
     for (const p of staffOf(room)) for (const [id, n] of Object.entries(pantryOf(p.slots))) avail[id] = (avail[id] ?? 0) + n;
     for (const [id, n] of Object.entries(room.shift?.reserved ?? {})) avail[id] = (avail[id] ?? 0) - n;
     return avail;
@@ -56,7 +59,8 @@ export function createKitchen(deps) {
       served: room.restaurant.served,
       revenue: room.restaurant.revenue,
       regulars,
-      capacity: shift ? capacity(menuOf(data.recipes, tier), available(room), data) : 0,
+      capacity: shift ? capacity(menuOf(data.recipes, tier, when()), available(room), data) : 0,
+      store: { ...(room.restaurant.storage ?? {}) },
       shift: shift ? { served: shift.served, revenue: shift.revenue } : null,
       orders: shift
         ? [...shift.orders.values()].map((o) => ({
@@ -106,17 +110,24 @@ export function createKitchen(deps) {
     room.saveDirty = true;
   }
 
-  /** 떼어 둔 재료를 직원 가방에서 꺼낸다 (만든 사람부터). 모자라면 false (아무것도 꺼내지 않는다). */
+  /** 떼어 둔 재료를 꺼낸다: 식당 창고(v13)부터, 그다음 직원 가방 (만든 사람부터). 모자라면 null (아무것도 꺼내지 않는다). */
   function takeIngredients(room, order, contributors) {
     const staff = staffOf(room);
     const ordered = [...contributors.map((id) => room.players.get(id)).filter(Boolean), ...staff.filter((p) => !contributors.includes(p.id))];
+    const storage = room.restaurant.storage ?? {};
     for (const [id, n] of Object.entries(order.used)) {
-      const have = ordered.reduce((a, p) => a + countWhere(p.slots, (x) => x === id), 0);
+      const have = (storage[id] ?? 0) + ordered.reduce((a, p) => a + countWhere(p.slots, (x) => x === id), 0);
       if (have < n) return null;
     }
     const touched = new Set();
     for (const [id, n] of Object.entries(order.used)) {
       let need = n;
+      const fromStore = Math.min(need, storage[id] ?? 0);
+      if (fromStore > 0) {
+        storage[id] -= fromStore;
+        if (storage[id] <= 0) delete storage[id];
+        need -= fromStore;
+      }
       for (const p of ordered) {
         if (need <= 0) break;
         const take = Math.min(need, countWhere(p.slots, (x) => x === id));
@@ -156,6 +167,7 @@ export function createKitchen(deps) {
       if (!p) continue;
       p.profile.sol += share;
       earn(p.profile, share);
+      bump(p.profile, 'serve');
     }
     room.restaurant.history.push(stars);
     if (room.restaurant.history.length > 100) room.restaurant.history.shift();
@@ -277,7 +289,7 @@ export function createKitchen(deps) {
     const seated = new Set([...shift.orders.values()].map((o) => o.customer));
     const freeSeats = rest.seats.map((_, i) => i).filter((i) => ![...shift.orders.values()].some((o) => o.seat === i));
     if (freeSeats.length === 0) return;
-    const menu = menuOf(data.recipes, tierOf(rest, ratingOfRoom(room)));
+    const menu = menuOf(data.recipes, tierOf(rest, ratingOfRoom(room)), when());
     const avail = available(room);
     const pool = [...data.customers.values()].filter((c) => !seated.has(c.id));
     for (let i = pool.length - 1; i > 0; i--) {
@@ -286,7 +298,7 @@ export function createKitchen(deps) {
     }
     for (const c of pool) {
       const rec = room.restaurant.regulars[c.id];
-      const pick = chooseOrder({ menu, avail, data, taste: c, regularDish: rec?.regular ? rec.dish : null, random });
+      const pick = chooseOrder({ menu, avail, data, taste: c, regularDish: rec?.regular ? rec.dish : null, random, seasonWeight: data.recipeSeasonWeight ?? 1 });
       if (!pick) continue;
       shift.seq += 1;
       const seat = freeSeats[Math.floor(random() * freeSeats.length)];
@@ -309,5 +321,5 @@ export function createKitchen(deps) {
     room.restaurant.history = cfg.restStartHistory.split(',').map(Number).filter((s) => Number.isInteger(s) && s >= 1 && s <= 5);
   }
 
-  return { restWire, handleRestaurant, tickRestaurant, seedRestaurant, closeShift, leaveStaff };
+  return { restWire, broadcastRest, handleRestaurant, tickRestaurant, seedRestaurant, closeShift, leaveStaff };
 }

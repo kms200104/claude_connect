@@ -1,19 +1,31 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { inHours } from './clock.js';
-import { blockedAreas } from './world.js';
+import { SEASONS, inHours } from './clock.js';
+import { blockedAreas, islandShape } from './world.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
 import { insideOutline, nearestOnBoundary, signedDistance } from './outline.js';
+import { loadSavings } from './savings.js';
+import { loadJobs } from './jobs.js';
+import { loadAchievements, parseMonthDay } from './progress.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
   const read = (rel) => JSON.parse(readFileSync(path.join(dataDir, rel), 'utf8'));
   const fish = new Map(read('fish/fish.json').fish.map((f) => [f.id, f]));
+  for (const f of fish.values()) {
+    for (const s of f.seasons ?? []) if (!SEASONS.includes(s)) throw new Error(`fish ${f.id}: unknown season ${s}`);
+  }
   const spots = new Map();
+  // 바다 (v0.12, kind: sea): 수역 사각형이 아니라 섬 둘레 바닷가 어디서나. 사각형 낚시터 목록(spots)과 따로 둔다.
+  let seaSpot = null;
   for (const s of read('fish/spots.json').spots) {
     for (const id of s.fish) if (!fish.has(id)) throw new Error(`spot ${s.id}: unknown fish ${id}`);
+    if (s.kind === 'sea') {
+      seaSpot = s;
+      continue;
+    }
     if (s.outline && (!Array.isArray(s.outline) || s.outline.length < 3)) throw new Error(`spot ${s.id}: outline 은 점 3개 이상`);
     // 여울(얕은 물, v0.9): 수역 안쪽 사각형. 들어가서 뜰채로 물고기를 몬다.
     for (const z of s.shallows ?? []) {
@@ -49,6 +61,8 @@ export function loadGameData(dataDir, cfg) {
 
   const npcsFile = read('npcs/npcs.json');
   const npcs = new Map(npcsFile.npcs.map((n) => [n.id, n]));
+  // v16 주민 생일 "MM-DD".
+  for (const n of npcs.values()) if (n.birthday !== undefined && !parseMonthDay(n.birthday)) throw new Error(`npc ${n.id}: birthday ${n.birthday}`);
 
   const events = read('events/events.json');
   for (const ev of [...events.daily, ...events.night]) {
@@ -62,6 +76,7 @@ export function loadGameData(dataDir, cfg) {
   } catch {
     layout = null; // 꾸밈 배치는 없어도 된다 (선물이 바위 위에 떨어질 수 있을 뿐)
   }
+  if (seaSpot) seaSpot.island = layout?.island ?? null;
 
   const quests = read('quests/quests.json');
   for (const t of quests.templates) if (t.item && !items.has(t.item)) throw new Error(`quest ${t.id}: unknown item ${t.item}`);
@@ -111,8 +126,12 @@ export function loadGameData(dataDir, cfg) {
   const units = listUnits(realestate);
   for (const u of units) if (!realestate.types[u.type]) throw new Error(`apartment ${u.id}: unknown type ${u.type}`);
   const bank = read('bank/bank.json');
+  // 예적금 (v0.12): 금융기관 여섯 곳 · 상품 · 우대 · 세금 · 예금자 보호.
+  const savings = loadSavings(read('bank/savings.json'));
   // 집 안 (v0.10): 평면도 · 집 안 자리 · 처음 놓이는 가구.
   const floorplans = read('realestate/floorplans.json');
+  // 일거리 (v0.12): 배달 알바 — 받을 곳 · 주민 집 (집이 없는 주민은 사는 아파트 동의 공동 현관).
+  const jobs = loadJobs(read('jobs/jobs.json'), npcs, realestate, floorplans);
   const plans = loadPlans(floorplans);
   for (const u of units) if (!plans.has(planIdOf(realestate, u))) throw new Error(`apartment ${u.id}: unknown plan ${planIdOf(realestate, u)}`);
   for (const p of plans.values()) {
@@ -121,6 +140,8 @@ export function loadGameData(dataDir, cfg) {
 
   // 마을톡 (v0.11)
   const messenger = read('messenger/messenger.json');
+  // v16 업적 · 칭호
+  const achievements = loadAchievements(read('achievements/achievements.json'));
 
   // 식당: 요리 · 동작 · 손님
   const recipesFile = read('restaurant/recipes.json');
@@ -129,6 +150,7 @@ export function loadGameData(dataDir, cfg) {
   const cookSteps = recipesFile.steps;
   for (const r of recipes) {
     for (const s of r.steps) if (!cookSteps[s]) throw new Error(`recipe ${r.id}: unknown step ${s}`);
+    for (const s of r.seasons ?? []) if (!SEASONS.includes(s)) throw new Error(`recipe ${r.id}: unknown season ${s}`);
     for (const ing of r.ingredients) {
       if (ing.item && !items.has(ing.item)) throw new Error(`recipe ${r.id}: unknown item ${ing.item}`);
       for (const id of ing.item_any ?? []) if (!fish.has(id) && !items.has(id)) throw new Error(`recipe ${r.id}: unknown ${id}`);
@@ -157,6 +179,11 @@ export function loadGameData(dataDir, cfg) {
   const data = {
     fish,
     spots,
+    seaSpot,
+    /** 낚시터 id → 사각형 낚시터 또는 바다. */
+    fishingSpot: (id) => spots.get(id) ?? (seaSpot && seaSpot.id === id ? seaSpot : null),
+    /** 사각형 낚시터 + 바다 (지금 낚을 수 있는 물고기를 모을 때). */
+    allSpots: () => (seaSpot ? [...spots.values(), seaSpot] : [...spots.values()]),
     items,
     chopDrops,
     trees,
@@ -192,11 +219,15 @@ export function loadGameData(dataDir, cfg) {
     plans,
     planOf: (unit) => plans.get(planIdOf(realestate, unit)) ?? null,
     bank,
+    savings,
+    jobs,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),
+    recipeSeasonWeight: recipesFile.season_weight ?? 1,
     cookSteps,
     restaurant,
     messenger,
+    achievements,
     customers,
     civic,
     programs,
@@ -212,8 +243,18 @@ export function loadGameData(dataDir, cfg) {
   return data;
 }
 
-/** 점과 수역 사이의 거리(안쪽이면 0). 윤곽(outline)이 있으면 다각형, 없으면 사각형. */
+/** 바닷가에 설 수 있는 섬 모양 값의 끝 (젖은 모래까지). 이보다 바깥이면 바다 건너 실내다. */
+export const SEA_STAND_MAX = 1.06;
+
+/** 점과 수역 사이의 거리(안쪽이면 0). 바다는 해안선까지, 윤곽(outline)이 있으면 다각형, 없으면 사각형. */
 export function distanceToSpot(spot, x, z) {
+  // 바다: 해안선까지의 거리 (바다 쪽이면 0). 섬 모양은 로드할 때 붙인다 (spot.island).
+  // 해안선 너머 멀리(섬 모양 1.06 넘게) 서 있다면 물 위가 아니라 바다 건너 실내(상점 · 아파트 집 안)다 → 바다 낚시 아님.
+  if (spot.kind === 'sea') {
+    if (!spot.island) return Infinity;
+    const shape = islandShape(spot.island, x, z);
+    return shape > SEA_STAND_MAX ? Infinity : Math.max(0, (1 - shape) * spot.island.half);
+  }
   if (spot.outline) {
     // 바깥 사각형 밖으로 한참 먼 점은 윤곽을 볼 것도 없이 사각형 거리가 하한이다.
     const dx = Math.max(Math.abs(x - spot.x) - spot.half_x, 0);
@@ -245,16 +286,21 @@ export function nearSpot(spot, x, z, margin) {
   return Math.abs(x - spot.x) < spot.half_x + margin && Math.abs(z - spot.z) < spot.half_z + margin;
 }
 
-/** 지금 시각·날씨에 이 낚시터에서 낚일 수 있는 물고기. */
-export function availableFish(spot, fishById, hour, weather) {
+/** 지금 시각·날씨·계절에 이 낚시터에서 낚일 수 있는 물고기 (season 이 null 이면 계절은 보지 않는다). */
+export function availableFish(spot, fishById, hour, weather, season = null) {
   return spot.fish
     .map((id) => fishById.get(id))
-    .filter((f) => inHours(f.hours, hour) && (!Array.isArray(f.weather) || f.weather.includes(weather)));
+    .filter(
+      (f) =>
+        inHours(f.hours, hour) &&
+        (!Array.isArray(f.weather) || f.weather.includes(weather)) &&
+        (season === null || !Array.isArray(f.seasons) || f.seasons.includes(season)),
+    );
 }
 
 /** 가중치 뽑기. 시각·날씨 조건에 맞는 물고기가 없으면 낚시터 전체에서 뽑는다. */
-export function pickFish(spot, fishById, random, hour = 12, weather = 'clear', weightOf = (f) => f.weight) {
-  let pool = availableFish(spot, fishById, hour, weather);
+export function pickFish(spot, fishById, random, hour = 12, weather = 'clear', weightOf = (f) => f.weight, season = null) {
+  let pool = availableFish(spot, fishById, hour, weather, season);
   if (pool.length === 0) pool = spot.fish.map((id) => fishById.get(id));
   return pickWeighted(pool, weightOf, random);
 }

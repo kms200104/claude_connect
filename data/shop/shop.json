@@ -47,18 +47,33 @@
       "name": "솔바람 잡화점",
       "points": 150000,
       "sell_bonus": 0.05,
-      "stock": ["yarn", "bouquet", "round_table", "bench", "vanity_mirror", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls", "potato", "butter", "lemon", "tv", "dining_table", "wardrobe", "fabric_sofa", "washing_machine"]
+      "stock": ["yarn", "bouquet", "round_table", "bench", "vanity_mirror", "floor_lamp", "bookshelf", "knit_cap", "apron", "raincoat", "braided_rug", "spiral_shell", "pressed_flower", "paper_lantern", "campfire", "sprout_pin", "overalls", "potato", "butter", "lemon", "tv", "dining_table", "wardrobe", "fabric_sofa", "washing_machine", "white_chair", "white_coffee_table", "white_rug", "white_arc_lamp", "white_shelf", "white_desk"]
     },
     {
       "level": 3,
       "name": "솔바람 백화점",
       "points": 600000,
       "sell_bonus": 0.1,
-      "stock": ["scented_candle", "silver_teapot", "rocking_chair", "sofa", "fountain", "grand_piano", "flower_hat", "velvet_beret", "formal_vest", "quilt_bed", "garden_swing", "jeogori", "air_conditioner", "refrigerator", "bed_double"]
+      "stock": ["scented_candle", "silver_teapot", "rocking_chair", "sofa", "fountain", "grand_piano", "flower_hat", "velvet_beret", "formal_vest", "quilt_bed", "garden_swing", "jeogori", "air_conditioner", "refrigerator", "bed_double", "white_sofa", "white_bed", "white_dining_table", "white_tv_stand"]
     }
   ],
   "room_origin": {
     "x": 0,
     "z": 194.5
-  }
+  },
+  "delivery": {
+    "fee": 3000, "min_delay_s": 20, "max_delay_s": 30, "speed": 3.4, "hand_range": 1.5, "wait_s": 90, "max_active": 3, "max_n": 99,
+    "courier": {
+      "id": "courier", "name": "다온", "personality": "lively", "color": "#F2A65A",
+      "look": { "hair": "#2F2A28", "style": "short", "top": "#F2A65A", "bottom": "#4F6A8C", "shoes": "#3A3A40" },
+      "about": "솔바람 상점의 배달 알바. 자전거보다 달리기가 빠르다고 우긴다."
+    },
+    "lines": {
+      "start": "주문하신 {items}, 배달 가고 있습니다~ 🛵",
+      "done": "배달 완료! {items} 전해 드렸어요. 맛있게 드세요 :)",
+      "stored": "안 계셔서 {items}은(는) 식당 창고에 넣어 두었어요!",
+      "full": "가방이 가득 차서 {items}은(는) 식당 창고에 넣어 두었어요!"
+    }
+  },
+  "storage": { "max_per_item": 999 }
 }

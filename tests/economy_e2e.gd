@@ -37,6 +37,10 @@ func _wait_until(cond: Callable, timeout_s: float) -> bool:
 	return cond.call()
 
 
+func _accounts() -> Array:
+	return Array(Economy.bank.get("sv", {}).get("accounts", []))
+
+
 func _count(item_id: String) -> int:
 	var n: int = 0
 	for it: InventoryItem in Net.inventory:
@@ -77,7 +81,48 @@ func _run() -> void:
 	_check(phone_button != null and phone_button.visible, "HUD 에 휴대폰 단추")
 	phone_button.pressed.emit()
 	await get_tree().process_frame
-	_check(econ.phone.is_open(), "휴대폰이 열림 (증권 앱)")
+	_check(econ.phone.is_open() and econ.phone.is_on_home(), "휴대폰이 열림 (홈 화면)")
+	var me: Player = _village.get_node("Player")
+	_check(me.rig.is_holding_phone() and me.is_input_locked(), "캐릭터가 휴대폰을 꺼내 든다 (멈춰 서서)")
+	await get_tree().create_timer(0.6).timeout
+	_check(me.rig.phone_prop() != null and me.rig.phone_prop().visible, "손에 휴대폰 모형")
+	var stocks_icon: PhoneAppIcon = econ.phone.find_child("App_stocks", true, false)
+	_check(stocks_icon != null, "홈 화면에 증권 앱 아이콘")
+	stocks_icon.pressed.emit()
+	await get_tree().process_frame
+	_check(econ.phone.current_app() == PhoneWindow.Tab.STOCKS, "아이콘을 누르면 증권 앱")
+	econ.phone.set("_stock_id", "SBE")
+	econ.phone.go_back()
+	_check(econ.phone.current_app() == PhoneWindow.Tab.STOCKS and str(econ.phone.get("_stock_id")) == "", "뒤로: 종목 화면 → 종목 목록")
+	econ.phone.go_back()
+	_check(econ.phone.is_on_home(), "뒤로: 앱 → 홈 화면")
+	econ.phone.open_app(PhoneWindow.Tab.BANK)
+	econ.phone.go_home()
+	_check(econ.phone.is_on_home(), "홈 단추: 앱 → 홈 화면")
+	# 설정 앱 (v0.14.2): 소리 · 화질 · 닉네임
+	var settings_icon: PhoneAppIcon = econ.phone.find_child("App_settings", true, false)
+	_check(settings_icon != null, "홈 화면에 설정 앱 아이콘")
+	settings_icon.pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var sp: SettingsPanel = econ.phone.settings_panel()
+	_check(sp != null and sp.volume_slider("music") != null, "설정 앱: 닉네임 · 소리 · 화질 · 화면")
+	if sp != null:
+		var music0: float = Audio.volume("music")
+		sp.volume_slider("music").value = 40.0
+		var bus: int = AudioServer.get_bus_index("Music")
+		_check(is_equal_approx(Audio.volume("music"), 0.4) and AudioServer.get_bus_volume_db(bus) < Audio.music_volume_db - 5.0, "배경음악 40%% → 버스가 작아진다 (%.1fdB)" % AudioServer.get_bus_volume_db(bus))
+		sp.volume_slider("sfx").value = 0.0
+		_check(AudioServer.is_bus_mute(AudioServer.get_bus_index("Sfx")), "효과음 0% = 끔")
+		Audio.set_volume("music", music0)
+		Audio.set_volume("sfx", 1.0)
+		sp.name_edit().text = "휴대폰이름"
+		sp.save_name()
+		_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "") == "휴대폰이름", 3.0), "설정 앱에서 닉네임 저장")
+		sp.name_edit().text = ""
+		sp.save_name()
+	econ.phone.go_home()
+	econ.phone.open_app(PhoneWindow.Tab.STOCKS)
 	var sol0: int = Net.sol
 	var trades: Array = []
 	Economy.trade_done.connect(func(r: Dictionary) -> void: trades.append(r))
@@ -91,7 +136,10 @@ func _run() -> void:
 	econ.phone.open(PhoneWindow.Tab.ASSETS)
 	await get_tree().process_frame
 	_check(Economy.net_worth > 0, "자산 앱: 순자산 %s" % Money.short(Economy.net_worth))
-	econ.phone.close()
+	econ.phone.go_home()
+	econ.phone.go_back()
+	_check(not econ.phone.is_open(), "홈 화면에서 뒤로 = 휴대폰 넣기")
+	_check(await _wait_until(func() -> bool: return not me.rig.is_holding_phone() and not me.is_input_locked() and not me.rig.phone_prop().visible, 2.0), "휴대폰을 넣고 다시 움직인다")
 
 	# ---- 은행 ----
 	var banked: Array = [false]
@@ -107,6 +155,26 @@ func _run() -> void:
 	var loan_id: String = str(Economy.loans[0].get("id", "")) if not Economy.loans.is_empty() else ""
 	Economy.repay_loan(loan_id, 1000000)
 	_check(await _wait_until(func() -> bool: return loans.size() == 2 and Economy.loans.is_empty(), 2.0), "전액 상환")
+	var sv: Dictionary = Economy.bank.get("sv", {})
+	_check(Array(sv.get("institutions", [])).size() == 6 and Array(sv.get("products", [])).size() >= 10, "예적금: 금융기관 6곳 · 상품 %d개" % Array(sv.get("products", [])).size())
+	var deps: Array[Dictionary] = []
+	Economy.deposit_done.connect(func(r: Dictionary) -> void: deps.append(r))
+	Economy.open_deposit("deundeun_deposit", 12, 5000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 1 and _accounts().size() == 1, 2.0), "저축은행 정기예금 500만 가입 → 내 예적금")
+	Economy.park_move(2000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 2 and int(deps[1].get("balance", 0)) == 2000000, 2.0), "파킹통장 200만 넣기")
+	var dep_id: String = str(deps[0].get("id", ""))
+	Economy.close_deposit(dep_id)
+	_check(await _wait_until(func() -> bool: return deps.size() == 3 and bool(deps[2].get("early", false)) and int(deps[2].get("net", 0)) >= 5000000, 2.0), "중도해지: 원금은 그대로")
+	Economy.park_move(-2000000)
+	_check(await _wait_until(func() -> bool: return deps.size() == 4 and _accounts().is_empty(), 2.0), "파킹통장 다 빼기 → 계좌 없음")
+	econ.phone.set("_bank_savings", true)
+	econ.phone.set("_sv_bank", "gureum")
+	econ.phone.open(PhoneWindow.Tab.BANK)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(econ.phone.is_open(), "은행 앱 예적금 화면이 열림")
+	econ.phone.close()
 
 	# ---- 부동산 ----
 	var office: Vector3 = apartments.office_position()
@@ -124,6 +192,39 @@ func _run() -> void:
 	await get_tree().process_frame
 	_check(apartments.get_node("Flags").get_child_count() == 1, "발코니에 금빛 깃발")
 	_check(apartments.unit_position("101-1001").y > apartments.unit_position("101-101").y + 10.0, "10층짜리 동")
+	var sol_before_lease: int = Net.sol
+	Economy.lease_home("101-501", "jeonse")
+	_check(await _wait_until(func() -> bool: return apts.size() == 2 and Economy.home_leases.has("101-501"), 3.0), "전세로 놓기 → 보증금")
+	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_lease == int(Economy.home_leases.get("101-501", {}).get("deposit", -1)), 2.0), "보증금만큼 솔이 늘었다")
+	Economy.lease_home("101-501", "rent")
+	_check(await _wait_until(func() -> bool: return apts.size() == 3 and not Economy.home_leases.has("101-501"), 3.0), "보증금 돌려주고 월세로")
+
+	# ---- 일거리: 배달 알바 ----
+	var jobs: JobController = _village.get_node("Jobs")
+	var job_done: Array[Dictionary] = []
+	Economy.job_done.connect(func(r: Dictionary) -> void: job_done.append(r))
+	Economy.take_job("parcel")
+	_check(await _wait_until(func() -> bool: return not Economy.job().is_empty(), 2.0), "배달 알바를 받았다")
+	_check(await _wait_until(func() -> bool: return jobs.chip_text().contains("받기"), 2.0), "칩: %s" % jobs.chip_text())
+	var job: Dictionary = Economy.job()
+	var from: Dictionary = job.get("from", {})
+	await _teleport(Vector3(float(from.get("x", 0.0)), 0.1, float(from.get("z", 0.0)) + 0.6))
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.JOB and interaction.target_id == JobController.TARGET_PICK, 2.0), "받을 곳에서 '물건 받기'")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return Economy.carry_item() == "parcel", 2.0), "택배 상자를 들었다")
+	_check(await _wait_until(func() -> bool: return (_village.get_node("Player") as Player).held_item == "parcel", 1.0), "손에 상자가 보인다")
+	var to: Dictionary = Economy.job().get("to", {})
+	await _teleport(Vector3(float(to.get("x", 0.0)) + 3.0, 0.1, float(to.get("z", 0.0)) + 2.5))
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.JOB and interaction.target_id == JobController.TARGET_DROP, 2.0), "주민 집 앞에서 '배달하기'")
+	var sol_before_job: int = Net.sol
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return job_done.size() == 1, 3.0), "배달 완료")
+	_check(int(job_done[0].get("tip", 0)) > 0 if not job_done.is_empty() else false, "빨리 와서 팁")
+	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_job == int(job_done[0].get("total", 0)) and Economy.job().is_empty(), 2.0), "삯이 지갑에 · 일거리 끝")
+	econ.phone.open(PhoneWindow.Tab.JOBS)
+	await get_tree().process_frame
+	_check(econ.phone.is_open() and int(Economy.jobs.get("done", 0)) == 1, "일거리 앱: 오늘 1건")
+	econ.phone.close()
 
 	# ---- 식당 ----
 	var counter: Vector3 = restaurant.counter_position()
@@ -180,6 +281,20 @@ func _run() -> void:
 	await get_tree().process_frame
 	_check(fishing.spot != null and fishing.spot.spot_id == "seongseong", "성성호수 물가에서는 그 호수로 던진다")
 	_check(fishing.spot.can_cast_from(player.global_position), "성성호수에서 낚시할 수 있다")
+
+	# ---- 바다 낚시 (v0.12): 섬 둘레 바닷가 어디서나 ----
+	var half: float = GameData.layout.island_half
+	await _teleport(Vector3(half - 2.0, 0.1, 0.0), -PI * 0.5)
+	await get_tree().create_timer(0.3).timeout
+	await get_tree().process_frame
+	_check(fishing.spot != null and fishing.spot.spot_id == "sea", "바닷가에서는 바다로 던진다 (%s)" % (fishing.spot.spot_id if fishing.spot != null else "-"))
+	_check(fishing.spot.can_cast_from(player.global_position), "바닷가에서 낚시할 수 있다")
+	var bobber_at: Vector3 = fishing.spot.info.clamp_inside(player.global_position + Vector3(4.0, 0.0, 0.0))
+	_check(GameData.layout.island_shape(Vector2(bobber_at.x, bobber_at.z)) > 1.0, "찌는 바다 위에 떨어진다")
+	var started: Array = [false]
+	Net.fish_started.connect(func(_shadow: float) -> void: started[0] = true, CONNECT_ONE_SHOT)
+	fishing.call("_on_action_pressed")
+	_check(await _wait_until(func() -> bool: return started[0], 3.0), "바다에 낚싯대를 던졌다")
 
 
 func _seated(site: RestaurantSite) -> int:

@@ -1,13 +1,13 @@
 import { performance } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { defaultConfig } from './config.js';
-import { CloseCode, ErrorCode, MOTIONS, PROTOCOL_VERSION, TOPICS } from './protocol.js';
+import { CloseCode, ErrorCode, MOTIONS, PROTOCOL_VERSION, SAY_GAP_MS, SAY_MAX_CHARS, TOPICS } from './protocol.js';
 import { RoomManager } from './rooms.js';
 import { RoomStore } from './persistence.js';
 import { loadGameData, pickWeighted } from './gamedata.js';
 import { createFishing } from './fishing.js';
 import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
-import { createClock, isWeather, timeBand, weatherAt } from './clock.js';
+import { createClock, isWeather, seasonOf, timeBand, weatherAt } from './clock.js';
 import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
 import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
 import { createMessenger } from './messenger.js';
@@ -18,14 +18,25 @@ import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, mbtiLe
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { defaultFurniture, furnitureWire, interiorOrigin, lobbyOf, normRot, onFloor, snapGrid } from './homes.js';
 import { PICKUP_RANGE, placedWire, placementProblem, snap } from './furniture.js';
-import { activeEvents, dropPosition, eventsWire, findEvent, planDay, sellMultiplier } from './events.js';
+import { activeEvents, buyMultiplier, dropPosition, eventsWire, findKind, planDay, sellMultiplier } from './events.js';
+import { weekOf } from './bank.js';
 import { applyFaceRequest, nearMirror } from './face.js';
+import { cleanName } from './nickname.js';
 import { createMarket } from './market.js';
 import { createEconomy, earn } from './economy.js';
 import { createKitchen } from './kitchen.js';
 import { inZone, netCatch, refillShoal, shoalWire, stepShoal } from './shoal.js';
 import { TileKind, beachSpot, digSpotWire, diggers, hitSpot, lakeShoreSpot, onBeach, snapTile, tileKey } from './dig.js';
 import { distanceToSpot } from './gamedata.js';
+import { createJobs } from './jobs.js';
+import { createDelivery, storeIngredients } from './delivery.js';
+import { SWIM, createSwimmers } from './swimmers.js';
+import { zoneWeight } from './fishing.js';
+import { bump, canWearTitle, checkAchievements, cleanBirthday, dateOfDay, noteFish, noteItems, parseMonthDay, progressWire, sameDay, statValues } from './progress.js';
+import { calendarWire } from './calendar.js';
+import { GUESTBOOK, addEntry, cleanEntryText, guestbookWire } from './guestbook.js';
+import { PHOTO_RULES, createPhotoStore } from './photos.js';
+import { DAY_MS, DAY_START_HOUR } from './clock.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -42,7 +53,10 @@ export function createServer(overrides = {}) {
   const data = loadGameData(cfg.dataDir, cfg);
   const store = overrides.store ?? new RoomStore(cfg.saveDir);
   const rooms = new RoomManager(cfg, store, data);
-  const wss = new WebSocketServer({ port: cfg.port, maxPayload: cfg.maxMessageBytes });
+  // v16: 사진(photo_up)만 큰 메시지를 받는다 — 나머지는 아래 message 처리에서 maxMessageBytes 로 막는다.
+  const photoPayload = Math.ceil((PHOTO_RULES.maxBytes * 4) / 3) + 512;
+  const wss = new WebSocketServer({ port: cfg.port, maxPayload: Math.max(cfg.maxMessageBytes, photoPayload) });
+  const photos = createPhotoStore(cfg.saveDir);
   const now = () => performance.now();
   const random = overrides.random ?? Math.random;
   const clock = overrides.clock ?? createClock(cfg);
@@ -55,9 +69,25 @@ export function createServer(overrides = {}) {
   const roomOf = (player) => [...rooms.rooms.values()].find((r) => r.players.get(player.id) === player);
 
   const weatherOf = (room) => (isWeather(cfg.weatherForce) ? cfg.weatherForce : weatherAt(room.weatherSeed, clock.day(), clock.hour()));
-  const environment = (room) => ({ hour: clock.hour(), weather: room ? weatherOf(room) : 'clear' });
+  const environment = (room) => ({ hour: clock.hour(), weather: room ? weatherOf(room) : 'clear', season: cfg.seasonForce || seasonOf(clock.gameMs()) });
 
   const sendInventory = (player) => sendTo(player, { t: 'inventory', ...inventoryToWire(player.slots, cfg, player.profile.held) });
+  /** v16 업적 판정에 쓰는 값: 기록 + 도감 · 친밀도 · 지갑 + 내가 기증한 물고기 · 가진 집. */
+  const progressValues = (room, profile) =>
+    statValues(profile, {
+      donated: room ? Object.values(room.museum.fish).filter((by) => by === profile.slot).length : 0,
+      homes: room ? Object.values(room.homes).filter((h) => h?.owner === profile.uid).length : 0,
+    });
+  /** 도감(가구·옷)을 채우고 새로 이룬 업적을 적는다. 이뤘으면 그 사람에게 알린다. 무엇이 바뀌었으면 true. */
+  const checkProgress = (player, room) => {
+    if (!room) return false;
+    const mine = [...room.placed.values()].filter((f) => f.owner === player.uid).map((f) => f.item);
+    const noted = noteItems(player.profile, data, mine);
+    const fresh = checkAchievements(player.profile, data.achievements, progressValues(room, player.profile), clock.day());
+    if (noted || fresh.length > 0) room.saveDirty = true;
+    if (fresh.length > 0) sendTo(player, { t: 'ach', ids: fresh });
+    return noted || fresh.length > 0;
+  };
   const profileWire = (player) => {
     const friends = {};
     for (const [id, rel] of Object.entries(player.profile.npcs)) friends[id] = rel.f;
@@ -68,20 +98,27 @@ export function createServer(overrides = {}) {
       outfit: { ...player.profile.outfit },
       emotes: { known: [...player.profile.emotes.known], quick: [...player.profile.emotes.quick] },
       face: { ...player.profile.face },
+      name: player.profile.name ?? '',
       ...economy.profileWire(roomOf(player), player.profile),
+      ...progressWire(player.profile, progressValues(roomOf(player), player.profile)),
     };
   };
   /** 프로필 보내기. 혼인한 세대면 지갑이 하나라 세대원에게도 함께 보낸다. */
   const sendProfile = (player) => {
+    const here = roomOf(player);
+    checkProgress(player, here);
     sendTo(player, { t: 'profile', ...profileWire(player) });
-    const room = player.profile.household ? roomOf(player) : null;
+    const room = player.profile.household ? here : null;
     if (!room) return;
     for (const m of room.householdOf(player.profile)) {
       const live = m.uid !== player.uid ? room.players.get(m.slot) : null;
-      if (live && live.uid === m.uid) sendTo(live, { t: 'profile', ...profileWire(live) });
+      if (live && live.uid === m.uid) {
+        checkProgress(live, room);
+        sendTo(live, { t: 'profile', ...profileWire(live) });
+      }
     }
   };
-  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now() });
+  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now(), se: cfg.seasonForce || '' });
 
   // ---- 경제: 증권 · 아파트 · 은행 · 식당 (economy.js) ----
   const market = overrides.market ?? createMarket(data.market, { saveDir: cfg.saveDir, feedUrl: cfg.marketFeedUrl, random, gameMs: clock.gameMs, day: clock.day, forceHours: cfg.marketHours === 'krx' });
@@ -92,10 +129,23 @@ export function createServer(overrides = {}) {
   };
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
-  const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory });
+  const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
+  const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
+  /** 상점에서 사는 값 (장바구니 물가가 오른 주에는 비싸다). */
+  const buyPrice = (room, item, n) => Math.round(data.items.get(item).buy * n * buyMultiplier(activeOf(room), item, data.kindOf));
+  const delivery = createDelivery({
+    data, cfg, random, now, send, sendTo, sendInventory, sendProfile, messenger, buyPrice,
+    stockFor: (room) => stockFor(room.shopPoints, shopLevels),
+    isIndoor: (p) => !!p.home || inShop(p),
+    onPaid: (room, player, amount) => {
+      room.shopPoints += Math.round(amount * data.shop.points_per_sol * cfg.shopPointsScale);
+      room.broadcast({ t: 'shop', ...roomShopWire(room), up: false });
+    },
+    onStored: (room) => kitchen.broadcastRest(room),
+  });
   /** 지금 구할 수 있는 소지품: 상점 진열품 + 나무에서 나오는 것. */
   const goodsPool = (room) => {
     const pool = new Set(stockFor(room.shopPoints, shopLevels).filter((id) => data.kindOf(id) === 'goods'));
@@ -146,19 +196,30 @@ export function createServer(overrides = {}) {
   const planOf = (room) => {
     const day = clock.day();
     if (!room.plan || room.plan.day !== day) {
-      room.plan = planDay({ seed: room.weatherSeed, day, events: data.events, data, force: cfg.eventForce, forcedWanted: cfg.eventWanted });
+      room.plan = planDay({ seed: room.weatherSeed, day, events: data.events, data, force: cfg.eventForce, forcedWanted: cfg.eventWanted, season: environment(null).season });
     }
     return room.plan;
   };
-  const activeOf = (room) => (room ? activeEvents(planOf(room), clock.hour(), weatherOf(room)) : []);
+  /** 이번 주 경제 소식 (v0.12, economy.js 가 주간 정산 때 정한다). 지난 주 것이면 없다. */
+  const econOf = (room) => {
+    const e = room.econ;
+    if (!e || e.week !== weekOf(clock.day())) return null;
+    const def = data.events.economy?.find((x) => x.id === e.id);
+    return def ? { id: e.id, def } : null;
+  };
+  const activeOf = (room) => (room ? activeEvents(planOf(room), clock.hour(), weatherOf(room), econOf(room)) : []);
   const eventsMessage = (room) => ({ t: 'ev', ...eventsWire(activeOf(room), clock.day()) });
-  const dropWire = (d) => (d.kind === 'gift' ? { id: d.id, kind: d.kind, x: d.x, z: d.z } : { id: d.id, kind: d.kind, item: d.item, x: d.x, z: d.z });
+  const dropWire = (d) => {
+    if (d.kind === 'gift') return { id: d.id, kind: d.kind, x: d.x, z: d.z };
+    if (d.kind === 'item') return { id: d.id, kind: d.kind, item: d.item, n: d.n, x: d.x, z: d.z };
+    return { id: d.id, kind: d.kind, item: d.item, x: d.x, z: d.z };
+  };
 
   /** 선물 풍선·별 조각 떨어뜨리기와 끝난 이벤트의 것 치우기 (worldTick 에서). */
   function tickDrops(room, active, t) {
-    const kinds = { gift: findEvent(active, 'gift_day'), star: findEvent(active, 'meteor_shower') };
+    const kinds = { gift: findKind(active, 'gift'), star: findKind(active, 'meteor') };
     for (const d of [...room.drops.values()]) {
-      if (kinds[d.kind] || d.kind === 'forage') continue;
+      if (kinds[d.kind] || d.kind === 'forage' || d.kind === 'item') continue;
       room.drops.delete(d.id);
       room.broadcast({ t: 'drop_gone', id: d.id, by: 0 });
     }
@@ -222,29 +283,112 @@ export function createServer(overrides = {}) {
     return null;
   }
 
-  /** 선물·별 조각 줍기. */
+  /**
+   * v13: 내려놓을 자리. 발밑에서 시작해, 이미 놓인 물건과 겹치지 않게 해바라기 씨 배치로 조금씩 벌려 놓는다
+   * (줍기 거리 안을 벗어나지 않는다).
+   */
+  function groundSpot(ground, x, z) {
+    const near = ground.filter((d) => Math.hypot(d.x - x, d.z - z) < 1.6);
+    for (let k = 0; k < 24; k++) {
+      const r = k === 0 ? 0.25 : 0.25 + 0.2 * Math.sqrt(k);
+      const a = k * 2.39996 + 0.6;
+      const at = { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
+      if (near.every((d) => Math.hypot(d.x - at.x, d.z - at.z) >= 0.42)) return at;
+    }
+    return { x, z };
+  }
+
+  /** 선물·별 조각·먹거리, 그리고 사람이 내려놓은 물건(v13) 줍기. 내려놓은 묶음은 가방에 들어가는 만큼만 줍고 나머지는 남는다. */
   function handleCollect(ctx, msg, fail) {
     const { player, room } = ctx;
     if (!player.acceptRid(msg.rid)) return;
     const d = typeof msg.id === 'string' ? room.drops.get(msg.id) : null;
     if (!d || Math.hypot(player.x - d.x, player.z - d.z) > data.events.collect_range + 0.5) return fail(ErrorCode.noDrop);
-    if (!addItem(player.slots, d.item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
-    room.drops.delete(d.id);
-    send(ctx.ws, { t: 'collect_result', rid: msg.rid, id: d.id, kind: d.kind, item: d.item });
+    let n = 1;
+    if (d.kind === 'item') {
+      n = d.n;
+      while (n > 0 && !canAdd(player.slots, d.item, n, data.limitOf)) n -= 1;
+    }
+    if (n < 1 || !addItem(player.slots, d.item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+    const left = d.kind === 'item' ? d.n - n : 0;
+    send(ctx.ws, { t: 'collect_result', rid: msg.rid, id: d.id, kind: d.kind, item: d.item, n, left });
     sendInventory(player);
     sendProfile(player);
-    room.broadcast({ t: 'drop_gone', id: d.id, by: player.id });
+    if (left > 0) {
+      d.n = left;
+      room.broadcast({ t: 'drop', d: dropWire(d) });
+    } else {
+      room.drops.delete(d.id);
+      room.broadcast({ t: 'drop_gone', id: d.id, by: player.id });
+    }
+    act(room, player, 'pick');
     rooms.save(room);
   }
 
+  /** v0.12: 다른 사람 화면에 보일 몸짓 (줍기·심기·놓기·건네기 등). 판정과 상관없는 연출용 알림. */
+  function act(room, player, kind, e = '') {
+    room.broadcast({ t: 'act', id: player.id, kind, e }, player.id);
+  }
+
+  /**
+   * v0.12: 말풍선. 대화하는 사람의 화면에 뜬 대사(주민 말 · 내가 고른 말)를 둘레 사람에게도 머리 위 말풍선으로 보여 준다.
+   * 대사는 클라이언트가 고른 꾸밈 글자라 판정에 쓰지 않는다. 대화 중인 주민 것만, 길이·간격을 제한한다.
+   */
+  // 클라이언트에서만 대화가 이어지는 가게 사람들 (상점 주인 · 박물관 관장 · 조종사 · 떠돌이 상인) — 서버는 대화 중인지 모른다.
+  const SAY_KEEPERS = new Set(
+    [data.shop?.keeper?.id, data.museum?.curator?.id, data.airport?.pilot?.id, ...(data.events?.daily ?? []).map((e) => e?.npc?.id)].filter(Boolean),
+  );
+
+  function handleSay(ctx, msg, fail) {
+    const { player, room } = ctx;
+    const who = msg.who === 'npc' ? 'npc' : 'me';
+    const keeper = who === 'npc' && SAY_KEEPERS.has(msg.npc);
+    if (!keeper && (player.talkingTo === null || (who === 'npc' && msg.npc !== player.talkingTo))) return fail(ErrorCode.notTalking);
+    const t = now();
+    if (t - (player.lastSayAt ?? -Infinity) < SAY_GAP_MS) return fail(ErrorCode.tooFast);
+    const text = typeof msg.tx === 'string' ? msg.tx.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, SAY_MAX_CHARS) : '';
+    if (!text) return fail(ErrorCode.badMessage);
+    player.lastSayAt = t;
+    room.broadcast({ t: 'say', id: player.id, npc: who === 'npc' ? msg.npc : '', tx: text }, player.id);
+  }
+
+  // v13: 낚시터에 보이는 물고기 (swimmers.js). 낚시 대회가 열리면 희귀한 물고기가 더 자주 나타난다.
+  const swimSpots = [...data.spots.keys(), ...(data.fishingSpot?.('sea') ? ['sea'] : [])];
+  const swimmers = createSwimmers({
+    data,
+    random: overrides.random ?? Math.random,
+    now,
+    environment: (spot) => environment(null),
+    weightFor: (room, spot, zone) => {
+      const d = findKind(activeOf(room), 'derby');
+      const boost = d && (!Array.isArray(d.def.spots) || d.def.spots.includes(spot.id)) ? d.def.rare_boost ?? 1 : 1;
+      return (f) => f.weight * (f.rarity === 'rare' ? boost : 1) * zoneWeight(zone, f);
+    },
+    spotIds: () => swimSpots,
+  });
   const fishing = createFishing({
     cfg,
     data,
     random: overrides.random,
+    swim: {
+      inWater: (spot, x, z) => swimmers.inWater(spot, x, z, 0.3),
+      engage: (player, spot, x, z, waited = 0) => {
+        const room = roomOf(player);
+        return room ? swimmers.engage(room, spot.id, x, z, player.id, now(), SWIM.notice + SWIM.noticeGrowth * waited) : null;
+      },
+      release: (player, id, caught) => {
+        const room = roomOf(player);
+        if (room) swimmers.release(room, id, caught, now());
+      },
+    },
     notify: sendTo,
     heldItem: (player) => player.heldItem,
     environment: (player) => environment(roomOf(player)),
-    derby: (player) => findEvent(activeOf(roomOf(player)), 'fishing_derby'),
+    // 낚시 대회: 대회가 열린 낚시터에서만 (spots 가 없으면 어디서나).
+    derby: (player, spot) => {
+      const d = findKind(activeOf(roomOf(player)), 'derby');
+      return d && (!Array.isArray(d.def.spots) || d.def.spots.includes(spot?.id)) ? d : null;
+    },
     // 같이 낚시: 같은 낚시터에서 9m 안에 다른 사람이 낚고 있으면.
     companions: (player, spot) => {
       const room = roomOf(player);
@@ -255,8 +399,11 @@ export function createServer(overrides = {}) {
       const room = roomOf(player);
       if (room) room.dirty = true; // 스냅샷에 fishing 플래그를 실어 보낸다
     },
+    publish: (player, ev) => roomOf(player)?.broadcast({ t: 'act', id: player.id, kind: 'fish', ...ev }, player.id),
     onInventoryChanged: (player, fishId) => {
       const room = roomOf(player);
+      bump(player.profile, 'fish');
+      noteFish(player.profile, fishId);
       sendInventory(player);
       sendProfile(player); // 부탁 진행도(have)가 바뀐다
       if (!room) return;
@@ -272,6 +419,7 @@ export function createServer(overrides = {}) {
     const npc = player.talkingTo !== null ? room.npcs.get(player.talkingTo) : null;
     if (npc && npc.talkingWith === player.id) endTalk(npc, now());
     if (npc && notify) sendTo(player, { t: 'talk_closed', npc: npc.id });
+    if (npc) room.broadcast({ t: 'act', id: player.id, kind: 'talk_end', e: npc.id }, player.id);
     player.talkingTo = null;
     player.offer = null;
     room.npcsDirty = true;
@@ -281,6 +429,10 @@ export function createServer(overrides = {}) {
     const { room, player } = ctx;
     if (!room || !player || player.ws !== ctx.ws) return;
     player.ws = null;
+    if (player.phone) {
+      player.phone = false;
+      room.dirty = true;
+    }
     fishing.drop(player);
     closeTalk(room, player, false);
     room.broadcast({ t: 'peer_status', id: player.id, online: false });
@@ -341,8 +493,13 @@ export function createServer(overrides = {}) {
       digspots: [...room.digSpots.values()].map(digSpotWire),
       shoals: [...room.shoals.values()].map(shoalWire),
       chats: messenger.wire(room, player.profile),
+      couriers: delivery.wire(room),
+      deliv: delivery.mine(room, player.uid),
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
+    // v16: 들어올 때 가진 가구 · 옷을 도감에 올리고 업적을 확인한다 (바뀌었으면 프로필을 다시).
+    if (checkProgress(player, room)) sendTo(player, { t: 'profile', ...profileWire(player) });
+    celebrate(room, player);
     // 집 안에서 끊겼다 돌아오면 그 집 안 그대로 (위치로 어느 집인지 찾는다).
     player.home = homeAtPosition(player.x, player.z);
     if (player.home) send(ctx.ws, homeMessage(room, player, null));
@@ -352,7 +509,8 @@ export function createServer(overrides = {}) {
 
   function checkVersion(ctx, msg) {
     if (msg.v !== PROTOCOL_VERSION) {
-      sendError(ctx.ws, ErrorCode.badVersion, `server protocol ${PROTOCOL_VERSION}`);
+      // 앱이 어느 쪽이 옛날 것인지 알려 줄 수 있게 서버 버전을 같이 보낸다.
+      send(ctx.ws, { t: 'error', code: ErrorCode.badVersion, msg: `server protocol ${PROTOCOL_VERSION}`, server_v: PROTOCOL_VERSION });
       return false;
     }
     return true;
@@ -379,8 +537,34 @@ export function createServer(overrides = {}) {
       const live = room.players.get(profile.slot);
       if (live && live.uid === profile.uid) sendProfile(live);
     }
+    // v16 생일: 오늘 생일인 주민을 마을 소식으로 (하루 한 번), 접속한 사람 중 오늘 생일이면 축하.
+    if (room.notedDay !== today) {
+      room.notedDay = today;
+      const date = dateOfDay(today, DAY_MS, DAY_START_HOUR);
+      for (const def of data.npcs.values()) if (sameDay(parseMonthDay(def.birthday), date)) messenger.npcBirthday(room, def);
+    }
+    for (const p of room.players.values()) if (p.online) celebrate(room, p);
     room.saveDirty = true;
   }
+
+  /** v16: 오늘이 이 사람 생일이면 (한 해에 한 번) 주민들이 축하 마을톡과 선물을 보낸다. */
+  function celebrate(room, player) {
+    const date = dateOfDay(clock.day(), DAY_MS, DAY_START_HOUR);
+    if (!sameDay(player.profile.birthday, date)) return;
+    let got = false;
+    const sent = messenger.birthday(room, player, date.y, (item) => {
+      const ok = addItem(player.slots, item, 1, cfg, data.limitOf);
+      got ||= ok;
+      return ok;
+    });
+    if (!sent) return;
+    if (got) sendInventory(player);
+    sendProfile(player);
+    room.saveDirty = true;
+  }
+
+  /** 주민의 생일이 오늘인지. */
+  const npcBirthdayToday = (def) => sameDay(parseMonthDay(def.birthday), dateOfDay(clock.day(), DAY_MS, DAY_START_HOUR));
 
   // ---- 인벤토리 ----
 
@@ -411,12 +595,23 @@ export function createServer(overrides = {}) {
         return;
       }
       case 'inv_discard': {
+        // v13: 버린 물건은 사라지지 않고 발밑에 남는다 (누구나 다시 주울 수 있다).
         if (!player.acceptRid(msg.rid)) return;
         const slot = player.slots[msg.slot];
         if (!Number.isInteger(msg.slot) || !slot) return fail(ErrorCode.badItem);
         if (data.isTool(slot.id)) return fail(ErrorCode.cantDiscard);
+        if (player.home || inShop(player)) return fail(ErrorCode.cantDropHere);
         const n = msg.n === undefined ? 1 : msg.n;
+        const ground = [...room.drops.values()].filter((d) => d.kind === 'item');
+        if (ground.length >= cfg.groundItemMax) return fail(ErrorCode.groundFull);
+        const item = slot.id;
         if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
+        const at = groundSpot(ground, player.x, player.z);
+        room.groundSeq += 1;
+        const d = { id: `g${room.groundSeq}`, kind: 'item', item, n, x: at.x, z: at.z };
+        room.drops.set(d.id, d);
+        room.broadcast({ t: 'drop', d: dropWire(d), by: player.id });
+        act(room, player, 'drop', item);
         sendInventory(player);
         sendProfile(player);
         rooms.save(room);
@@ -442,7 +637,7 @@ export function createServer(overrides = {}) {
     if (state.s !== TreeStage.grown) return fail(ErrorCode.treeNotReady);
     const drop = pickWeighted(data.chopDrops[def.kind], (d) => d.weight, random).id;
     // 나무꾼의 날에는 두 개씩.
-    const lumber = findEvent(activeOf(room), 'lumber_day');
+    const lumber = findKind(activeOf(room), 'lumber');
     const count = lumber ? lumber.def.drop_multiplier : 1;
     // 가방이 가득 차면 나무를 찍지 않는다(찍힌 횟수도 그대로).
     if (!canAdd(player.slots, drop, count, data.limitOf)) return fail(ErrorCode.inventoryFull);
@@ -453,6 +648,7 @@ export function createServer(overrides = {}) {
     room.treeHits.set(def.id, { by: player.id, at: t });
     const result = chopTree(state, today, clock.gameMs(), data.treeRules.chopsToFell, partner ? 2 : 1);
     addItem(player.slots, drop, count, cfg, data.limitOf);
+    bump(player.profile, 'chop');
     // 같이 쓰러뜨리면 두 사람 모두 하나씩 더.
     let bonus = 0;
     if (result.felled && partner) {
@@ -492,19 +688,27 @@ export function createServer(overrides = {}) {
         beginTalk(npc, player, now());
         player.talkingTo = npc.id;
         room.npcsDirty = true;
+        room.broadcast({ t: 'act', id: player.id, kind: 'talk', e: npc.id }, player.id);
 
         const today = clock.day();
         const profile = player.profile;
         const rel = relationOf(profile, npc.id);
         const first = rel.talkDay !== today;
+        // v16 주민 생일: 그날 처음 말을 걸면 친밀도가 더 오르고 주민이 기뻐한다.
+        const bday = first && npcBirthdayToday(npc.def);
         if (first) {
           rel.talkDay = today;
-          addFriendship(rel, data.quests.friend_per_talk);
+          addFriendship(rel, data.quests.friend_per_talk + (bday ? data.messenger.birthday?.npc_talk_bonus ?? 0 : 0));
+          if (bday) {
+            setMood(npc, 'happy', now());
+            npc.mood = 'happy';
+          }
         } else {
           // 같은 날 또 말을 걸어도 조금씩 친해진다 (수다와 합쳐 하루 상한).
           addChatFriendship(rel, today, data.npcRules.talkExtraFriend, data.npcRules.topicFriendPerDay);
         }
         const reply = { t: 'talk_open', rid: msg.rid, npc: npc.id, f: rel.f, first, m: currentMood(npc, now()) };
+        if (npcBirthdayToday(npc.def)) reply.bday = true;
         // 친해진 만큼 감정표현을 하나씩 가르쳐 준다.
         const teach = emoteToTeach(npc.def, rel.f, profile.emotes.known);
         if (teach) {
@@ -524,11 +728,11 @@ export function createServer(overrides = {}) {
           reply.quest = questWire(active, player.slots, data);
           reply.ready = questReady(player.slots, active, data);
         } else if (shouldOffer({ rules: data.quests, profile, npcId: npc.id, today, random, chance: cfg.questChance })) {
-          const { hour, weather } = environment(room);
+          const { hour, weather, season } = environment(room);
           const only = data.quests.templates.filter((t) => t.id === cfg.questTemplate);
           const rules = only.length > 0 ? { ...data.quests, templates: only } : data.quests;
           profile.questSeq += 1;
-          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, today, seq: profile.questSeq, goodsPool: goodsPool(room) });
+          player.offer = makeQuest({ rules, data, npcDef: npc.def, random, hour, weather, season, today, seq: profile.questSeq, goodsPool: goodsPool(room) });
           rel.offerDay = today;
           profile.lastQuestDay = today;
           reply.offer = player.offer;
@@ -590,6 +794,7 @@ export function createServer(overrides = {}) {
         if (!questReady(player.slots, quest, data)) return fail(ErrorCode.questNotReady);
         // 아이템 차감 · 보상 · 친밀도를 한 번에 반영하고 바로 저장한다.
         removeWhere(player.slots, questAccepts(quest, data), quest.n);
+        bump(player.profile, 'quest');
         player.profile.sol += quest.reward;
         earn(player.profile, quest.reward);
         addFriendship(relationOf(player.profile, npc.id), data.quests.friend_per_quest);
@@ -649,6 +854,7 @@ export function createServer(overrides = {}) {
         let item;
         let amount;
         let back = 0;
+        let stored = false;
         if (msg.t === 'shop_sell') {
           const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
           if (!slot) return fail(ErrorCode.badItem);
@@ -656,26 +862,34 @@ export function createServer(overrides = {}) {
           if (base <= 0) return fail(ErrorCode.cantSell);
           item = slot.id;
           // 특가 매입의 날에는 고른 물건을 2배로.
-          amount = Math.floor(sellValue(base, n, room.shopPoints, shopLevels) * sellMultiplier(activeOf(room), item, 'shop'));
+          amount = Math.floor(sellValue(base, n, room.shopPoints, shopLevels) * sellMultiplier(activeOf(room), item, 'shop', data.kindOf));
           if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
           player.profile.sol += amount;
           earn(player.profile, amount);
         } else {
           item = msg.item;
           if (typeof item !== 'string' || !stockFor(room.shopPoints, shopLevels).includes(item)) return fail(ErrorCode.notForSale);
-          amount = data.items.get(item).buy * n;
+          // 장바구니 물가가 오른 주(v0.12 경제 소식)에는 그 종류가 비싸다.
+          amount = buyPrice(room, item, n);
           if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
-          if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+          // v13: 식재료는 가방 대신 식당 창고로 바로 간다 (식당은 창고 재료부터 쓴다).
+          stored = data.kindOf(item) === 'ingredient';
+          if (stored) {
+            const max = data.shop.storage?.max_per_item ?? 999;
+            if ((room.restaurant.storage?.[item] ?? 0) + n > max) return fail(ErrorCode.storageFull);
+            storeIngredients(room.restaurant, item, n, max);
+          } else if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
           player.profile.sol -= amount;
           back = economy.cashback(room, player, amount);
         }
         // 사고판 솔만큼 상점 포인트가 쌓인다 (마을 공용).
         room.shopPoints += Math.round(amount * data.shop.points_per_sol * cfg.shopPointsScale);
         const shop = roomShopWire(room);
-        send(ctx.ws, { t: 'shop_result', rid: msg.rid, kind: msg.t === 'shop_sell' ? 'sell' : 'buy', item, n, sol: player.profile.sol, amount, back });
+        send(ctx.ws, { t: 'shop_result', rid: msg.rid, kind: msg.t === 'shop_sell' ? 'sell' : 'buy', item, n, sol: player.profile.sol, amount, back, stored });
         sendInventory(player);
         sendProfile(player);
         room.broadcast({ t: 'shop', ...shop, up: shop.level > before });
+        if (stored) kitchen.broadcastRest(room);
         rooms.save(room);
         return;
       }
@@ -687,7 +901,7 @@ export function createServer(overrides = {}) {
     const { player } = ctx;
     const room = ctx.room;
     const active = activeOf(room);
-    const merchant = findEvent(active, 'merchant');
+    const merchant = findKind(active, 'visitor');
     const spot = merchant?.def.spot;
     let back = 0;
     if (!merchant || Math.hypot(player.x - spot.x, player.z - spot.z) > data.npcRules.talkRange + 1) return fail(ErrorCode.merchantAway);
@@ -706,7 +920,8 @@ export function createServer(overrides = {}) {
     } else {
       item = msg.item;
       if (typeof item !== 'string' || !merchant.def.stock.includes(item)) return fail(ErrorCode.notForSale);
-      amount = data.items.get(item).buy * n;
+      // 손님마다 파는 값 배율 (v0.12: 중고 가구상은 70%).
+      amount = Math.round(data.items.get(item).buy * n * (merchant.def.buy_mult ?? 1));
       if (player.profile.sol < amount) return fail(ErrorCode.notEnoughSol);
       if (!addItem(player.slots, item, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
       player.profile.sol -= amount;
@@ -727,12 +942,15 @@ export function createServer(overrides = {}) {
       const f = typeof msg.id === 'string' ? room.flowers.get(msg.id) : null;
       if (!f || f.s !== 'bloom' || Math.hypot(player.x - f.x, player.z - f.z) > data.plants.plant_range + 0.5) return fail(ErrorCode.noFlower);
       const def = data.flowerDefs.get(f.sp);
-      if (!addItem(player.slots, def.item, 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+      // 봄꽃 축제(v0.12)에는 꽃이 두 송이씩.
+      const fest = findKind(activeOf(room), 'flowers');
+      if (!addItem(player.slots, def.item, fest ? fest.def.drop_multiplier ?? 2 : 1, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
       pickFlower(f, def, clock.gameMs(), cfg.growthScale);
       send(ctx.ws, { t: 'pick_result', rid: msg.rid, id: f.id, item: def.item });
       sendInventory(player);
       sendProfile(player);
       room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
+      act(room, player, 'pick');
       rooms.save(room);
       return;
     }
@@ -750,6 +968,7 @@ export function createServer(overrides = {}) {
     const problem = plantProblem({ kind, x, z, player, data, trees: room.allTreeSpots(data), flowers: room.flowers, placed: room.placed });
     if (problem) return fail(ErrorCode.badPlant);
     removeAt(player.slots, held, 1);
+    bump(player.profile, 'plant');
     let id;
     if (kind === 'tree') {
       room.plantSeq += 1;
@@ -766,6 +985,7 @@ export function createServer(overrides = {}) {
       room.broadcast({ t: 'flower', f: flowerWire(f), by: player.id });
     }
     send(ctx.ws, { t: 'plant_result', rid: msg.rid, id, kind, x, z });
+    act(room, player, 'plant');
     sendInventory(player);
     sendProfile(player);
     rooms.save(room);
@@ -855,6 +1075,7 @@ export function createServer(overrides = {}) {
     sendInventory(player);
     sendProfile(player);
     room.broadcast({ t: 'museum', ...museumWire(room), id: slot.id, by: player.id });
+    act(room, player, 'give', slot.id);
     rooms.save(room);
   }
 
@@ -892,6 +1113,43 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  /** 닉네임 (v14): 어디서나 바꿀 수 있다 (거울 창 · 처음 화면 설정). 빈 이름이면 기본 이름으로 돌아간다. */
+  function handleName(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const name = cleanName(msg.name);
+    if (name === null) return fail(ErrorCode.badName);
+    player.profile.name = name;
+    sendTo(player, { t: 'name', rid: msg.rid, id: player.id, name });
+    room.broadcast({ t: 'name', id: player.id, name }, player.id);
+    rooms.save(room);
+  }
+
+  /** 휴대폰 꺼내 보기 · 화면 누르기 (v15, 연출용): 꺼내 든 상태는 플레이어 정보(phone)로, 누르기는 몸짓(act phone_tap)으로 알린다. */
+  function handlePhone(ctx, msg) {
+    const { player, room } = ctx;
+    if (msg.t === 'phone') {
+      const on = msg.on === true;
+      if (player.phone === on) return;
+      player.phone = on;
+      room.dirty = true;
+      return;
+    }
+    // 누르기는 휴대폰을 든 동안만, 너무 잦으면 거른다.
+    const t = now();
+    if (!player.phone || t - (player.phoneTapAt ?? -Infinity) < 120) return;
+    player.phoneTapAt = t;
+    act(room, player, 'phone_tap');
+  }
+
+  /** 입장할 때 같이 보낸 닉네임 (처음 화면 설정). 쓸 수 없거나 비었으면 그대로 둔다. */
+  function applyJoinName(player, raw) {
+    const name = cleanName(raw);
+    if (!name || name === player.profile.name) return false;
+    player.profile.name = name;
+    return true;
+  }
+
   // ---- 가구 설치 · 옷 ----
 
   function handleFurniture(ctx, msg, fail) {
@@ -914,6 +1172,7 @@ export function createServer(overrides = {}) {
         sendInventory(player);
         sendProfile(player);
         room.broadcast({ t: 'placed', rid: msg.rid, by: player.id, f: placedWire(f, (uid) => room.slotOfUid(uid)) });
+        act(room, player, 'place');
         rooms.save(room);
         return;
       }
@@ -926,6 +1185,7 @@ export function createServer(overrides = {}) {
         sendInventory(player);
         sendProfile(player);
         room.broadcast({ t: 'unplaced', rid: msg.rid, id: f.id });
+        act(room, player, 'place');
         rooms.save(room);
         return;
       }
@@ -981,6 +1241,8 @@ export function createServer(overrides = {}) {
     for (const f of caught) if (addItem(player.slots, f.sp, 1, cfg, data.limitOf)) got.push(f.sp);
     if (got.length) {
       player.profile.catches += got.length;
+      bump(player.profile, 'fish', got.length);
+      for (const id of got) noteFish(player.profile, id);
       room.stats.totalCatches += got.length;
       for (const id of got) room.stats.species[id] = (room.stats.species[id] ?? 0) + 1;
     }
@@ -1027,6 +1289,7 @@ export function createServer(overrides = {}) {
       t: 'home', rid, unit: player.home, plan: data.planOf(unit)?.id ?? '', ox: o.x, oz: o.z,
       owner: owner ? room.slotOfUid(owner) ?? 0 : 0, edit: canEditHome(room, player, player.home),
       x: player.x, y: player.y, z: player.z, f: furnitureWire(homeList(room, player.home)),
+      gb: owner ? guestbookWire(room.guestbooks, player.home) : [],
     };
   }
   /** 그 집 안에 있는 사람 모두에게 가구 목록을 다시 보낸다 (요청한 사람에게는 rid 와 함께). */
@@ -1124,6 +1387,7 @@ export function createServer(overrides = {}) {
         return fail(ErrorCode.badMessage);
     }
     broadcastHomeFurniture(room, unitId, player, msg.rid);
+    act(room, player, 'place');
     rooms.save(room);
   }
 
@@ -1189,6 +1453,7 @@ export function createServer(overrides = {}) {
         if (!p || !p.online) continue;
         const item = pickWeighted(table, (e) => e.weight, random).id;
         const ok = addItem(p.slots, item, 1, cfg, data.limitOf);
+        if (ok) bump(p.profile, 'clam');
         const reply = { t: 'dig_result', kind: 'clam', spot: spot.id, item: ok ? item : '', full: !ok, coop: people.length >= 2 };
         if (p === player) reply.rid = msg.rid;
         sendTo(p, reply);
@@ -1242,6 +1507,138 @@ export function createServer(overrides = {}) {
     rooms.save(room);
   }
 
+  // ---- v16: 칭호 · 생일 · 달력 · 방명록 · 놀러 가기 · 사진 ----
+
+  /** 칭호 고르기: 이룬 업적의 칭호만 ('' = 떼기). 모두에게 알린다. */
+  function handleTitle(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const id = typeof msg.id === 'string' ? msg.id : '';
+    if (!canWearTitle(player.profile, id)) return fail(ErrorCode.badTitle);
+    player.profile.title = id;
+    sendTo(player, { t: 'title', rid: msg.rid, id: player.id, title: id });
+    room.broadcast({ t: 'title', id: player.id, title: id }, player.id);
+    room.saveDirty = true;
+  }
+
+  /** 생일 정하기 (설정 앱). 축하는 한 해에 한 번이라 바꿔도 또 받지는 못한다. 오늘로 정하면 바로 축하. */
+  function handleBirthday(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const b = cleanBirthday(msg.birthday);
+    if (!b) return fail(ErrorCode.badBirthday);
+    player.profile.birthday = b;
+    sendProfile(player);
+    celebrate(room, player);
+    room.saveDirty = true;
+  }
+
+  /** 날씨 · 달력 앱: 오늘부터 이레 (날씨 · 이벤트 · 생일). */
+  function handleCalendar(ctx) {
+    const { room } = ctx;
+    send(ctx.ws, {
+      t: 'cal',
+      today: clock.day(),
+      days: calendarWire({
+        seed: room.weatherSeed,
+        today: clock.day(),
+        data,
+        profiles: [...room.profiles.values()],
+        weatherForce: isWeather(cfg.weatherForce) ? cfg.weatherForce : null,
+        seasonOf: (ms) => cfg.seasonForce || seasonOf(ms),
+        eventForce: cfg.eventForce,
+        eventWanted: cfg.eventWanted,
+      }),
+      econ: econOf(room)?.id ?? '',
+    });
+  }
+
+  /** 방명록에 쓰기: 그 집 안에서만 (주인이 있는 집). 집 주인에게 마을톡 알림, 집 안 사람들에게 새 목록. */
+  function handleGuestbook(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const unit = player.home;
+    const owner = unit ? room.homes[unit]?.owner : null;
+    if (!unit || !owner) return fail(ErrorCode.notHome);
+    const text = cleanEntryText(msg.tx);
+    if (!text) return fail(ErrorCode.badMessage);
+    const t = now();
+    if (t - (player.lastGuestbookAt ?? -Infinity) < GUESTBOOK.gapMs) return fail(ErrorCode.tooFast);
+    player.lastGuestbookAt = t;
+    addEntry(room.guestbooks, unit, { by: player.id, tx: text, at: Date.now() });
+    const ownerProfile = room.profiles.get(owner);
+    const mine = room.householdOf(player.profile).some((p) => p.uid === owner);
+    if (!mine) {
+      bump(player.profile, 'guestbook');
+      if (ownerProfile) messenger.homeNote(room, ownerProfile, 'wrote', { name: player.profile.name || `친구 ${player.id}`, text: text.slice(0, 40) });
+    }
+    const list = guestbookWire(room.guestbooks, unit);
+    for (const p of room.players.values()) {
+      if (p.online && p.home === unit) sendTo(p, { t: 'gb', rid: p === player ? msg.rid : null, unit, list });
+    }
+    sendProfile(player);
+    rooms.save(room);
+  }
+
+  /** 친구 집에 놀러 가기 (휴대폰 지도 · 친구 목록): 공동 현관을 거치지 않고 그 집 현관 안쪽으로 바로 간다. */
+  function handleVisit(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (!homeRules) return fail(ErrorCode.notHome);
+    const unit = typeof msg.unit === 'string' ? unitById(msg.unit) : null;
+    const owner = unit ? room.homes[unit.id]?.owner : null;
+    if (!unit || !owner || !room.profiles.has(owner)) return fail(ErrorCode.notVisitable);
+    if (player.fishing || player.job?.stage === 'carry') return fail(ErrorCode.alreadyFishing);
+    const plan = data.planOf(unit);
+    const o = homeOrigin(unit.id);
+    player.home = unit.id;
+    teleport(ctx, o.x + plan.spawn[0], o.z + plan.spawn[1]);
+    send(ctx.ws, homeMessage(room, player, msg.rid));
+    const mine = room.householdOf(player.profile).some((p) => p.uid === owner);
+    if (!mine) {
+      // 같은 집은 하루 한 번만 센다 (들락날락해서 업적을 채우지 못하게) · 주인에게도 그때 한 번 알린다.
+      player.profile.visitDay ??= {};
+      if (player.profile.visitDay[unit.id] !== clock.day()) {
+        player.profile.visitDay[unit.id] = clock.day();
+        bump(player.profile, 'visit');
+        messenger.homeNote(room, room.profiles.get(owner), 'visit', { name: player.profile.name || `친구 ${player.id}` });
+        sendProfile(player);
+      }
+      const host = room.players.get(room.slotOfUid(owner));
+      if (host?.online) sendTo(host, { t: 'visit', id: player.id, unit: unit.id });
+    }
+    rooms.save(room);
+  }
+
+  /** 사진 보내기 (마을톡 친구 방 pl:<자리>): JPEG 를 받아 저장하고 두 사람 대화방에 사진 메시지로. */
+  function handlePhotoUp(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const th = typeof msg.th === 'string' && /^pl:[1-9][0-9]?$/.test(msg.th) ? msg.th : null;
+    const target = th ? [...room.profiles.values()].find((p) => p.slot === Number(th.slice(3))) : null;
+    if (!target || target === player.profile) return fail(ErrorCode.badMessage);
+    const t = now();
+    if (t - (player.lastPhotoAt ?? -Infinity) < PHOTO_RULES.gapMs) return fail(ErrorCode.tooFast);
+    const buf = photos.decode(msg.img);
+    if (!buf) return fail(ErrorCode.badPhoto);
+    player.lastPhotoAt = t;
+    const id = photos.put(room, buf, player.id, Date.now());
+    if (!id) return fail(ErrorCode.badPhoto);
+    const caption = typeof msg.tx === 'string' && msg.tx.trim() ? msg.tx.trim().slice(0, 60) : '📷 사진';
+    messenger.push(room, player.profile, th, 'me', caption, true, id);
+    messenger.push(room, target, `pl:${player.profile.slot}`, `p${player.profile.slot}`, caption, false, id);
+    send(ctx.ws, { t: 'photo_sent', rid: msg.rid, id, th });
+    bump(player.profile, 'photo');
+    sendProfile(player);
+    rooms.save(room);
+  }
+
+  function handlePhotoGet(ctx, msg, fail) {
+    const img = photos.get(ctx.room, msg.id);
+    if (!img) return fail(ErrorCode.noPhoto);
+    send(ctx.ws, { t: 'photo', id: msg.id, img });
+  }
+
   /** 낚시·인벤토리·나무·대화 요청. 결과는 항상 서버가 확정해서 알린다. */
   function handleAction(ctx, msg) {
     const { player } = ctx;
@@ -1251,7 +1648,10 @@ export function createServer(overrides = {}) {
       case 'fish_cast': {
         if (!player.acceptRid(msg.rid)) return; // 중복 요청 무시
         if (player.talkingTo !== null) return fail(ErrorCode.alreadyFishing);
-        const err = fishing.cast(player, msg.rid, msg.spot);
+        // 상점 · 집 안에서는 낚시를 못 한다 (실내는 바다 건너에 있어서 바다 낚시터로 잘못 잡히던 버그).
+        if (player.home || inShop(player)) return fail(ErrorCode.notAtSpot);
+        const target = Number.isFinite(msg.x) && Number.isFinite(msg.z) ? { x: msg.x, z: msg.z } : null;
+        const err = fishing.cast(player, msg.rid, msg.spot, target);
         if (err) fail(err);
         return;
       }
@@ -1270,6 +1670,8 @@ export function createServer(overrides = {}) {
       }
       case 'fish_cancel':
         return fishing.cancel(player);
+      case 'say':
+        return handleSay(ctx, msg, fail);
       case 'equip':
       case 'inv_move':
       case 'inv_discard':
@@ -1288,6 +1690,8 @@ export function createServer(overrides = {}) {
         return handleFurniture(ctx, msg, fail);
       case 'collect':
         return handleCollect(ctx, msg, fail);
+      case 'deliv_order':
+        return delivery.order(ctx, msg, fail);
       case 'plant':
       case 'pick':
         return handlePlant(ctx, msg, fail);
@@ -1298,11 +1702,27 @@ export function createServer(overrides = {}) {
         return handleDonate(ctx, msg, fail);
       case 'set_face':
         return handleFace(ctx, msg, fail);
+      case 'set_name':
+        return handleName(ctx, msg, fail);
+      case 'phone':
+      case 'phone_tap':
+        return handlePhone(ctx, msg);
       case 'stock_order':
         return economy.handleStock(ctx, msg, fail);
       case 'apt_buy':
       case 'apt_sell':
+      case 'apt_lease':
         return economy.handleHome(ctx, msg, fail);
+      case 'dep_open':
+      case 'dep_close':
+      case 'park_move':
+        return economy.handleSavings(ctx, msg, fail);
+      case 'job_info':
+      case 'job_take':
+      case 'job_pick':
+      case 'job_drop':
+      case 'job_quit':
+        return jobs.handle(ctx, msg, fail);
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1329,6 +1749,20 @@ export function createServer(overrides = {}) {
       case 'home_move':
       case 'home_pickup':
         return handleHomeInside(ctx, msg, fail);
+      case 'set_title':
+        return handleTitle(ctx, msg, fail);
+      case 'set_birthday':
+        return handleBirthday(ctx, msg, fail);
+      case 'cal_info':
+        return handleCalendar(ctx);
+      case 'gb_write':
+        return handleGuestbook(ctx, msg, fail);
+      case 'home_visit':
+        return handleVisit(ctx, msg, fail);
+      case 'photo_up':
+        return handlePhotoUp(ctx, msg, fail);
+      case 'photo_get':
+        return handlePhotoGet(ctx, msg, fail);
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -1393,6 +1827,7 @@ export function createServer(overrides = {}) {
         if (!validUid(ctx, msg)) return;
         const room = rooms.createRoom();
         const { player } = rooms.addPlayer(room, msg.uid);
+        applyJoinName(player, msg.name);
         return bind(ctx, room, player, false);
       }
       case 'join': {
@@ -1404,8 +1839,12 @@ export function createServer(overrides = {}) {
         if (!room) return sendError(ctx.ws, ErrorCode.roomNotFound);
         const added = rooms.addPlayer(room, msg.uid);
         if (!added) return sendError(ctx.ws, ErrorCode.roomFull);
+        const renamed = applyJoinName(added.player, msg.name);
         // 같은 uid가 이미 방에 있으면(다른 기기/재접속) 그 자리를 이어받는다.
-        return bind(ctx, room, added.player, added.existing);
+        bind(ctx, room, added.player, added.existing);
+        // 이어받은 자리는 다른 사람이 이미 알고 있으니 바뀐 이름만 따로 알린다.
+        if (renamed && added.existing) room.broadcast({ t: 'name', id: added.player.id, name: added.player.profile.name }, added.player.id);
+        return;
       }
       case 'resume': {
         if (!checkVersion(ctx, msg)) return;
@@ -1422,6 +1861,7 @@ export function createServer(overrides = {}) {
       case 'msg_send':
       case 'msg_read':
       case 'fish_cancel':
+      case 'say':
       case 'equip':
       case 'inv_move':
       case 'inv_discard':
@@ -1435,6 +1875,7 @@ export function createServer(overrides = {}) {
       case 'shop_exit':
       case 'shop_sell':
       case 'shop_buy':
+      case 'deliv_order':
       case 'place':
       case 'pickup':
       case 'wear':
@@ -1446,10 +1887,22 @@ export function createServer(overrides = {}) {
       case 'emote_quick':
       case 'donate':
       case 'set_face':
+      case 'set_name':
+      case 'phone':
+      case 'phone_tap':
       case 'talk_topic':
       case 'stock_order':
       case 'apt_buy':
       case 'apt_sell':
+      case 'apt_lease':
+      case 'dep_open':
+      case 'dep_close':
+      case 'park_move':
+      case 'job_info':
+      case 'job_take':
+      case 'job_pick':
+      case 'job_drop':
+      case 'job_quit':
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1470,6 +1923,13 @@ export function createServer(overrides = {}) {
       case 'home_place':
       case 'home_move':
       case 'home_pickup':
+      case 'set_title':
+      case 'set_birthday':
+      case 'cal_info':
+      case 'gb_write':
+      case 'home_visit':
+      case 'photo_up':
+      case 'photo_get':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -1505,6 +1965,8 @@ export function createServer(overrides = {}) {
         return sendError(ws, ErrorCode.badMessage, 'json');
       }
       if (typeof msg !== 'object' || msg === null || typeof msg.t !== 'string') return sendError(ws, ErrorCode.badMessage, 'shape');
+      // v16: 큰 메시지는 사진만 (그 밖은 예전처럼 maxMessageBytes 까지).
+      if (raw.length > cfg.maxMessageBytes && msg.t !== 'photo_up') return sendError(ws, ErrorCode.badMessage, 'size');
       handleMessage(ctx, msg);
     });
     ws.on('close', () => detach(ctx, { startGrace: true }));
@@ -1523,7 +1985,8 @@ export function createServer(overrides = {}) {
         p: [...room.players.values()].map((p) => ({
           id: p.id,
           fishing: p.fishing !== null,
-          held: p.heldItem,
+          phone: p.phone,
+          held: jobs.carried(p) ?? p.heldItem,
           hat: p.profile.outfit.hat,
           top: p.profile.outfit.top,
           x: p.x,
@@ -1568,6 +2031,8 @@ export function createServer(overrides = {}) {
           p.approachedAt ??= {};
           p.approachedAt[npc.id] = t;
           sendTo(p, { t: 'npc_greet', npc: npc.id });
+          // 둘레 사람에게도 이 주민이 그 사람에게 손을 흔들며 말을 거는 모습이 보인다 (인사받은 사람은 npc_greet 로 따로 그린다).
+          room.broadcast({ t: 'npc_emote', npc: npc.id, e: 'hello', to: p.id, m: npc.mood, from: '' }, p.id);
         },
       });
       if (approached) room.npcsDirty = true;
@@ -1585,6 +2050,8 @@ export function createServer(overrides = {}) {
         room.broadcast({ t: 'npcs', st: t, n: [...room.npcs.values()].map(npcWire) });
       }
       tickShoals(room, dtMs / 1000, t);
+      if (delivery.tick(room, dtMs, t)) room.broadcast({ t: 'couriers', c: delivery.wire(room) });
+      for (const spotId of swimmers.tick(room, dtMs, t, online)) room.broadcast({ t: 'fishes', spot: spotId, f: swimmers.wire(room, spotId) });
     }
   }, 1000 / cfg.npcTickRate);
 

@@ -30,3 +30,4 @@ run_mode merchant 18191 12 WEATHER_FORCE=clear EVENT_FORCE=merchant EVENT_WANTED
 run_mode bargain 18192 12 WEATHER_FORCE=clear EVENT_FORCE=bargain EVENT_WANTED=$WANT
 run_mode gift 18193 12 WEATHER_FORCE=clear EVENT_FORCE=gift_day EVENT_SPAWN_SCALE=0.02 FISH_TIME_SCALE=4
 run_mode meteor 18194 22 WEATHER_FORCE=clear EVENT_FORCE=meteor_shower EVENT_SPAWN_SCALE=0.02
+run_mode visitor 18195 12 WEATHER_FORCE=clear EVENT_FORCE=antique_dealer EVENT_WANTED=fossil,old_coin START_SOL=3000000

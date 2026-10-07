@@ -11,6 +11,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_button.pressed.connect(func() -> void: action_pressed.emit())
 	_button.add_to_group(&"blocks_joystick")
+	# 가로 화면: 오른쪽 단추 줄(휴대폰 · 감정표현) 왼쪽으로 비킨다.
+	HudLayout.landscape_shift(_button, -170.0)
 	hide_action()
 
 
@@ -23,6 +25,11 @@ const ICONS: Dictionary[String, String] = {
 	"선물 줍기": "res://assets/ui/icons/gift.png",
 	"별 줍기": "res://assets/icons/items/star_fragment.png",
 }
+
+
+## v16: 조이스틱을 오른쪽에 두면 상황 버튼은 왼쪽 아래로.
+func set_left_side(left: bool) -> void:
+	HudLayout.mirror_side(_button, left, -170.0)
 
 
 func show_action(text: String) -> void:

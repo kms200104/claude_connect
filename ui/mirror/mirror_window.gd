@@ -3,6 +3,7 @@ extends Control
 ## 거울 창 (거울 앞에서 상황 버튼으로 연다): 카메라가 얼굴 앞으로 다가가고, 아래 판에서 눈·코·입·피부·머리를 고른다.
 ## 고르는 동안은 내 캐릭터에만 미리 입혀 보고, "완료"를 누르면 서버에 바꾼 항목만 요청한다 (닫기 = 처음대로).
 ## 위쪽 빈 곳을 좌우로 끌면 캐릭터가 돌아서 옆모습도 볼 수 있다. 내가 놓은 거울 가구면 "가방에 넣기"도 있다.
+## v14: "이름" 탭에서 닉네임도 바꾼다 ("완료" 때 얼굴과 같이 보낸다). 글자판이 올라오면 판을 그만큼 올린다.
 
 signal closed
 
@@ -12,7 +13,12 @@ const INK: Color = Color(0.36, 0.24, 0.14)
 const SOFT: Color = Color(0.52, 0.42, 0.32)
 const PICKED: Color = Color(0.98, 0.84, 0.55)
 ## 탭: (이름, 모양 항목, 색 항목).
-const TABS: Array[Array] = [["눈", "eyes", "eye_color"], ["코", "nose", ""], ["입", "mouth", ""], ["피부", "skin", ""], ["머리", "hair", "hair_color"]]
+const TABS: Array[Array] = [["눈", "eyes", "eye_color"], ["코", "nose", ""], ["입", "mouth", ""], ["피부", "skin", ""], ["머리", "hair", "hair_color"], ["이름", NAME_TAB, ""]]
+const NAME_TAB: String = "name"
+const PANEL_SIZE: Vector2 = Vector2(1032, 860)
+const PANEL_BOTTOM: float = 20.0
+## 가로 화면: 얼굴을 화면 왼쪽에 두려고 바라보는 점을 오른쪽으로 옮기는 만큼 (m).
+const MIRROR_SIDE: float = 0.95
 
 @export var player: Player
 @export var camera_rig: FollowCamera
@@ -40,6 +46,15 @@ var _colors: HBoxContainer = null
 var _status: Label = null
 var _pickup: Button = null
 var _option_buttons: Dictionary[String, Button] = {}
+var _scroll: ScrollContainer = null
+var _name_box: VBoxContainer = null
+var _name_edit: LineEdit = null
+var _name_hint: Label = null
+## 서버 답을 기다리는 것 (얼굴 · 이름). 둘 다 오면 닫는다.
+var _wait_face: bool = false
+var _wait_name: bool = false
+## 글자판 때문에 판을 올린 만큼 (UI 좌표).
+var _lift: float = 0.0
 
 
 func _ready() -> void:
@@ -49,9 +64,10 @@ func _ready() -> void:
 	add_to_group(&"blocks_joystick")
 	_panel = PanelContainer.new()
 	_panel.add_theme_stylebox_override("panel", EventHud._box(BG, EDGE, 40, 6, 24))
-	_panel.custom_minimum_size = Vector2(1032, 860)
-	# 화면 아래 가운데 (길쭉한 S24 화면에서도 얼굴은 위에, 판은 아래에).
-	HudLayout.center_bottom(_panel, 1032.0, 860.0, 20.0)
+	_panel.custom_minimum_size = PANEL_SIZE
+	# 세로: 화면 아래 가운데 (길쭉한 S24 화면에서도 얼굴은 위에, 판은 아래에). 가로: 오른쪽 (얼굴은 왼쪽).
+	_layout_panel()
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _layout_panel())
 	add_child(_panel)
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 12)
@@ -73,21 +89,22 @@ func _ready() -> void:
 	col.add_child(_tabs_row)
 	for i: int in TABS.size():
 		var tab: Button = _button(str(TABS[i][0]), 34)
-		tab.custom_minimum_size = Vector2(186, 76)
+		tab.custom_minimum_size = Vector2(152, 76)
 		tab.pressed.connect(_select_tab.bind(i))
 		_tabs_row.add_child(tab)
 	_colors = HBoxContainer.new()
 	_colors.add_theme_constant_override("separation", 8)
 	col.add_child(_colors)
-	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.add_child(_scroll)
 	_grid = GridContainer.new()
 	_grid.columns = 4
 	_grid.add_theme_constant_override("h_separation", 12)
 	_grid.add_theme_constant_override("v_separation", 12)
-	scroll.add_child(_grid)
+	_scroll.add_child(_grid)
+	_build_name_box(col)
 	var foot: HBoxContainer = HBoxContainer.new()
 	foot.add_theme_constant_override("separation", 12)
 	col.add_child(foot)
@@ -104,6 +121,7 @@ func _ready() -> void:
 	done.pressed.connect(save)
 	foot.add_child(done)
 	Net.face_changed.connect(_on_face_changed)
+	Net.name_changed.connect(_on_name_changed)
 	Net.request_failed.connect(_on_request_failed)
 	Net.state_changed.connect(func(s: int) -> void:
 		if s != Net.State.ONLINE:
@@ -125,6 +143,10 @@ func open(furniture_id: String = "", mirror_at: Vector3 = Vector3.INF) -> void:
 	_original = GameData.face.sanitize(Net.faces.get(Net.my_id, {}), Net.my_id)
 	face = _original.duplicate()
 	_saving = false
+	_wait_face = false
+	_wait_name = false
+	_name_edit.text = Net.names.get(Net.my_id, "")
+	_name_hint.text = "비워 두면 기본 이름 \"%s\" · 글자·숫자 %d자까지" % [GameData.default_player_name(Net.my_id), NetProtocol.NAME_MAX]
 	_status.text = "위쪽을 좌우로 끌면 돌아볼 수 있어요"
 	visible = true
 	_yaw = 0.0
@@ -147,6 +169,7 @@ func open(furniture_id: String = "", mirror_at: Vector3 = Vector3.INF) -> void:
 		camera_rig.focus_distance = face_distance
 		camera_rig.focus_pitch_degrees = face_pitch_degrees
 		camera_rig.focus_height = face_look_height
+		camera_rig.focus_side = MIRROR_SIDE if ScreenFit.landscape else 0.0
 		camera_rig.set_focus(1.0, 0.6)
 	# 이벤트 알림 카드가 얼굴을 가리지 않게 거울을 보는 동안 숨긴다.
 	_set_popups_visible(false)
@@ -159,6 +182,8 @@ func close() -> void:
 	if not visible:
 		return
 	visible = false
+	_name_edit.release_focus()
+	_set_lift(0.0)
 	_preview(_saved_face())
 	if player != null:
 		player.set_input_lock(&"mirror", false)
@@ -173,30 +198,106 @@ func close() -> void:
 			if not visible and camera_rig.focus <= 0.0:
 				camera_rig.focus_distance = saved.x
 				camera_rig.focus_pitch_degrees = saved.y
-				camera_rig.focus_height = saved.z)
+				camera_rig.focus_height = saved.z
+				camera_rig.focus_side = 0.0)
 	_set_popups_visible(true)
 	Audio.play_ui(Audio.SFX_CLOSE)
 	closed.emit()
 
 
+## 거울을 보는 동안 판 · 얼굴을 가리는 HUD (이벤트 알림판 · 오른쪽 단추 줄 · 상황 버튼).
+const HIDE_HUD: PackedStringArray = ["EventHud", "PhoneButton", "EmoteBar", "ActionHud", "FishingHud"]
+
+
 func _set_popups_visible(shown: bool) -> void:
-	var events: CanvasItem = get_parent().get_node_or_null("EventHud") as CanvasItem
-	if events != null:
-		events.visible = shown
+	for n: String in HIDE_HUD:
+		var c: CanvasItem = get_parent().get_node_or_null(n) as CanvasItem
+		if c != null:
+			# 보이기 여부는 각자 정하니(온라인 · 이벤트) 투명도로만 감춘다. 창이 화면을 덮어 눌리지는 않는다.
+			c.modulate.a = 1.0 if shown else 0.0
 
 
-## 완료: 바뀐 항목만 서버에 보낸다 (바뀐 게 없으면 그냥 닫는다).
+## 완료: 바뀐 항목만 서버에 보낸다 (얼굴 · 이름, 바뀐 게 없으면 그냥 닫는다).
 func save() -> void:
 	var changes: Dictionary = {}
 	for key: String in FaceCatalog.KEYS:
 		if str(face.get(key, "")) != str(_original.get(key, "")):
 			changes[key] = face[key]
-	if changes.is_empty():
+	var new_name: String = NetProtocol.clean_name(_name_edit.text)
+	var renamed: bool = new_name != str(Net.names.get(Net.my_id, ""))
+	if changes.is_empty() and not renamed:
 		close()
 		return
 	_saving = true
+	_wait_face = not changes.is_empty()
+	_wait_name = renamed
 	_status.text = "거울에 비춰 보는 중…"
-	Net.set_face(changes)
+	if _wait_face:
+		Net.set_face(changes)
+	if _wait_name:
+		Net.set_nickname(new_name)
+
+
+## 이름 탭의 입력 칸 (테스트용).
+func name_edit() -> LineEdit:
+	return _name_edit
+
+
+func _build_name_box(col: VBoxContainer) -> void:
+	_name_box = VBoxContainer.new()
+	_name_box.add_theme_constant_override("separation", 14)
+	_name_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_name_box.visible = false
+	col.add_child(_name_box)
+	_name_box.add_child(_label("닉네임 — 마을 사람들 머리 위와 대화에 나와요", 30, INK))
+	_name_edit = LineEdit.new()
+	_name_edit.custom_minimum_size = Vector2(0, 104)
+	_name_edit.max_length = NetProtocol.NAME_MAX
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_edit.placeholder_text = "닉네임"
+	_name_edit.add_theme_font_size_override("font_size", 46)
+	_name_edit.text_submitted.connect(func(_t: String) -> void: _name_edit.release_focus())
+	_name_box.add_child(_name_edit)
+	_name_hint = _label("", 26, SOFT)
+	_name_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_name_box.add_child(_name_hint)
+
+
+func _process(_delta: float) -> void:
+	if not visible:
+		return
+	# 글자판이 올라와 있으면 이름 칸이 가려지지 않게 판을 올린다.
+	var want: float = KeyboardLift.lift_for(_panel, _lift)
+	if absf(want - _lift) > 1.0:
+		_set_lift(want)
+
+
+func _set_lift(value: float) -> void:
+	_lift = value
+	_layout_panel()
+
+
+## 판 자리: 세로는 아래 가운데, 가로는 오른쪽 (위 정보 줄 아래부터). 글자판이 올라오면 그만큼 올린다.
+func _layout_panel() -> void:
+	if ScreenFit.landscape:
+		_panel.anchor_left = 1.0
+		_panel.anchor_right = 1.0
+		_panel.anchor_top = 0.0
+		_panel.anchor_bottom = 1.0
+		# 오른쪽 단추 줄(휴대폰 · 감정표현) 왼쪽에.
+		_panel.offset_left = -170.0 - PANEL_SIZE.x
+		_panel.offset_right = -170.0
+		_panel.offset_top = 150.0 - _lift
+		_panel.offset_bottom = -PANEL_BOTTOM - _lift
+		_panel.custom_minimum_size = Vector2(PANEL_SIZE.x, 0.0)
+	else:
+		_panel.custom_minimum_size = PANEL_SIZE
+		HudLayout.center_bottom(_panel, PANEL_SIZE.x, PANEL_SIZE.y, PANEL_BOTTOM + _lift)
+	# 방향이 바뀔 때는 HudLayout 이 아니라 여기서 다시 맞춘다.
+	if _panel.is_in_group(HudLayout.GROUP):
+		_panel.remove_from_group(HudLayout.GROUP)
+	if camera_rig != null and visible:
+		camera_rig.focus_side = MIRROR_SIDE if ScreenFit.landscape else 0.0
 
 
 ## 지금 탭에서 고를 수 있는 모양 단추 (테스트용).
@@ -250,6 +351,12 @@ func _select_tab(index: int) -> void:
 	_option_buttons.clear()
 	var key: String = TABS[index][1]
 	var color_key: String = TABS[index][2]
+	_scroll.visible = key != NAME_TAB
+	_name_box.visible = key == NAME_TAB
+	if key == NAME_TAB:
+		_colors.visible = false
+		return
+	_name_edit.release_focus()
 	var look: CharacterLook = GameData.player_look(Net.my_id, face)
 	for part: FaceCatalog.Part in GameData.face.list(key):
 		var b: Button = Button.new()
@@ -291,6 +398,8 @@ func _select_tab(index: int) -> void:
 ## 고른 것에 노란 바탕 (그림도 지금 피부·눈동자 색으로 다시 그린다).
 func _refresh_marks() -> void:
 	var key: String = TABS[_tab][1]
+	if key == NAME_TAB:
+		return
 	var color_key: String = TABS[_tab][2]
 	var look: CharacterLook = GameData.player_look(Net.my_id, face)
 	for id: String in _option_buttons:
@@ -310,10 +419,24 @@ func _refresh_marks() -> void:
 
 
 func _on_face_changed(player_id: int, _face: Dictionary) -> void:
-	if player_id != Net.my_id or not _saving:
+	if player_id != Net.my_id or not _saving or not _wait_face:
+		return
+	_wait_face = false
+	_original = _saved_face()
+	_finish_save()
+
+
+func _on_name_changed(player_id: int, _name: String) -> void:
+	if player_id != Net.my_id or not _saving or not _wait_name:
+		return
+	_wait_name = false
+	_finish_save()
+
+
+func _finish_save() -> void:
+	if _wait_face or _wait_name:
 		return
 	_saving = false
-	_original = _saved_face()
 	Audio.play_sfx("emote_up", -4.0)
 	if player != null:
 		player.play_emote("happy")
@@ -321,9 +444,14 @@ func _on_face_changed(player_id: int, _face: Dictionary) -> void:
 
 
 func _on_request_failed(kind: String, code: String) -> void:
-	if kind != "set_face" or not visible:
+	if kind not in ["set_face", "set_name"] or not visible:
 		return
 	_saving = false
+	_wait_face = false
+	_wait_name = false
+	if kind == "set_name":
+		_status.text = "그 이름은 쓸 수 없어요 (글자·숫자 %d자까지)" % NetProtocol.NAME_MAX
+		return
 	_status.text = "거울에서 너무 멀어요" if code == NetProtocol.ERR_NOT_NEAR_MIRROR else "그 모양은 고를 수 없어요"
 
 

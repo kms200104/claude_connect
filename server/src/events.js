@@ -7,17 +7,29 @@ import { groundProblem } from './world.js';
 const EVENT_SALT = 0x5eed;
 
 /**
+ * 이벤트 종류 (v0.12): 같은 종류는 같은 규칙으로 다룬다 — 데이터의 kind, 없으면 예전 id 로.
+ * bargain(상점이 고른 물건을 비싸게) · visitor(광장에 오는 손님, 사고팔기) · derby(낚시 대회) · lumber(목재 두 배)
+ * flowers(꽃 두 배) · gift(선물 풍선) · meteor(유성우) · economy(한 주 동안의 경제 소식).
+ */
+const LEGACY_KIND = { bargain: 'bargain', merchant: 'visitor', fishing_derby: 'derby', lumber_day: 'lumber', gift_day: 'gift', meteor_shower: 'meteor' };
+export function eventKind(def) {
+  return def?.kind ?? LEGACY_KIND[def?.id] ?? def?.id ?? '';
+}
+
+/**
  * 하루 계획: { daily: { id, def, wanted: [아이템 id] } | null, meteor: def | null }.
  * force(쉼표 목록)·forcedWanted 는 시연·테스트용 (cfg.eventForce, cfg.eventWanted).
  */
-export function planDay({ seed, day, events, data, force = '', forcedWanted = '' }) {
+export function planDay({ seed, day, events, data, force = '', forcedWanted = '', season = null }) {
   const random = seededRandom(seed, day + EVENT_SALT);
   const forced = force ? force.split(',').map((s) => s.trim()).filter(Boolean) : null;
   let dailyDef = null;
   if (forced) {
     dailyDef = events.daily.find((d) => forced.includes(d.id)) ?? null;
   } else if (random() < events.daily_chance) {
-    dailyDef = pickWeighted(events.daily, (d) => d.weight, random);
+    // 계절 축제(v0.12, seasons)는 그 계절에만 뽑힌다.
+    const pool = events.daily.filter((d) => !season || !Array.isArray(d.seasons) || d.seasons.includes(season));
+    dailyDef = pickWeighted(pool, (d) => d.weight, random);
   }
   let daily = null;
   if (dailyDef) {
@@ -42,9 +54,13 @@ function pickWanted(spec, data, random) {
   return out;
 }
 
-/** 지금 열려 있는 이벤트 [{ id, def, wanted }]. 하루 이벤트는 시간대, 유성우는 시간대와 날씨도 맞아야 한다. */
-export function activeEvents(plan, hour, weather) {
+/**
+ * 지금 열려 있는 이벤트 [{ id, def, wanted }]. 하루 이벤트는 시간대, 유성우는 시간대와 날씨도 맞아야 한다.
+ * econ (v0.12): 이번 주 경제 소식 { id, def } — 한 주 내내 열려 있다.
+ */
+export function activeEvents(plan, hour, weather, econ = null) {
   const list = [];
+  if (econ?.def) list.push({ id: econ.id, def: econ.def, wanted: [] });
   if (plan.daily && inHours(plan.daily.def.hours, hour)) list.push(plan.daily);
   const m = plan.meteor;
   if (m && inHours(m.hours, hour) && (!Array.isArray(m.weather) || m.weather.includes(weather))) list.push({ id: m.id, def: m, wanted: [] });
@@ -55,14 +71,30 @@ export function findEvent(active, id) {
   return active.find((e) => e.id === id) ?? null;
 }
 
-/** 상점(where='shop') 또는 떠돌이 상인(where='merchant')이 이 아이템을 사 줄 때의 배율. 상인은 찾는 물건만 산다(그 밖은 0). */
-export function sellMultiplier(active, itemId, where) {
+/** 이 종류의 열린 이벤트 (없으면 null). */
+export function findKind(active, kind) {
+  return active.find((e) => eventKind(e.def) === kind) ?? null;
+}
+
+/**
+ * 상점(where='shop') 또는 광장 손님(where='merchant')이 이 아이템을 사 줄 때의 배율. 손님은 찾는 물건만 산다(그 밖은 0).
+ * 상점은 특가 매입 × 이번 주 경제 소식(그 종류 물건 값이 오르거나 내림, kindOf 로 종류를 안다).
+ */
+export function sellMultiplier(active, itemId, where, kindOf = null) {
   if (where === 'merchant') {
-    const m = findEvent(active, 'merchant');
+    const m = findKind(active, 'visitor');
     return m && m.wanted.includes(itemId) ? m.def.multiplier : 0;
   }
-  const b = findEvent(active, 'bargain');
-  return b && b.wanted.includes(itemId) ? b.def.multiplier : 1;
+  const b = findKind(active, 'bargain');
+  const econ = findKind(active, 'economy')?.def.effect;
+  const market = econ?.type === 'sell' && kindOf && kindOf(itemId) === econ.item_kind ? econ.mult : 1;
+  return (b && b.wanted.includes(itemId) ? b.def.multiplier : 1) * market;
+}
+
+/** 상점에서 살 때의 배율 (v0.12 경제 소식: 장바구니 물가가 오르면 그 종류가 비싸진다). */
+export function buyMultiplier(active, itemId, kindOf) {
+  const econ = findKind(active, 'economy')?.def.effect;
+  return econ?.type === 'buy' && kindOf(itemId) === econ.item_kind ? econ.mult : 1;
 }
 
 /** 클라이언트에 보내는 이벤트 목록 (이름·설명은 클라이언트가 같은 데이터로 안다). */
@@ -74,6 +106,7 @@ export function eventsWire(active, day) {
       if (e.wanted.length > 0) w.wanted = e.wanted;
       if (e.def.multiplier) w.mult = e.def.multiplier;
       if (e.def.stock) w.stock = e.def.stock;
+      if (e.def.buy_mult) w.bm = e.def.buy_mult;
       return w;
     }),
   };

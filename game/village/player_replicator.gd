@@ -14,6 +14,9 @@ extends Node
 ## 가만히 있어도 이 간격마다 한 번은 보낸다.
 @export_range(0.1, 5.0, 0.1, "suffix:s") var idle_send_interval: float = 1.0
 
+## 상대의 대화 말풍선이 들리는 거리 (m).
+const SAY_HEAR_RANGE: float = 28.0
+
 var _remotes: Dictionary[int, RemotePlayer] = {}
 var _send_accum: float = 0.0
 var _since_last_send: float = 0.0
@@ -23,6 +26,8 @@ var _last_velocity: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
+	# v16 휴대폰 지도가 친구 자리를 찾는다.
+	add_to_group(&"player_replicator")
 	Net.welcomed.connect(_on_welcomed)
 	Net.peer_joined.connect(_on_peer_joined)
 	Net.face_changed.connect(_on_face_changed)
@@ -34,6 +39,9 @@ func _ready() -> void:
 	Net.state_changed.connect(_on_state_changed)
 	Net.inventory_updated.connect(func(_slots: Array[InventoryItem], _held: int) -> void: _sync_held_item())
 	Net.peer_action.connect(_on_peer_action)
+	Net.peer_act.connect(_on_peer_act)
+	Economy.job_changed.connect(_sync_held_item)
+	Net.peer_said.connect(_on_peer_said)
 	Net.profile_updated.connect(_sync_outfit)
 	_sync_held_item()
 
@@ -132,13 +140,15 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 			continue
 		var remote: RemotePlayer = _spawn_remote(state)
 		remote.push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
+		remote.set_phone(state.phone)
 		remote.set_outfit(state.hat, state.top)
 
 
 ## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.
 func _sync_held_item() -> void:
 	if player != null and Net.state == Net.State.ONLINE:
-		player.set_held_item(Net.held_item_id())
+		var carry: String = Economy.carry_item()
+		player.set_held_item(carry if not carry.is_empty() else Net.held_item_id())
 
 
 ## 내 옷을 서버가 알려 준 대로 입힌다.
@@ -156,6 +166,29 @@ func _on_face_changed(id: int, _face: Dictionary) -> void:
 	var remote: RemotePlayer = _remotes.get(id)
 	if remote != null and remote.rig != null:
 		remote.rig.set_look(Net.look_of(id))
+
+
+## v12: 추가 값이 있는 상대 동작 (낚시 장면).
+func _on_peer_act(id: int, kind: String, msg: Dictionary) -> void:
+	var remote: RemotePlayer = _remotes.get(id)
+	if remote != null and kind == "fish":
+		remote.fish_event(msg)
+
+
+## v12: 상대가 대화하며 띄운 대사 → 그 주민(또는 상대) 머리 위 말풍선. 내 화면 밖이거나 멀면 띄우지 않는다.
+func _on_peer_said(id: int, npc_id: String, text: String) -> void:
+	var remote: RemotePlayer = _remotes.get(id)
+	if remote == null or text.is_empty():
+		return
+	var speaker: Node3D = remote
+	if not npc_id.is_empty():
+		var actor: NpcActor = NpcActor.find(get_tree(), npc_id)
+		if actor == null:
+			return
+		speaker = actor
+	if player != null and speaker.global_position.distance_to(player.global_position) > SAY_HEAR_RANGE:
+		return
+	EmoteBubble.say(speaker, text, 2.95, clampf(1.6 + float(text.length()) * 0.06, 2.0, 4.5))
 
 
 func _on_peer_action(id: int, kind: String, target: String) -> void:

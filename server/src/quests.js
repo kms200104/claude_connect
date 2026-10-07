@@ -54,10 +54,10 @@ const between = (random, min, max) => min + Math.floor(random() * (max - min + 1
  * 부탁 하나를 만든다. 지금 낚을 수 있는 물고기가 없으면 물고기 부탁은 고르지 않는다.
  * goodsPool: 지금 구할 수 있는 소지품 id (상점 진열품 + 나무에서 나오는 것). 비어 있으면 소지품 부탁은 고르지 않는다.
  */
-export function makeQuest({ rules, data, npcDef, random, hour, weather, today, seq, goodsPool = [] }) {
+export function makeQuest({ rules, data, npcDef, random, hour, weather, season = null, today, seq, goodsPool = [] }) {
   const fishNow = [];
-  for (const spot of data.spots.values()) {
-    for (const f of availableFish(spot, data.fish, hour, weather)) if (!fishNow.includes(f)) fishNow.push(f);
+  for (const spot of data.allSpots?.() ?? data.spots.values()) {
+    for (const f of availableFish(spot, data.fish, hour, weather, season)) if (!fishNow.includes(f)) fishNow.push(f);
   }
   const likes = npcDef.likes ?? [];
   const templates = rules.templates.filter(

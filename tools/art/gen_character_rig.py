@@ -2,8 +2,14 @@
 """game/player/character_rig.tscn 을 만든다 (애니메이션 키 표를 한 곳에서 관리). 사용: python3 tools/art/gen_character_rig.py"""
 from pathlib import Path
 OUT=str(Path(__file__).resolve().parents[2] / 'game/player/character_rig.tscn')
-TRACKS=['Visual:position','Visual:rotation','Visual:scale','Visual/ArmL:rotation','Visual/ArmR:rotation',
-        'Visual/LegL:rotation','Visual/LegR:rotation','Visual/ArmR/Rod:rotation','Visual/ArmR/Axe:rotation']
+# v0.13: 허리(Waist)와 목(Neck) 관절. 팔·도구는 허리 위(Upper)에, 머리는 목 위(Head)에 달린다.
+UP='Visual/Waist/Upper'
+TRACKS=['Visual:position','Visual:rotation','Visual:scale',UP+'/ArmL:rotation',UP+'/ArmR:rotation',
+        'Visual/LegL:rotation','Visual/LegR:rotation',UP+'/ArmR/Rod:rotation',UP+'/ArmR/Axe:rotation']
+# 허리 · 목 트랙은 동작 표를 다 만든 뒤 split_spine() 이 Visual:rotation 에서 나눠 만든다.
+SPINE_TRACKS=['Visual/Waist:rotation',UP+'/Neck:rotation']
+WAIST_Y=-0.34  # 허리 관절 높이 (반바지 허리 · 스웨터 밑단이 겹치는 곳)
+NECK_Y=0.06    # 목 관절 높이 (목폴라 위, 머리 밑)
 AL=-0.16; AR=0.16  # 팔 벌림(z)
 ROD=-0.6; AXE=-0.5
 def V(x,y,z): return (x,y,z)
@@ -228,12 +234,81 @@ PL = lambda x, y: pose((0,y,0),(-0.1,0,0),(1,1,1),(x,0,0.22),(x,0,-0.22))
 anim('cook_plate', 1.0, [(0, PL(1.25,0)), (0.35, PL(1.0,-0.015)), (0.5, PL(0.95,-0.02)), (0.65, PL(1.0,-0.015)), (1.0, PL(1.25,0))], loop=True)
 COOKS=['cook_chop','cook_stir','cook_flip','cook_mix','cook_plate']
 # dig: 삽을 들어(예비) 땅에 꽂고 → 발로 밟아 깊이(몸이 눌림) → 허리를 펴며 흙을 퍼 올림(늘어남) → 털어 내고 제자리
-DG = lambda vy, rx, a, ll, k: pose((0,vy,0),(rx,0,0),sq(k),(a,0,0.15),(a+0.15,0,-0.12),(ll,0,0),(0,0,0))
-anim('dig', 0.8, [(0, REST), (0.08, DG(0.02,0.08,1.0,0.0,0.03)), (0.2, DG(-0.06,-0.34,0.5,0.35,-0.04)), (0.32, DG(-0.11,-0.44,0.33,0.0,-0.07)),
- (0.48, DG(0.02,-0.06,1.3,0.0,0.05)), (0.56, DG(0.0,-0.1,1.15,0.0,0.0)), (0.8, REST)], lag=TOOL_LAG)
+# 삽은 도끼 자리(Axe)에 들고 다녀서(날이 위·앞) 손목 트랙(axe)으로 삽을 뒤집어 날을 땅에 꽂고, 퍼 올릴 때 수평으로 눕힌다.
+DG = lambda vy, rx, a, ll, k, t: pose((0,vy,0),(rx,0,0),sq(k),(a,0,0.15),(a+0.15,0,-0.12),(ll,0,0),(0,0,0),axe=t)
+anim('dig', 0.8, [(0, REST), (0.08, DG(0.02,0.08,1.0,0.0,0.03,-1.6)), (0.2, DG(-0.06,-0.34,0.5,0.35,-0.04,-2.9)), (0.32, DG(-0.11,-0.44,0.33,0.0,-0.07,-2.85)),
+ (0.48, DG(0.02,-0.06,1.3,0.0,0.05,-3.0)), (0.56, DG(0.0,-0.1,1.15,0.0,0.0,-2.7)), (0.8, REST)], lag=TOOL_LAG)
 # sit: 의자에 앉아 두 다리를 앞으로 쭉 (작은 몸이라 발이 바닥에 안 닿는다), 다리를 번갈아 달랑달랑
 SI = lambda rz, y, a, b: pose((0,y,0),(0.04,0,rz),(1,1,1),(0.5,0,0.08),(0.5,0,-0.08),(1.5+a,0,0.05),(1.5+b,0,-0.05))
 anim('sit', 2.4, [(0, SI(0,0,0,0)), (0.6, SI(0.04,0.008,0.15,-0.1)), (1.2, SI(0,0,0,0)), (1.8, SI(-0.04,0.008,-0.1,0.15)), (2.4, SI(0,0,0,0))], loop=True)
+# rummage (v0.12): 가방을 열면 주머니를 뒤진다. 고개를 숙여 오른쪽 주머니를 내려다보며 오른손을 넣어 휘적휘적,
+#                  왼손은 옆구리 주머니를 툭툭 두드려 본다. 가끔 고개를 들어 갸웃 (반복).
+RM = lambda y, rx, ry, rz, k, al, ar: pose((0,y,0),(rx,ry,rz),sq(k),al,ar,(0,0,0.03),(0,0,-0.03))
+anim('rummage', 1.6, [
+ (0, RM(-0.015,-0.2,-0.28,0.06,-0.01,(0.12,0,-0.05),(0.12,0,0.02))),
+ (0.2, RM(-0.025,-0.24,-0.3,0.07,-0.02,(0.2,0,-0.02),(0.32,0,-0.08))),
+ (0.4, RM(-0.015,-0.21,-0.26,0.05,-0.01,(0.08,0,-0.08),(0.05,0,0.06))),
+ (0.6, RM(-0.025,-0.25,-0.31,0.07,-0.02,(0.18,0,-0.03),(0.36,0,-0.1))),
+ (0.8, RM(-0.015,-0.2,-0.27,0.06,-0.01,(0.1,0,-0.06),(0.1,0,0.04))),
+ (1.05, RM(0.0,-0.1,-0.12,-0.04,0.01,(0.15,0,-0.1),(0.42,0,-0.14))),
+ (1.3, RM(-0.01,-0.14,-0.18,-0.02,0.0,(0.12,0,-0.08),(0.38,0,-0.12))),
+ (1.6, RM(-0.015,-0.2,-0.28,0.06,-0.01,(0.12,0,-0.05),(0.12,0,0.02)))], loop=True)
+
+# phone (v0.14): 휴대폰을 오른손에 들고 가슴 앞에서 내려다본다. 왼손은 화면 위에 띄워 두고(누를 준비),
+#               숨 쉬듯 살짝 오르내리며 가끔 고개를 갸웃.
+PH = lambda y, rx, rz, k, al, ar: pose((0,y,0),(rx,0,rz),sq(k),al,ar,(0,0,0.02),(0,0,-0.02))
+PH_AL=(1.2,0,0.55); PH_AR=(1.42,0,-0.66)
+anim('phone', 2.8, [
+ (0, PH(0,-0.3,0,0,PH_AL,PH_AR)),
+ (0.7, PH(-0.006,-0.31,0.015,-0.01,(1.22,0,0.56),(1.44,0,-0.66))),
+ (1.4, PH(0,-0.29,0.03,0.006,(1.18,0,0.54),(1.41,0,-0.65))),
+ (2.1, PH(-0.006,-0.31,0.012,-0.01,(1.21,0,0.56),(1.43,0,-0.67))),
+ (2.8, PH(0,-0.3,0,0,PH_AL,PH_AR))], loop=True)
+# phone_tap: 화면을 톡 — 왼손 검지가 앞으로 찌르고, 휴대폰을 든 오른손이 눌린 만큼 살짝 밀렸다가 파르르 떨며 제자리.
+#            고개도 아주 조금 끄덕 (0.26초).
+anim('phone_tap', 0.26, [
+ (0, PH(0,-0.3,0,0,PH_AL,PH_AR)),
+ (0.05, PH(-0.003,-0.31,0,-0.005,(1.32,0,0.63),(1.4,0,-0.65))),
+ (0.08, PH(-0.006,-0.32,0,-0.01,(1.38,0,0.66),(1.32,0,-0.62))),
+ (0.12, PH(-0.003,-0.31,0.008,-0.004,(1.3,0,0.61),(1.47,0,-0.7))),
+ (0.16, PH(0,-0.3,-0.006,0,(1.24,0,0.57),(1.39,0,-0.64))),
+ (0.2, PH(0,-0.3,0.003,0,(1.21,0,0.56),(1.435,0,-0.67))),
+ (0.26, PH(0,-0.3,0,0,PH_AL,PH_AR))], lag=(0.0,0.0,0.0,0.0))
+
+# ---- 허리 · 목 나누기 (v0.13) ----
+# 예전에는 몸 전체(Visual)가 한 덩어리로 기울어 뻣뻣해 보였다. 몸통 회전을 골반(Visual) · 허리 · 목에 나눠 맡긴다:
+# 숙이기·젖히기(x) 는 골반 45% · 허리 35% · 목 20%, 비틀기(y) 는 40 · 40 · 20, 갸웃(z) 은 50 · 30 · 20.
+# 목은 허리보다 조금 늦게(따라가기), 허리는 골반보다 조금 늦게 움직여 끝동작이 부드럽게 흐른다.
+SHARE=((0.45,0.4,0.5),(0.35,0.4,0.3),(0.2,0.2,0.2))
+SPINE_LAG=(0.02,0.055)  # 허리 · 목이 골반보다 늦는 시간 (반복 동작은 늦추지 않는다)
+# 걷기·달리기: 팔과 반대로 허리를 비틀고(어깨가 앞으로 나온 팔 쪽으로) 목은 반대로 돌려 시선을 앞에 둔다.
+TWIST={'walk':0.07,'run':0.11}
+def split_spine():
+    for name,a in anims.items():
+        R=a['keys'][1]
+        a['keys'][1]=[V(r[0]*SHARE[0][0],r[1]*SHARE[0][1],r[2]*SHARE[0][2]) for r in R]
+        waist=[V(r[0]*SHARE[1][0],r[1]*SHARE[1][1],r[2]*SHARE[1][2]) for r in R]
+        neck=[V(r[0]*SHARE[2][0],r[1]*SHARE[2][1],r[2]*SHARE[2][2]) for r in R]
+        if name in TWIST:
+            # ArmR 가 앞으로(+x) 나온 만큼 오른쪽 어깨가 앞으로 (+y).
+            arm=a['keys'][4]
+            m=max(abs(k[0]) for k in arm) or 1.0
+            waist=[V(w[0],w[1]+TWIST[name]*k[0]/m,w[2]) for w,k in zip(waist,arm)]
+            neck=[V(n[0],n[1]-0.6*TWIST[name]*k[0]/m,n[2]) for n,k in zip(neck,arm)]
+        if name=='idle':
+            # 숨 쉴 때 고개가 살짝 끄덕인다.
+            neck=[V(n[0]+d,n[1],n[2]) for n,d in zip(neck,[0,0.03,0.0,0.03,0])]
+        a['keys'].append(waist)
+        a['keys'].append(neck)
+        if 'ttimes' in a:
+            n=len(a['times'])
+            for lag in SPINE_LAG:
+                ts=[]
+                for j,t in enumerate(a['times']):
+                    ts.append(t if (j==0 or j==n-1 or a['loop']) else round(min(t+lag,a['length']-0.012*(n-1-j)),4))
+                a['ttimes'].append(ts)
+split_spine()
+TRACKS=TRACKS+SPINE_TRACKS
 
 def fmt(v):
     def f(x):
@@ -276,7 +351,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig']) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -325,7 +400,7 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
-''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig']) + '''[sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']) + '''[sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
 fadein_time = 0.06
 fadeout_time = 0.12
 
@@ -335,6 +410,14 @@ xfade_time = 0.12
 [sub_resource type="AnimationNodeBlend2" id="Blend2_cook"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_sit"]
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_rummage"]
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_phone"]
+
+[sub_resource type="AnimationNodeOneShot" id="OneShot_phone_tap"]
+fadein_time = 0.03
+fadeout_time = 0.05
 
 [sub_resource type="AnimationNodeOneShot" id="OneShot_emote"]
 fadein_time = 0.1
@@ -372,6 +455,18 @@ nodes/Sit/node = SubResource("AN_sit")
 nodes/Sit/position = Vector2(220, 200)
 nodes/SitBlend/node = SubResource("Blend2_sit")
 nodes/SitBlend/position = Vector2(270, 40)
+nodes/Rummage/node = SubResource("AN_rummage")
+nodes/Rummage/position = Vector2(270, 200)
+nodes/RummageBlend/node = SubResource("Blend2_rummage")
+nodes/RummageBlend/position = Vector2(295, 40)
+nodes/Phone/node = SubResource("AN_phone")
+nodes/Phone/position = Vector2(295, 200)
+nodes/PhoneBlend/node = SubResource("Blend2_phone")
+nodes/PhoneBlend/position = Vector2(305, 40)
+nodes/PhoneTap/node = SubResource("AN_phone_tap")
+nodes/PhoneTap/position = Vector2(305, 200)
+nodes/PhoneTapShot/node = SubResource("OneShot_phone_tap")
+nodes/PhoneTapShot/position = Vector2(312, 40)
 nodes/Chop/node = SubResource("AN_chop")
 nodes/Chop/position = Vector2(120, 200)
 nodes/ChopShot/node = SubResource("OneShot_chop")
@@ -397,42 +492,64 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"ChopShot", 0, &"SitBlend", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"FishBlend", 0, &"BrakeBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
-[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
+[node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
 tree = NodePath("AnimationTree")
 visual = NodePath("Visual")
-body_mesh = NodePath("Visual/Body")
-arm_left = NodePath("Visual/ArmL")
-arm_right = NodePath("Visual/ArmR")
+body_mesh = NodePath("Visual/Waist/Upper/Body")
+hips_mesh = NodePath("Visual/Hips")
+head_mesh = NodePath("Visual/Waist/Upper/Neck/Head/HeadMesh")
+waist = NodePath("Visual/Waist")
+upper = NodePath("Visual/Waist/Upper")
+neck = NodePath("Visual/Waist/Upper/Neck")
+head = NodePath("Visual/Waist/Upper/Neck/Head")
+arm_left = NodePath("Visual/Waist/Upper/ArmL")
+arm_right = NodePath("Visual/Waist/Upper/ArmR")
 leg_left = NodePath("Visual/LegL")
 leg_right = NodePath("Visual/LegR")
-rod = NodePath("Visual/ArmR/Rod")
-axe = NodePath("Visual/ArmR/Axe")
-tool = NodePath("Visual/ArmR/Tool")
+rod = NodePath("Visual/Waist/Upper/ArmR/Rod")
+axe = NodePath("Visual/Waist/Upper/ArmR/Axe")
+tool = NodePath("Visual/Waist/Upper/ArmR/Tool")
 clay_material = ExtResource("2_clay")
 
 [node name="Visual" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="Visual"]
+[node name="Hips" type="MeshInstance3D" parent="Visual"]
 
-[node name="ArmL" type="Node3D" parent="Visual"]
+[node name="Waist" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(WAIST_Y) + ''', 0)
+
+[node name="Upper" type="Node3D" parent="Visual/Waist"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(-WAIST_Y) + ''', 0)
+
+[node name="Body" type="MeshInstance3D" parent="Visual/Waist/Upper"]
+
+[node name="Neck" type="Node3D" parent="Visual/Waist/Upper"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(NECK_Y) + ''', 0)
+
+[node name="Head" type="Node3D" parent="Visual/Waist/Upper/Neck"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, ''' + str(-NECK_Y) + ''', 0)
+
+[node name="HeadMesh" type="MeshInstance3D" parent="Visual/Waist/Upper/Neck/Head"]
+
+[node name="ArmL" type="Node3D" parent="Visual/Waist/Upper"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.23, -0.05, 0)
 
-[node name="ArmR" type="Node3D" parent="Visual"]
+[node name="ArmR" type="Node3D" parent="Visual/Waist/Upper"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.23, -0.05, 0)
 
-[node name="Rod" type="Node3D" parent="Visual/ArmR"]
+[node name="Rod" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
-[node name="Axe" type="Node3D" parent="Visual/ArmR"]
+[node name="Axe" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
-[node name="Tool" type="Node3D" parent="Visual/ArmR"]
+[node name="Tool" type="Node3D" parent="Visual/Waist/Upper/ArmR"]
 visible = false
-transform = Transform3D(1, 0, 0, 0, -0.5885011, -0.8084964, 0, 0.8084964, -0.5885011, 0, -0.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
 
 [node name="LegL" type="Node3D" parent="Visual"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, -0.42, 0)
@@ -476,6 +593,11 @@ parameters/CookSwitch/current_state = "cook_chop"
 parameters/CookSwitch/transition_request = ""
 parameters/CookSwitch/current_index = 0
 parameters/SitBlend/blend_amount = 0.0
+parameters/RummageBlend/blend_amount = 0.0
+parameters/PhoneBlend/blend_amount = 0.0
+parameters/PhoneTapShot/active = false
+parameters/PhoneTapShot/internal_active = false
+parameters/PhoneTapShot/request = 0
 ''')
 open(OUT,'w').write('\n'.join(out))
 print('ok')

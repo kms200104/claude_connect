@@ -1,6 +1,6 @@
 class_name MerchantStall
 extends Node3D
-## 떠돌이 상인 누리와 노점 (보라 줄무늬 파라솔 · 깔개 · 보따리 · 상자). 떠돌이 상인 이벤트가 열린 동안만 광장에 선다.
+## 떠돌이 상인 누리와 노점 (보라 줄무늬 파라솔 · 깔개 · 보따리 · 상자). 광장 손님 이벤트(v0.12: 누리 · 중고 가구상 바우 · 생선 장수 갈매)가 열린 동안만 광장에 선다.
 ## 사고팔기는 대화(DialogueController) → 상점 창(떠돌이 상인 모드)으로 하고, 판정은 서버가 한다.
 
 @export var actor_scene: PackedScene
@@ -15,20 +15,10 @@ func _ready() -> void:
 	_info = GameData.event_info(EventInfo.MERCHANT)
 	if _info == null or _info.npc == null:
 		return
-	global_position = _info.spot
-	actor = actor_scene.instantiate()
-	add_child(actor)
-	actor.setup(_info.npc)
-	actor.global_position = _info.spot
-	var state: NetNpcState = NetNpcState.new()
-	state.id = _info.npc.id
-	state.position = _info.spot
-	state.yaw = _info.spot_yaw
-	actor.apply_state(state)
+	_place(_info)
 	_stall = MeshInstance3D.new()
 	_stall.mesh = _stall_mesh()
 	_stall.material_override = clay_material
-	_stall.rotation.y = _info.spot_yaw + PI  # 노점 모양은 +Z 가 앞, 상인은 -Z 를 본다
 	add_child(_stall)
 	var collider: StaticBody3D = StaticBody3D.new()
 	var shape: CollisionShape3D = CollisionShape3D.new()
@@ -39,9 +29,30 @@ func _ready() -> void:
 	shape.position.y = 1.0
 	collider.add_child(shape)
 	add_child(collider)
+	_stall.rotation.y = _info.spot_yaw + PI  # 노점 모양은 +Z 가 앞, 상인은 -Z 를 본다
 	Net.events_changed.connect(func(_started: PackedStringArray) -> void: _refresh())
 	Net.state_changed.connect(func(_s: int) -> void: _refresh())
 	_refresh()
+
+
+## 손님(상인)을 세운다 (v0.12: 광장 손님이 여럿이라, 오늘 온 손님으로 바꿔 세운다).
+func _place(info: EventInfo) -> void:
+	if actor != null:
+		actor.queue_free()
+		actor = null
+	_info = info
+	global_position = info.spot
+	actor = actor_scene.instantiate()
+	add_child(actor)
+	actor.setup(info.npc)
+	actor.global_position = info.spot
+	var state: NetNpcState = NetNpcState.new()
+	state.id = info.npc.id
+	state.position = info.spot
+	state.yaw = info.spot_yaw
+	actor.apply_state(state)
+	if _stall != null:
+		_stall.rotation.y = info.spot_yaw + PI
 
 
 func npc_id() -> String:
@@ -62,7 +73,10 @@ func near(position: Vector3, max_distance: float) -> bool:
 
 
 func _refresh() -> void:
-	var open: bool = Net.state == Net.State.ONLINE and Net.event_active(EventInfo.MERCHANT) != null
+	var visitor: ActiveEvent = Net.event_of_kind(EventInfo.KIND_VISITOR) if Net.state == Net.State.ONLINE else null
+	var open: bool = visitor != null
+	if open and visitor.info() != null and visitor.info().npc != null and visitor.id != _info.id:
+		_place(visitor.info())
 	visible = open
 	for child: Node in get_children():
 		if child is StaticBody3D:

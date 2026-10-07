@@ -23,7 +23,16 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_action.pressed.connect(func() -> void: action_pressed.emit())
 	_cancel.pressed.connect(func() -> void: cancel_pressed.emit())
+	# 가로 화면: 상황 버튼(ActionHud)과 같은 자리로 비킨다.
+	HudLayout.landscape_shift(_action, -170.0)
+	HudLayout.landscape_shift(_cancel, -170.0)
 	reset()
+
+
+## v16: 조이스틱을 오른쪽에 두면 낚시 · 그만두기 버튼은 왼쪽 아래로.
+func set_left_side(left: bool) -> void:
+	HudLayout.mirror_side(_action, left, -170.0)
+	HudLayout.mirror_side(_cancel, left, -170.0)
 
 
 func _process(_delta: float) -> void:

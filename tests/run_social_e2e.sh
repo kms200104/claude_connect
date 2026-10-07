@@ -9,7 +9,10 @@ DIR="$(mktemp -d)"
 cleanup() { kill "${SERVER_PID:-0}" 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
 
-(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=200 WEATHER_FORCE=clear EVENT_FORCE=none QUEST_CHANCE=0 \
+# 마을 시계를 정오로 맞춘다 (밤에는 주민이 집 앞에 머물러 다가오지 않고, 물고기도 시간대마다 다르다).
+NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
+OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
+(cd "$ROOT/server" && CLOCK_OFFSET_MIN="$OFFSET" PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=200 WEATHER_FORCE=clear EVENT_FORCE=none QUEST_CHANCE=0 \
   START_FRIENDSHIP=10 NPC_APPROACH_SCALE=40 MESSENGER_CHECK_MS=400 MESSENGER_REPLY_SCALE=0.2 exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1

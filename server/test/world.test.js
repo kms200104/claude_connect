@@ -180,3 +180,18 @@ describe('부탁', () => {
     assert.deepEqual(pruneExpired([{ id: 'a', exp: 4 }, { id: 'b', exp: 5 }], 5), [{ id: 'b', exp: 5 }]);
   });
 });
+
+describe('v0.12 꾸밈 자리 (바위 · 선착장 · 울타리)', () => {
+  it('바위 위 · 선착장 위 · 울타리 줄 위에는 가구를 놓거나 심을 수 없고, 조금 떨어지면 된다', async () => {
+    const { blockedAreas, groundProblem } = await import('../src/world.js');
+    const rock = data.layout.rocks[0];
+    assert.equal(groundProblem(data, rock.x, rock.z), 'building', '바위 위');
+    const dock = data.layout.dock;
+    assert.notEqual(groundProblem(data, dock.x, dock.z), null, '선착장 위 (물가라 water 이거나 building)');
+    // 성성호수공원 배치에는 활주로 울타리만 남아 (활주로 자리라 building), 빈 풀밭에 울타리 한 줄을 세워 본다.
+    const fenced = { ...data, layout: { ...data.layout, fences: [...data.layout.fences, [[27, 85], [33, 85]]] } };
+    fenced.blocked = blockedAreas(fenced);
+    assert.equal(groundProblem(fenced, 30, 85), 'fence', '울타리 줄 위');
+    assert.equal(groundProblem(fenced, 30, 85 + 1.5), null, '울타리에서 1.5m 떨어진 풀밭');
+  });
+});

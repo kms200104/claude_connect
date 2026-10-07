@@ -130,6 +130,7 @@ func _run() -> void:
 	Field.net_done.connect(func(r: Dictionary) -> void: print("[%s] 그물: %s" % [_role, str(r)]))
 	Field.dig_done.connect(func(r: Dictionary) -> void: print("[%s] 삽: %s" % [_role, str(r)]))
 	await get_tree().create_timer(0.5).timeout
+	await _phone()
 	await _civic()
 	await _kitchen()
 	await _shallows()
@@ -139,6 +140,34 @@ func _run() -> void:
 
 func _other_id() -> int:
 	return 2 if Net.my_id == 1 else 1
+
+
+# ---- 휴대폰 (v15): 꺼내 든 모습 · 누르기가 친구 화면에도 ----
+
+func _phone() -> void:
+	var econ: EconomyController = _village.get_node("EconomyController")
+	var replicator: Node = _village.find_child("PlayerReplicator", true, false)
+	if _role == "a":
+		econ.phone.open()
+		await _sync("phone_out")
+		await _sync("phone_seen")
+		econ.phone.tap()
+		await _sync("phone_tapped")
+		econ.phone.close()
+		await _sync("phone_away")
+	else:
+		await _sync("phone_out")
+		var friend: RemotePlayer = replicator.remote(_other_id()) if replicator != null else null
+		_check(friend != null and await _wait_until(func() -> bool: return friend.rig.is_holding_phone(), 3.0), "친구가 휴대폰을 꺼내 든 모습이 보인다")
+		var tapped: Array[bool] = [false]
+		Net.peer_action.connect(func(id: int, kind: String, _t: String) -> void:
+			if id == _other_id() and kind == "phone_tap":
+				tapped[0] = true)
+		await _sync("phone_seen")
+		_check(await _wait_until(func() -> bool: return tapped[0], 3.0), "친구가 화면을 톡 누르는 몸짓")
+		await _sync("phone_tapped")
+		await _sync("phone_away")
+		_check(friend != null and await _wait_until(func() -> bool: return not friend.rig.is_holding_phone(), 3.0), "휴대폰을 넣으면 친구 화면에서도 내린다")
 
 
 # ---- 동사무소 · 혼인신고 · 세대 지갑 ----

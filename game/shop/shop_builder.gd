@@ -9,6 +9,18 @@ const EXTERIOR_SIZE: Dictionary = {1: Vector3(4.5, 2.8, 3.5), 2: Vector3(6.5, 3.
 ## 단계별 실내 방 크기 (가로, 깊이). 남쪽 벽(출구)은 항상 같은 자리.
 const INTERIOR_SIZE: Dictionary = {1: Vector2(8.0, 7.0), 2: Vector2(10.0, 8.0), 3: Vector2(12.5, 9.5)}
 const WALL_HEIGHT: float = 3.0
+## Tripo 계산대 모형 (tools/blender/import_tripo.py). 있으면 절차 계산대 대신 모든 단계가 이것을 쓴다.
+const COUNTER_MODEL: String = "shop_counter"
+
+
+## 계산대 모형 (없으면 null — 절차 계산대를 실내 메시에 넣는다).
+static func counter_model() -> ArrayMesh:
+	return PartMesh.load_model(COUNTER_MODEL)
+
+
+## 계산대 모형을 놓는 자리 (방 원점 기준, 바닥 가운데). 주인 자리(keeper_offset)보다 조금 앞.
+static func counter_position(level: int) -> Vector3:
+	return Vector3(0.0, 0.1, -INTERIOR_SIZE[level].y + 2.2)
 
 
 static func _p(shape: String, size: Array, at: Vector3, color: Variant) -> Dictionary:
@@ -125,12 +137,13 @@ static func interior_parts(level: int) -> Array:
 	parts.append(_p("sphere", [0.05], Vector3(0.45, 0.42, 0.0), "#D9B44A"))
 	for x: float in [-0.85, 0.85]:
 		parts.append(_r("rbox", [0.16, 0.9, 0.24], Vector3(x, 0.45, 0.0), "#6E4A2E" if level < 3 else "#D9B44A", 0.3))
-	# 계산대
-	var counter_z: float = -d + 2.0
-	var counter_color: String = ["", "#A0714A", "#8C5A3A", "#3A2A24"][level]
-	parts.append(_p("box", [w * 0.45, 1.0, 0.7], Vector3(0.0, 0.5, counter_z), counter_color))
-	parts.append(_p("box", [w * 0.45 + 0.1, 0.08, 0.8], Vector3(0.0, 1.04, counter_z), "#D9B44A" if level == 3 else "#C89A63"))
-	parts.append(_p("box", [0.35, 0.25, 0.25], Vector3(w * 0.15, 1.2, counter_z), "#5A5A5A"))
+	# 계산대 (모형이 있으면 ShopController 가 따로 놓는다)
+	if counter_model() == null:
+		var counter_z: float = -d + 2.0
+		var counter_color: String = ["", "#A0714A", "#8C5A3A", "#3A2A24"][level]
+		parts.append(_p("box", [w * 0.45, 1.0, 0.7], Vector3(0.0, 0.5, counter_z), counter_color))
+		parts.append(_p("box", [w * 0.45 + 0.1, 0.08, 0.8], Vector3(0.0, 1.04, counter_z), "#D9B44A" if level == 3 else "#C89A63"))
+		parts.append(_p("box", [0.35, 0.25, 0.25], Vector3(w * 0.15, 1.2, counter_z), "#5A5A5A"))
 	# 진열 선반 (단계가 오를수록 많아진다)
 	var shelf_rows: int = level + 1
 	var goods_colors: PackedStringArray = ["#C0504D", "#4F81BD", "#9BBB59", "#F2C14E", "#E87A90", "#7EC8A8"]
@@ -187,8 +200,13 @@ static func interior_colliders(level: int) -> Array[AABB]:
 		AABB(Vector3(0.8, 0.0, -0.1), Vector3(side, WALL_HEIGHT, 0.2)),
 		# 출구 자리도 막는다 (문 밖 허공으로 걸어 나가지 않게). 나가는 건 서버가 옮겨 준다.
 		AABB(Vector3(-0.8, 0.0, 0.0), Vector3(1.6, WALL_HEIGHT, 0.3)),
-		AABB(Vector3(-w * 0.225, 0.0, -d + 1.65), Vector3(w * 0.45, 1.1, 0.7)),
 	]
+	var counter: ArrayMesh = counter_model()
+	if counter != null:
+		var aabb: AABB = counter.get_aabb()
+		boxes.append(AABB(aabb.position + counter_position(level), aabb.size))
+	else:
+		boxes.append(AABB(Vector3(-w * 0.225, 0.0, -d + 1.65), Vector3(w * 0.45, 1.1, 0.7)))
 	for side_sign: float in [-1.0, 1.0]:
 		boxes.append(AABB(Vector3(side_sign * (w * 0.5 - 0.45) - 0.3, 0.0, -d + 0.8), Vector3(0.6, 1.8, d - 2.4)))
 	return boxes

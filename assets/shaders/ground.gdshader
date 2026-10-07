@@ -8,8 +8,8 @@ render_mode diffuse_toon, specular_disabled;
 global uniform float toon_softness;
 global uniform float world_wetness;
 
-uniform sampler2D map_texture : source_color, filter_linear_mipmap, repeat_disable;
-uniform sampler2D detail_texture : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D map_texture : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform sampler2D detail_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
 // 색 지도가 덮는 범위 (마을 가운데 ±map_extent 미터). village_layout.json 의 map_extent 와 같아야 한다.
 uniform float map_extent = 64.0;
 uniform float detail_tile = 3.0;

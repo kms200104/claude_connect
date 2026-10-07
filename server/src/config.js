@@ -44,8 +44,10 @@ export const defaultConfig = {
 
   // 인벤토리: 퀵슬롯 칸 수 + 가방 칸 수. 물고기 한 칸에 쌓을 수 있는 개수(도구·목재는 items.json 의 stack).
   quickSlots: num('QUICK_SLOTS', 5),
-  inventoryCapacity: num('INVENTORY_CAPACITY', 20),
+  inventoryCapacity: num('INVENTORY_CAPACITY', 30),
   inventoryStackSize: num('INVENTORY_STACK_SIZE', 99),
+  // v13: 버린 물건은 사라지지 않고 발밑에 남는다. 마을 바닥에 둘 수 있는 묶음 수.
+  groundItemMax: num('GROUND_ITEM_MAX', 150),
 
   // 낚시. 입질까지 기다리는 시간은 fishTimeScale 배로 줄이거나 늘릴 수 있다(테스트는 0.01).
   fishTimeScale: num('FISH_TIME_SCALE', 1),
@@ -62,6 +64,8 @@ export const defaultConfig = {
   fishReactionSlackMs: num('FISH_REACTION_SLACK_MS', 100),
   // 낚시 중 캐스팅 지점에서 이 이상 움직이면 낚시가 취소된다.
   fishMaxMoveMeters: num('FISH_MAX_MOVE_M', 1.5),
+  // v13: 찌를 겨눠 던질 수 있는 가장 먼 거리 (캐릭터에서).
+  fishCastMaxMeters: num('FISH_CAST_MAX_M', 7),
   // 끌어올리기 연타 (v0.11): 필요한 횟수 배율(0 이면 연타 없이 챔질만으로 낚는다 — 옛 테스트용), 연타 사이 최소 간격.
   fishReelScale: num('FISH_REEL_SCALE', 1),
   fishMinTapGapMs: num('FISH_MIN_TAP_GAP_MS', 40),
@@ -77,6 +81,8 @@ export const defaultConfig = {
   clockOffsetMin: num('CLOCK_OFFSET_MIN', 0),
   // 날씨를 고정한다 (clear | cloudy | rain | thunder). 비우면 마을 시드로 정한다.
   weatherForce: process.env.WEATHER_FORCE || '',
+  // 계절 고정 (v0.12, 테스트·시연용): spring | summer | autumn | winter. 비우면 마을 날짜의 달로 정한다.
+  seasonForce: process.env.SEASON_FORCE || '',
   // 뇌우일 때 번개 간격(ms).
   lightningMinMs: num('LIGHTNING_MIN_MS', 6000),
   lightningMaxMs: num('LIGHTNING_MAX_MS', 18000),
@@ -107,8 +113,12 @@ export const defaultConfig = {
   eventForce: process.env.EVENT_FORCE || '',
   // 특가 매입·떠돌이 상인이 찾는 물건을 고정한다 (쉼표 목록, 시연·테스트용).
   eventWanted: process.env.EVENT_WANTED || '',
+  // 경제 소식 고정 (v0.12, 테스트·시연용): events.json economy 의 id. 비우면 주간 정산 때 확률로 뽑는다.
+  econForce: process.env.ECON_FORCE || '',
   // 선물·별 조각이 떨어지는 간격 배율 (테스트는 작게).
   eventSpawnScale: num('EVENT_SPAWN_SCALE', 1),
+  // v13: 식재료 배달이 출발하기까지 기다리는 시간 배수 (테스트는 0.01).
+  deliveryTimeScale: num('DELIVERY_TIME_SCALE', 1),
   // 나무·꽃이 자라는 시간 배율 (1 = 데이터의 게임 분 그대로, 테스트·시연은 작게).
   growthScale: num('GROWTH_SCALE', 1),
   // 처음 들어온 사람의 주민 친밀도 (시연·테스트용: 선물·감정표현 배우기를 바로 보려고).

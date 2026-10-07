@@ -25,6 +25,10 @@ func _ready() -> void:
 	_quest_button.add_to_group(&"blocks_joystick")
 	_log.add_to_group(&"blocks_joystick")
 	_log.visible = false
+	# 이벤트 알림판보다 위에 그린다 (펼치면 가려지지 않게).
+	_log.z_index = 5
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit_log())
+	_fit_log()
 	Net.profile_updated.connect(_refresh_profile)
 	Net.weather_changed.connect(func(_w: String) -> void: _refresh_weather())
 	Net.state_changed.connect(func(_s: int) -> void: _refresh_visibility())
@@ -37,6 +41,23 @@ func _process(delta: float) -> void:
 	if _clock_accum >= 0.5 and visible:
 		_clock_accum = 0.0
 		_clock.text = VillageClock.format_time(Net.game_hour())
+
+
+## 부탁 목록 자리: 세로는 화면 폭 그대로, 가로는 부탁 단추 아래 오른쪽에 1000 폭으로.
+func _fit_log() -> void:
+	if ScreenFit.landscape:
+		_log.anchor_left = 1.0
+		_log.anchor_right = 1.0
+		_log.offset_left = -1024.0
+		_log.offset_right = -24.0
+		_log.offset_top = 150.0
+	else:
+		_log.anchor_left = 0.0
+		_log.anchor_right = 1.0
+		_log.offset_left = 24.0
+		_log.offset_right = -24.0
+		_log.offset_top = 270.0
+	_log.offset_bottom = _log.offset_top + 250.0
 
 
 func quest_lines() -> PackedStringArray:

@@ -1,33 +1,47 @@
 {
   "version": 1,
-  "_comment": "화질 설정. 절약 = 갤럭시 S24 기준(작은 몸체 · 발열·배터리 우선), 고화질 = 갤럭시 Z 폴드7 기준(큰 안쪽 화면에서도 선명하게). pixel_budget 은 3D 를 그리는 픽셀 수 상한 (화면이 더 크면 3D 해상도를 그만큼 낮추고, UI 는 언제나 원래 해상도). density 는 풀·들꽃·야자수 개수 배율. pack 은 assets/packs/<pack>/ 리소스팩.",
+  "_comment": "화질 설정. 기준 기기: 갤럭시 S24(3DMark 약 4,400) · Z 폴드7(약 6,100), 60fps. 고화질 = 두 기기의 기본(화면 그대로 3D · MSAA 4배 · 원본 폴리곤 모형), 절약 = 배터리·발열을 아끼거나 더 낮은 기기용. pixel_budget 은 3D 를 그리는 픽셀 수 상한 (화면이 더 크면 3D 해상도를 그만큼 낮추고, UI 는 언제나 원래 해상도). Mobile 렌더러는 FSR 을 지원하지 않아 확대는 쌍선형(bilinear)만 쓴다. density 는 풀·들꽃·야자수 개수 배율. character_detail 은 캐릭터 머리·얼굴·머리카락·몸 촘촘함(0~2, 캐릭터 하나 최대 8,000 · 12,000 · 24,000 삼각형). models 는 Tripo 모형 폴리곤 (full = 원본, low = 예산까지 줄인 _low.glb). mesh_detail 은 가구·건물 도형의 둥근 면 촘촘함 배율. pack 은 assets/packs/<pack>/ 리소스팩.",
   "default": "low",
   "devices": [
-    { "match": "^SM-S921", "name": "갤럭시 S24", "preset": "low" },
-    { "match": "^SM-S92[68]", "name": "갤럭시 S24+ · Ultra", "preset": "high" },
-    { "match": "^SM-F966", "name": "갤럭시 Z 폴드7", "preset": "high" }
+    {
+      "match": "^SM-S921",
+      "name": "갤럭시 S24",
+      "preset": "high"
+    },
+    {
+      "match": "^SM-S92[68]",
+      "name": "갤럭시 S24+ · Ultra",
+      "preset": "high"
+    },
+    {
+      "match": "^SM-F966",
+      "name": "갤럭시 Z 폴드7",
+      "preset": "high"
+    }
   ],
   "presets": {
     "low": {
       "name": "절약",
-      "about": "갤럭시 S24 기준 · 발열과 배터리를 아껴요",
+      "about": "배터리와 발열을 아껴요 · 더 낮은 기기용",
       "pixel_budget": 1600000,
       "scaling": "bilinear",
       "msaa": 2,
       "shadow_size": 1024,
       "shadow_soft": false,
       "shadow_distance": 22,
-      "grass": 0.55,
+      "grass": 0.6,
       "wild_flowers": 0.6,
-      "palms": 0.6,
+      "palms": 0.7,
       "character_detail": 0,
-      "pack": "low"
+      "models": "low",
+      "pack": "low",
+      "mesh_detail": 1.0
     },
     "high": {
       "name": "고화질",
-      "about": "갤럭시 Z 폴드7 기준 · 큰 화면에서도 선명하게",
-      "pixel_budget": 3300000,
-      "scaling": "fsr",
+      "about": "갤럭시 S24 · Z 폴드7 기준 · 화면 그대로 선명하게",
+      "pixel_budget": 4400000,
+      "scaling": "bilinear",
       "msaa": 4,
       "shadow_size": 2048,
       "shadow_soft": true,
@@ -35,8 +49,10 @@
       "grass": 1.0,
       "wild_flowers": 1.0,
       "palms": 1.0,
-      "character_detail": 1,
-      "pack": "high"
+      "character_detail": 2,
+      "models": "full",
+      "pack": "high",
+      "mesh_detail": 1.5
     }
   }
 }

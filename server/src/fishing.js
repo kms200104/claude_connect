@@ -51,11 +51,16 @@ export function createFishing({
   onInventoryChanged,
   onFishingChanged,
   heldItem = () => 'rod',
-  environment = () => ({ hour: 12, weather: 'clear' }),
+  environment = () => ({ hour: 12, weather: 'clear', season: null }),
   // 낚시 대회가 열려 있으면 그 이벤트 ({ def }) — 희귀한 물고기가 더 잘 잡히고, 낚을 때마다 상금.
   derby = () => null,
   // 같은 낚시터에서 함께 낚고 있는 다른 사람 수 (같이 낚시 보너스).
   companions = () => 0,
+  // v0.12: 다른 사람 화면에 보일 낚시 장면 (던지기 · 톡 · 입질 · 끌어올리기 · 낚음/놓침). 판정과는 상관없는 연출용.
+  publish = () => {},
+  // v13: 물 밑에 보이는 물고기 (swimmers.js). 찌를 겨눠 던지면(x, z) 그 앞의 물고기가 알아채고 다가와 문다.
+  //   engage(player, spot, x, z, notice) → { swimmer, approachMs } | null,  release(player, swimmerId, caught),  inWater(spot, x, z)
+  swim = null,
 }) {
   const scaled = (ms) => ms * cfg.fishTimeScale;
   const rand = (min, max) => min + random() * (max - min);
@@ -76,27 +81,67 @@ export function createFishing({
     if (!session) return;
     clearTimers(session);
     player.fishing = null;
+    if (session.swimmer && swim) swim.release(player, session.swimmer, !!result.ok);
     notify(player, { t: 'fish_result', rid: session.rid, ...result });
+    publish(player, result.ok ? { e: 'land', fish: result.fish } : { e: 'end', reason: result.reason });
     onFishingChanged(player);
   }
 
-  /** 에러 코드를 돌려주거나(실패), null(성공) */
-  function cast(player, rid, spotId) {
+  /**
+   * 입질 일정: 가짜 입질(톡) fakes 번 뒤에 진짜 입질. firstMs 뒤에 첫 톡.
+   */
+  function scheduleBites(player, session, firstMs, fakes, pace) {
+    const { rid, fish } = session;
+    let at = firstMs;
+    for (let i = 0; i < fakes; i++) {
+      schedule(session, at, () => {
+        if (player.fishing !== session) return;
+        notify(player, { t: 'fish_nibble', rid });
+        publish(player, { e: 'nibble' });
+      });
+      at += rand(cfg.fishGapMinMs, cfg.fishGapMaxMs) * pace * (session.swimmer ? 0.6 : 1);
+    }
+    schedule(session, at, () => {
+      if (player.fishing !== session) return;
+      session.phase = 'bite';
+      session.biteAt = now();
+      notify(player, { t: 'fish_bite', rid, windowMs: fish.hook_window_ms });
+      publish(player, { e: 'bite' });
+      // 허용 창 + 네트워크 여유 안에 아무 응답이 없으면 도망간다.
+      session.timers.push(
+        setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.escaped }), fish.hook_window_ms + cfg.fishHookGraceMs),
+      );
+    });
+  }
+
+  /** v13: 알아챈 물고기가 정해졌다 — 다가오는 시간 뒤에 톡·톡(2~3번) 하고 문다. */
+  function hooked(player, session, found, pace) {
+    session.fish = found.swimmer.fish;
+    session.swimmer = found.swimmer.id;
+    const fakes = Math.min(cfg.fishMaxFakeNibbles, 2 + Math.floor(random() * 2));
+    // 찌 앞에 멈춰 잠깐 살핀 다음 첫 톡 (다가오는 시간은 실제 시간이라 줄이지 않는다).
+    const first = found.approachMs / Math.max(cfg.fishTimeScale, 1e-6) + rand(500, 1100) * pace;
+    scheduleBites(player, session, first, fakes, pace);
+    return { fid: found.swimmer.id, shadow: shadowSize(found.swimmer.fish), size: found.swimmer.fish.size ?? 'M', ms: found.approachMs };
+  }
+
+  /** 에러 코드를 돌려주거나(실패), null(성공). target = { x, z } (v13: 찌를 겨눈 자리, 없으면 옛 방식). */
+  function cast(player, rid, spotId, target = null) {
     if (player.fishing) return ErrorCode.alreadyFishing;
     if (heldItem(player) !== 'rod') return ErrorCode.noTool;
-    const spot = typeof spotId === 'string' ? data.spots.get(spotId) : null;
+    const spot = typeof spotId === 'string' ? (data.fishingSpot?.(spotId) ?? data.spots.get(spotId)) : null;
     if (!spot) return ErrorCode.notAtSpot;
     if (distanceToSpot(spot, player.x, player.z) > spot.cast_range) return ErrorCode.notAtSpot;
     if (!hasFreeSpace(player.slots, data.isFish, data.limitOf)) return ErrorCode.inventoryFull;
 
-    const { hour, weather } = environment(player);
-    const contest = derby(player);
+    const { hour, weather, season = null } = environment(player);
+    const contest = derby(player, spot);
     const coop = companions(player, spot) > 0;
     const boost = (contest ? contest.def.rare_boost ?? 1 : 1) * (coop ? COOP_FISHING.rare : 1);
     const zone = shallowAt(spot, player.x, player.z) ? 'shallow' : 'deep';
     const weight = (f) => f.weight * (f.rarity === 'rare' ? boost : 1) * zoneWeight(zone, f);
-    let fish = pickFish(spot, data.fish, random, hour, weather, weight);
-    if (weight(fish) <= 0) fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.size === 'L' ? 0.0001 : 1));
+    let fish = pickFish(spot, data.fish, random, hour, weather, weight, season);
+    if (weight(fish) <= 0) fish = pickFish(spot, data.fish, random, hour, weather, (f) => f.weight * (f.size === 'L' ? 0.0001 : 1), season);
     const pace = coop ? COOP_FISHING.wait : 1;
     const session = {
       rid,
@@ -107,29 +152,52 @@ export function createFishing({
       startX: player.x,
       startZ: player.z,
       biteAt: 0,
+      swimmer: null,
     };
+
+    // v13: 겨눠 던지기 — 찌 앞의 보이는 물고기가 알아채고 다가와 문다.
+    const aimed = swim && target && Number.isFinite(target.x) && Number.isFinite(target.z);
+    if (aimed) {
+      if (Math.hypot(target.x - player.x, target.z - player.z) > cfg.fishCastMaxMeters || !swim.inWater(spot, target.x, target.z)) return ErrorCode.badCast;
+      session.bx = target.x;
+      session.bz = target.z;
+      player.fishing = session;
+      const found = swim.engage(player, spot, target.x, target.z);
+      const info = found ? hooked(player, session, found, pace) : { fid: '', shadow: 0, size: '', ms: 0 };
+      notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop, bx: target.x, bz: target.z, ...info });
+      publish(player, { e: 'cast', spot: spot.id, bx: target.x, bz: target.z });
+      onFishingChanged(player);
+      if (!found) waitForFish(player, session, pace);
+      return null;
+    }
+
     player.fishing = session;
     notify(player, { t: 'fish_started', rid, spot: spot.id, zone, coop, shadow: shadowSize(fish) });
+    publish(player, { e: 'cast', spot: spot.id });
     onFishingChanged(player);
 
-    // 입질 일정: 가짜 입질 0~N번 뒤에 진짜 입질.
+    // 옛 방식(겨누지 않음): 가짜 입질 0~N번 뒤에 진짜 입질.
     const fakes = Math.floor(random() * (cfg.fishMaxFakeNibbles + 1));
-    let at = rand(cfg.fishFirstNibbleMinMs, cfg.fishFirstNibbleMaxMs) * pace;
-    for (let i = 0; i < fakes; i++) {
-      schedule(session, at, () => player.fishing === session && notify(player, { t: 'fish_nibble', rid }));
-      at += rand(cfg.fishGapMinMs, cfg.fishGapMaxMs) * pace;
-    }
-    schedule(session, at, () => {
-      if (player.fishing !== session) return;
-      session.phase = 'bite';
-      session.biteAt = now();
-      notify(player, { t: 'fish_bite', rid, windowMs: fish.hook_window_ms });
-      // 허용 창 + 네트워크 여유 안에 아무 응답이 없으면 도망간다.
-      session.timers.push(
-        setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.escaped }), fish.hook_window_ms + cfg.fishHookGraceMs),
-      );
-    });
+    scheduleBites(player, session, rand(cfg.fishFirstNibbleMinMs, cfg.fishFirstNibbleMaxMs) * pace, fakes, pace);
     return null;
+  }
+
+  /** v13: 찌 둘레에 물고기가 없다 — 기다리는 동안 알아채는 거리가 넓어져 지나가던 물고기가 결국 찾아온다. */
+  function waitForFish(player, session, pace) {
+    const started = now();
+    const look = () => {
+      if (player.fishing !== session || session.swimmer) return;
+      const waited = (now() - started) / 1000;
+      const found = swim.engage(player, session.spot, session.bx, session.bz, waited);
+      if (found) {
+        const info = hooked(player, session, found, pace);
+        notify(player, { t: 'fish_found', rid: session.rid, ...info });
+        publish(player, { e: 'found' });
+        return;
+      }
+      session.timers.push(setTimeout(look, 400));
+    };
+    session.timers.push(setTimeout(look, 400));
   }
 
   function hook(player, rid, reaction) {
@@ -168,6 +236,7 @@ export function createFishing({
     session.phase = 'reel';
     session.reel = { ...need, at: now() };
     notify(player, { t: 'fish_reel', rid, taps: need.taps, ms: need.ms });
+    publish(player, { e: 'reel' });
     session.timers.push(
       setTimeout(() => player.fishing === session && end(player, { ok: false, reason: FishFail.snapped }), need.ms + cfg.fishHookGraceMs),
     );
@@ -209,7 +278,7 @@ export function createFishing({
   function land(player, session) {
     addItem(player.slots, session.fish.id, 1, cfg, data.limitOf);
     player.profile.catches += 1;
-    const contest = derby(player);
+    const contest = derby(player, session.spot);
     const bonus = contest ? contest.def.bonus?.[session.fish.rarity] ?? 0 : 0;
     player.profile.sol += bonus;
     earn(player.profile, bonus);

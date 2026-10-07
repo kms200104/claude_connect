@@ -1,4 +1,11 @@
 ; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
 config_version=5
 
 [application]
@@ -6,7 +13,7 @@ config_version=5
 config/name="솔바람 마을"
 run/main_scene="res://ui/title/title_screen.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
-run/max_fps=30
+run/max_fps=60
 
 [autoload]
 
@@ -18,6 +25,8 @@ Economy="*res://autoload/economy/economy.gd"
 Field="*res://autoload/field/field.gd"
 Home="*res://autoload/home/home.gd"
 Talk="*res://autoload/talk/talk.gd"
+ScreenFit="*res://autoload/screen/screen_fit.gd"
+Journal="*res://autoload/journal/journal.gd"
 
 [debug]
 
@@ -31,12 +40,12 @@ window/size/window_width_override=540
 window/size/window_height_override=960
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=1
+window/handheld/orientation=6
 
 [gui]
 
 theme/custom="res://ui/theme/game_theme.tres"
-theme/custom_font="res://assets/fonts/jua_regular.ttf"
+theme/custom_font="res://assets/fonts/ui_font.tres"
 
 [input_devices]
 

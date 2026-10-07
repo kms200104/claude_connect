@@ -26,6 +26,8 @@ extends Node
 @onready var _code_edit: LineEdit = %CodeEdit
 @onready var _code_go: Button = %CodeGo
 @onready var _server_edit: LineEdit = %ServerEdit
+@onready var _subtitle: Label = $Overlay/Root/Subtitle
+@onready var _card: PanelContainer = $Overlay/Root/Card
 
 var _village: Node = null
 var _hud: CanvasLayer = null
@@ -34,6 +36,8 @@ var _angle: float = 0.6
 var _started: bool = false
 var _time: float = 0.0
 var _clouds: Array[Node3D] = []
+## 글자판 때문에 카드를 올린 만큼 (방 코드 · 서버 주소 칸).
+var _lift: float = 0.0
 
 
 func _ready() -> void:
@@ -71,7 +75,7 @@ func _ready() -> void:
 		if _code_edit.text.strip_edges().length() == NetProtocol.ROOM_CODE_LENGTH:
 			_enter(func() -> void: Net.join_room(_server_url(), _code_edit.text)))
 	_refresh_start_label()
-	# 화질 고르기 (절약 · 고화질).
+	# 설정: 닉네임 · 화질 고르기 (절약 · 고화질).
 	var quality: QualityWindow = QualityWindow.attach(_overlay)
 	var quality_button: Button = QualityWindow.make_button(quality, 32)
 	_start_button.get_parent().add_child(quality_button)
@@ -84,7 +88,54 @@ func _ready() -> void:
 	test_button.pressed.connect(func() -> void: _enter(Net.play_on_test_server))
 	_start_button.get_parent().add_child(test_button)
 	_place_camera()
+	# 가로 화면 (v0.13.4): 로고는 왼쪽, 카드는 오른쪽.
+	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit())
+	_fit()
 	Audio.play_music(Audio.MUSIC_TITLE)
+
+
+## 세로: 로고 위 · 카드 아래 (장면 그대로). 가로: 로고 왼쪽 가운데 · 카드 오른쪽 가운데.
+func _fit() -> void:
+	if _logo == null or _card == null:
+		return
+	if ScreenFit.landscape:
+		for c: Control in [_logo, _subtitle]:
+			c.anchor_left = 0.27
+			c.anchor_right = 0.27
+		_logo.offset_left = -420.0
+		_logo.offset_right = 420.0
+		_logo.offset_top = 170.0
+		_logo.offset_bottom = 170.0 + 476.0
+		_subtitle.offset_top = 660.0
+		_subtitle.offset_bottom = 724.0
+		_card.anchor_left = 0.5
+		_card.anchor_top = 0.5
+		_card.anchor_right = 1.0
+		_card.anchor_bottom = 0.5
+		_card.offset_left = 40.0
+		_card.offset_right = -70.0
+		_card.offset_top = -330.0 - _lift
+		_card.offset_bottom = 330.0 - _lift
+		_card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	else:
+		for c: Control in [_logo, _subtitle]:
+			c.anchor_left = 0.5
+			c.anchor_right = 0.5
+		_logo.offset_left = -450.0
+		_logo.offset_right = 450.0
+		_logo.offset_top = 150.0
+		_logo.offset_bottom = 659.0
+		_subtitle.offset_top = 676.0
+		_subtitle.offset_bottom = 740.0
+		_card.anchor_left = 0.0
+		_card.anchor_top = 1.0
+		_card.anchor_right = 1.0
+		_card.anchor_bottom = 1.0
+		_card.offset_left = 70.0
+		_card.offset_right = -70.0
+		_card.offset_top = -760.0 - _lift
+		_card.offset_bottom = -120.0 - _lift
+		_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
 func _process(delta: float) -> void:
@@ -93,6 +144,10 @@ func _process(delta: float) -> void:
 	_time += delta
 	_angle += orbit_speed * delta
 	_place_camera()
+	var want: float = KeyboardLift.lift_for(_card, _lift)
+	if absf(want - _lift) > 1.0:
+		_lift = want
+		_fit()
 	if _logo != null:
 		# 로고가 둥실둥실.
 		_logo.pivot_offset = _logo.size * 0.5

@@ -1,15 +1,16 @@
 extends Node
 ## 얼굴 검사 (렌더러 없이): 모든 눈·코·입 도형의 꼭짓점이 머리 메시 겉면보다 바깥에 있는지(파묻혀 깨지지 않는지),
-## 캐릭터 하나 삼각형 수가 예산(4,000) 안인지, 절약·고화질 둘 다.
+## 감정표현 눈썹·눈물도 겉면 밖인지, 캐릭터 하나 삼각형 수(가장 무거운 표정 포함)가 촘촘함별 예산(BUDGET) 안인지, 모든 촘촘함에서.
 ## 사용: godot --headless --path . res://tests/face_check.tscn
 
-const BUDGET: int = 4000
+## 촘촘함(0 절약 · 1 · 2 고화질)별 캐릭터 하나 삼각형 상한 (CLAUDE.md).
+const BUDGET: Array[int] = [8000, 12000, 24000]
 var _failed: int = 0
 
 
 func _ready() -> void:
 	var catalog: FaceCatalog = GameData.face
-	for detail: int in [0, 1]:
+	for detail: int in range(CharacterModel.MAX_DETAIL + 1):
 		CharacterModel.detail = detail
 		CharacterModel.clear_cache()
 		var head: Vector2i = CharacterModel.HEAD_SEGMENTS[detail]
@@ -31,6 +32,16 @@ func _ready() -> void:
 					if d < worst:
 						worst = d
 						worst_name = "%s/%s" % [key, part.id]
+		var expr_tris: int = 0
+		for emote_id: String in catalog.expressions:
+			var mesh: ArrayMesh = CharacterModel.expression(CharacterLook.new(), emote_id)
+			expr_tris = maxi(expr_tris, _tris(mesh))
+			for v: Vector3 in mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+				var d: float = _surface_distance(v)
+				if d < worst:
+					worst = d
+					worst_name = "expression/%s" % emote_id
+		_check(not catalog.expressions.is_empty(), "detail %d: 표정 %d개" % [detail, catalog.expressions.size()])
 		# 머리 메시의 면은 이상적인 겉면보다 안쪽이니, 이상적인 겉면 밖이면 면에 파묻히지 않는다.
 		_check(worst > 0.0, "detail %d: 얼굴 부품이 머리 겉면 밖 (가장 낮은 %s %.4fm, 면 깊이 %.4fm)" % [detail, worst_name, worst, sag])
 		var most: int = 0
@@ -41,11 +52,11 @@ func _ready() -> void:
 			look.eyes = "sparkle"
 			look.mouth = "laugh"
 			look.nose = "freckle"
-			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look))
+			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.head(look)) + _tris(CharacterModel.hips(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look)) + expr_tris
 			if tris > most:
 				most = tris
 				most_name = hair.id
-		_check(most <= BUDGET, "detail %d: 캐릭터 삼각형 %d ≤ %d (가장 많은 머리: %s)" % [detail, most, BUDGET, most_name])
+		_check(most <= BUDGET[detail], "detail %d: 캐릭터 삼각형 %d ≤ %d (가장 많은 머리: %s)" % [detail, most, BUDGET[detail], most_name])
 	print("FACE %s" % ("PASS" if _failed == 0 else "FAIL"))
 	get_tree().quit(0 if _failed == 0 else 1)
 
@@ -61,7 +72,8 @@ func _face_only(look: CharacterLook) -> ArrayMesh:
 func _surface_distance(p: Vector3) -> float:
 	var d: Vector3 = p - CharacterModel.HEAD_CENTER
 	var r: Vector3 = CharacterModel.HEAD_RADII
-	var k: float = sqrt(pow(d.x / r.x, 2.0) + pow(d.y / r.y, 2.0) + pow(d.z / r.z, 2.0))
+	var w: float = CharacterModel.head_width(d.y / r.y)
+	var k: float = sqrt(pow(d.x / (r.x * w), 2.0) + pow(d.y / r.y, 2.0) + pow(d.z / (r.z * w), 2.0))
 	return d.length() * (1.0 - 1.0 / maxf(k, 0.0001))
 
 

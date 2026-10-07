@@ -2,7 +2,7 @@ extends Node
 ## 아이템 아이콘 사진관 (실제 렌더러 필요): 아이템 모형(data 의 model, 물고기 look)을 점토 조명으로 찍어
 ## assets/icons/items/<id>.png (128×128, 투명 배경)로 저장한다. 참고 그림에서 오려 낸 아이콘(HAND_MADE)은 건드리지 않는다.
 ## 머리 모양 그림(거울 창)도 찍는다: assets/ui/face/hair_<id>.png (--only=hair 로 머리만).
-## 식당 요리 그림도 찍는다: assets/icons/dishes/<id>.png (--only=dishes 로 요리만).
+## 식당 요리 그림도 찍는다: assets/icons/dishes/<id>.png (--only=dishes 로 요리만, --only=dish:<id>,dish:<id> 로 그 요리만).
 ## 사용: godot --path . res://tools/render_icons.tscn [-- --only=wood,acorn]
 
 ## tools/art/extract_reference.py 가 참고 그림에서 오려 낸 아이콘.
@@ -37,9 +37,12 @@ func _ready() -> void:
 		await _shoot(info.id, built[0], built[1])
 		count += 1
 	# 식당 요리 (assets/icons/dishes/<id>.png): 접시를 비스듬히 위에서.
-	if only.is_empty() or "dishes" in only:
+	var some_dishes: bool = Array(only).any(func(x: String) -> bool: return x.begins_with("dish:"))
+	if only.is_empty() or "dishes" in only or some_dishes:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DishArt.ICON_DIR))
 		for r: RecipeInfo in GameData.econ.recipe_order:
+			if some_dishes and not ("dish:" + r.id) in only:
+				continue
 			await _shoot(r.id, DishArt.mesh(r.id), Vector3(0.0, 1.0, 0.85), DishArt.ICON_DIR)
 			count += 1
 	# 이벤트 그림: 선물 풍선 (assets/ui/icons/gift.png).
@@ -124,7 +127,11 @@ func _build_studio() -> void:
 
 ## 캐릭터 머리 (몸 메시 + 눈 메시)를 같은 각도로.
 func _shoot_head(id: String, look: CharacterLook) -> void:
-	_holder.mesh = CharacterModel.body(look)
+	_holder.mesh = CharacterModel.head(look)
+	var torso: MeshInstance3D = MeshInstance3D.new()
+	torso.mesh = CharacterModel.body(look)
+	torso.material_override = _material
+	_viewport.add_child(torso)
 	var eyes: MeshInstance3D = MeshInstance3D.new()
 	eyes.mesh = CharacterModel.eyes(look)
 	eyes.material_override = _material
@@ -132,7 +139,7 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 	_viewport.add_child(eyes)
 	var center: Vector3 = CharacterModel.HEAD_CENTER + Vector3(0.0, 0.02, 0.0)
 	# 캐릭터 앞 = -Z. 살짝 옆에서.
-	_camera.look_at_from_position(center + Vector3(0.45, 0.25, -1.0).normalized() * 2.15, center)
+	_camera.look_at_from_position(center + Vector3(0.45, 0.25, -1.0).normalized() * 2.5, center)
 	for i: int in 3:
 		await RenderingServer.frame_post_draw
 	var image: Image = _viewport.get_texture().get_image()
@@ -141,6 +148,7 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 	image.save_png(path)
 	print("[icons] %s" % path)
 	eyes.queue_free()
+	torso.queue_free()
 
 
 func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:

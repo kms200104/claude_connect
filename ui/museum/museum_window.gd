@@ -36,8 +36,10 @@ func _ready() -> void:
 	add_child(dim)
 	var panel: PanelContainer = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", EventHud._box(BG, EDGE, 40, 6, 30))
-	panel.custom_minimum_size = Vector2(980, 1380)
+	panel.custom_minimum_size = Vector2(980, 0)
 	HudLayout.center_top(panel, 980.0, 230.0)
+	# 아래 끝 (세로 1610) — 가로 화면이면 화면 높이에 맞춰 줄어든다.
+	HudLayout.fit_bottom(panel, 1610.0)
 	add_child(panel)
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)
@@ -191,6 +193,14 @@ func _book_cell(fish: FishInfo) -> Control:
 ## 언제 잡히는지 슬쩍 알려 준다.
 static func _when_hint(fish: FishInfo) -> String:
 	var parts: PackedStringArray = []
+	var places: PackedStringArray = GameData.fish_places(fish.id)
+	if not places.is_empty():
+		parts.append(" · ".join(places))
+	if not fish.seasons.is_empty():
+		var names: PackedStringArray = []
+		for s: String in fish.seasons:
+			names.append(VillageClock.season_name(s))
+		parts.append(", ".join(names))
 	if fish.hours.size() == 2:
 		parts.append("%d시~%d시" % [fish.hours[0], fish.hours[1]])
 	if not fish.weathers.is_empty():

@@ -66,7 +66,16 @@ describe('마을 이벤트', () => {
       for (const id of plan.daily.wanted) assert.ok(data.priceOf(id) > 0, `${id} 는 팔 수 있는 물건`);
     }
     assert.ok(opened > 400 * 0.65 && opened < 400 * 0.85, `이벤트가 열린 날 ${opened}/400`);
-    assert.deepEqual([...seen].sort(), ['bargain', 'fishing_derby', 'gift_day', 'lumber_day', 'merchant'], '다섯 이벤트가 모두 나온다');
+    assert.deepEqual([...seen].sort(), data.events.daily.map((d) => d.id).sort(), '계절을 안 보면 모든 하루 이벤트가 나온다');
+    // v0.12 계절 축제: 그 계절에만 뽑힌다.
+    for (const season of ['spring', 'summer', 'autumn', 'winter']) {
+      const ids = new Set();
+      for (let day = 0; day < 300; day++) {
+        const plan = planDay({ seed: 99, day, events: data.events, data, season });
+        if (plan.daily) ids.add(plan.daily.id);
+      }
+      for (const d of data.events.daily.filter((x) => x.seasons)) assert.equal(ids.has(d.id), d.seasons.includes(season), `${season}: ${d.id}`);
+    }
     // 시간대·날씨: 떠돌이 상인은 9~21시, 유성우는 밤의 맑음·흐림에만.
     const forced = planDay({ seed: 1, day: 1, events: data.events, data, force: 'merchant,meteor_shower', forcedWanted: 'wood' });
     assert.deepEqual(activeEvents(forced, 8, 'clear').map((e) => e.id), []);

@@ -7,6 +7,7 @@ import { addItem, emptySlots, hasItem, sanitize } from './inventory.js';
 import { sanitizePlanted, sanitizeTrees } from './trees.js';
 import { sanitizeFlowers } from './plants.js';
 import { defaultFace, sanitizeFace } from './face.js';
+import { sanitizeName } from './nickname.js';
 import { sanitizeHoldings } from './market.js';
 import { sanitizeHomes } from './realestate.js';
 import { sanitizeChats } from './messenger.js';
@@ -19,6 +20,10 @@ import { sanitizeHomeItems } from './homes.js';
 import { createNpcRuntime } from './npcs.js';
 import { relationOf, sanitizeQuests, sanitizeRelations } from './quests.js';
 import { sanitizePlaced } from './furniture.js';
+import { sanitizeDeposits } from './savings.js';
+import { cleanBirthday, sanitizeAch, sanitizeDex, sanitizeStats } from './progress.js';
+import { sanitizeGuestbooks } from './guestbook.js';
+import { sanitizePhotos } from './photos.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const intOr = (v, fallback) => (Number.isInteger(v) ? v : fallback);
@@ -62,6 +67,8 @@ export function unlinkWallet(profile, sol) {
 
 /** schema 4 → 5 화폐 단위 배율. */
 export const MONEY_SCALE_V5 = 100;
+/** schema 5 → 6: 아파트 평면도를 가로·세로 1.4배로 키웠다 (floorplans.json size_scale). 그 전 저장의 집 가구 자리도 같이 옮긴다. */
+export const HOME_SCALE_V6 = 1.4;
 
 /** 한 사람(uid)의 저장되는 상태. 접속이 끊겨도 방 파일에 남는다. */
 function newProfile(uid, slot, cfg, data) {
@@ -84,6 +91,7 @@ function newProfile(uid, slot, cfg, data) {
     outfit: { hat: '', top: '' }, // 입은 옷 (아이템 id). 입은 옷은 인벤토리 칸을 차지하지 않는다
     emotes: { known: ['hello'], quick: ['hello'] }, // 배운 감정표현과 감정표현 퀵슬롯
     face: data ? defaultFace(data.face, slot) : {}, // 거울에서 고른 얼굴 (눈·코·입·피부·머리)
+    name: '', // 닉네임 (v14, 빈 이름이면 기본 이름)
     stocks: {}, // 가진 주식 { 종목: { q, cost } }
     trades: [], // 최근 거래 (보기용)
     loans: [], // 대출 [{ id, kind, principal, rate, unit, since }]
@@ -94,7 +102,35 @@ function newProfile(uid, slot, cfg, data) {
     civic: sanitizeCivic(null), // 동사무소 기록: 전입 · 받은 지원금 · 천안사랑카드 · 정책대출 승인
     age: data?.civic?.player_age?.[(slot - 1) % (data.civic.player_age.length || 1)] ?? 29,
     chats: {}, // 마을톡 대화방 (v0.11, messenger.js)
+    deposits: [], // 예적금 계좌 (v0.12, savings.js)
+    depSeq: 0,
+    banksUsed: [], // 상품을 든 적이 있는 금융기관 (첫 거래 우대)
+    coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
+    jobDay: null, // 일거리: { day: 마을 날짜, done: 그날 한 배달 수 }
+    // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
+    stats: sanitizeStats(null),
+    dex: { fish: {}, items: [] },
+    ach: [],
+    title: '',
+    birthday: null,
+    bdayYear: 0,
   };
+}
+
+/** 집 가구 자리(평면도 기준 미터)를 k 배로 (평면도를 키운 버전의 저장을 옮길 때). */
+function scaleHomeItems(raw, k) {
+  if (k === 1 || !raw || typeof raw !== 'object') return raw;
+  const out = {};
+  for (const [unitId, list] of Object.entries(raw)) {
+    out[unitId] = Array.isArray(list) ? list.map((f) => (f && Number.isFinite(f.x) && Number.isFinite(f.z) ? { ...f, x: f.x * k, z: f.z * k } : f)) : list;
+  }
+  return out;
+}
+
+/** 마을톡 하루 기록 { day, n, from: [주민 id] } (messenger.js). 모양이 틀리면 없는 것으로. */
+function sanitizeMsgDay(raw) {
+  if (!raw || typeof raw !== 'object' || !Number.isInteger(raw.day)) return undefined;
+  return { day: raw.day, n: Math.max(0, intOr(raw.n, 0)), from: Array.isArray(raw.from) ? raw.from.filter((id) => typeof id === 'string').slice(0, 32) : [] };
 }
 
 /** 배운 감정표현 (모르는 id 는 버리고, 기본 감정표현은 항상 안다) 과 퀵슬롯. */
@@ -145,8 +181,11 @@ export class Player {
     this.lastMotionAt = -Infinity; // 몸짓(브레이크) 간격
     this.graceTimer = null;
     this.fishing = null; // 낚시 세션 (fishing.js)
+    this.phone = false; // 휴대폰을 꺼내 보는 중 (v15, 연출용)
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
+    this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
+    this.lastJobNpc = null; // 바로 전에 배달한 집 (연달아 같은 집이 안 나오게)
     this.handledRids = new Set(); // 이미 처리한 요청 ID (중복 방지)
   }
 
@@ -177,10 +216,13 @@ export class Player {
       id: this.id,
       online: this.online,
       fishing: this.fishing !== null,
+      phone: this.phone,
       held: this.heldItem,
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
       face: { ...this.profile.face },
+      name: this.profile.name ?? '',
+      title: this.profile.title ?? '',
       x: this.x,
       y: this.y,
       z: this.z,
@@ -232,14 +274,21 @@ export class Room {
     this.eventSig = '';
     this.drops = new Map();
     this.dropSeq = 0;
+    // v13: 사람이 내려놓은 물건(kind 'item')은 drops 에 같이 두되 저장한다 (id 'g…').
+    this.groundSeq = 0;
+    // v13: 식재료 배달 (delivery.js). 기다리는 주문은 저장한다(다시 켜면 바로 출발하거나 식당 창고로).
+    this.deliveries = new Map();
+    this.delivSeq = 0;
     this.nextDropAt = { gift: 0, star: 0, forage: 0 };
     // 경제 (마을 공용): 아파트 소유 · 집값 지수 · 기준금리 · 마지막으로 이자를 매긴 주
     this.homes = {}; // 호수 → { owner: uid, price, day }
     this.aptIndex = data.realestate?.index?.start ?? 1;
     this.baseRate = data.bank?.base_rate ?? 0.03;
+    this.econ = null; // v0.12: 이번 주 경제 소식 { id, week, bank? }
+    this.closedBanks = {}; // v0.12: 영업정지한 금융기관 → 다시 여는 주
     this.week = null;
     // 식당: 별점 기록 · 단골 (저장) / 지금 영업 (저장 안 함)
-    this.restaurant = sanitizeRestaurant(null, data.recipes ?? []);
+    this.restaurant = sanitizeRestaurant(null, data.recipes ?? [], data.kindOf);
     this.shift = null;
     // v0.9: 혼인신고한 세대 (id → { id, members: [uid, uid], wallet: { sol }, since }), 삽으로 고친 땅 칸 (저장),
     // 조개 숨구멍 · 여울 물고기 떼 · 같이 찍은 나무 기록 (저장 안 함).
@@ -254,6 +303,11 @@ export class Room {
     // v0.10: 집 안 가구 (호수 → [{id, item, x, z, rot}], 저장). 아직 없는 집은 평면도의 기본 가구를 보여 준다.
     this.homeItems = {};
     this.homeItemSeq = 0;
+    // v16: 집(호수)마다 방명록 · 마을톡으로 보낸 사진 목록 (파일은 photos.js).
+    this.guestbooks = {};
+    this.photos = [];
+    this.photoSeq = 0;
+    this.notedDay = null; // v16: 주민 생일 알림을 보낸 마을 날짜 (다시 켜도 같은 날 또 알리지 않게)
     this.dirty = false; // 위치 스냅샷 방송 필요
     this.saveDirty = false; // 파일 저장 필요
   }
@@ -279,19 +333,38 @@ export class Room {
     room.shopPoints = Math.max(0, Math.trunc(finite(world.shopPoints, 0) * money));
     room.placed = sanitizePlaced(world.placed, data);
     room.placedSeq = Math.max(0, intOr(world.placedSeq, 0));
+    for (const g of sanitizeGround(world.ground, data, cfg)) room.drops.set(g.id, g);
+    room.delivSeq = Math.max(0, intOr(world.delivSeq, 0));
+    const door = data.shop?.door ?? { x: 0, z: 0 };
+    for (const d of Array.isArray(world.deliveries) ? world.deliveries : []) {
+      if (!d || typeof d.id !== 'string' || typeof d.uid !== 'string') continue;
+      // 묶음 상자(items) 또는 옛 한 건짜리(item, n).
+      const raw = Array.isArray(d.items) ? d.items : [{ item: d.item, n: d.n }];
+      const items = raw.filter((it) => it && typeof it.item === 'string' && data.isKnown(it.item) && Number.isInteger(it.n) && it.n >= 1).map((it) => ({ item: it.item, n: Math.min(it.n, 999) }));
+      if (items.length === 0) continue;
+      room.deliveries.set(d.id, { id: d.id, uid: d.uid, pid: intOr(d.pid, 0), items, orders: Math.max(1, intOr(d.orders, items.length)), ph: 'wait', dueAt: 0, x: door.x, z: door.z, yaw: 0, waited: 0, handAt: 0 });
+    }
+    room.groundSeq = Math.max(0, intOr(world.groundSeq, 0), ...[...room.drops.keys()].filter((id) => id.startsWith('g')).map((id) => intOr(Number(id.slice(1)), 0)));
     room.homes = sanitizeHomes(world.homes, data.units);
-    room.homeItems = sanitizeHomeItems(world.homeItems, data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
+    room.homeItems = sanitizeHomeItems(scaleHomeItems(world.homeItems, Number.isInteger(saved.schema) && saved.schema < 6 ? HOME_SCALE_V6 : 1), data.units, (u) => data.planOf?.(u) ?? null, (id) => data.kindOf?.(id) === 'furniture');
     room.homeItemSeq = Math.max(0, intOr(world.homeItemSeq, 0));
+    room.guestbooks = sanitizeGuestbooks(world.guestbooks, data.units);
+    room.photos = sanitizePhotos(world.photos);
+    room.photoSeq = Math.max(0, intOr(world.photoSeq, 0));
+    room.notedDay = intOr(world.notedDay, null);
     if (finite(world.aptIndex, 0) > 0) room.aptIndex = world.aptIndex;
     if (finite(world.baseRate, 0) > 0) room.baseRate = world.baseRate;
     room.week = intOr(world.week, null);
-    room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes);
+    // v0.12 경제 소식(이번 주)과 영업정지한 금융기관 { 기관 id: 다시 여는 주 }.
+    room.econ = world.econ && typeof world.econ.id === 'string' && Number.isInteger(world.econ.week) ? { id: world.econ.id, week: world.econ.week, bank: typeof world.econ.bank === 'string' ? world.econ.bank : undefined } : null;
+    room.closedBanks = Object.fromEntries(Object.entries(world.closedBanks ?? {}).filter(([id, w]) => data.savings?.institutions.has(id) && Number.isInteger(w)));
+    room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes, data.kindOf);
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
       const base = newProfile(uid, slot, cfg, data);
       // schema 1 은 물고기 목록(items), schema 2 부터는 칸 배열(slots).
-      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf), cfg);
+      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf, Array.isArray(p.slots)), cfg);
       const held = intOr(p.held, base.held);
       room.profiles.set(uid, {
         ...base,
@@ -310,6 +383,7 @@ export class Room {
         outfit: sanitizeOutfit(p.outfit, data),
         emotes: sanitizeEmotes(p.emotes, data, cfg),
         face: sanitizeFace(p.face, data.face, base.slot),
+        name: sanitizeName(p.name),
         stocks: sanitizeHoldings(p.stocks, data.market),
         trades: Array.isArray(p.trades) ? p.trades.slice(-20) : [],
         loans: sanitizeLoans(p.loans),
@@ -318,7 +392,23 @@ export class Room {
         income: { amount: Math.max(0, Math.trunc(finite(p.income?.amount, 0))), history: Array.isArray(p.income?.history) ? p.income.history.filter(Number.isFinite).slice(-8) : [] },
         civic: sanitizeCivic(p.civic),
         chats: data.messenger ? sanitizeChats(p.chats, data.messenger) : {},
+        // 오늘 먼저 온 마을톡 수 (하루 상한). 빠뜨리면 서버를 다시 켤 때마다 같은 날 연락이 또 온다.
+        msgDay: sanitizeMsgDay(p.msgDay),
+        deposits: sanitizeDeposits(p.deposits, data.savings),
+        depSeq: Math.max(0, intOr(p.depSeq, 0)),
+        banksUsed: Array.isArray(p.banksUsed) ? p.banksUsed.filter((b) => data.savings?.institutions.has(b)) : [],
+        coopMember: !!p.coopMember,
+        jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
+        stats: sanitizeStats(p.stats),
+        dex: sanitizeDex(p.dex, data),
+        ach: data.achievements ? sanitizeAch(p.ach, data.achievements) : [],
+        bdayYear: Math.max(0, intOr(p.bdayYear, 0)),
+        birthday: cleanBirthday(p.birthday),
+        // 놀러 간 집 → 마지막으로 센 마을 날짜 (같은 집은 하루 한 번만 센다).
+        visitDay: Object.fromEntries(Object.entries(p.visitDay ?? {}).filter(([u, d]) => data.units.some((x) => x.id === u) && Number.isInteger(d))),
       });
+      const saved = room.profiles.get(uid);
+      saved.title = typeof p.title === 'string' && saved.ach.some((a) => a.id === p.title) ? p.title : '';
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
@@ -362,12 +452,22 @@ export class Room {
         aptIndex: this.aptIndex,
         baseRate: this.baseRate,
         week: this.week,
+        econ: this.econ ?? null,
+        closedBanks: { ...(this.closedBanks ?? {}) },
         restaurant: structuredClone(this.restaurant),
         tiles: [...this.tiles.values()].map((t) => [t.x, t.z, t.s]),
         households: [...this.households.values()].map((h) => ({ id: h.id, members: [...h.members], sol: h.wallet.sol, since: h.since })),
         householdSeq: this.householdSeq,
         homeItems: structuredClone(this.homeItems),
         homeItemSeq: this.homeItemSeq,
+        guestbooks: structuredClone(this.guestbooks),
+        photos: this.photos.map((ph) => ({ ...ph })),
+        photoSeq: this.photoSeq,
+        notedDay: this.notedDay,
+        deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, items: d.items.map((it) => ({ ...it })), orders: d.orders })),
+        delivSeq: this.delivSeq,
+        ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),
+        groundSeq: this.groundSeq,
       },
       profiles,
     };
@@ -517,4 +617,20 @@ export class RoomManager {
     for (const room of this.rooms.values()) this.save(room);
     await this.store.idle();
   }
+}
+
+/** v13: 저장된 "바닥에 내려놓은 물건". 모르는 아이템 · 이상한 값은 버리고 묶음 수를 넘으면 앞에서부터만 남긴다. */
+export function sanitizeGround(raw, data, cfg) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const g of raw) {
+    if (out.length >= cfg.groundItemMax) break;
+    if (!g || typeof g.id !== 'string' || !/^g\d+$/.test(g.id) || seen.has(g.id)) continue;
+    if (typeof g.item !== 'string' || !data.isKnown(g.item) || !Number.isFinite(g.x) || !Number.isFinite(g.z)) continue;
+    const n = Number.isInteger(g.n) && g.n >= 1 ? Math.min(g.n, 999) : 1;
+    seen.add(g.id);
+    out.push({ id: g.id, kind: 'item', item: g.item, n, x: g.x, z: g.z });
+  }
+  return out;
 }

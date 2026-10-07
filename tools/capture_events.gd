@@ -34,6 +34,8 @@ func _ready() -> void:
 			await _gift()
 		"meteor":
 			await _meteor()
+		"visitor":
+			await _visitor()
 	get_tree().quit()
 
 
@@ -86,6 +88,28 @@ func _advance_until_choices(box: DialogueBox) -> void:
 		if box.is_open():
 			box.press()
 		await _wait(0.1)
+
+
+## v0.12 광장 손님: 중고 가구상 바우 (노점에 선 모습 · 이벤트 카드 · 30% 싸게 파는 보따리).
+func _visitor() -> void:
+	var player: Player = _village.get_node("Player")
+	var merchant: MerchantStall = _village.get_node("Merchant")
+	var event_hud: EventHud = _village.get_node("HUD/EventHud")
+	var shop_window: ShopWindow = _village.get_node("HUD/ShopWindow")
+	await _wait_until(func() -> bool: return merchant.is_open() and merchant.npc_id() == "bau", 5.0)
+	player.global_position = merchant.actor.global_position + Vector3(1.0, 0.1, 1.2)
+	Net.equip(-1)
+	_snap_camera()
+	await _wait(1.2)
+	await _shot("e21_visitor_stall")
+	event_hud.toggle_card()
+	await _wait(0.4)
+	await _shot("e22_visitor_card")
+	event_hud.toggle_card()
+	shop_window.open(ShopWindow.MODE_BUY, ShopWindow.AT_MERCHANT)
+	await _wait(0.6)
+	await _shot("e23_visitor_shop")
+	shop_window.close()
 
 
 func _merchant() -> void:

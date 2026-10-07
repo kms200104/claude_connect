@@ -18,6 +18,11 @@ extends Node3D
 ## 보간 결과를 한 번 더 부드럽게 따라가는 정도 (클수록 딱 붙는다).
 @export_range(1.0, 60.0, 0.5) var follow_smoothing: float = 30.0
 @export_range(4, 100) var max_samples: int = 40
+## 화면에 그리는 이동 속도의 상한 (m/s, 달리기 7 + 여유). 위치 소식이 몰려 오면(모바일 망 · 끊김 뒤) 보간 목표가 한꺼번에
+## 앞으로 튀는데, 그대로 따라가면 순간 빨라 보인다. 상한까지만 따라가고, 너무 뒤처지면(catch_up_after 넘게) 조금씩 더 빨리 따라잡는다.
+@export_range(1.0, 30.0, 0.1, "suffix:m/s") var max_display_speed: float = 8.0
+@export_range(0.1, 5.0, 0.1, "suffix:m") var catch_up_after: float = 1.0
+@export_range(0.0, 20.0, 0.5) var catch_up_gain: float = 6.0
 
 @export_group("Animation")
 ## 이 속도(m/s)로 움직이면 walk 애니메이션이 100% 재생된다 (플레이어 최대 속도와 같게).
@@ -33,7 +38,17 @@ var fishing: bool = false
 ## 리그의 기본값(낚싯대)과 같게 시작해야 첫 상태가 빈손일 때도 반영된다.
 var held_item: String = "rod"
 
+## v12: 상대 낚시 장면 (던진 찌가 날아가 떨어지고, 톡·쑥 입질, 끌어올리기, 낚으면 들어 올려 자랑). FishingController 와 같은 값.
+const BOBBER_SCENE: PackedScene = preload("res://game/fishing/bobber.tscn")
+const CAST_DISTANCE: float = 2.8
+const CAST_RELEASE_S: float = 0.24
+const CAST_FLIGHT_S: float = 0.55
+const SHOW_OFF_S: float = 2.6
+
 var _samples: Array[Sample] = []
+var _bobber: Bobber = null
+## 낚시 장면 번호 — 기다리는 동안 다음 장면이 오면 이전 것은 멈춘다.
+var _fish_seq: int = 0
 var _shown_speed: float = 0.0
 var _footsteps: Footsteps = Footsteps.new()
 
@@ -61,6 +76,17 @@ func set_outfit(hat: String, top: String) -> void:
 		rig.set_outfit(hat, top)
 
 
+func _ready() -> void:
+	# 닉네임이 바뀌면 머리 위 이름도 바꾼다 (v14).
+	Net.name_changed.connect(func(id: int, _n: String) -> void:
+		if id == player_id:
+			set_online(online))
+	# v16: 칭호를 바꾸면 닉네임 옆 칭호도.
+	Journal.title_changed.connect(func(id: int) -> void:
+		if id == player_id:
+			set_online(online))
+
+
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
 	if rig != null:
@@ -71,12 +97,14 @@ func setup(state: NetPlayerState) -> void:
 	set_online(state.online)
 	_apply_held(state.held)
 	set_outfit(state.hat, state.top)
+	set_phone(state.phone)
 
 
 func set_online(value: bool) -> void:
 	online = value
 	if name_label != null:
-		name_label.text = "플레이어 %d" % player_id if online else "플레이어 %d · 연결 끊김" % player_id
+		var shown: String = Journal.display_name(player_id)
+		name_label.text = shown if online else "%s · 연결 끊김" % shown
 		name_label.modulate = Color.WHITE if online else Color(1.0, 1.0, 1.0, 0.55)
 
 
@@ -99,6 +127,103 @@ func play_action(kind: String, target: String = "") -> void:
 			rig.set_cooking(target, str(COOK_TOOLS.get(target, "")))
 		"cook_end":
 			rig.set_cooking("")
+		"carry":
+			# 배달 물건을 받아 든다 (손에 든 모습은 위치 스냅샷의 held 로 바뀐다, 빈 문자열 = 그만둠).
+			if not target.is_empty():
+				rig.play_plant()
+		"plant", "pick", "place", "drop":
+			# 쪼그려 앉아 심기·줍기·가구 놓기·내려놓기 (같은 몸짓).
+			rig.play_plant()
+		"give", "deliver":
+			rig.play_emote("bow")
+		"phone_tap":
+			rig.phone_tap()
+
+
+## 휴대폰을 꺼내 보는 중인지 (스냅샷마다 온다, v15).
+func set_phone(on: bool) -> void:
+	if rig != null and rig.is_holding_phone() != on:
+		rig.set_phone(on and online)
+
+
+## 상대의 낚시 장면 한 토막 (서버 act kind = fish).
+func fish_event(msg: Dictionary) -> void:
+	_fish_seq += 1
+	var seq: int = _fish_seq
+	match str(msg.get("e", "")):
+		"cast":
+			if rig != null:
+				rig.play_cast()
+			Audio.play_at("fish_cast", global_position, -4.0, 1.0, 0.05)
+			await get_tree().create_timer(CAST_RELEASE_S).timeout
+			if seq != _fish_seq or not is_inside_tree():
+				return
+			var target: Vector3 = _cast_target(str(msg.get("spot", "")))
+			if target == Vector3.INF:
+				return
+			# v13: 겨눠 던진 자리 (물고기 머리 앞).
+			if msg.get("bx") != null and msg.get("bz") != null:
+				target = Vector3(float(msg["bx"]), target.y, float(msg["bz"]))
+			_ensure_bobber().cast_to(_rod_tip(), target, CAST_FLIGHT_S)
+			_bobber.landed.connect(func(at: Vector3) -> void: Audio.play_at("fish_plop", at, -4.0, 1.0, 0.08), CONNECT_ONE_SHOT)
+		"found":
+			# 지나가던 물고기가 찌를 알아챘다 (물고기 그림자는 FishSchool 이 그린다).
+			pass
+		"nibble":
+			if _bobber != null and _bobber.visible:
+				_bobber.nibble()
+		"bite":
+			if _bobber != null and _bobber.visible:
+				_bobber.bite()
+				Audio.play_at("fish_bite", _bobber.global_position, -3.0)
+		"reel":
+			if _bobber != null and _bobber.visible:
+				_bobber.struggle()
+			if rig != null:
+				rig.reel_tug()
+		"land":
+			if _bobber != null:
+				_bobber.hide_bobber()
+			var fish: FishInfo = GameData.fish.get(str(msg.get("fish", "")))
+			if fish == null or rig == null:
+				return
+			rig.show_off(FishModel.mesh(fish), {"S": 0.75, "M": 1.0, "L": 1.25}.get(fish.size, 1.0))
+			EmoteBubble.say(self, GameData.catch_shout(fish.rarity, fish.display_name), 2.95, SHOW_OFF_S - 0.4)
+			Audio.play_at("fanfare_small" if fish.rarity != "common" else "fish_catch", global_position, -4.0)
+			await get_tree().create_timer(SHOW_OFF_S).timeout
+			if seq == _fish_seq and rig != null and rig.is_showing_off():
+				rig.show_off(null)
+		_:
+			if _bobber != null:
+				_bobber.hide_bobber()
+
+
+func _ensure_bobber() -> Bobber:
+	if _bobber == null or not is_instance_valid(_bobber):
+		_bobber = BOBBER_SCENE.instantiate()
+		_bobber.top_level = true
+		add_child(_bobber)
+	return _bobber
+
+
+## 상대 찌가 떨어질 자리: 낚시터 안, 바라보는 방향으로 CAST_DISTANCE 앞 (FishingController._on_started 와 같은 식).
+func _cast_target(spot_id: String) -> Vector3:
+	for node: Node in get_tree().get_nodes_in_group(&"fishing_spots"):
+		var spot: FishingSpot = node as FishingSpot
+		if spot == null or spot.info == null or spot.spot_id != spot_id:
+			continue
+		var forward: Vector3 = -body.global_basis.z if body != null else Vector3.FORWARD
+		forward.y = 0.0
+		var target: Vector3 = spot.info.clamp_inside(global_position + forward.normalized() * CAST_DISTANCE)
+		target.y = spot.water_height + 0.02
+		return target
+	return Vector3.INF
+
+
+func _rod_tip() -> Vector3:
+	if rig != null and rig.rod != null:
+		return rig.rod.global_transform * Vector3(0.0, 1.5, 0.0)
+	return global_position + Vector3(0.0, 1.6, 0.0)
 
 
 ## 상대의 감정표현·몸짓. 브레이크는 몸을 젖히고 끼이익 미끄러지며 흙먼지를 일으킨다.
@@ -189,7 +314,15 @@ func _process(delta: float) -> void:
 
 	var weight: float = 1.0 - exp(-follow_smoothing * delta)
 	var before: Vector3 = global_position
-	global_position = global_position.lerp(target_pos, weight)
+	var next: Vector3 = global_position.lerp(target_pos, weight)
+	var step: Vector2 = Vector2(next.x - before.x, next.z - before.z)
+	var lag: float = Vector2(target_pos.x - before.x, target_pos.z - before.z).length()
+	if lag < teleport_distance and delta > 0.0:
+		var limit: float = (max_display_speed + maxf(0.0, lag - catch_up_after) * catch_up_gain) * delta
+		if step.length() > limit:
+			step = step.normalized() * limit
+			next = Vector3(before.x + step.x, next.y, before.z + step.y)
+	global_position = next
 	if rig != null and delta > 0.0:
 		# 실제로 화면에서 움직인 속도로 걷기 애니메이션을 정한다 (낚시 중에는 서 있는다).
 		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta

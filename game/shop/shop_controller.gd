@@ -34,6 +34,8 @@ func _ready() -> void:
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void: _on_welcomed())
 	Net.shop_updated.connect(_on_shop_updated)
 	Net.shop_door_passed.connect(_on_door_passed)
+	# 화질이 바뀌면 그 화질의 모형(원본 / 줄인 _low)으로 다시 짓는다.
+	Quality.changed.connect(func() -> void: _build(level))
 	Net.request_failed.connect(func(kind: String, _code: String) -> void:
 		if kind == "shop_enter" or kind == "shop_exit":
 			_door_pending = false)
@@ -125,9 +127,16 @@ func _build(new_level: int) -> void:
 	add_child(_exterior)
 	_exterior.global_position = Vector3(shop.door.x, 0.0, shop.door.z)
 	_add_mesh(_exterior, "shop_ext_%d" % level, ShopBuilder.exterior_parts(level), material)
-	_add_mesh(_exterior, "shop_win_%d" % level, ShopBuilder.exterior_windows(level), glow_material)
+	# Tripo 건물 모형(앞면이 z=0)이면 창문이 모형에 칠해져 있어 따로 빛나는 유리를 붙이지 않는다.
+	var ext_model: ArrayMesh = PartMesh.load_model("shop_ext_%d" % level)
 	var size: Vector3 = ShopBuilder.EXTERIOR_SIZE[level]
-	_add_box(_exterior, AABB(Vector3(-size.x * 0.5, 0.0, -size.z), size))
+	if ext_model == null:
+		_add_mesh(_exterior, "shop_win_%d" % level, ShopBuilder.exterior_windows(level), glow_material)
+		_add_box(_exterior, AABB(Vector3(-size.x * 0.5, 0.0, -size.z), size))
+	else:
+		# 앞에 내놓은 과일 상자·계단은 밟고 문 앞까지 갈 수 있게 충돌은 앞면에서 0.5m 들인다.
+		var aabb: AABB = ext_model.get_aabb()
+		_add_box(_exterior, AABB(Vector3(aabb.position.x + 0.2, 0.0, aabb.position.z), Vector3(aabb.size.x - 0.4, aabb.size.y, aabb.size.z - 0.5)))
 	_sign = Label3D.new()
 	_sign.text = shop.level_info(level).display_name
 	_sign.font_size = 40 if level < 3 else 48
@@ -136,6 +145,9 @@ func _build(new_level: int) -> void:
 	_sign.modulate = Color(1.0, 0.95, 0.8) if level < 3 else Color(1.0, 0.85, 0.35)
 	# 간판은 차양(1·2단계)이나 지붕(3단계) 앞 끝에 붙인다. 위에서 내려다봐도 가려지지 않게.
 	_sign.position = [Vector3.ZERO, Vector3(0.0, size.y - 0.15, 1.3), Vector3(0.0, size.y - 0.3, 1.15), Vector3(0.0, size.y + 0.25, 0.4)][level]
+	if ext_model != null:
+		# 모형 지붕 위, 앞쪽 끝 (위에서 내려다보는 카메라에 가려지지 않게).
+		_sign.position = Vector3(0.0, ext_model.get_aabb().end.y + 0.3, -0.6)
 	_sign.double_sided = false
 	_exterior.add_child(_sign)
 
@@ -145,6 +157,14 @@ func _build(new_level: int) -> void:
 	add_child(_interior)
 	_interior.global_position = shop.room_origin
 	_add_mesh(_interior, "shop_room_%d" % level, ShopBuilder.interior_parts(level), material)
+	var counter: ArrayMesh = ShopBuilder.counter_model()
+	if counter != null:
+		var counter_mi: MeshInstance3D = MeshInstance3D.new()
+		counter_mi.name = "Counter"
+		counter_mi.mesh = counter
+		counter_mi.material_override = PartMesh.material_for(ShopBuilder.COUNTER_MODEL, material)
+		counter_mi.position = ShopBuilder.counter_position(level)
+		_interior.add_child(counter_mi)
 	var chandelier: Array = ShopBuilder.chandelier_parts(level)
 	if not chandelier.is_empty():
 		_add_mesh(_interior, "shop_chandelier", chandelier, material)
@@ -183,7 +203,7 @@ func _add_mesh(parent: Node3D, key: String, parts: Array, mat: Material) -> void
 		return
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.mesh = PartMesh.get_mesh(key, parts)
-	mi.material_override = mat
+	mi.material_override = PartMesh.material_for(key, mat)
 	parent.add_child(mi)
 
 

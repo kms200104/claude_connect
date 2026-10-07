@@ -23,14 +23,25 @@ const TARGET_EXIT: String = "exit"
 const DECOR_BUTTON_Y: float = 340.0
 
 var interior: HomeInterior = null
+## 창밖 풍경을 찍는 곳 (마을의 아파트 동). 없으면 창은 하늘색.
+@export var apartments: ApartmentSite
+## 그 집 발코니에서 바깥으로 이만큼 나간 자리에서 찍는다 (자기 동 벽이 가리지 않게).
+@export_range(0.0, 10.0, 0.5, "suffix:m") var view_step_out: float = 2.5
+var _view: HomeView = null
 var window: HomeWindow = null
 var editor: HomeEditor = null
 var _decor_button: Button = null
+## v16 방명록 (주인이 있는 집 안에서).
+var guestbook: GuestbookWindow = null
+var _guestbook_button: Button = null
 var _outdoor_pitch: float = 48.0
 var _outdoor_distance: float = 7.5
 
 
 func _ready() -> void:
+	_view = HomeView.new()
+	_view.name = "HomeView"
+	add_child(_view)
 	interior = HomeInterior.new()
 	interior.name = "Interior"
 	interior.clay_material = clay_material
@@ -55,9 +66,19 @@ func _ready() -> void:
 	_decor_button.visible = false
 	_decor_button.pressed.connect(func() -> void: editor.start())
 	HudLayout.right_top(_decor_button, Vector2(160.0, 84.0), 24.0, DECOR_BUTTON_Y)
+	guestbook = GuestbookWindow.new()
+	guestbook.name = "GuestbookWindow"
+	_guestbook_button = _decor_button.duplicate(Node.DUPLICATE_GROUPS) as Button
+	_guestbook_button.name = "GuestbookButton"
+	_guestbook_button.text = "방명록"
+	_guestbook_button.add_to_group(&"blocks_joystick")
+	_guestbook_button.pressed.connect(func() -> void: guestbook.open())
+	HudLayout.right_top(_guestbook_button, Vector2(160.0, 84.0), 24.0, DECOR_BUTTON_Y + 100.0)
 	if hud != null:
 		hud.add_child.call_deferred(window)
 		hud.add_child.call_deferred(_decor_button)
+		hud.add_child.call_deferred(_guestbook_button)
+		hud.add_child.call_deferred(guestbook)
 	if camera_rig != null:
 		_outdoor_pitch = camera_rig.pitch_degrees
 		_outdoor_distance = camera_rig.distance
@@ -68,9 +89,9 @@ func _ready() -> void:
 	Home.failed.connect(_on_failed)
 
 
-## 엘리베이터 창·꾸미기 중이면 다른 상황 버튼을 숨긴다.
+## 엘리베이터 창·꾸미기·방명록 중이면 다른 상황 버튼을 숨긴다.
 func is_busy() -> bool:
-	return (window != null and window.is_open()) or (editor != null and editor.active)
+	return (window != null and window.is_open()) or (editor != null and editor.active) or (guestbook != null and guestbook.is_open())
 
 
 func pick_target(position: Vector3) -> String:
@@ -107,6 +128,8 @@ func activate(target: String) -> void:
 func _process(_delta: float) -> void:
 	if _decor_button != null:
 		_decor_button.visible = Home.is_inside() and Home.editable and not editor.active and Net.state == Net.State.ONLINE
+	if _guestbook_button != null:
+		_guestbook_button.visible = Home.is_inside() and Home.owner_slot > 0 and not editor.active and Net.state == Net.State.ONLINE
 
 
 func _on_door(unit: String, position: Vector3) -> void:
@@ -119,6 +142,8 @@ func _on_door(unit: String, position: Vector3) -> void:
 		interior.build(Home.plan)
 		interior.visible = true
 		interior.sync_furniture(Home.furniture)
+		interior.set_view(null)
+		_capture_view(unit)
 		# 현관에 들어서면 집 안(남쪽, 발코니 쪽)을 바라본다.
 		player.body.rotation.y = PI
 		if sky != null:
@@ -141,6 +166,15 @@ func _on_door(unit: String, position: Vector3) -> void:
 			camera_rig.distance = _outdoor_distance
 	if camera_rig != null:
 		camera_rig.snap_to_target()
+
+
+## 창밖 풍경: 마을의 이 집 발코니 앞에서 여섯 방향을 찍어 창유리에 넣는다 (여섯 프레임쯤, 그동안은 하늘색 유리).
+func _capture_view(unit: String) -> void:
+	if apartments == null:
+		return
+	var view: HomeView.View = await _view.capture(apartments.unit_position(unit) + Vector3(0.0, 0.4, view_step_out))
+	if view != null and Home.unit == unit:
+		interior.set_view(view)
 
 
 func _on_failed(kind: String, code: String) -> void:

@@ -1,5 +1,9 @@
 Jua (jua_regular.ttf): Copyright 2018 The Jua Project Authors.
 Gowun Dodum (gowun_dodum_symbols.ttf, 기호만 추린 부분집합): Copyright 2021 The Gowun Dodum Project Authors.
+Noto Color Emoji (emoji_subset.ttf, 쓰는 이모지만 추린 부분집합): Copyright 2021 Google Inc.
+Noto Sans Symbols 2 (symbols_subset.ttf, 부분집합): Copyright 2022 Google Inc.
+Noto Sans KR (cjk_marks.ttf, 기호 몇 개만 추린 부분집합): Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+(모두 SIL Open Font License 1.1 — 아래. 만드는 도구: tools/fonts/build_extra_fonts.py)
 
 Copyright 2018 The Jua Project Authors
 

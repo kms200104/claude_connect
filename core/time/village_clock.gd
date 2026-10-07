@@ -23,6 +23,22 @@ static func day_index(game_ms: float) -> int:
 	return floori((game_ms - DAY_START_HOUR * HOUR_MS) / DAY_MS)
 
 
+## 계절 (v0.12): 마을 날짜의 달로 — 봄 3~5월 · 여름 6~8월 · 가을 9~11월 · 겨울 12~2월 (서버 seasonOf 와 같다).
+static func season_of(game_ms: float) -> String:
+	var month: int = int(Time.get_datetime_dict_from_unix_time(int(game_ms / 1000.0))["month"])
+	if month >= 3 and month <= 5:
+		return "spring"
+	if month >= 6 and month <= 8:
+		return "summer"
+	if month >= 9 and month <= 11:
+		return "autumn"
+	return "winter"
+
+
+static func season_name(season: String) -> String:
+	return {"spring": "봄", "summer": "여름", "autumn": "가을", "winter": "겨울"}.get(season, season)
+
+
 ## morning(5–10) day(10–17) evening(17–20) night(20–5)
 static func time_band(hour: float) -> String:
 	if hour >= 5.0 and hour < 10.0:
@@ -43,3 +59,18 @@ static func format_time(hour: float) -> String:
 	if h12 == 0:
 		h12 = 12
 	return "%s %d:%02d" % [half, h12, m]
+
+
+## 마을 날짜 번호 → 그날의 달력 { year, month, day, weekday(0 = 일) } (서버 progress.js dateOfDay 와 같다: 그날 정오 기준).
+static func date_of_day(day: int) -> Dictionary:
+	var noon_ms: float = float(day) * DAY_MS + (DAY_START_HOUR + 7.0) * HOUR_MS
+	return Time.get_datetime_dict_from_unix_time(int(noon_ms / 1000.0))
+
+
+const WEEKDAYS: PackedStringArray = ["일", "월", "화", "수", "목", "금", "토"]
+
+
+## "10월 6일 (화)" 같은 표시용 날짜.
+static func format_date(day: int) -> String:
+	var d: Dictionary = date_of_day(day)
+	return "%d월 %d일 (%s)" % [int(d["month"]), int(d["day"]), WEEKDAYS[int(d["weekday"]) % 7]]

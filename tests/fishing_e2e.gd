@@ -77,10 +77,17 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return player.rig._fishing_value > 0.9, 1.5), "AnimationTree 낚시 가중치가 올라감 (%.2f)" % player.rig._fishing_value)
 	_check(controller.phase == FishingController.Phase.WAITING, "아직 입질 전")
 	var shadow: FishShadow = controller.get_node("FishShadow")
-	_check(await _wait_until(func() -> bool: return shadow.visible and shadow.mode != FishShadow.Mode.HIDDEN, 2.0), "찌 주변에 물고기 그림자가 나타남 (크기 %.2f)" % shadow.scale.x)
+	_check(await _wait_until(func() -> bool: return shadow.visible and shadow.mode != FishShadow.Mode.HIDDEN, 10.0), "찌 주변에 물고기 그림자가 나타남 (크기 %.2f)" % shadow.scale.x)
+
+	# v13: 물 밑의 물고기 그림자들 · 겨눠 던지기 · 찌를 같이 비추는 카메라
+	var school: FishSchool = _village.get_node("FishSchool")
+	var cam_rig: FollowCamera = _village.get_node("CameraRig")
+	_check(school.count("lake") >= 3, "호수 물 밑에 물고기 그림자들이 보임 (%d마리)" % school.count("lake"))
+	_check(shadow.is_line() and not school.hidden_id.is_empty(), "알아챈 물고기가 찌 쪽으로 곧장 다가옴 (보이던 그 물고기: %s)" % school.hidden_id)
+	_check(await _wait_until(func() -> bool: return cam_rig.point_weight > 0.5, 2.0), "카메라가 찌를 같이 비춤 (%.2f)" % cam_rig.point_weight)
 
 	# 진짜 입질을 기다렸다가 사람처럼 150ms 뒤에 챔질
-	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 8.0), "진짜 입질이 옴")
+	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 15.0), "진짜 입질이 옴")
 	await _hook_and_reel(hud, controller)
 	_check(await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.RESULT, 3.0), "결과가 확정됨")
 	var first_bag: InventoryItem = Net.inventory[Net.quick_slot_count]

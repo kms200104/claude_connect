@@ -28,6 +28,10 @@ signal npcs_received(server_time_ms: float, states: Array[NetNpcState])
 signal chop_succeeded(tree_id: String, item_id: String, felled: bool)
 ## 상대가 한 동작 (지금은 도끼질만). target = 나무 id.
 signal peer_action(id: int, kind: String, target: String)
+## v12: 상대의 동작 알림 전체 (낚시 장면처럼 추가 값이 있는 것: kind = fish 면 e = cast|nibble|bite|reel|land|end, spot, fish).
+signal peer_act(id: int, kind: String, msg: Dictionary)
+## v12: 상대가 대화 중에 화면에 띄운 대사 (npc 가 비면 상대 자신의 말).
+signal peer_said(id: int, npc_id: String, text: String)
 signal talk_opened(reply: TalkReply)
 ## 서버가 대화를 끝냄 (멀어졌거나 시간 초과).
 signal talk_closed(npc_id: String)
@@ -45,6 +49,10 @@ signal furniture_removed(id: String)
 signal request_failed(kind: String, code: String)
 ## 찌를 던졌다. shadow = 물 밑에 다가올 물고기 그림자 크기 (희귀하고 클수록 크다, 0.6~1.7).
 signal fish_started(shadow: float)
+## v13: 겨눠 던진 찌를 알아챈 물고기 (처음엔 없다가 지나가던 물고기가 찾아왔을 때). last_fish 에 fid · 크기 · 다가오는 시간.
+signal fish_found(shadow: float)
+## v13: 낚시터 물고기 그림자들 [{id, x, z, yaw, s(S·M·L), r(희귀도), st(roam·engaged·flee), o(낚는 사람)}].
+signal fishes_updated(spot_id: String, list: Array[Dictionary])
 ## 챔질 성공 → 끌어올리기: ms 안에 taps 번 연타해야 한다 (v0.11).
 signal fish_reel(taps: int, ms: int)
 signal fish_nibble
@@ -61,6 +69,13 @@ signal drop_added(drop: DropInfo)
 signal drop_removed(id: String, by: int)
 ## 내가 선물·별 조각을 주웠다.
 signal collected(kind: String, item_id: String)
+## 바닥 묶음의 개수가 바뀌었다 (v13: 가방에 다 안 들어가 일부만 주웠을 때).
+signal drop_changed(drop: DropInfo)
+## 식재료 배달 (v13): 주문이 받아졌다(merged = 아직 떠나지 않은 상자에 같이 담김, 배달비 없음) /
+## 상자를 받았다(items = [{item, n, where: "bag" | "storage"}]) / 길 위의 배달 알바들이 바뀌었다.
+signal delivery_ordered(item_id: String, count: int, eta_s: int, amount: int, merged: bool)
+signal delivery_done(items: Array[Dictionary])
+signal couriers_updated(list: Array[Dictionary])
 ## 낚시 대회 상금을 받았다.
 signal fish_bonus(amount: int)
 ## 누군가 씨앗을 심어 새 나무가 생겼다 (상태는 tree_changed 로도 온다).
@@ -75,6 +90,8 @@ signal flower_picked(item_id: String)
 signal peer_emoted(player_id: int, emote_id: String)
 ## 누군가(나 포함) 거울에서 얼굴을 바꿨다.
 signal face_changed(player_id: int, face: Dictionary)
+## 누군가(나 포함) 닉네임을 바꿨다 (v14). 빈 이름이면 기본 이름.
+signal name_changed(player_id: int, display_name: String)
 ## 주민이 누군가의 감정표현에 반응했다 (to: 감정표현을 한 사람).
 ## from = 그 사람이 한 감정표현 (주민 반응은 그에 대한 것).
 ## 친한 주민이 먼저 다가와 나에게 말을 걸었다 (v0.11).
@@ -149,6 +166,18 @@ var outfit_top: String = ""
 var events: Array[ActiveEvent] = []
 ## 바닥에 떨어진 선물·별 조각 (id → 정보).
 var drops: Dictionary[String, DropInfo] = {}
+## 마지막으로 주운 개수와 바닥에 남은 개수 (v13 내려놓은 묶음).
+var last_collect_count: int = 1
+var last_collect_left: int = 0
+## 마지막으로 산 것이 식당 창고로 갔는지 (v13: 식재료).
+var last_trade_stored: bool = false
+## v13: 지금 낚시를 알아챈 물고기 {fid, size, ms, bx, bz} (fish_started · fish_found 때 채운다). fid 가 비면 아직 없음.
+var last_fish: Dictionary = {}
+## 낚시터 id → 물고기 그림자 목록 (fishes_updated 와 같은 것).
+var fishes: Dictionary[String, Array] = {}
+## 길 위의 배달 알바 [{id, x, z, yaw, ph, to, item, k}] 와 내 배달 상자 [{id, items: [{item, n}], ph}] (v13, 묶음 배달).
+var couriers: Array[Dictionary] = []
+var my_deliveries: Array[Dictionary] = []
 ## 마지막 도끼질로 얻은 개수 (나무꾼의 날에는 2).
 var last_chop_count: int = 1
 ## 씨앗을 심어 생긴 나무 (id → 정보). 데이터 나무는 GameData.trees.
@@ -162,8 +191,12 @@ var emotes_known: PackedStringArray = ["hello"]
 var emotes_quick: PackedStringArray = ["hello"]
 ## 주민 id → 지금 기분.
 var npc_moods: Dictionary[String, String] = {}
+## 버전이 맞지 않을 때 서버가 알려 준 서버의 프로토콜 버전 (0 = 모름).
+var server_version: int = 0
 ## 자리 번호 → 거울에서 고른 얼굴 (FaceCatalog id 사전). 없으면 자리 기본 얼굴.
 var faces: Dictionary[int, Dictionary] = {}
+## 자리 번호 → 닉네임 (v14). 없거나 빈 이름이면 GameData.player_name 의 기본 이름.
+var names: Dictionary[int, String] = {}
 
 var _ws: WebSocketPeer = null
 ## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
@@ -183,10 +216,14 @@ var _user_closed: bool = false
 var _join_fallback_tried: bool = false
 var _rid_counter: int = 0
 var _fishing_rid: String = ""
+## 마지막으로 보낸 말풍선 대사 시각 (SAY_GAP_MS 거르기).
+var _last_say_ms: int = -100000
 var _pending: Dictionary[String, String] = {}  # rid → 요청 종류 (거부됐을 때 어떤 요청인지 알리려고)
 var _clock_game_ms: float = 0.0
 var _clock_scale: float = 1.0
 var _clock_server_ms: float = 0.0
+## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
+var _season_force: String = ""
 
 
 func _ready() -> void:
@@ -257,9 +294,15 @@ func send_move(position: Vector3, yaw: float, velocity: Vector3) -> void:
 
 
 ## 낚시터에 던지기 요청. 결과는 fish_started / action_rejected 로 온다.
-func cast_fishing(spot_id: String) -> void:
+## aim (v13): 찌를 떨어뜨릴 자리 (물고기 머리 앞). 주면 그 둘레의 물고기가 알아채고 다가온다.
+func cast_fishing(spot_id: String, aim: Variant = null) -> void:
 	_fishing_rid = _next_rid()
-	_send({"t": "fish_cast", "rid": _fishing_rid, "spot": spot_id})
+	last_fish = {}
+	var msg: Dictionary = {"t": "fish_cast", "rid": _fishing_rid, "spot": spot_id}
+	if aim is Vector3:
+		msg["x"] = snappedf((aim as Vector3).x, 0.001)
+		msg["z"] = snappedf((aim as Vector3).z, 0.001)
+	_send(msg)
 
 
 ## 챔질 요청. `reaction_ms`는 입질 연출이 보인 뒤 버튼을 누르기까지 걸린 시간(없으면 0).
@@ -284,6 +327,33 @@ func cancel_fishing() -> void:
 
 
 ## 칸에 든 아이템 버리기(물고기는 놓아주기). 도구는 서버가 거부한다.
+## 식재료 배달 주문 (v13). 값 + 배달비를 바로 낸다. 아직 상점을 떠나지 않은 내 상자가 있으면 거기에 같이 담기고 배달비는 없다.
+func order_delivery(item_id: String, count: int) -> void:
+	_request("deliv_order", {"item": item_id, "n": count})
+
+
+## 아직 상점을 떠나지 않은 (같이 담을 수 있는) 내 배달 상자가 있는지 — 있으면 다음 주문은 배달비 없이 같이 온다.
+func has_waiting_delivery() -> bool:
+	for d: Dictionary in my_deliveries:
+		if str(d.get("ph", "wait")) == "wait":
+			return true
+	return false
+
+
+func _apply_couriers(list: Variant) -> void:
+	couriers.clear()
+	if list is Array:
+		for entry: Variant in list:
+			if entry is Dictionary:
+				couriers.append(entry)
+	# 내 주문 중 길에 나선 것은 'walk' 로 (휴대폰에 "오는 중" 표시).
+	for d: Dictionary in my_deliveries:
+		for c: Dictionary in couriers:
+			if str(c.get("id", "")) == str(d.get("id", "")):
+				d["ph"] = str(c.get("ph", "walk"))
+	couriers_updated.emit(couriers)
+
+
 func discard_item(slot: int, count: int = 1) -> void:
 	_request("inv_discard", {"slot": slot, "n": count})
 
@@ -360,13 +430,51 @@ func event_active(event_id: String) -> ActiveEvent:
 	return null
 
 
-## 이 물건을 팔 때의 배율. 상점: 특가 매입이면 2, 아니면 1. 떠돌이 상인: 찾는 물건만 2, 그 밖은 0(안 산다).
+## 이 종류의 열린 이벤트 (v0.12: visitor · bargain · derby · economy …). 없으면 null.
+func event_of_kind(kind: String) -> ActiveEvent:
+	for e: ActiveEvent in events:
+		var info: EventInfo = e.info()
+		if info != null and info.kind == kind:
+			return e
+	return null
+
+
+## 이 물건을 팔 때의 배율 (서버 sellMultiplier 와 같다). 상점: 특가 매입 × 이번 주 경제 소식. 광장 손님: 찾는 물건만, 그 밖은 0(안 산다).
 func sell_multiplier(item_id: String, at: String = "") -> float:
 	if at == "merchant":
-		var m: ActiveEvent = event_active(EventInfo.MERCHANT)
+		var m: ActiveEvent = event_of_kind(EventInfo.KIND_VISITOR)
 		return m.multiplier if m != null and item_id in m.wanted else 0.0
-	var b: ActiveEvent = event_active(EventInfo.BARGAIN)
-	return b.multiplier if b != null and item_id in b.wanted else 1.0
+	var b: ActiveEvent = event_of_kind(EventInfo.KIND_BARGAIN)
+	var mult: float = b.multiplier if b != null and item_id in b.wanted else 1.0
+	var fx: Dictionary = _econ_effect()
+	if str(fx.get("type", "")) == "sell" and _item_kind(item_id) == str(fx.get("item_kind", "")):
+		mult *= float(fx.get("mult", 1.0))
+	return mult
+
+
+## 살 때의 배율 (서버 buyMultiplier · 광장 손님의 buy_mult 와 같다).
+func buy_multiplier(item_id: String, at: String = "") -> float:
+	if at == "merchant":
+		var m: ActiveEvent = event_of_kind(EventInfo.KIND_VISITOR)
+		return m.info().buy_mult if m != null and m.info() != null else 1.0
+	if at != "":
+		return 1.0
+	var fx: Dictionary = _econ_effect()
+	if str(fx.get("type", "")) == "buy" and _item_kind(item_id) == str(fx.get("item_kind", "")):
+		return float(fx.get("mult", 1.0))
+	return 1.0
+
+
+func _econ_effect() -> Dictionary:
+	var e: ActiveEvent = event_of_kind(EventInfo.KIND_ECONOMY)
+	return e.info().effect if e != null and e.info() != null else {}
+
+
+static func _item_kind(item_id: String) -> String:
+	if GameData.fish.has(item_id):
+		return "fish"
+	var info: ItemInfo = GameData.item(item_id)
+	return info.kind if info != null else ""
 
 
 ## 손에 든 씨앗을 (x, z) 에 심는다 (서버가 0.5m 격자로 맞춘다).
@@ -383,6 +491,22 @@ func send_emote(emote_id: String) -> void:
 	_send({"t": "emote", "e": emote_id})
 
 
+## 대화 중 화면에 띄운 대사를 둘레 사람에게 말풍선으로 (npc_id = 주민의 말, 빈 문자열 = 내 말). 결과를 기다리지 않는다.
+## 서버는 SAY_GAP_MS 보다 잦은 대사를 버리니, 잇달아 오면 버리지 않고 간격(+여유)을 두고 차례로 보낸다.
+func send_say(npc_id: String, text: String) -> void:
+	var line: String = text.strip_edges().left(NetProtocol.SAY_MAX_CHARS)
+	if line.is_empty() or state != State.ONLINE:
+		return
+	var now: int = Time.get_ticks_msec()
+	var at: int = maxi(now, _last_say_ms + NetProtocol.SAY_GAP_MS + 60)
+	_last_say_ms = at
+	if at > now:
+		await get_tree().create_timer(float(at - now) / 1000.0).timeout
+		if state != State.ONLINE:
+			return
+	_send({"t": "say", "who": "npc" if not npc_id.is_empty() else "me", "npc": npc_id, "tx": line})
+
+
 ## 감정표현 퀵슬롯 (배운 것만, 최대 GameData.emote_quick_slots 개).
 func set_emote_quick(ids: PackedStringArray) -> void:
 	emotes_quick = ids
@@ -393,6 +517,48 @@ func set_emote_quick(ids: PackedStringArray) -> void:
 ## 대화 중인 주민과 이 주제로 수다를 떤다.
 func talk_topic(topic: String) -> void:
 	_send({"t": "talk_topic", "topic": topic})
+
+
+## 닉네임을 바꾼다 (v14, 어디서나). 빈 이름이면 기본 이름으로. 결과는 name_changed. 처음 화면 설정에도 같이 기억한다.
+func set_nickname(display_name: String) -> void:
+	var clean: String = NetProtocol.clean_name(display_name)
+	save_nickname(clean)
+	if state == State.ONLINE:
+		_request("set_name", {"name": clean})
+
+
+## 들어온 뒤: 처음 화면 설정에서 바꾼 이름이 서버와 다르면(이어하기는 이름을 안 보낸다) 보내고,
+## 설정에 이름이 없으면 서버 이름을 기억해 둔다.
+func _sync_nickname() -> void:
+	var local: String = nickname()
+	var remote: String = str(names.get(my_id, ""))
+	if local == remote:
+		return
+	if local.is_empty():
+		save_nickname(remote)
+	else:
+		_request("set_name", {"name": local})
+
+
+## 처음 화면 설정에 적어 둔 닉네임 (입장할 때 같이 보낸다). 없으면 빈 문자열.
+func nickname() -> String:
+	return str(_load_settings().get_value("settings", "nickname", ""))
+
+
+func save_nickname(display_name: String) -> void:
+	var cfg: ConfigFile = _load_settings()
+	cfg.set_value("settings", "nickname", NetProtocol.clean_name(display_name))
+	cfg.save(_settings_path())
+
+
+## 휴대폰을 꺼냈다 · 넣었다 (v15, 다른 사람 화면에서도 들고 보는 모습이 보이게).
+func set_phone(on: bool) -> void:
+	_send({"t": "phone", "on": on})
+
+
+## 휴대폰 화면을 눌렀다 (다른 사람 화면에서도 톡 누르는 손짓).
+func phone_tap() -> void:
+	_send({"t": "phone_tap"})
 
 
 ## 거울 앞에서 얼굴을 바꾼다 (바꿀 항목만 보내도 된다). 결과는 face_changed.
@@ -441,6 +607,11 @@ func game_ms() -> float:
 	return _clock_game_ms + (server_time_ms() - _clock_server_ms) * _clock_scale
 
 
+## 지금 계절 (v0.12): spring / summer / autumn / winter.
+func season() -> String:
+	return _season_force if not _season_force.is_empty() else VillageClock.season_of(game_ms())
+
+
 func game_hour() -> float:
 	return VillageClock.hour_of(game_ms())
 
@@ -485,6 +656,9 @@ func _start(url: String, intent: Intent, code: String) -> void:
 
 func _open_socket() -> void:
 	_ws = WebSocketPeer.new()
+	# v16: 사진(photo_up · photo)은 수십 KB 라 기본 버퍼(64KB)보다 넉넉히.
+	_ws.outbound_buffer_size = 1 << 18
+	_ws.inbound_buffer_size = 1 << 18
 	_open_handled = false
 	_connect_started_ms = Time.get_ticks_msec()
 	var err: Error = _ws.connect_to_url(_socket_url())
@@ -570,9 +744,9 @@ func _on_socket_open() -> void:
 	_set_state(State.JOINING if state != State.RECONNECTING else State.RECONNECTING)
 	match _intent:
 		Intent.CREATE:
-			_send({"t": "create", "v": NetProtocol.VERSION, "uid": uid})
+			_send({"t": "create", "v": NetProtocol.VERSION, "uid": uid, "name": nickname()})
 		Intent.JOIN:
-			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code})
+			_send({"t": "join", "v": NetProtocol.VERSION, "uid": uid, "code": room_code, "name": nickname()})
 		Intent.RESUME:
 			_send({"t": "resume", "v": NetProtocol.VERSION, "token": _token})
 
@@ -639,6 +813,7 @@ func _handle_text(text: String) -> void:
 				partner_online = true
 				var joined: NetPlayerState = NetPlayerState.from_dict(joined_data)
 				faces[joined.id] = joined.face
+				names[joined.id] = joined.display_name
 				peer_joined.emit(joined)
 		"peer_status":
 			var pid: int = int(msg.get("id", 0))
@@ -663,6 +838,13 @@ func _handle_text(text: String) -> void:
 			if face_data is Dictionary:
 				faces[face_id] = face_data
 				face_changed.emit(face_id, face_data)
+		"name":
+			var name_id: int = int(msg.get("id", 0))
+			_pending.erase(str(msg.get("rid", "")))
+			names[name_id] = str(msg.get("name", ""))
+			if name_id == my_id:
+				save_nickname(names[name_id])
+			name_changed.emit(name_id, names[name_id])
 		"weather":
 			weather = str(msg.get("w", weather))
 			weather_changed.emit(weather)
@@ -716,6 +898,9 @@ func _handle_text(text: String) -> void:
 			if str(msg.get("kind", "")) == "emote":
 				peer_emoted.emit(int(msg.get("id", 0)), str(msg.get("e", "")))
 			peer_action.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), str(msg.get("tree", msg.get("e", ""))))
+			peer_act.emit(int(msg.get("id", 0)), str(msg.get("kind", "")), msg)
+		"say":
+			peer_said.emit(int(msg.get("id", 0)), str(msg.get("npc", "")), str(msg.get("tx", "")))
 		"chop_result":
 			_pending.erase(str(msg.get("rid", "")))
 			last_chop_count = int(msg.get("n", 1))
@@ -740,6 +925,7 @@ func _handle_text(text: String) -> void:
 		"shop_result":
 			_pending.erase(str(msg.get("rid", "")))
 			sol = int(msg.get("sol", sol))
+			last_trade_stored = bool(msg.get("stored", false))
 			shop_traded.emit(str(msg.get("kind", "")), str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("amount", 0)))
 		"placed":
 			_pending.erase(str(msg.get("rid", "")))
@@ -758,7 +944,19 @@ func _handle_text(text: String) -> void:
 			sol = int(msg.get("sol", sol))
 			quest_completed.emit(str(msg.get("quest", "")), str(msg.get("npc", "")), int(msg.get("reward", 0)))
 		"fish_started":
+			last_fish = {"fid": str(msg.get("fid", "")), "size": str(msg.get("size", "")), "ms": int(msg.get("ms", 0)),
+				"bx": msg.get("bx"), "bz": msg.get("bz")}
 			fish_started.emit(float(msg.get("shadow", 1.0)))
+		"fish_found":
+			last_fish.merge({"fid": str(msg.get("fid", "")), "size": str(msg.get("size", "")), "ms": int(msg.get("ms", 0))}, true)
+			fish_found.emit(float(msg.get("shadow", 1.0)))
+		"fishes":
+			var school: Array[Dictionary] = []
+			for entry: Variant in msg.get("f", []):
+				if entry is Dictionary:
+					school.append(entry)
+			fishes[str(msg.get("spot", ""))] = school
+			fishes_updated.emit(str(msg.get("spot", "")), school)
 		"fish_reel":
 			fish_reel.emit(int(msg.get("taps", 6)), int(msg.get("ms", 2600)))
 		"fish_nibble":
@@ -776,14 +974,45 @@ func _handle_text(text: String) -> void:
 			var dropped: Variant = msg.get("d", {})
 			if dropped is Dictionary:
 				var d: DropInfo = DropInfo.from_dict(dropped)
+				var known: bool = drops.has(d.id)
 				drops[d.id] = d
-				drop_added.emit(d)
+				if known:
+					drop_changed.emit(d)
+				else:
+					drop_added.emit(d)
 		"drop_gone":
 			var gone: String = str(msg.get("id", ""))
 			drops.erase(gone)
 			drop_removed.emit(gone, int(msg.get("by", 0)))
+		"deliv_ok":
+			_pending.erase(str(msg.get("rid", "")))
+			sol = int(msg.get("sol", sol))
+			# 같은 상자(id)에 담겼으면 그 상자의 물건 목록만 바꾼다.
+			var box_id: String = str(msg.get("id", ""))
+			var box_items: Array = msg.get("items", [{"item": msg.get("item", ""), "n": msg.get("n", 1)}])
+			var found: bool = false
+			for d: Dictionary in my_deliveries:
+				if str(d.get("id", "")) == box_id:
+					d["items"] = box_items
+					d["orders"] = int(msg.get("orders", 1))
+					found = true
+			if not found:
+				my_deliveries.append({"id": box_id, "items": box_items, "orders": int(msg.get("orders", 1)), "ph": "wait"})
+			delivery_ordered.emit(str(msg.get("item", "")), int(msg.get("n", 1)), int(msg.get("eta", 0)), int(msg.get("amount", 0)), bool(msg.get("merged", false)))
+		"deliv_done":
+			var done_id: String = str(msg.get("id", ""))
+			my_deliveries = my_deliveries.filter(func(d: Dictionary) -> bool: return str(d.get("id", "")) != done_id)
+			var got: Array[Dictionary] = []
+			for entry: Variant in msg.get("items", []):
+				if entry is Dictionary:
+					got.append(entry)
+			delivery_done.emit(got)
+		"couriers":
+			_apply_couriers(msg.get("c", []))
 		"collect_result":
 			_pending.erase(str(msg.get("rid", "")))
+			last_collect_count = int(msg.get("n", 1))
+			last_collect_left = int(msg.get("left", 0))
 			collected.emit(str(msg.get("kind", "")), str(msg.get("item", "")))
 		"error":
 			_on_server_error(str(msg.get("code", "")), msg)
@@ -802,8 +1031,10 @@ func _on_welcome(msg: Dictionary) -> void:
 	var me: NetPlayerState = null
 	var others: Array[NetPlayerState] = []
 	faces.clear()
+	names.clear()
 	for player_state: NetPlayerState in _parse_states(msg.get("players", [])):
 		faces[player_state.id] = player_state.face
+		names[player_state.id] = player_state.display_name
 		if player_state.id == my_id:
 			me = player_state
 		else:
@@ -815,6 +1046,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	_pending.clear()
 	_apply_inventory(msg.get("inv", {}))
 	_apply_profile(msg.get("prof", {}))
+	_sync_nickname()
 	_apply_clock(msg.get("clock", {}))
 	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
 	tree_stages.clear()
@@ -846,6 +1078,11 @@ func _on_welcome(msg: Dictionary) -> void:
 				var p: PlacedInfo = PlacedInfo.from_dict(entry)
 				placed[p.id] = p
 	drops.clear()
+	_apply_couriers(msg.get("couriers", []))
+	my_deliveries.clear()
+	for entry: Variant in msg.get("deliv", []):
+		if entry is Dictionary:
+			my_deliveries.append(entry)
 	var drop_list: Variant = msg.get("drops", [])
 	if drop_list is Array:
 		for entry: Variant in drop_list:
@@ -953,6 +1190,8 @@ func _apply_profile(data: Variant) -> void:
 	var my_face: Variant = data.get("face", null)
 	if my_face is Dictionary and my_id > 0:
 		faces[my_id] = my_face
+	if data.has("name") and my_id > 0:
+		names[my_id] = str(data.get("name", ""))
 	profile_updated.emit()
 
 
@@ -981,6 +1220,7 @@ func _apply_clock(data: Variant) -> void:
 	_clock_game_ms = float(data.get("g", 0.0))
 	_clock_scale = float(data.get("s", 1.0))
 	_clock_server_ms = float(data.get("st", 0.0))
+	_season_force = str(data.get("se", ""))
 
 
 func _parse_npcs(entries: Variant) -> Array[NetNpcState]:
@@ -1032,6 +1272,9 @@ func _on_pong(msg: Dictionary) -> void:
 
 
 func _on_server_error(code: String, msg: Dictionary = {}) -> void:
+	if code == NetProtocol.ERR_BAD_VERSION:
+		# 서버가 알려 준 프로토콜 버전 (옛 서버는 msg 글에만 "server protocol N").
+		server_version = int(msg.get("server_v", str(msg.get("msg", "")).get_slice("protocol ", 1).to_int()))
 	if code == NetProtocol.ERR_RATE_LIMITED:
 		push_warning("Net: 서버가 요청 속도 제한을 알림")
 		return
@@ -1052,7 +1295,7 @@ func _on_server_error(code: String, msg: Dictionary = {}) -> void:
 		_pending.erase(rid)
 		if not kind.is_empty():
 			request_failed.emit(kind, code)
-		if (not rid.is_empty() and kind in ["", "fish_cast"]) or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL]:
+		if (not rid.is_empty() and kind in ["", "fish_cast"]) or code in [NetProtocol.ERR_NOT_AT_SPOT, NetProtocol.ERR_INVENTORY_FULL, NetProtocol.ERR_ALREADY_FISHING, NetProtocol.ERR_NOT_FISHING, NetProtocol.ERR_BAD_ITEM, NetProtocol.ERR_NO_TOOL, NetProtocol.ERR_BAD_CAST]:
 			action_rejected.emit(code)
 		return
 	_close_socket(1000, "error")

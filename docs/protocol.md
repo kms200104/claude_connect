@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v11
+# 네트워크 프로토콜 v16
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -11,17 +11,22 @@ v6 → v7: 얼굴 꾸미기 — 거울 앞에서 얼굴 바꾸기(`set_face` →
 v7 → v8: 마을 경제 — 화폐를 현실 단위로(1솔 ≈ 1원, 모든 값 ×100), 증권(`stock_order`, `market_tick`), 아파트(`apt_buy` `apt_sell`, `homes`), 은행(`bank_quote` `loan_take` `loan_repay`, `bank`, 주간 정산 `week`), 식당(`rest_open` `rest_close` `rest_cook` `rest_serve`, `rest` `rest_order` `rest_served` `rest_left` `rest_closed` `rest_result`), 들판 채집물(`drop.kind: "forage"`), 성성호수 낚시터(`fish_cast.spot: "seongseong"`), 대화 주제 `worry` `mbti`. `profile` 에 `stocks trades loans credit income worth`, `welcome` 에 `market homes rest`. 저장 파일 schema 5 (schema 4 이하의 솔·상점 포인트·부탁 보상은 읽을 때 ×100).
 v8 → v9: 같이 하기 · 동사무소 · 여울 · 삽 — 식당 직원(`rest_join`, 직원의 `rest_close` = 그만두기, `rest_staff`)·동작 나눠 맡기(`rest_cook{order, step}` → `rest_claim`, `rest_step` → `rest_stepped`, 마지막 동작에 서버가 `rest_result` — `rest_serve` 없어짐), `rest` 의 `staff team orders[].steps`, 같이 베기(`chop_result.coop`, `coop_bonus`), 같이 낚시·얕은/깊은 물(`fish_started.zone coop`), 동사무소(`civic_info` `civic_civil` `civic_apply` `marry_propose` `marry_answer`, `civic` `civic_result` `marry_proposal` `marry_declined` `household`), 정책대출(`apt_buy.policy: "didimdol"`, `loan_take.product: "sunshine_youth"`, 대출의 `product fixed`), 카드 캐시백(`shop_result.back`), 주간 지원금(`week.grant`), 여울 뜰채(`net` → `net_result`, `shoal`), 삽(`dig` → `dig_result`, `tile` `digspot` `digspot_gone`). `profile` 에 `civ`, `welcome` 에 `civic tiles digspots shoals`. 저장 파일은 schema 5 그대로 (world 에 `tiles households householdSeq`, 프로필에 `household civic age` — 없으면 기본값).
 v10 → v11: 낚시 끌어올리기 — `fish_started.shadow`(물고기 그림자 크기), 챔질 뒤 `fish_reel{taps, ms}` → 클라이언트 `fish_reel{rid, taps[]}`, 실패 사유 `snapped`. 요리 동작 `grill`(면마다 뒤집기) · `steam`(재료 담기 → 물 붓기 → 뚜껑 열기). 주민이 먼저 다가와 말 걸기(`npcs` 의 `ap`, `npc_greet`). 마을톡(`msg_send` `msg_read` → `msg`, `welcome.chats`). 저장 파일은 schema 5 그대로 (프로필에 `chats`, 주민 관계에 `msgReplyDay` — 없으면 빈 값).
+v11 → v12: 말풍선(`say`) · 다른 사람 몸짓(`act`) · 배달 일거리(`job_*`) · 예적금(`dep_open` `dep_close` `park_move`) · 주간 경제 소식. 버전이 다르면 `error{code: "bad_version", server_v}` 로 서버 버전을 알려 준다.
+v12 → v13: 가방 30칸(퀵 5 + 가방 30, 옛 저장의 칸 자리는 그대로) · 버린 물건이 바닥에 남음(`inv_discard` → `drop{kind: "item", n}` · 일부만 줍기 `collect_result.n left`, 에러 `cant_drop_here` `ground_full`) · 10개씩 사기와 식당 창고(`shop_result.stored`, `rest.store`, 에러 `storage_full`) · 식재료 배달(`deliv_order` → `deliv_ok`, 마을톡 `sys:shop`, `couriers`, `deliv_done`, 에러 `delivery_busy`) · 물 밑 물고기 그림자와 겨눠 던지기(`fishes`, `fish_cast.x z`, `fish_started.fid size ms bx bz`, `fish_found`, 에러 `bad_cast`). 저장 파일은 schema 6 그대로 (world 에 `ground groundSeq deliveries delivSeq`, `restaurant.storage`).
+v13 → v14: 닉네임 — `set_name{rid name}` → `name{rid? id name}`(방 전체), `create`/`join` 의 `name?`(처음 화면 설정에 적어 둔 이름), 플레이어 정보·프로필의 `name`(빈 문자열 = 자리 기본 이름), 에러 `bad_name`. 저장 파일은 schema 6 그대로 (프로필에 `name` 이 없으면 빈 이름).
+v14 → v15: 휴대폰 연출 — `phone{on}`(꺼내 듦/넣음 → 플레이어 정보 · 스냅샷의 `phone`), `phone_tap`(들고 있을 때만, 120ms에 한 번 → 다른 사람에게 `act{kind: "phone_tap"}`). 끊기면 `phone` 은 false. 저장 파일은 그대로.
+v15 → v16: 휴대폰 앱 · 놀거리 — 도감 · 업적 · 칭호(`profile` 의 `stats dex ach title birthday`, 새로 이루면 `ach{ids}`, `set_title` → `title{id title}` 방 전체, 플레이어 정보의 `title`), 생일(`set_birthday`, 그날 주민 축하 마을톡 · 선물, 주민 생일은 `npcs.json` 의 `birthday` · `talk_open.bday`), 날씨 · 달력(`cal_info` → `cal`), 친구 집 놀러 가기(`home_visit` → `home` · 주인에게 `visit`), 방명록(`home.gb`, `gb_write` → `gb`), 마을톡 사진(`photo_up` → `photo_sent` · 메시지의 `ph`(글은 한마디, 없으면 "📷 사진"), `photo_get` → `photo`, 사진만 큰 메시지 허용). 에러 `bad_title bad_birthday not_visitable bad_photo no_photo`. 저장 파일은 schema 6 그대로 (프로필에 `stats dex ach title birthday bdayYear visitDay`, world 에 `guestbooks photos photoSeq notedDay` — 없으면 빈 값).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |
 |---|---|---|
-| `create` | `v uid` | 방 생성 + 입장. `uid`는 기기에 저장된 영구 ID(8~64자 `[A-Za-z0-9_-]`) |
-| `join` | `v uid code` | 방 코드(대소문자 무관)로 입장. 같은 `uid`는 쓰던 자리·인벤토리를 되찾는다 |
+| `create` | `v uid name?` | 방 생성 + 입장. `uid`는 기기에 저장된 영구 ID(8~64자 `[A-Za-z0-9_-]`). v14 `name` = 쓸 닉네임 (비었거나 쓸 수 없으면 무시) |
+| `join` | `v uid code name?` | 방 코드(대소문자 무관)로 입장. 같은 `uid`는 쓰던 자리·인벤토리를 되찾는다. `name` 은 `create` 와 같다 |
 | `resume` | `v`, `token` | 끊긴 자리로 복귀 (유예 시간 안에서만) |
 | `move` | `x y z yaw vx vz` | 내 위치 요청 (m, rad). 서버가 속도·경계 검사 |
 | `ping` | `c` | 클라이언트 시각. `pong`으로 RTT·서버 시계 추정 |
-| `fish_cast` | `rid spot` | 낚시터에 던지기 요청. **낚싯대를 손에 들고** 수역 `cast_range` 안에 있어야 한다 |
+| `fish_cast` | `rid spot x? z?` | 낚시터에 던지기 요청. **낚싯대를 손에 들고** 수역 `cast_range` 안에 있어야 한다. v13: `x z` = 찌를 떨어뜨릴 자리(물 안, 캐릭터에서 7m 안 — 아니면 `bad_cast`). 주면 그 둘레의 보이는 물고기가 알아채고 다가온다 |
 | `fish_hook` | `rid reaction` | 챔질 요청. `reaction` = 입질 연출이 보인 뒤 버튼을 누르기까지 걸린 ms (입질 전이면 0) |
 | `fish_reel` | `rid taps[]` | 끌어올리기 연타 (v11). `taps` = 서버 `fish_reel` 을 받아 연타 화면이 뜬 뒤 누른 시각들(ms). 필요한 수를 채우면 바로, 못 채우면 시간이 다 됐을 때 보낸다 |
 | `fish_cancel` | | 낚시 취소 |
@@ -29,7 +34,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `msg_read` | `th` | 그 대화방을 다 읽었다 (답 없음) |
 | `equip` | `slot` | 손에 들 퀵슬롯 번호(0~4, `-1` = 빈손). 거절되면 `inventory`로 서버 값을 다시 보낸다 |
 | `inv_move` | `rid from to` | 칸 옮기기. 같은 아이템이면 쌓을 수 있는 만큼 합치고, 아니면 맞바꾼다 |
-| `inv_discard` | `rid slot n` | 칸에서 n개 버리기(물고기는 놓아주기). 도구는 `cant_discard` |
+| `inv_discard` | `rid slot n` | 칸에서 n개 내려놓기. v13: 사라지지 않고 발밑에 `drop{kind: "item"}` 으로 남는다 (집·상점 안은 `cant_drop_here`, 마을 바닥에 150묶음이 넘으면 `ground_full`). 도구는 `cant_discard` |
 | `chop` | `rid tree` | 도끼질 요청. **도끼를 손에 들고** 다 자란 나무에서 `chop_range` 안 |
 | `talk` | `rid npc` | 주민에게 말 걸기. `talk_range` 안, 다른 사람과 이야기 중이 아니어야 한다 |
 | `talk_end` | | 대화 끝 (주민이 다시 걷는다) |
@@ -39,12 +44,13 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `shop_enter` | `rid` | 상점 문(`door`)에서 `enter_range` 안이면 서버가 실내로 옮긴다 → `shop_door` |
 | `shop_exit` | `rid` | 실내 출구(`exit`)에서 `exit_range` 안이면 밖으로 옮긴다 → `shop_door` |
 | `shop_sell` | `rid slot n` | 칸의 물건 n개 팔기 (실내에서만, 도구는 `cant_sell`) |
-| `shop_buy` | `rid item n` | 지금 단계까지 열린 진열품 n개 사기 (실내에서만) |
+| `shop_buy` | `rid item n` | 지금 단계까지 열린 진열품 n개(1~99) 사기 (실내에서만). v13: 식재료는 가방 대신 식당 창고로 (`shop_result.stored`, 재료마다 999개까지 — 넘으면 `storage_full`) |
+| `deliv_order` | `rid item n` | v13 식재료 배달 주문 (어디서나). 지금 상점에서 파는 식재료만(`not_for_sale`), n 1~99, 한 사람이 동시에 3건까지(`delivery_busy`). 값 + 배달비(3,000솔)를 바로 낸다. 아직 상점을 떠나지 않은 내 상자가 있으면 거기에 같이 담고 배달비는 받지 않는다(묶음 배달) |
 | `place` | `rid slot x z rot` | 가구 설치. 서버가 0.5m 격자로 맞추고, 3m 안·물/나무/다른 가구/상점 앞이 아닌 곳만 |
 | `pickup` | `rid id` | 내가 놓은 가구를 2.5m 안에서 줍기 |
 | `wear` | `rid slot` | 칸의 옷 입기 (입던 옷은 그 칸으로) |
 | `unwear` | `rid part` | `hat` / `top` 벗기 (가방에 빈자리가 있어야) |
-| `collect` | `rid id` | 바닥의 선물 풍선·별 조각 줍기 (`collect_range` 2m 안, 가방에 빈자리) |
+| `collect` | `rid id` | 바닥의 선물 풍선·별 조각·채집물·내려놓은 물건 줍기 (`collect_range` 2m 안, 가방에 빈자리). v13: 내려놓은 묶음은 들어가는 만큼만 줍고 나머지는 남는다 |
 | `shop_sell`/`shop_buy` + `at: "merchant"` | | 떠돌이 상인과 거래: 상인 곁(대화 거리 +1m)에서만. 상인이 찾는 물건만 2배 값에 사고(그 밖은 `not_wanted`), 보따리 물건(`stock`)을 판다. 상점 포인트는 쌓이지 않는다 |
 | `shop_buy` + `at: "airport"` | | 공항 기념품 사기 (v6): 조종사 곁(`shop_range` 3.2m +0.5)에서만, `airport.json` 의 `stock` 만. 팔기는 `cant_sell`. 상점 포인트는 쌓이지 않는다 |
 | `plant` | `rid x z` | 손에 든 씨앗 심기 (v6). 서버가 0.5m 격자로 맞추고, `plant_range` 안·섬 풀밭·길/물/건물/집 아님·나무 2.2m(꽃은 1m)·꽃 0.85m·가구 0.9m 떨어진 곳만. 나무 씨앗 → `tree`, 꽃씨 → `flower` |
@@ -77,6 +83,16 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `home_move` | `rid id x z rot` | 집 가구 옮기기·돌리기 (같은 검사) → `home_f` |
 | `home_pickup` | `rid id` | 집 가구를 가방에 넣기 (`inventory_full`) → `home_f`, `inventory` |
 | `set_face` | `rid face{}` | 얼굴 바꾸기 (v7). 마을 거울(`village_layout.json` 의 `mirrors`)이나 놓인 거울 가구(`items.json` 의 `mirror: true`) 2.2m(+0.5) 안에서만, 상점 안은 안 됨(`not_near_mirror`). `face` 는 바꿀 항목만: `eyes eye_color nose mouth skin hair hair_color` → `face_parts.json` 의 id. 모르는 항목·id·빈 요청은 `bad_face` |
+| `set_name` | `rid name` | 닉네임 바꾸기 (v14, 어디서나). 앞뒤 공백을 지우고 띄어쓰기는 한 칸으로, 글자·숫자·띄어쓰기·`_ - .` 만 10자까지 — 아니면 `bad_name`. 빈 문자열 = 자리 기본 이름으로 |
+| `phone` | `on` | 휴대폰을 꺼내 들었다(true) · 넣었다(false) (v15, 연출용 — 답 없음). 다른 사람 화면에서 `players[]`/`snap.p[]` 의 `phone` 으로 들고 보는 모습 |
+| `phone_tap` | | 휴대폰 화면을 눌렀다 (v15, 들고 있을 때만, 120ms에 한 번). 다른 사람에게 `act{id, kind: "phone_tap"}` |
+| `set_title` | `rid id` | 칭호 달기 (v16): 이룬 업적 id 만, `""` = 떼기. 아니면 `bad_title`. 결과 `title{rid, id, title}` · 다른 사람에게 `title{id, title}` |
+| `set_birthday` | `rid birthday{m, d}` | 생일 정하기 (v16). 없는 날짜는 `bad_birthday`. 오늘로 정하면 바로 축하 (한 해에 한 번) |
+| `cal_info` | | 날씨 · 달력 (v16, 답 `cal`) |
+| `home_visit` | `rid unit` | 친구 집에 바로 놀러 가기 (v16): 주인이 있는 집만(`not_visitable`), 낚시 · 배달 중엔 안 됨. 답 `home`, 주인에게 `visit{id, unit}` + 마을톡 |
+| `gb_write` | `rid tx` | 방명록 쓰기 (v16): 주인이 있는 집 안에서만(`not_home`), 100자, 8초에 한 번(`too_fast`). 그 집 안 사람 모두에게 `gb` |
+| `photo_up` | `rid th img tx?` | 사진 보내기 (v16): `th` = `pl:<자리>`, `img` = base64 JPEG (96KB 이하, `bad_photo`), 4초에 한 번. 두 사람 대화방에 `msg{m: {…, ph}}`, 보낸 사람에게 `photo_sent{rid, id, th}`. 이 메시지만 `maxMessageBytes` 를 넘어도 된다 |
+| `photo_get` | `id` | 마을톡 사진 받기 (v16): 답 `photo{id, img}` (없으면 `no_photo`) |
 
 ## 서버 → 클라이언트
 | t | 필드 | 설명 |
@@ -118,7 +134,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `home_f` | `rid unit f[]` | 그 집 가구 목록 (v10, 요청한 사람에게는 `rid` 와 함께, 같은 집 안의 다른 사람에게도) |
 | `inventory` | `slots[] quick cap held` | 내 인벤토리 전체. `slots` 길이 = `quick + cap`, 앞 `quick` 칸이 퀵슬롯, 빈 칸은 `null`. `held` = 손에 든 퀵슬롯(-1 = 빈손) |
 | `profile` | `sol quests[] friends{} outfit emotes face` | 내 솔(화폐)·받은 부탁·주민 친밀도·입은 옷·감정표현(`{known[], quick[]}`, v6)·얼굴(v7). 바뀔 때마다 나에게만 |
-| `fish_started` | `rid spot zone coop shadow` | 던지기 수락. v11: `shadow` = 물 밑에서 다가오는 그림자 크기 (희귀도 흔함 0.75 · 보통 1.0 · 희귀 1.35 × 몸 S 0.85 · M 1 · L 1.2 — 어떤 물고기인지는 모른다). v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
+| `fish_started` | `rid spot zone coop shadow fid? size? ms? bx? bz?` | 던지기 수락. v13 겨눠 던지기: `fid` = 찌를 알아챈 물고기(`fishes` 의 id, 없으면 "" 그리고 `shadow` 0 → 나중에 `fish_found`), `ms` = 그 물고기가 찌 앞까지 오는 시간, `bx bz` = 찌 자리. v11: `shadow` = 물 밑에서 다가오는 그림자 크기 (희귀도 흔함 0.75 · 보통 1.0 · 희귀 1.35 × 몸 S 0.85 · M 1 · L 1.2 — 어떤 물고기인지는 모른다). v9: `zone` = `shallow`/`deep`(찌가 떨어진 물, 얕으면 작은 물고기만·깊으면 큰 물고기 1.6배), `coop` = 9m 안에서 같이 낚시 중(기다림 ×0.7 · 희귀 ×1.35) |
 | `fish_nibble` | `rid` | 가짜 입질 (0~3번). 아직 당기면 안 된다 |
 | `fish_bite` | `rid windowMs` | 진짜 입질. 물고기 종류는 알리지 않는다 |
 | `fish_reel` | `rid taps ms` | 챔질 성공 → 끌어올리기 (v11): `ms` 안에 `taps` 번 연타해야 한다 |
@@ -136,6 +152,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `plant_result` | `rid id kind x z` | 내가 심었다 (`kind` = `tree`/`flower`) |
 | `pick_result` | `rid id item` | 내가 꽃을 땄다 |
 | `face` | `rid? id face{}` | 누군가 얼굴을 바꿨다 (v7, 방 전체 — 바꾼 사람에게는 `rid` 와 함께). `face` = 일곱 항목 전부 |
+| `name` | `rid? id name` | 누군가 닉네임을 바꿨다 (v14, 방 전체 — 바꾼 사람에게는 `rid` 와 함께). 이어받은 자리로 `join` 하며 이름이 바뀌어도 다른 사람에게 온다 |
 | `museum` | `fish{} id by` | 박물관 기증 목록이 바뀌었다 (방 전체, v6). `fish` = 물고기 id → 기증한 사람 자리 번호 |
 | `donate_result` | `rid fish reward sol count gifts[]` | 내가 기증했다: 감사 `reward`솔, 지금까지 `count`종, 문턱을 넘어 받은 기념품 `gifts` |
 | `talk_closed` | `npc` | 서버가 대화를 끝냄 (멀어짐·시간 초과) |
@@ -149,17 +166,24 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 | `unplaced` | `rid id` | 가구가 치워졌다 (방 전체) |
 | `lightning` | `st power` | 번개 (뇌우일 때, 방의 모두에게 같은 순간). `power` 0.6~1 |
 | `ev` | `day list[]` | 지금 열린 이벤트가 바뀌었다 (방 전체). `list[]`: `{id, wanted?, mult?, stock?}` — `wanted` 오늘 2배로 사 주는 물건, `stock` 떠돌이 상인의 보따리 |
-| `drop` | `d` | 바닥에 선물·별 조각이 떨어졌다 (방 전체). `d` = `{id, kind, x, z, item?}` (`kind` = `gift`/`star`, 선물 속 `item`은 주울 때까지 비밀) |
+| `drop` | `d by?` | 바닥에 선물·별 조각이 떨어졌다 (방 전체). `d` = `{id, kind, x, z, item?, n?}` (`kind` = `gift`/`star`/`forage`/`item`, 선물 속 `item`은 주울 때까지 비밀). v13 `item` = 사람이 내려놓은 묶음(`n`개, id `g…`) — 같은 id 가 다시 오면 개수가 바뀐 것 |
+| `deliv_ok` | `rid id item n amount fee eta sol merged items orders` | v13 배달 주문 수락. `eta` = 상자가 출발할 때까지 초 (20~30), `merged` = 기존 상자에 같이 담김(`fee` 0), `items` = 상자 안 `[{item, n}]`(같은 재료는 합침), `orders` = 상자에 담긴 건수 |
+| `couriers` | `c[]` | v13 길 위의 배달 알바들 `{id, x, z, yaw, ph, to, item, k}` (`item` = 상자의 첫 재료, `k` = 재료 가짓수) (`ph` = `walk` 뛰어가는 중 · `hand` 건네는 중 · `back` 돌아가는 중, `to` = 받는 사람 자리). 움직이는 동안 주민 틱마다 |
+| `deliv_done` | `id items[]` | v13 배달 상자를 받았다. `items` = `[{item, n, where}]`, `where` = `bag` / `storage`(가방이 가득 · 집이나 상점 안에 90초 넘게 · 접속 안 함) |
+| `fishes` | `spot f[]` | v13 그 낚시터 물 밑 물고기 그림자들 `{id, x, z, yaw, s, r, st, o}` (`s` = 몸 크기 S·M·L, `r` = 희귀도 — 어떤 물고기인지는 모른다, `st` = `roam`/`engaged`/`flee`, `o` = 낚는 사람 자리). 사람이 28m 안에 있는 호수 · 바닷가에 선 사람 앞바다만 |
+| `fish_found` | `rid fid shadow size ms` | v13 겨눈 찌 둘레에 없던 물고기가 지나가다 알아챘다 (그 물고기가 다가와 문다) |
 | `drop_gone` | `id by` | 주웠거나(`by` = 주운 사람) 이벤트가 끝나 사라졌다(`by` = 0) |
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지).
+`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.
 
-에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
+v16 서버 → 클라이언트: `ach{ids}`(새로 이룬 업적) · `title{rid?, id, title}` · `cal{today, days[{day, y, m, d, wd, season, w[8], ev, meteor, npc[], pl[]}], econ}`(오늘부터 이레, `w` = 0 · 3 · … · 21시 칸 날씨) · `gb{rid?, unit, list[{by, tx, at}]}` · `visit{id, unit}` · `photo_sent{rid, id, th}` · `photo{id, img}`. `profile` 의 v16 값: `stats`(업적 판정 값 — `data/achievements/achievements.json` 의 `stats`), `dex{fish{id: 낚은 수}, items[]}`, `ach[{id, at}]`, `title`, `birthday{m, d}|null`.
+
+에러 코드: `bad_version bad_message not_in_room already_in_room room_not_found room_full resume_failed rate_limited not_at_spot already_fishing not_fishing inventory_full bad_item cant_discard no_tool not_near_tree tree_not_ready too_fast not_near_npc npc_busy not_talking no_offer bad_quest quest_not_ready not_near_door not_in_shop not_for_sale not_enough_sol cant_sell bad_place place_limit not_owner not_wearable no_drop merchant_away not_wanted not_seed bad_plant plant_limit no_flower unknown_emote not_near_keeper already_donated not_fish bad_topic not_near_mirror bad_face bad_name market_closed bad_order not_enough_shares bad_unit unit_taken not_your_unit loan_limit bad_loan rest_closed rest_busy not_at_restaurant order_gone missing_ingredient cook_too_fast not_staff step_taken not_at_civic not_eligible bad_program no_partner already_married not_in_shallow bad_dig not_at_lobby not_home not_editable home_full cant_drop_here ground_full delivery_busy storage_full bad_cast` (앱 안 테스트 서버는 지원하지 않는 요청에 `test_server`)
 
 ## 입장 정보 (`welcome`)
 - `inv` = `inventory`, `prof` = `profile` 과 같은 모양.
@@ -203,6 +227,9 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - 서버는 `reaction`이 허용 창(`hook_window_ms`, 450~700ms) 안인지, 사람이 낼 수 있는 값(≥80ms)인지, 서버가 잰 경과 시간과 모순되지 않는지만 본다. 네트워크 지연은 판정에 들어가지 않는다.
 - 입질 전에 당기면 `early`, 창을 넘기면 `late`, 아예 반응이 없으면 `escaped`, 캐스팅 지점에서 1.5m 넘게 움직이면 `moved`.
 - 같은 `rid`는 한 번만 처리한다.
+- (v13 `server/src/swimmers.js`) 호수마다 물고기 6마리가 늘 헤엄치고(0.25~0.55m/s, 물가 0.9m 안쪽), 바다는 바닷가에 선 사람마다 앞바다(해안선 1.5~4.5m 바깥)에 4마리. 2.5~4분마다 지금 시각·날씨·계절에 맞는 물고기로 바뀐다(얕은 물에 생기면 작은 물고기, 낚시 대회면 희귀 가중치).
+- 겨눠 던지기: 찌 둘레 2.6m 안의 물고기 가운데 **찌가 머리 앞쪽에 떨어진** 것이 먼저 알아챈다 (옆이면 +0.8m, 뒤면 +2.5m 만큼 멀게 친다). 알아챈 물고기는 몸을 돌려 찌 앞(머리가 찌를 향하게)까지 헤엄쳐 오고(0.8m/s, 멀면 3.5초 안에 오도록 빠르게), 잠깐 살핀 뒤 톡 2~3번 → 진짜 입질. 그 물고기가 곧 낚일 물고기다. 아무도 없으면 기다리는 1초마다 알아채는 거리가 1.5m 넓어진다. 낚으면 사라지고 20초 뒤 다시 채워진다. 놓치면 휙 달아나 8초 동안 찌를 무시한다.
+- (v13 클라이언트) `FishSchool` 이 그림자를 그린다: 모양은 같고 크기 S 0.75 · M 1 · L 1.35, 아우라는 보통 하늘빛 · 희귀 금빛 + 반짝임. 낚시 어시스트: 던지면 5.5m 안의 물고기 가운데 앞쪽 · 가까운 것을 골라 캐릭터를 그쪽으로 돌리고 그 머리 앞 0.85m 에 찌를 던진다. 찌가 떨어지면 카메라가 캐릭터와 찌를 함께 비춘다(세로 화면에 둘 다 들어오게 물러남).
 
 ## 나무 (서버 판정)
 - 다 자란 나무(`grown`)를 도끼로 찍을 때마다 `chop_drops` 가중치로 목재 1개(목재 / 부드러운 목재 / 단단한 목재). 3번째에 쓰러져 그루터기(`stump`).
@@ -301,10 +328,24 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
   - 은행: 주간 정산 때 이자를 냈으면 · 못 내서 원금에 더했으면 · 월세 수입 · 청년 월세 지원금을 알린다.
   - `MESSENGER_CHECK_MS` · `MESSENGER_REPLY_SCALE` 은 테스트용.
 
+## 바닥에 내려놓기 · 식당 창고 · 식재료 배달 (서버 판정, v13)
+- 내려놓기: 발밑에서 시작해 이미 놓인 물건과 0.42m 이상 떨어지게 해바라기 씨 배치로 놓는다(줍기 거리 안). 누구나 주울 수 있고 저장된다(마을에 150묶음까지). 클라이언트는 아이템 모형을 손바닥만 하게(0.42m) 줄여 바닥에 두고, 가까이 가면 물건 위에 이름표("목재 ×3")를 띄운다.
+- 식당 창고(`restaurant.storage`): 상점에서 산 식재료와 받지 못한 배달이 들어간다. 식당은 손님 주문을 받을 때 창고 + 직원 가방을 함께 세고, 요리를 낼 때 창고 재료부터 쓴다.
+- 묶음 배달: 출발 전 상자(`wait`)에 다음 주문을 같이 담는다 — 최대 3건 · 배달비는 상자당 한 번 · 같은 재료는 합친다. 막 떠나려던 참이면 3초(`DELIVERY_TIME_SCALE` 배) 더 기다린다. 출발 · 완료 마을톡은 상자마다 한 번("주문하신 달걀 10개, 쌀 한 봉 2개, 두부 3개, 배달 가고 있습니다~"). 가방에 다 안 들어가면 들어가는 재료만 건네고 나머지는 식당 창고로, 마을톡 한 통에 함께 적는다.
+- 배달 (`data/shop/shop.json` 의 `delivery`, `server/src/delivery.js`): 주문 → 20~30초(`DELIVERY_TIME_SCALE` 배) 뒤 마을톡 `sys:shop` 에 "주문하신 ○○ n개, 배달 가고 있습니다~" → 배달 알바(`courier`)가 상점 문 앞에서 3.4m/s 로 주문한 사람에게 곧장 뛰어가 1.5m 안에서 건넨다(가방, 안 들어가면 식당 창고) → "배달 완료!" → 상점으로 돌아간다. 주문한 사람이 집·상점 안이거나 접속을 끊었으면 그 자리에서 90초 기다리다 식당 창고에 넣고 알린다. 기다리는 주문은 저장된다(다시 켜면 바로 출발하거나 창고로).
+
+## 도감 · 업적 · 칭호 · 생일 · 달력 · 방명록 · 사진 (서버 판정, v16)
+- 도감: 낚은 물고기는 낚을 때(낚싯대 · 뜰채) 센다. 가구 · 옷은 프로필을 보낼 때마다 가방 · 입은 옷 · 내가 마을에 놓은 가구를 훑어 한 번이라도 있었던 것을 올린다.
+- 업적(`server/src/progress.js`): 프로필을 보낼 때마다 판정 값(stats + 도감 크기 · 친밀도 30 이상 주민 수 · 지갑 · 가진 집 · 내가 기증한 물고기)이 목표를 넘은 업적을 적고 `ach` 로 알린다. 칭호는 이룬 업적의 것만 단다.
+- 생일: 플레이어 생일이 되면(접속할 때 · 날짜가 바뀔 때) 친밀도 `birthday.min_friendship`(4) 이상인 주민이 축하 마을톡과 선물(주민 `gifts` 중 하나, 가방이 차면 못 받음)을 보내고, 같은 마을 친구들 마을 소식 방에 알린다. 한 해에 한 번(`bdayYear`) — 생일을 바꿔도 다시 받지 못한다. 주민 생일에는 모두의 마을 소식 방에 알리고(하루 한 번, `notedDay`), 그날 처음 말을 걸면 친밀도 +`npc_talk_bonus`(3).
+- 달력: 날씨(`weatherAt`)와 하루 이벤트(`planDay`)는 마을 시드와 날짜로 정해지는 값이라 앞날을 그대로 계산해 보낸다 (예보가 틀리지 않는다). 유성우는 "그날 밤 맑으면".
+- 놀러 가기 · 방명록: 같은 집은 하루 한 번만 업적에 센다(`visitDay`). 방명록은 집마다 최근 40개.
+- 사진(`server/src/photos.js`): `<saveDir>/photos/<방 코드>/<id>.jpg`, 방마다 최근 80장(넘치면 오래된 것부터 지움). 앨범(찍은 사진)은 기기에만 있고 보낼 때 그 한 장만 올린다.
+
 ## 앱 안 테스트 서버 (v10)
 - 서버 주소 `test://local` = 클라이언트 안의 `LocalTestServer` (127.0.0.1 의 빈 포트, 18680~). 같은 메시지 형식으로 답한다.
 - 입장 정보는 `data/testserver/welcome.json` (`node server/tools/make_test_snapshot.js` 로 진짜 서버에서 찍음) + 저장된 가방·솔·위치.
-- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_reel` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`), v11: 주민 마을톡(`msg_send npc:*` 답장, 친한 주민이 30초마다 먼저 연락 — 친구 방은 `test_server`) · 가까이 서 있는 친한 주민의 `npc_greet`. 나무·꽃은 게임 1분 = 실제 6초로 자란다. 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 …)은 `error{code: "test_server"}`.
+- 처리: `ping` `create/join/resume` `move` `equip` `inv_move` `inv_discard` `talk` `talk_topic` `talk_end` `chop`(그루터기 → 다시 자람) `fish_cast` `fish_hook` `fish_reel` `fish_cancel` `collect`(나무 곁에 채집물이 돋음) `plant` `pick` `wear` `unwear` `set_face` `shop_enter/exit` `shop_buy/sell` `place` `pickup` `home_*` (어느 집이든 `edit: true`), v13: `inv_discard`(발밑에 남음, 다시 줍기) · 겨눠 던지기는 물고기 그림자가 없어 옛 방식 · `deliv_order` 는 `test_server`, v11: 주민 마을톡(`msg_send npc:*` 답장, 친한 주민이 30초마다 먼저 연락 — 친구 방은 `test_server`) · 가까이 서 있는 친한 주민의 `npc_greet`. 나무·꽃은 게임 1분 = 실제 6초로 자란다. v16: `cal_info`(늘 맑음 · 이벤트 없음 · 주민 생일만). 그 밖에 rid 가 있는 요청(식당·증권·은행·동사무소·혼인·뜰채·삽 · 칭호 · 생일 · 방명록 · 놀러 가기 · 사진 …)은 `error{code: "test_server"}`.
 
 ## 얼굴 · 거울 (서버 판정, v7)
 - 얼굴은 프로필의 `face` (`eyes eye_color nose mouth skin hair hair_color`, `data/looks/face_parts.json` 의 id). 새 프로필·모르는 id 는 자리 기본 얼굴(`defaults[slot-1]`).
@@ -312,7 +353,7 @@ v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으
 - 비용 없음. 바꾸면 저장하고 방 전체에 `face` 로 알린다.
 
 ## 인벤토리
-퀵슬롯 5칸 + 가방 20칸. 새 아이템은 같은 아이템 칸 → 빈 가방 칸 → 빈 퀵슬롯 순으로 들어간다. 칸당 개수: 물고기 99, 목재 30, 도구 1.
+퀵슬롯 5칸 + 가방 30칸 (v13, 이전 20칸 — 저장된 칸 자리는 그대로 두고 늘어난 칸은 빈다). 새 아이템은 같은 아이템 칸 → 빈 가방 칸 → 빈 퀵슬롯 순으로 들어간다. 칸당 개수: 물고기 99, 목재 30, 도구 1.
 처음 들어오면 퀵슬롯 1번에 낚싯대, 2번에 도끼가 있고 1번을 손에 들고 있다(솔은 `START_SOL`, 기본 0). 도구는 버릴 수 없다.
 아이템 종류: 도구, 재료(목재 6종), 소지품(부탁·선물용 19종 + v6 씨앗 4 · 자작나무 씨앗 · 꽃 4 · 엽서), 가구(20종 + v6 지구본·비행기 모형·여행 가방·어항·월척 트로피·황금 물고기상), 옷(모자 8·상의 7, v6 조종사 모자), 물고기(31종). 나무 종류(둥근·소나무·자작나무)마다 나오는 목재·소지품이 다르다.
 물고기 칸이 가득 차면 던지기 전에 `inventory_full`로 거절하고, 던진 뒤 칸이 찼다면 `fish_result(inventory_full)`로 놓친다.

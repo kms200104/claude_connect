@@ -1,7 +1,9 @@
 class_name VillageDecor
 extends Node3D
 ## 마을 꾸밈: 이끼 낀 바위, 나무 울타리, 꽃밭·들꽃, 풀 덤불, 호수 선착장, 바닷가 야자수·조개·불가사리. 배치는 data/world/village_layout.json.
-## 반복되는 것(풀·꽃·울타리)은 MultiMesh 한 덩어리씩, 바위는 모두 합쳐 메시 하나로 그린다 (전부 드로우콜 9개).
+## 반복되는 것(풀·꽃·울타리·야자수·조개)은 MultiMesh 로, 바위는 모두 합쳐 메시 하나로 그린다.
+## MultiMesh 는 CHUNK_SIZE 칸으로 나눠 칸마다 그리는 거리를 정한다 — 마을 전체를 한 덩어리로 그리면 화면 밖 풀까지
+## 매 프레임 그려서 삼각형이 40만 개를 넘는다 (칸으로 나누면 카메라에 보이는 칸만, 가까운 칸만 그린다).
 ## 큰 바위·울타리·선착장은 충돌체를 둔다. 풀·꽃은 길·호수·집·상점·나무 자리를 피해서 흩뿌린다 (시드 고정, 매번 같은 자리).
 
 ## 정점 색을 쓰는 흰 툰 머티리얼.
@@ -18,6 +20,11 @@ const ROCK: Color = Color("#A7A9A6")
 const MOSS: Color = Color("#7FAE5A")
 const PETALS: Array[Color] = [Color("#F6A6B8"), Color("#FFD866"), Color("#9EC1F2"), Color("#F4F1EA")]
 const FENCE_SPACING: float = 2.0
+## MultiMesh 를 나누는 칸 크기 (m).
+const CHUNK_SIZE: float = 12.0
+## 칸 가운데까지 이 거리(m)보다 멀면 그리지 않는다. 게임 카메라(7.5m · 48°)는 캐릭터 앞 약 13m, 옆 약 9m 까지 보인다.
+const DRAW_NEAR: float = 30.0
+const DRAW_FAR: float = 60.0
 const DOCK_TOP: float = 0.08
 
 var _layout: VillageLayout = null
@@ -96,8 +103,8 @@ func _build_fences() -> void:
 	var rail_st: SurfaceTool = ClayMesh.begin()
 	for y: float in [0.4, 0.74]:
 		ClayMesh.add_rounded_box(rail_st, Vector3(0.0, y, 0.0), Vector3(1.0, 0.13, 0.08), 0.3, ClayMesh.vertical_gradient(WOOD.darkened(0.1), WOOD_LIGHT, 1.0), Basis(), 8, 5)
-	_add_multimesh("FencePosts", ClayMesh.commit(post_st), posts)
-	_add_multimesh("FenceRails", ClayMesh.commit(rail_st), rails)
+	_add_multimesh("FencePosts", ClayMesh.commit(post_st), posts, DRAW_FAR)
+	_add_multimesh("FenceRails", ClayMesh.commit(rail_st), rails, DRAW_FAR)
 
 
 ## 호수 선착장: 가로 판자 + 양옆 들보 + 모서리 말뚝. 위를 걸을 수 있다 (FishingSpot 이 이 자리만 물 막이를 비운다).
@@ -149,7 +156,7 @@ func _build_flowers() -> void:
 		var xforms: Array[Transform3D] = []
 		for x: Variant in by_color[i]:
 			xforms.append(x)
-		_add_multimesh("Flowers_%d" % i, _flower_mesh(PETALS[i]), xforms)
+		_add_multimesh("Flowers_%d" % i, _flower_mesh(PETALS[i]), xforms, DRAW_NEAR)
 
 
 func _flower_xform(p: Vector2) -> Transform3D:
@@ -195,7 +202,7 @@ func _build_grass() -> void:
 		var a: float = TAU * float(i) / 5.0 + 0.3
 		var lean: Vector3 = Vector3(cos(a), 0.0, sin(a)) * 0.09
 		ClayMesh.add_rod(st, lean * 0.3, lean + Vector3(0.0, 0.22 + 0.05 * float(i % 3), 0.0), 0.03, 0.004, blade, 3)
-	_add_multimesh("Grass", ClayMesh.commit(st), xforms)
+	_add_multimesh("Grass", ClayMesh.commit(st), xforms, DRAW_NEAR)
 
 
 func _random_point() -> Vector2:
@@ -295,9 +302,9 @@ func _build_beach() -> void:
 			stars.append(xf)
 		else:
 			shells.append(xf)
-	_add_multimesh("Palms", _palm_mesh(), palms)
-	_add_multimesh("Shells", _shell_mesh(), shells)
-	_add_multimesh("Starfish", _starfish_mesh(), stars)
+	_add_multimesh("Palms", _palm_mesh(), palms, DRAW_FAR)
+	_add_multimesh("Shells", _shell_mesh(), shells, DRAW_NEAR)
+	_add_multimesh("Starfish", _starfish_mesh(), stars, DRAW_NEAR)
 
 
 func _near_runway_or_building(p: Vector2, pad: float) -> bool:
@@ -354,21 +361,33 @@ func _add_mesh_instance(node_name: String, mesh: Mesh) -> void:
 	add_child(mi)
 
 
-func _add_multimesh(node_name: String, mesh: Mesh, xforms: Array[Transform3D]) -> void:
-	if xforms.is_empty():
-		return
-	var mm: MultiMesh = MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = mesh
-	mm.instance_count = xforms.size()
-	for i: int in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-	var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-	mmi.name = node_name
-	mmi.multimesh = mm
-	mmi.material_override = clay_material
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mmi)
+## 같은 메시를 CHUNK_SIZE 칸마다 MultiMesh 하나씩. 노드를 칸 가운데에 두어(거리 계산 기준) draw_distance 밖의 칸은 그리지 않는다.
+func _add_multimesh(node_name: String, mesh: Mesh, xforms: Array[Transform3D], draw_distance: float) -> void:
+	var cells: Dictionary[Vector2i, Array] = {}
+	for xf: Transform3D in xforms:
+		var cell: Vector2i = Vector2i(floori(xf.origin.x / CHUNK_SIZE), floori(xf.origin.z / CHUNK_SIZE))
+		if not cells.has(cell):
+			cells[cell] = []
+		cells[cell].append(xf)
+	for cell: Vector2i in cells:
+		var list: Array = cells[cell]
+		var center: Vector3 = Vector3((float(cell.x) + 0.5) * CHUNK_SIZE, 0.0, (float(cell.y) + 0.5) * CHUNK_SIZE)
+		var mm: MultiMesh = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i: int in list.size():
+			var xf: Transform3D = list[i]
+			mm.set_instance_transform(i, Transform3D(xf.basis, xf.origin - center))
+		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
+		mmi.name = "%s_%d_%d" % [node_name, cell.x, cell.y]
+		mmi.multimesh = mm
+		mmi.material_override = clay_material
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.position = center
+		mmi.visibility_range_end = draw_distance
+		mmi.visibility_range_end_margin = 2.0
+		add_child(mmi)
 
 
 func _add_collider(center: Vector3, size: Vector3, yaw: float) -> void:

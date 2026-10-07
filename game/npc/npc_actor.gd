@@ -35,9 +35,20 @@ var _has_state: bool = false
 var _mark_time: float = 0.0
 
 
+## 장면에 있는 주민(가게 사람 포함) 가운데 id 가 같은 것 (없으면 null).
+static func find(tree: SceneTree, npc_id: String) -> NpcActor:
+	for node: Node in tree.get_nodes_in_group(&"npc_actors"):
+		var actor: NpcActor = node as NpcActor
+		if actor != null and actor.info != null and actor.info.id == npc_id and actor.is_inside_tree():
+			return actor
+	return null
+
+
 func setup(npc: NpcInfo) -> void:
 	info = npc
 	name = "Npc_%s" % npc.id
+	# 다른 사람의 대화 말풍선을 이 주민 머리 위에 띄울 때 id 로 찾는다 (find).
+	add_to_group(&"npc_actors")
 	if name_label != null:
 		name_label.text = npc.display_name
 	if rig != null:
