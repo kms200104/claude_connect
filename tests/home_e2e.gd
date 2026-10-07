@@ -104,6 +104,8 @@ func _first_person(home: HomeController, player: Player, tag: String) -> void:
 	var glass: ShaderMaterial = home.interior.get("_view_material")
 	_check(home.first_person.active and absf(cam.global_position.y - (player.global_position.y + HomeFirstPerson.EYE_HEIGHT)) < 0.05, "[%s] 1인칭: 눈높이 카메라" % tag)
 	_check(not player.body.visible, "[%s] 1인칭: 내 캐릭터는 안 보인다" % tag)
+	var ceiling: MeshInstance3D = home.interior.first_person_shell()
+	_check(ceiling != null and ceiling.visible and absf(ceiling.get_aabb().end.y - HomeInterior.CEILING_HEIGHT - 0.06) < 0.05, "[%s] 1인칭: 천장이 막혀 있다 (%.1fm)" % [tag, HomeInterior.CEILING_HEIGHT])
 	_check(glass != null and float(glass.get_shader_parameter("use_live")) > 0.5 and glass.get_shader_parameter("live_view") is ViewportTexture, "[%s] 1인칭: 창유리에 실시간 창밖 풍경" % tag)
 	_check(button.text == "돌아가기", "[%s] 1인칭: '돌아가기' 단추" % tag)
 	# 위아래로 둘러봐도 창밖 카메라가 찌그러지지 않는다 (방향 행렬이 직교 · 단위 길이 = 회전만).
@@ -117,6 +119,7 @@ func _first_person(home: HomeController, player: Player, tag: String) -> void:
 	button.pressed.emit()
 	await get_tree().create_timer(0.3).timeout
 	_check(not home.first_person.active and player.body.visible and float(glass.get_shader_parameter("use_live")) < 0.5, "[%s] 돌아가기: 캐릭터 · 찍어 둔 창밖 사진으로" % tag)
+	_check(not home.interior.first_person_shell().visible, "[%s] 돌아가기: 3인칭은 천장 없이 (위에서 내려다봄)" % tag)
 	_check(cam.global_position.distance_to(before) < 0.5, "[%s] 돌아가기: 카메라가 제자리 (%.2fm)" % [tag, cam.global_position.distance_to(before)])
 
 

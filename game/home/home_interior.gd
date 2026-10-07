@@ -31,6 +31,13 @@ var _view_material: ShaderMaterial = null
 var sight_overlay: Material = null
 ## 시야를 막는 벽 (창 있는 벽 포함, 문 자리 제외) — 이 노드 기준 상자. HomeSight 가 거리 지도를 만든다.
 var wall_boxes: Array[AABB] = []
+## 1인칭 전용 천장 (v0.13.8): 3인칭은 위에서 내려다보느라 천장이 없지만, 1인칭에서는 천장과 그 높이까지 이어 올린 벽으로 막는다.
+## 높이는 캐릭터(약 1.6m)의 두 배. set_first_person 으로 켜고 끈다.
+const CEILING_HEIGHT: float = 3.2
+const CEILING_COLOR: Array = ["#F2EEE6", "#FAF8F3"]
+var _first_person_shell: MeshInstance3D = null
+## 벽 줄마다 (벽 · 창 · 문 위 인방) 벽 꼭대기에서 천장까지 이어 올릴 자리.
+var _upper_runs: Array[Dictionary] = []
 var _furniture_root: Node3D = null
 var _furniture_nodes: Dictionary[String, StaticBody3D] = {}
 var _labels: Array[Label3D] = []
@@ -51,6 +58,7 @@ func build(new_plan: FloorPlan) -> void:
 	_furniture_nodes.clear()
 	_labels.clear()
 	wall_boxes.clear()
+	_upper_runs.clear()
 	var parts: Array = []
 	var glass: Array = []
 	var colliders: Array[AABB] = []
@@ -71,6 +79,7 @@ func build(new_plan: FloorPlan) -> void:
 		shape.shape = b
 		shape.position = box.get_center()
 		body.add_child(shape)
+	_build_first_person_shell()
 	_build_lights()
 	_build_labels()
 	_furniture_root = Node3D.new()
@@ -294,6 +303,7 @@ func _emit_run(parts: Array, glass: Array, colliders: Array[AABB], horizontal: b
 	var mid: float = (from + to) * 0.5
 	var center: Vector3 = Vector3(mid, 0.0, line) if horizontal else Vector3(line, 0.0, mid)
 	var size_along: float = length + t
+	_upper_runs.append({"horizontal": horizontal, "along": size_along, "center": center})
 	if key == "door":
 		# 문틀 위 인방(0.25m) + 문틀 양옆 기둥.
 		parts.append(_wall_part(horizontal, size_along, t, 2.05, h, center, "#E4DCD0"))
@@ -593,6 +603,34 @@ static func _side_point(r: Rect2, n: Vector2, k: float) -> Vector2:
 	if n.x == 0.0:
 		return Vector2(lerpf(r.position.x, r.end.x, k), r.position.y if n.y < 0.0 else r.end.y)
 	return Vector2(r.position.x if n.x < 0.0 else r.end.x, lerpf(r.position.y, r.end.y, k))
+
+
+## 1인칭에서만 보이는 천장 · 벽 윗부분 (그림자는 드리우지 않는다 — 해가 집 안을 어둡게 가리지 않게).
+func set_first_person(on: bool) -> void:
+	if _first_person_shell != null:
+		_first_person_shell.visible = on
+
+
+func first_person_shell() -> MeshInstance3D:
+	return _first_person_shell
+
+
+func _build_first_person_shell() -> void:
+	var parts: Array = []
+	var t: float = _wall_thickness
+	# 천장: 방 사각형마다 얇은 판 (벽 두께만큼 넓혀 틈이 없게).
+	for room: FloorPlan.Room in plan.rooms:
+		for r: Rect2 in room.rects:
+			var c: Vector2 = r.get_center()
+			parts.append(KeeperSite.p("box", [r.size.x + t, 0.06, r.size.y + t], Vector3(c.x, CEILING_HEIGHT + 0.03, c.y), CEILING_COLOR))
+	# 벽 · 창 · 문 위를 천장까지 이어 올린다.
+	for run: Dictionary in _upper_runs:
+		parts.append(_wall_part(bool(run["horizontal"]), float(run["along"]), t, _wall_height - 0.01, CEILING_HEIGHT, run["center"], WALL_COLOR))
+	_first_person_shell = _mesh(PartMesh.build(parts), clay_material)
+	_first_person_shell.name = "FirstPersonCeiling"
+	_first_person_shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_first_person_shell.visible = false
+	add_child(_first_person_shell)
 
 
 func _build_lights() -> void:

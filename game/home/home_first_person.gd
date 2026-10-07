@@ -60,6 +60,8 @@ func enter() -> void:
 	if player.body != null:
 		player.body.visible = false
 	_start_live_view()
+	if interior != null:
+		interior.set_first_person(true)
 	_place_camera()
 	changed.emit(true)
 
@@ -70,6 +72,8 @@ func exit() -> void:
 		return
 	active = false
 	_stop_live_view()
+	if interior != null:
+		interior.set_first_person(false)
 	if player != null and player.body != null:
 		player.body.visible = true
 	if camera_rig != null:
