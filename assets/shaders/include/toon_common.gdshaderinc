@@ -16,6 +16,17 @@ global uniform float night_light;
 global uniform vec4 see_through_target;
 // 화면에서 비우는 원의 반지름 (캐릭터 자리에서의 m).
 global uniform float see_through_radius;
+
+// 집 안 벽 너머 가리기 (v0.13.6, HomeSight): 집 안 메시마다 이 머티리얼(home_sight)을 덮어(material_overlay) 그린다.
+// 화소 자리에서 캐릭터(sight_eye)까지 벽 거리 지도(sight_field)를 따라 걸어가 벽에 막히면 어둡게 덮고, 보이면 버린다(discard).
+uniform bool sight_overlay = false;
+uniform float sight_on = 0.0;
+// R = 가장 가까운 벽까지 거리 / sight_field_max (m). 영역 = 월드 (x, z) sight_rect.xy 부터 크기 sight_rect.zw.
+uniform sampler2D sight_field : filter_linear, repeat_disable;
+uniform vec4 sight_rect = vec4(0.0, 0.0, 1.0, 1.0);
+uniform float sight_field_max = 2.55;
+uniform vec2 sight_eye = vec2(0.0);
+uniform vec3 sight_color : source_color = vec3(0.05, 0.045, 0.05);
 #endif
 
 uniform vec4 albedo : source_color = vec4(1.0);
@@ -69,11 +80,43 @@ void see_through_clip(vec3 view_vertex, mat4 inv_view, vec3 cam, vec2 frag) {
 		discard;
 	}
 }
+// 0 = 벽에 가려 안 보임, 1 = 보임 (경계는 부드럽게). 벽 거리 지도를 따라 거리만큼씩 건너뛴다 (최대 40걸음).
+float sight_visible(vec2 p) {
+	vec2 to = sight_eye - p;
+	float dist = length(to);
+	if (dist < 0.3) {
+		return 1.0;
+	}
+	vec2 dir = to / dist;
+	// 벽 겉면 · 윗면 화소는 벽 안에서 시작하므로 조금 떨어져서 걷는다 (벽 두께 0.14m).
+	float t = 0.2;
+	float vis = 1.0;
+	for (int i = 0; i < 40; i++) {
+		if (t >= dist - 0.1 || vis < 0.01) {
+			break;
+		}
+		vec2 q = p + dir * t;
+		float d = texture(sight_field, (q - sight_rect.xy) / sight_rect.zw).r * sight_field_max;
+		vis = min(vis, smoothstep(0.03, 0.11, d));
+		t += max(d * 0.9, 0.04);
+	}
+	return vis;
+}
 #endif
 
 void fragment() {
 #ifdef SEE_THROUGH
-	if (!IN_SHADOW_PASS && see_through_target.w > 0.001) {
+	if (sight_overlay) {
+		// 덮개: 보이는 곳은 버리고, 벽 너머는 어둡게 (경계는 바이어 무늬로 점점이).
+		float hidden = 0.0;
+		if (sight_on > 0.5 && !IN_SHADOW_PASS) {
+			vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+			hidden = 1.0 - sight_visible(world.xz);
+		}
+		if (hidden <= see_through_dither(FRAGCOORD.xy)) {
+			discard;
+		}
+	} else if (!IN_SHADOW_PASS && see_through_target.w > 0.001) {
 		see_through_clip(VERTEX, INV_VIEW_MATRIX, CAMERA_POSITION_WORLD, FRAGCOORD.xy);
 	}
 #endif
@@ -95,4 +138,10 @@ void fragment() {
 	ROUGHNESS = toon_softness;
 	METALLIC = 0.0;
 	EMISSION = emission * emission_energy * night_light;
+#ifdef SEE_THROUGH
+	if (sight_overlay) {
+		ALBEDO = vec3(0.0);
+		EMISSION = sight_color;
+	}
+#endif
 }

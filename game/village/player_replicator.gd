@@ -82,6 +82,15 @@ func remote_positions() -> Array[Vector3]:
 	return out
 
 
+## 보이고 있는 다른 플레이어들 (집 안 벽 너머 가리기 HomeSight 가 감추고 보인다).
+func remote_nodes() -> Array[RemotePlayer]:
+	var out: Array[RemotePlayer] = []
+	for remote: RemotePlayer in _remotes.values():
+		if is_instance_valid(remote):
+			out.append(remote)
+	return out
+
+
 func _teleport_player(position: Vector3) -> void:
 	player.global_position = position
 	player.velocity = Vector3.ZERO

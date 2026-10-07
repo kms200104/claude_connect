@@ -39,6 +39,9 @@ var first_person: HomeFirstPerson = null
 var _first_person_button: Button = null
 ## 1인칭에서 걸을 때 쓰는 조이스틱 (그 손가락은 둘러보기에 쓰지 않는다).
 @export var joystick: TouchJoystick
+## v0.13.6 3인칭 집 안: 벽 너머 가리기. 친구 캐릭터도 벽 너머면 감춘다.
+var sight: HomeSight = null
+@export var replicator: PlayerReplicator
 var _outdoor_pitch: float = 48.0
 var _outdoor_distance: float = 7.5
 
@@ -89,6 +92,14 @@ func _ready() -> void:
 	first_person.apartments = apartments
 	first_person.joystick = joystick
 	add_child(first_person)
+	sight = HomeSight.new()
+	sight.name = "Sight"
+	sight.interior = interior
+	sight.player = player
+	sight.first_person = first_person
+	sight.editor = editor
+	sight.replicator = replicator
+	add_child(sight)
 	_first_person_button = _decor_button.duplicate(Node.DUPLICATE_GROUPS) as Button
 	_first_person_button.name = "FirstPersonButton"
 	_first_person_button.text = "1인칭"

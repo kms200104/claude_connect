@@ -27,6 +27,10 @@ var plan: FloorPlan = null
 ## 창유리: 바깥 풍경 사진을 읽는 머티리얼 (set_view). 하나를 모든 창이 같이 쓴다.
 const WINDOW_VIEW_SHADER: String = "res://assets/shaders/window_view.gdshader"
 var _view_material: ShaderMaterial = null
+## 벽 너머 가리기 (v0.13.6, HomeSight): 집 안 모든 메시(가구 포함)에 덮어 그리는 머티리얼. null 이면 없음.
+var sight_overlay: Material = null
+## 시야를 막는 벽 (창 있는 벽 포함, 문 자리 제외) — 이 노드 기준 상자. HomeSight 가 거리 지도를 만든다.
+var wall_boxes: Array[AABB] = []
 var _furniture_root: Node3D = null
 var _furniture_nodes: Dictionary[String, StaticBody3D] = {}
 var _labels: Array[Label3D] = []
@@ -46,6 +50,7 @@ func build(new_plan: FloorPlan) -> void:
 		c.queue_free()
 	_furniture_nodes.clear()
 	_labels.clear()
+	wall_boxes.clear()
 	var parts: Array = []
 	var glass: Array = []
 	var colliders: Array[AABB] = []
@@ -166,6 +171,7 @@ func _make_furniture(item_id: String) -> StaticBody3D:
 	mi.name = "Mesh"
 	mi.mesh = PartMesh.get_mesh(item_id, info.model)
 	mi.material_override = clay_material
+	mi.material_overlay = sight_overlay
 	body.add_child(mi)
 	var aabb: AABB = mi.mesh.get_aabb()
 	var shape: CollisionShape3D = CollisionShape3D.new()
@@ -304,6 +310,7 @@ func _emit_run(parts: Array, glass: Array, colliders: Array[AABB], horizontal: b
 		glass.append(_wall_part(horizontal, length - 0.08, 0.03, sill + 0.05, top, center, "#FFFFFF"))
 		parts.append(_wall_part(horizontal, 0.05, t + 0.02, sill, top, center, "#F4F4F2"))
 		colliders.append(_wall_box(horizontal, size_along, t, h, center))
+		wall_boxes.append(colliders[-1])
 		return
 	parts.append(_wall_part(horizontal, size_along, t, 0.0, h, center, WALL_COLOR))
 	# 벽 윗면 띠 (위에서 볼 때 평면도처럼 진한 선).
@@ -311,6 +318,7 @@ func _emit_run(parts: Array, glass: Array, colliders: Array[AABB], horizontal: b
 	# 걸레받이.
 	parts.append(_wall_part(horizontal, size_along, t + 0.02, 0.0, 0.08, center, "#D8CEC0"))
 	colliders.append(_wall_box(horizontal, size_along, t, h, center))
+	wall_boxes.append(colliders[-1])
 
 
 func _wall_part(horizontal: bool, along: float, thick: float, y0: float, y1: float, center: Vector3, color: Variant) -> Dictionary:
@@ -458,4 +466,5 @@ func _mesh(mesh: Mesh, material: Material) -> MeshInstance3D:
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.material_override = material
+	mi.material_overlay = sight_overlay
 	return mi

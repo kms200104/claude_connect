@@ -77,6 +77,22 @@ func _run() -> void:
 	await _visit_and_decorate(home, interaction, "102-502", "35", false)
 
 
+## v0.13.6 3인칭 집 안: 벽 너머는 가린다 (현관에서 안방 가운데는 안 보이고, 바로 앞은 보인다). 1인칭에서는 끈다.
+func _sight(home: HomeController, player: Player, tag: String) -> void:
+	_check(home.sight.active() and float(home.sight.material.get_shader_parameter("sight_on")) > 0.5, "[%s] 3인칭: 벽 너머 가리기 켜짐" % tag)
+	_check(home.sight.can_see(player.global_position + Vector3(0.6, 0.0, 0.0)), "[%s] 3인칭: 바로 곁은 보인다" % tag)
+	var master: FloorPlan.Room = Home.plan.first_room("master")
+	var hidden_spot: Vector3 = Home.to_world(master.main_rect().get_center())
+	_check(not home.sight.can_see(hidden_spot), "[%s] 3인칭: 현관에서 벽 너머 안방은 가려진다" % tag)
+	var mesh: MeshInstance3D = home.interior.get_child(0) as MeshInstance3D
+	_check(mesh != null and mesh.material_overlay == home.sight.material, "[%s] 3인칭: 집 안 메시에 가림 덮개" % tag)
+	home.first_person.enter()
+	await get_tree().create_timer(0.1).timeout
+	_check(float(home.sight.material.get_shader_parameter("sight_on")) < 0.5, "[%s] 1인칭에서는 가리지 않는다" % tag)
+	home.first_person.exit()
+	await get_tree().create_timer(0.1).timeout
+
+
 ## v0.13.5 1인칭: 눈높이 카메라 · 캐릭터 숨김 · 창유리는 실시간 창밖 풍경 → 돌아가면 그대로.
 func _first_person(home: HomeController, player: Player, tag: String) -> void:
 	var button: Button = home.get("_first_person_button")
@@ -119,10 +135,13 @@ func _visit_and_decorate(home: HomeController, interaction: InteractionControlle
 		_check(need in items, "[%s] 기본 가구 %s" % [tag, GameData.item_name(need)])
 	_check(Home.editable, "[%s] 내 집이라 꾸밀 수 있다" % tag)
 	await get_tree().create_timer(0.3).timeout
+	await _sight(home, player, tag)
 	await _first_person(home, player, tag)
 	_check(home.get("_decor_button").visible, "[%s] '꾸미기' 단추" % tag)
 	home.editor.start()
 	_check(home.editor.active and home.editor.get("_camera").current, "[%s] 위에서 본 평면도 (직교 카메라)" % tag)
+	await get_tree().create_timer(0.1).timeout
+	_check(float(home.sight.material.get_shader_parameter("sight_on")) < 0.5, "[%s] 꾸미기에서는 벽 너머도 다 보인다" % tag)
 	var cam: Camera3D = home.editor.get("_camera")
 	_check(absf(cam.global_basis.z.y - 1.0) < 0.01, "[%s] 바로 위에서 내려다봄" % tag)
 	# 안방 더블 침대를 끌어 옮긴다: 손가락 위치는 격자에 저절로 맞는다.
