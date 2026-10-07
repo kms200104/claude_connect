@@ -64,6 +64,22 @@ var point: Vector3 = Vector3.ZERO
 var point_weight: float = 0.0
 var _point_tween: Tween = null
 
+@export_group("See through")
+## 높은 건물·나무가 캐릭터를 가리면 (v0.13.5): 그 건물의 캐릭터 둘레를 점점이 비워 캐릭터가 비쳐 보이게 한다
+## (toon_world_see 셰이더를 쓰는 건물·나무 머티리얼만). 집 안·1인칭에서는 끈다.
+@export var see_through: bool = true
+## 캐릭터 자리에서 비우는 원의 반지름 (m). 화면에서 캐릭터 키(1.6m)보다 조금 크게.
+@export_range(0.5, 4.0, 0.05, "suffix:m") var see_through_radius: float = 1.6
+## 비우는 원의 가운데 높이 (캐릭터 발 기준).
+@export_range(0.0, 3.0, 0.05, "suffix:m") var see_through_height: float = 0.9
+## 켜고 끌 때 몇 초에 걸쳐 바뀌는지.
+@export_range(0.0, 2.0, 0.05, "suffix:s") var see_through_fade: float = 0.35
+
+## 지금 비우는 세기 (0~1, 부드럽게 따라간다). 1인칭 같은 다른 카메라가 끄려면 see_through_blocked 를 켠다.
+var see_through_weight: float = 0.0
+var see_through_blocked: bool = false
+var _see_through_radius_sent: float = -1.0
+
 @export_group("Smoothing")
 ## 클수록 캐릭터에 딱 붙는다 (지수 감쇠 계수, 프레임레이트와 무관).
 @export_range(0.5, 30.0, 0.1) var follow_smoothing: float = 5.0
@@ -86,6 +102,19 @@ func _physics_process(delta: float) -> void:
 	var weight: float = 1.0 - exp(-follow_smoothing * delta)
 	lean = lean.lerp(water_lean_target(target.global_position), 1.0 - exp(-water_lean_smoothing * delta))
 	global_position = global_position.lerp(_goal_position(), weight)
+	_update_see_through(delta)
+
+
+## 셰이더(toon_world_see)에 캐릭터 자리와 세기를 넣는다.
+func _update_see_through(delta: float) -> void:
+	var want: float = 1.0 if see_through and not see_through_blocked and target != null and not Home.is_inside() else 0.0
+	var step: float = delta / see_through_fade if see_through_fade > 0.0 else 1.0
+	see_through_weight = move_toward(see_through_weight, want, step)
+	var at: Vector3 = target.global_position + Vector3(0.0, see_through_height, 0.0) if target != null else Vector3.ZERO
+	RenderingServer.global_shader_parameter_set(&"see_through_target", Vector4(at.x, at.y, at.z, see_through_weight))
+	if see_through_radius != _see_through_radius_sent:
+		_see_through_radius_sent = see_through_radius
+		RenderingServer.global_shader_parameter_set(&"see_through_radius", see_through_radius)
 
 
 ## 순간이동(상점 문 등) 뒤에 마을을 가로질러 미끄러지지 않도록 바로 따라붙는다.

@@ -1,4 +1,4 @@
-[gd_scene load_steps=75 format=3]
+[gd_scene load_steps=77 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -69,6 +69,8 @@
 [ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
 [ext_resource type="Script" path="res://game/fishing/sea_spot.gd" id="71_sea"]
 [ext_resource type="Script" path="res://game/journal/journal_controller.gd" id="72_journal"]
+[ext_resource type="Material" path="res://assets/materials/building_clay.tres" id="90_bclay"]
+[ext_resource type="Material" path="res://assets/materials/building_window.tres" id="91_bwindow"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -223,7 +225,7 @@ clay_material = ExtResource("23_foliage")
 
 [node name="Trees" type="Node3D" parent="." node_paths=PackedStringArray("player", "replicator")]
 script = ExtResource("22_trees")
-foliage_material = ExtResource("23_foliage")
+foliage_material = ExtResource("90_bclay")
 player = NodePath("../Player")
 replicator = NodePath("../PlayerReplicator")
 
@@ -252,37 +254,37 @@ clay_material = ExtResource("23_foliage")
 [node name="Museum" type="Node3D" parent="."]
 script = ExtResource("54_museum")
 actor_scene = ExtResource("25_actor")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 
 [node name="Airport" type="Node3D" parent="."]
 script = ExtResource("55_airport")
 actor_scene = ExtResource("25_actor")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 
 [node name="Apartments" type="Node3D" parent="."]
 script = ExtResource("64_apartments")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 
 [node name="Restaurant" type="Node3D" parent="." node_paths=PackedStringArray("npcs")]
 script = ExtResource("65_restaurant")
 actor_scene = ExtResource("25_actor")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 npcs = NodePath("../Npcs")
 
 [node name="Park" type="Node3D" parent="."]
 script = ExtResource("99_park")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 
 [node name="Civic" type="Node3D" parent="."]
 script = ExtResource("67_civic")
 actor_scene = ExtResource("25_actor")
-clay_material = ExtResource("23_foliage")
-window_material = ExtResource("28_window")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
 
 [node name="Field" type="Node3D" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud", "interaction")]
 script = ExtResource("68_field")
@@ -292,7 +294,7 @@ toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 interaction = NodePath("../InteractionController")
 
-[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud", "apartments")]
+[node name="Home" type="Node3D" parent="." node_paths=PackedStringArray("player", "camera_rig", "sky", "hud", "toast_hud", "apartments", "joystick")]
 script = ExtResource("69_home")
 player = NodePath("../Player")
 camera_rig = NodePath("../CameraRig")
@@ -302,6 +304,7 @@ toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("23_foliage")
 window_material = ExtResource("28_window")
 apartments = NodePath("../Apartments")
+joystick = NodePath("../HUD/Joystick")
 
 [node name="Mirrors" type="Node3D" parent="."]
 script = ExtResource("62_mirror_site")

@@ -77,6 +77,25 @@ func _run() -> void:
 	await _visit_and_decorate(home, interaction, "102-502", "35", false)
 
 
+## v0.13.5 1인칭: 눈높이 카메라 · 캐릭터 숨김 · 창유리는 실시간 창밖 풍경 → 돌아가면 그대로.
+func _first_person(home: HomeController, player: Player, tag: String) -> void:
+	var button: Button = home.get("_first_person_button")
+	_check(button != null and button.visible, "[%s] '1인칭' 단추" % tag)
+	var cam: Camera3D = _village.get_node("CameraRig/Camera3D")
+	var before: Vector3 = cam.global_position
+	button.pressed.emit()
+	await get_tree().create_timer(0.2).timeout
+	var glass: ShaderMaterial = home.interior.get("_view_material")
+	_check(home.first_person.active and absf(cam.global_position.y - (player.global_position.y + HomeFirstPerson.EYE_HEIGHT)) < 0.05, "[%s] 1인칭: 눈높이 카메라" % tag)
+	_check(not player.body.visible, "[%s] 1인칭: 내 캐릭터는 안 보인다" % tag)
+	_check(glass != null and float(glass.get_shader_parameter("use_live")) > 0.5 and glass.get_shader_parameter("live_view") is ViewportTexture, "[%s] 1인칭: 창유리에 실시간 창밖 풍경" % tag)
+	_check(button.text == "돌아가기", "[%s] 1인칭: '돌아가기' 단추" % tag)
+	button.pressed.emit()
+	await get_tree().create_timer(0.3).timeout
+	_check(not home.first_person.active and player.body.visible and float(glass.get_shader_parameter("use_live")) < 0.5, "[%s] 돌아가기: 캐릭터 · 찍어 둔 창밖 사진으로" % tag)
+	_check(cam.global_position.distance_to(before) < 0.5, "[%s] 돌아가기: 카메라가 제자리 (%.2fm)" % [tag, cam.global_position.distance_to(before)])
+
+
 func _visit_and_decorate(home: HomeController, interaction: InteractionController, unit: String, plan_id: String, test_server: bool) -> void:
 	var tag: String = "테스트 서버" if test_server else "진짜 서버"
 	var player: Player = _village.get_node("Player")
@@ -100,6 +119,7 @@ func _visit_and_decorate(home: HomeController, interaction: InteractionControlle
 		_check(need in items, "[%s] 기본 가구 %s" % [tag, GameData.item_name(need)])
 	_check(Home.editable, "[%s] 내 집이라 꾸밀 수 있다" % tag)
 	await get_tree().create_timer(0.3).timeout
+	await _first_person(home, player, tag)
 	_check(home.get("_decor_button").visible, "[%s] '꾸미기' 단추" % tag)
 	home.editor.start()
 	_check(home.editor.active and home.editor.get("_camera").current, "[%s] 위에서 본 평면도 (직교 카메라)" % tag)

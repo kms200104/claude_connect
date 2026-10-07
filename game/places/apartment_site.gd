@@ -67,6 +67,26 @@ func unit_position(unit_id: String) -> Vector3:
 	return tower.global_transform * Vector3(x, (u.floor - 1) * FLOOR_HEIGHT + 1.0, size.y * 0.5 + 0.35)
 
 
+## 그 집이 있는 동의 방향 (로컬 +Z = 앞면 · 발코니 쪽). 없으면 기본 방향.
+func unit_basis(unit_id: String) -> Basis:
+	var u: EconData.Unit = GameData.econ.unit(unit_id)
+	var tower: Node3D = _towers.get(u.building) if u != null else null
+	return tower.global_basis.orthonormalized() if tower != null else Basis.IDENTITY
+
+
+## 그 집이 있는 동의 그림(메시 · 이름표) — 1인칭 창밖 풍경에서 자기 동은 감춘다 (HomeFirstPerson).
+func unit_tower_visuals(unit_id: String) -> Array[VisualInstance3D]:
+	var out: Array[VisualInstance3D] = []
+	var u: EconData.Unit = GameData.econ.unit(unit_id)
+	var tower: Node3D = _towers.get(u.building) if u != null else null
+	if tower == null:
+		return out
+	for c: Node in tower.get_children():
+		if c is VisualInstance3D:
+			out.append(c)
+	return out
+
+
 ## 동의 바닥 크기 (너비 x · 깊이 z). 서버 world.js 의 막힌 자리와 같은 값.
 static func tower_size(b: Dictionary) -> Vector2:
 	return Vector2(float(b.get("w", TOWER_SIZE.x)), float(b.get("d", TOWER_SIZE.y)))

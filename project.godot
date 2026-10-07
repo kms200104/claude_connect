@@ -79,3 +79,11 @@ night_light={
 "type": "float",
 "value": 0.0
 }
+see_through_target={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+see_through_radius={
+"type": "float",
+"value": 1.6
+}

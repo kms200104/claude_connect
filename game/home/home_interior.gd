@@ -87,6 +87,13 @@ func set_view(view: HomeView.View) -> void:
 	material.set_shader_parameter("face_up", view.ups)
 
 
+## 1인칭 창밖 보기: 실시간 화면(null 이면 끄고 찍어 둔 사진으로 돌아간다).
+func set_live_view(texture: Texture2D) -> void:
+	var material: ShaderMaterial = _window_view_material()
+	material.set_shader_parameter("use_live", 1.0 if texture != null else 0.0)
+	material.set_shader_parameter("live_view", texture)
+
+
 func _window_view_material() -> ShaderMaterial:
 	if _view_material == null:
 		_view_material = ShaderMaterial.new()

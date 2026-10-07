@@ -34,6 +34,11 @@ var _decor_button: Button = null
 ## v16 방명록 (주인이 있는 집 안에서).
 var guestbook: GuestbookWindow = null
 var _guestbook_button: Button = null
+## v0.13.5 1인칭 (창밖 보기).
+var first_person: HomeFirstPerson = null
+var _first_person_button: Button = null
+## 1인칭에서 걸을 때 쓰는 조이스틱 (그 손가락은 둘러보기에 쓰지 않는다).
+@export var joystick: TouchJoystick
 var _outdoor_pitch: float = 48.0
 var _outdoor_distance: float = 7.5
 
@@ -64,7 +69,9 @@ func _ready() -> void:
 	_decor_button.add_theme_stylebox_override("pressed", EventHud._box(Color(0.98, 0.84, 0.55), Color(0.5, 0.36, 0.24), 30, 4, 10))
 	_decor_button.add_to_group(&"blocks_joystick")
 	_decor_button.visible = false
-	_decor_button.pressed.connect(func() -> void: editor.start())
+	_decor_button.pressed.connect(func() -> void:
+		first_person.exit()
+		editor.start())
 	HudLayout.right_top(_decor_button, Vector2(160.0, 84.0), 24.0, DECOR_BUTTON_Y)
 	guestbook = GuestbookWindow.new()
 	guestbook.name = "GuestbookWindow"
@@ -74,7 +81,23 @@ func _ready() -> void:
 	_guestbook_button.add_to_group(&"blocks_joystick")
 	_guestbook_button.pressed.connect(func() -> void: guestbook.open())
 	HudLayout.right_top(_guestbook_button, Vector2(160.0, 84.0), 24.0, DECOR_BUTTON_Y + 100.0)
+	first_person = HomeFirstPerson.new()
+	first_person.name = "FirstPerson"
+	first_person.player = player
+	first_person.camera_rig = camera_rig
+	first_person.interior = interior
+	first_person.apartments = apartments
+	first_person.joystick = joystick
+	add_child(first_person)
+	_first_person_button = _decor_button.duplicate(Node.DUPLICATE_GROUPS) as Button
+	_first_person_button.name = "FirstPersonButton"
+	_first_person_button.text = "1인칭"
+	_first_person_button.add_to_group(&"blocks_joystick")
+	_first_person_button.pressed.connect(func() -> void: first_person.toggle())
+	first_person.changed.connect(func(on: bool) -> void: _first_person_button.text = "돌아가기" if on else "1인칭")
+	HudLayout.right_top(_first_person_button, Vector2(160.0, 84.0), 24.0, DECOR_BUTTON_Y + 200.0)
 	if hud != null:
+		hud.add_child.call_deferred(_first_person_button)
 		hud.add_child.call_deferred(window)
 		hud.add_child.call_deferred(_decor_button)
 		hud.add_child.call_deferred(_guestbook_button)
@@ -130,10 +153,13 @@ func _process(_delta: float) -> void:
 		_decor_button.visible = Home.is_inside() and Home.editable and not editor.active and Net.state == Net.State.ONLINE
 	if _guestbook_button != null:
 		_guestbook_button.visible = Home.is_inside() and Home.owner_slot > 0 and not editor.active and Net.state == Net.State.ONLINE
+	if _first_person_button != null:
+		_first_person_button.visible = Home.is_inside() and not editor.active and not (guestbook != null and guestbook.is_open())
 
 
 func _on_door(unit: String, position: Vector3) -> void:
 	editor.stop()
+	first_person.exit()
 	player.global_position = position
 	player.velocity = Vector3.ZERO
 	player.clear_look_direction()

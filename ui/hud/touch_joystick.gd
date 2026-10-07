@@ -103,6 +103,11 @@ func _input(event: InputEvent) -> void:
 			_update_stick(drag.position)
 
 
+## 이 터치(index)를 조이스틱이 쓰고 있는지 (1인칭 둘러보기가 조이스틱 손가락은 건너뛴다).
+func owns_touch(index: int) -> bool:
+	return _touch_index != -1 and _touch_index == index
+
+
 func _in_activation_area(pos: Vector2) -> bool:
 	# 퀵슬롯·가방·대화 창·상황 버튼 위를 누른 건 조이스틱이 아니다 (그 컨트롤들은 "blocks_joystick" 그룹).
 	for node: Node in get_tree().get_nodes_in_group(&"blocks_joystick"):

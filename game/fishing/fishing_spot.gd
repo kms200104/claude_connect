@@ -61,7 +61,7 @@ func _water_material() -> ShaderMaterial:
 	return null
 
 
-## 윤곽 호수의 거리 그림 (tools/art/gen_lake_sdf.py 가 만든 JSON: size² L8, base64)을 물 셰이더에 넣는다.
+## 윤곽 호수의 거리 그림 (tools/art/gen_lake_sdf.py 가 만든 JSON: size² L8 또는 RG8, base64)을 물 셰이더에 넣는다.
 func _apply_outline_sdf(mat: ShaderMaterial) -> void:
 	var path: String = "res://data/fish/sdf/%s.json" % spot_id
 	var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -69,12 +69,15 @@ func _apply_outline_sdf(mat: ShaderMaterial) -> void:
 		push_error("FishingSpot: 거리 그림 없음 — python3 tools/art/gen_lake_sdf.py (%s)" % path)
 		return
 	var size: int = int(doc["size"])
-	var image: Image = Image.create_from_data(size, size, false, Image.FORMAT_L8, Marshalls.base64_to_raw(str(doc["data"])))
+	# v0.13.5: 두 채널(RG8: R = 물가 ±range m, G = 깊이 ±far_range m)이면 큰 호수 가운데까지 깊이를 잰다.
+	var two: bool = int(doc.get("channels", 1)) == 2
+	var image: Image = Image.create_from_data(size, size, false, Image.FORMAT_RG8 if two else Image.FORMAT_L8, Marshalls.base64_to_raw(str(doc["data"])))
 	var half: Array = doc["half"]
 	mat.set_shader_parameter("use_outline", true)
 	mat.set_shader_parameter("outline_sdf", ImageTexture.create_from_image(image))
 	mat.set_shader_parameter("sdf_half", Vector2(float(half[0]), float(half[1])))
 	mat.set_shader_parameter("sdf_range", float(doc["range"]))
+	mat.set_shader_parameter("sdf_far_range", float(doc.get("far_range", 0.0)) if two else 0.0)
 
 
 ## 윤곽 호수의 물 막이: 윤곽을 물가 폭만큼 안쪽으로 줄인 다각형(들)을 한 칸 높이로 세운다. 선착장·여울 자리는 뺀다.

@@ -13,6 +13,10 @@ uniform vec3 face_up[6];
 // 사진을 아직 못 찍었으면 하늘색 유리.
 uniform float has_view = 0.0;
 uniform vec3 sky_color : source_color = vec3(0.72, 0.86, 0.98);
+// 1인칭 창밖 보기 (v0.13.5): 마을의 그 집 자리에 같은 방향으로 둔 카메라가 찍는 실시간 화면(HomeFirstPerson).
+// 메인 카메라와 화각·비율이 같으므로 화면 좌표(SCREEN_UV) 그대로 읽으면 창 너머가 맞아떨어진다.
+uniform float use_live = 0.0;
+uniform sampler2D live_view : source_color, filter_linear, repeat_disable;
 // 유리 빛깔과 가장자리 반사.
 uniform vec3 tint : source_color = vec3(0.96, 0.99, 1.0);
 uniform float reflect = 0.22;
@@ -42,6 +46,9 @@ vec3 outside_color(vec3 dir) {
 void fragment() {
 	vec3 dir = normalize(world_pos - CAMERA_POSITION_WORLD);
 	vec3 outside = has_view > 0.5 ? outside_color(dir) : mix(sky_color, vec3(1.0), clamp(-dir.y, 0.0, 1.0) * 0.3);
+	if (use_live > 0.5) {
+		outside = texture(live_view, SCREEN_UV).rgb;
+	}
 	float edge = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 3.0);
 	ALBEDO = mix(outside * tint, vec3(1.0), edge * reflect);
 }
