@@ -6,6 +6,7 @@ extends VBoxContainer
 ##   화질   — 자동(기기 추천) · 절약 · 고화질
 ##   화면   — 돌리는 대로 · 세로 고정 · 가로 고정
 ## v16: 생일(마을에 들어와 있을 때) · 진동 켜기/끄기(물고기가 물 때) · 글자 크기 · 조이스틱 위치(왼손/오른손)와 크기.
+## 지도 항상 보기 (화면 오른쪽 위 작은 지도). 마을에서는 이 내용이 휴대폰 설정 앱에만 있다 (방 정보 줄 "설정" 단추도 그 앱을 연다).
 ## 바꾸면 바로 적용되고 기억된다.
 
 const INK: Color = Color(0.36, 0.24, 0.14)
@@ -26,6 +27,7 @@ var _quality_info: Label = null
 var _orient_buttons: Dictionary[String, Button] = {}
 var _pref_buttons: Dictionary[String, Dictionary] = {}
 var _vibration: CheckButton = null
+var _minimap: CheckButton = null
 var _bday_month: int = 1
 var _bday_day: int = 1
 var _bday_label: Label = null
@@ -92,6 +94,8 @@ func refresh() -> void:
 			_mark(_pref_buttons[key][id], str(Prefs.get_value(key)) == id)
 	if _vibration != null:
 		_vibration.set_pressed_no_signal(Prefs.vibration())
+	if _minimap != null:
+		_minimap.set_pressed_no_signal(Prefs.minimap())
 
 
 ## 닉네임 입력 칸 (테스트용).
@@ -294,10 +298,35 @@ func _build_play() -> void:
 			Prefs.vibrate(60, 0.6)
 		Audio.play_ui(Audio.SFX_CLICK))
 	col.add_child(_vibration)
+	_minimap = _check("지도 항상 보기 (화면 오른쪽 위 작은 지도, 누르면 지도 앱)")
+	_minimap.name = "MinimapToggle"
+	_minimap.toggled.connect(func(on: bool) -> void:
+		Prefs.set_value(Prefs.MINIMAP, on)
+		Audio.play_ui(Audio.SFX_CLICK))
+	col.add_child(_minimap)
 	_choice_row(col, "글자 크기", Prefs.FONT, Prefs.FONT_NAMES)
 	_choice_row(col, "조이스틱 자리", Prefs.STICK_SIDE, Prefs.STICK_SIDES)
 	_choice_row(col, "조이스틱 크기", Prefs.STICK_SIZE, Prefs.STICK_NAMES)
 	col.add_child(_label("조이스틱을 오른쪽에 두면 상황 버튼(대화 · 베기 · 낚시)은 왼쪽 아래로 옮겨져요.", 22, SOFT))
+
+
+## 켜기/끄기 줄.
+func _check(text: String) -> CheckButton:
+	var c: CheckButton = CheckButton.new()
+	c.text = text
+	c.focus_mode = Control.FOCUS_NONE
+	c.custom_minimum_size = Vector2(0, 88)
+	c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	c.add_theme_font_size_override("font_size", 28)
+	c.add_theme_color_override("font_color", INK)
+	c.add_theme_color_override("font_pressed_color", INK)
+	c.add_theme_color_override("font_hover_color", INK)
+	return c
+
+
+## 지도 항상 보기 켜기/끄기 (테스트용).
+func minimap_toggle() -> CheckButton:
+	return _minimap
 
 
 ## 이름 + 고르기 단추 줄 (설정 key 의 값 하나).

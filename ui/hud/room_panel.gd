@@ -42,10 +42,13 @@ func _ready() -> void:
 		_server_edit.text = Net.TEST_SERVER_URL
 		Net.play_on_test_server())
 	_form.add_child(_test_button)
-	# 방 정보 줄에 설정 단추 — 닉네임 · 화질 (창은 HUD 맨 위에 붙인다).
-	var quality: QualityWindow = QualityWindow.attach(get_parent() if get_parent() != null else self)
-	var quality_button: Button = QualityWindow.make_button(quality, 26)
+	# 방 정보 줄에 설정 단추: 마을에서는 휴대폰을 꺼내 설정 앱을 연다 (설정은 휴대폰 한 곳에). 휴대폰이 없는 화면이면 설정 창.
+	var quality_button: Button = Button.new()
+	quality_button.text = "설정"
+	quality_button.focus_mode = Control.FOCUS_NONE
+	quality_button.add_theme_font_size_override("font_size", 26)
 	quality_button.name = "QualityButton"
+	quality_button.pressed.connect(_open_settings)
 	_leave_button.get_parent().add_child(quality_button)
 	_leave_button.get_parent().move_child(quality_button, _leave_button.get_index())
 	Net.state_changed.connect(_on_state_changed)
@@ -84,6 +87,21 @@ func _apply_command_line() -> void:
 		Net.create_room(_server_edit.text)
 	elif not join.is_empty():
 		Net.join_room(_server_edit.text, join)
+
+
+## "설정": 휴대폰 설정 앱 (HUD 의 PhoneWindow). 없으면 예전 설정 창을 그때 붙여 연다.
+func _open_settings() -> void:
+	var hud: Node = get_parent() if get_parent() != null else self
+	var phone: PhoneWindow = hud.get_node_or_null("PhoneWindow") as PhoneWindow
+	if phone != null and Net.state == Net.State.ONLINE:
+		phone.open(PhoneWindow.Tab.SETTINGS)
+		return
+	var window: QualityWindow = hud.get_node_or_null("QualityWindow") as QualityWindow
+	if window == null:
+		window = QualityWindow.new()
+		window.name = "QualityWindow"
+		hud.add_child(window)
+	window.open()
 
 
 func _on_code_changed(text: String) -> void:

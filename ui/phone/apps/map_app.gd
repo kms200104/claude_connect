@@ -115,7 +115,8 @@ func _collect() -> void:
 
 func _add_places() -> void:
 	var econ: EconData = GameData.econ
-	_add("place", "plaza", "마을 광장", "마을 한가운데. 거울과 꽃밭이 있어요.", Vector2.ZERO, "광")
+	var plaza: Vector2 = GameData.layout.plaza_center if GameData.layout != null else Vector2.ZERO
+	_add("place", "plaza", "마을 광장", "성성호수 남쪽 상점가 한가운데. 거울과 꽃밭이 있어요.", plaza, "광")
 	if GameData.shop != null:
 		_add("place", "shop", "솔바람 상점", "물건을 사고팔아요. 상점이 크면 파는 것도 늘어요.", Vector2(GameData.shop.door.x, GameData.shop.door.z - 3.0), "상")
 	if GameData.museum != null:
@@ -131,7 +132,16 @@ func _add_places() -> void:
 			_add("place", "civic", "동사무소", "전입 · 지원금 · 정책대출 · 혼인신고.", Vector2(float(civic.get("x", 0.0)), float(civic.get("z", 0.0))), "동")
 		for b: Variant in econ.buildings():
 			if b is Dictionary:
-				_add("place", "apt:%s" % str(b.get("id", "")), "솔바람 아파트 %s동" % str(b.get("id", "")), "공동 현관에서 집에 들어가요.", Vector2(float(b.get("x", 0.0)), float(b.get("z", 0.0))), "아")
+				_add("place", "apt:%s" % str(b.get("id", "")), "%s %s동" % [econ.complex_name(), str(b.get("id", ""))], "공동 현관에서 집에 들어가요.", Vector2(float(b.get("x", 0.0)), float(b.get("z", 0.0))), "아")
+		# 둘레 단지 (겉모습만): 단지 가운데에 이름.
+		for complex: Variant in econ.apartments.get("samples", []):
+			if not complex is Dictionary or (complex.get("buildings", []) as Array).is_empty():
+				continue
+			var c: Vector2 = Vector2.ZERO
+			for b2: Dictionary in complex["buildings"]:
+				c += Vector2(float(b2.get("x", 0.0)), float(b2.get("z", 0.0)))
+			c /= float((complex["buildings"] as Array).size())
+			_add("place", "complex:%s" % str(complex.get("id", "")), str(complex.get("name", "")), "둘레 아파트 단지 (구경만).", c, "단")
 	for npc: NpcInfo in GameData.npcs.values():
 		if not npc.has_house:
 			continue

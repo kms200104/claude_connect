@@ -1,6 +1,6 @@
 class_name Prefs
 extends RefCounted
-## 플레이 설정 (v16, 설정 앱): 진동 · 글자 크기 · 조이스틱 위치와 크기 · 음악 앱에서 고른 곡.
+## 플레이 설정 (v16, 설정 앱): 진동 · 글자 크기 · 조이스틱 위치와 크기 · 음악 앱에서 고른 곡 · 지도 항상 보기.
 ## user://settings.cfg 의 "play" 칸에 기억한다 (소리 · 화질 · 화면 방향은 각자 저장). 바뀌면 Prefs.events.changed(key).
 
 const PATH: String = "user://settings.cfg"
@@ -13,6 +13,8 @@ const STICK_SIZE: String = "stick_size"
 ## 음악 앱: "" = 자동(시각 · 날씨 · 이벤트에 맞춰), "off" = 끄기, 그 밖 = 곡 이름.
 const MUSIC: String = "music"
 const MUSIC_OFF: String = "off"
+## 화면 오른쪽 위 작은 지도(MiniMap)를 늘 띄울지.
+const MINIMAP: String = "minimap"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
@@ -26,6 +28,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"stick_side": "left",
 	"stick_size": "normal",
 	"music": "",
+	"minimap": false,
 }
 
 
@@ -74,6 +77,10 @@ static func stick_scale() -> float:
 
 static func music() -> String:
 	return str(get_value(MUSIC))
+
+
+static func minimap() -> bool:
+	return bool(get_value(MINIMAP))
 
 
 ## 짧게 떨기 (진동을 껐으면 아무것도 안 한다).

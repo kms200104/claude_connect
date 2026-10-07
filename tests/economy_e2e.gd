@@ -121,6 +121,35 @@ func _run() -> void:
 		_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "") == "휴대폰이름", 3.0), "설정 앱에서 닉네임 저장")
 		sp.name_edit().text = ""
 		sp.save_name()
+		# 지도 항상 보기: 켜면 휴대폰을 닫은 마을 화면 오른쪽 위에 작은 지도, 누르면 지도 앱.
+		var mini: MiniMap = econ.minimap
+		_check(mini != null and sp.minimap_toggle() != null and not sp.minimap_toggle().button_pressed and not mini.should_show(), "설정 앱: '지도 항상 보기' (처음엔 꺼짐)")
+		sp.minimap_toggle().button_pressed = true
+		econ.phone.close()
+		_check(await _wait_until(func() -> bool: return mini.visible and mini.size.x > 100.0, 1.5), "지도 항상 보기를 켜면 마을 화면에 작은 지도")
+		econ.phone.open(PhoneWindow.Tab.SETTINGS)
+		_check(await _wait_until(func() -> bool: return not mini.visible, 1.0), "휴대폰을 연 동안은 작은 지도를 감춘다")
+		econ.phone.close()
+		await _wait_until(func() -> bool: return mini.visible, 1.0)
+		var tap: InputEventMouseButton = InputEventMouseButton.new()
+		tap.button_index = MOUSE_BUTTON_LEFT
+		tap.pressed = true
+		mini.call("_gui_input", tap)
+		_check(await _wait_until(func() -> bool: return econ.phone.visible and econ.phone.app_view() is MapApp, 1.5), "작은 지도를 누르면 휴대폰 지도 앱")
+		econ.phone.open(PhoneWindow.Tab.SETTINGS)
+		await get_tree().process_frame
+		sp = econ.phone.settings_panel()
+		if sp != null:
+			sp.minimap_toggle().button_pressed = false
+		# 방 정보 줄의 "설정" 단추도 휴대폰 설정 앱을 연다 (설정은 휴대폰 한 곳에).
+		econ.phone.close()
+		var room_settings: Button = _village.get_node("HUD").find_child("QualityButton", true, false)
+		_check(room_settings != null, "방 정보 줄 '설정' 단추")
+		if room_settings != null:
+			room_settings.pressed.emit()
+			await get_tree().process_frame
+			_check(econ.phone.visible and econ.phone.settings_panel() != null, "'설정' 단추 → 휴대폰 설정 앱")
+			_check(_village.get_node("HUD").find_child("QualityWindow", true, false) == null, "마을에는 따로 된 설정 창이 없다")
 	econ.phone.go_home()
 	econ.phone.open_app(PhoneWindow.Tab.STOCKS)
 	var sol0: int = Net.sol

@@ -31,6 +31,8 @@ var phone: PhoneWindow = null
 var kitchen: KitchenWindow = null
 var civic: CivicWindow = null
 var _phone_button: Button = null
+## 화면 오른쪽 위 작은 지도 (설정 "지도 항상 보기").
+var minimap: MiniMap = null
 ## 이번 영업에 주방 창을 저절로 한 번 열었는지.
 var _kitchen_opened_for_shift: bool = false
 var _join_pending: bool = false
@@ -64,6 +66,10 @@ func _ready() -> void:
 		hud.add_child.call_deferred(kitchen)
 		hud.add_child.call_deferred(civic)
 		hud.add_child.call_deferred(phone)
+		minimap = MiniMap.new()
+		minimap.phone = phone
+		minimap.player = player
+		hud.add_child.call_deferred(minimap)
 	Talk.received.connect(_on_talk_received)
 	Talk.changed.connect(func() -> void:
 		if _phone_button != null:

@@ -114,15 +114,18 @@ func _run() -> void:
 	window.save()
 	_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "") == "솔바람" and not window.is_open(), 3.0), "완료하면 닉네임이 바뀌고 창이 닫힌다: %s" % Net.names.get(Net.my_id, ""))
 	_check(Net.nickname() == "솔바람", "처음 화면 설정에도 기억된다")
-	# 설정 창에서도 (어디서나)
-	var settings: QualityWindow = _village.get_node("HUD").find_child("QualityWindow", true, false)
-	_check(settings != null, "마을의 설정 창")
-	if settings != null:
-		settings.open()
-		_check(settings.name_edit().text == "솔바람", "설정 창에 지금 닉네임")
-		settings.name_edit().text = ""
-		settings.save_name()
-		settings.close()
+	# 휴대폰 설정 앱에서도 (마을의 "설정" 단추가 여는 곳)
+	var phone: PhoneWindow = _village.get_node("HUD").find_child("PhoneWindow", true, false)
+	_check(phone != null, "마을의 휴대폰")
+	if phone != null:
+		phone.open(PhoneWindow.Tab.SETTINGS)
+		await get_tree().process_frame
+		var settings: SettingsPanel = phone.settings_panel()
+		_check(settings != null and settings.name_edit().text == "솔바람", "설정 앱에 지금 닉네임")
+		if settings != null:
+			settings.name_edit().text = ""
+			settings.save_name()
+		phone.close()
 		_check(await _wait_until(func() -> bool: return Net.names.get(Net.my_id, "x") == "", 3.0) and GameData.player_name(Net.my_id) == GameData.default_player_name(Net.my_id), "비우면 기본 이름으로: %s" % GameData.player_name(Net.my_id))
 
 	# 거울에서 멀면 서버가 거절
