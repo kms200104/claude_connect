@@ -135,7 +135,10 @@ func _place_camera() -> void:
 	cam.global_transform = Transform3D(Basis.from_euler(Vector3(_pitch, _yaw, 0.0)), eye)
 	cam.fov = fov
 	if _live_cam != null:
-		_live_cam.global_transform = _to_village() * cam.global_transform
+		# 자리만 줄여 옮기고(view_depth_scale), 보는 방향은 동 방향만큼 돌리기만 한다. 줄인 변환을 카메라 방향에까지 곱하면
+		# 시야가 가로로 찌그러지고 위아래로 볼 때 기울어져 창밖이 "사진을 우겨넣은" 것처럼 보인다.
+		var to_village: Transform3D = _to_village()
+		_live_cam.global_transform = Transform3D(to_village.basis.orthonormalized() * cam.global_transform.basis, to_village * cam.global_transform.origin)
 		_live_cam.fov = cam.fov
 		var want: Vector2i = Vector2i((Vector2(get_viewport().get_visible_rect().size) * live_scale).round())
 		if _vp.size != want:

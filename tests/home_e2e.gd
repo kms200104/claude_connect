@@ -106,6 +106,14 @@ func _first_person(home: HomeController, player: Player, tag: String) -> void:
 	_check(not player.body.visible, "[%s] 1인칭: 내 캐릭터는 안 보인다" % tag)
 	_check(glass != null and float(glass.get_shader_parameter("use_live")) > 0.5 and glass.get_shader_parameter("live_view") is ViewportTexture, "[%s] 1인칭: 창유리에 실시간 창밖 풍경" % tag)
 	_check(button.text == "돌아가기", "[%s] 1인칭: '돌아가기' 단추" % tag)
+	# 위아래로 둘러봐도 창밖 카메라가 찌그러지지 않는다 (방향 행렬이 직교 · 단위 길이 = 회전만).
+	home.first_person.set("_pitch", deg_to_rad(40.0))
+	await get_tree().process_frame
+	var live: Camera3D = home.first_person.get("_live_cam")
+	var b: Basis = live.global_basis if live != null else Basis()
+	var skew: float = absf(b.x.dot(b.y)) + absf(b.y.dot(b.z)) + absf(b.z.dot(b.x)) + absf(b.x.length() - 1.0) + absf(b.y.length() - 1.0) + absf(b.z.length() - 1.0)
+	_check(live != null and skew < 0.001, "[%s] 1인칭: 위를 봐도 창밖 카메라가 찌그러지지 않음 (%.4f)" % [tag, skew])
+	_check(live != null and absf(live.global_basis.z.y - cam.global_basis.z.y) < 0.001, "[%s] 1인칭: 창밖 카메라도 같은 높낮이로 본다" % tag)
 	button.pressed.emit()
 	await get_tree().create_timer(0.3).timeout
 	_check(not home.first_person.active and player.body.visible and float(glass.get_shader_parameter("use_live")) < 0.5, "[%s] 돌아가기: 캐릭터 · 찍어 둔 창밖 사진으로" % tag)
