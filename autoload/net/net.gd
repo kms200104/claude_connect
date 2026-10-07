@@ -132,6 +132,8 @@ var server_url: String = ""
 var room_code: String = ""
 var my_id: int = 0
 var partner_present: bool = false
+## v17: 테스트 도구가 켜진 서버 (설정의 "테스트: 솔 받기" 단추를 보인다).
+var dev_tools: bool = false
 var partner_online: bool = false
 var rtt_ms: float = 0.0
 var uid: String = ""
@@ -1025,6 +1027,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	my_id = int(msg.get("id", 0))
 	_token = str(msg.get("token", ""))
 	room_code = str(msg.get("code", room_code))
+	dev_tools = bool(msg.get("dev", false))
 	_save_last_room(room_code)
 	_intent = Intent.NONE
 	_attempt = 0

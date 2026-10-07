@@ -208,6 +208,16 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return jobs.chip_text().contains("받기"), 2.0), "칩: %s" % jobs.chip_text())
 	var job: Dictionary = Economy.job()
 	var from: Dictionary = job.get("from", {})
+	# v0.13.7 방향 화살표: 멀리 있으면 캐릭터 둘레에서 받을 곳 쪽을 가리킨다.
+	var walker: Player = _village.get_node("Player")
+	var from_at: Vector3 = Vector3(float(from.get("x", 0.0)), 0.0, float(from.get("z", 0.0)))
+	await _teleport(from_at + Vector3(0.0, 0.1, 25.0))
+	await get_tree().create_timer(0.2).timeout
+	var arrow: Node3D = jobs.get_node("JobArrow")
+	var to_target: Vector3 = (from_at - walker.global_position) * Vector3(1, 0, 1)
+	var pointing: Vector3 = -arrow.global_basis.z
+	_check(arrow.visible and pointing.normalized().dot(to_target.normalized()) > 0.98, "화살표가 받을 곳을 가리킨다 (%.2f)" % pointing.normalized().dot(to_target.normalized()))
+	_check(absf(Vector2(arrow.global_position.x - walker.global_position.x, arrow.global_position.z - walker.global_position.z).length() - jobs.arrow_radius) < 0.3, "화살표는 캐릭터 둘레에")
 	await _teleport(Vector3(float(from.get("x", 0.0)), 0.1, float(from.get("z", 0.0)) + 0.6))
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.JOB and interaction.target_id == JobController.TARGET_PICK, 2.0), "받을 곳에서 '물건 받기'")
 	interaction.action_hud.action_pressed.emit()
@@ -221,9 +231,23 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return job_done.size() == 1, 3.0), "배달 완료")
 	_check(int(job_done[0].get("tip", 0)) > 0 if not job_done.is_empty() else false, "빨리 와서 팁")
 	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_job == int(job_done[0].get("total", 0)) and Economy.job().is_empty(), 2.0), "삯이 지갑에 · 일거리 끝")
+	_check(int(job_done[0].get("streak", 0)) == 1 and int(Economy.jobs.get("streak", 0)) == 1, "연속 팁 1번째 (보너스는 2번째부터)")
+	_check(not jobs.get_node("JobArrow").visible, "일이 끝나면 화살표도 사라진다")
 	econ.phone.open(PhoneWindow.Tab.JOBS)
 	await get_tree().process_frame
 	_check(econ.phone.is_open() and int(Economy.jobs.get("done", 0)) == 1, "일거리 앱: 오늘 1건")
+	econ.phone.close()
+
+	# ---- v17 테스트 도구: 설정 앱의 "테스트: 2000억 솔 받기" ----
+	_check(Net.dev_tools, "테스트 도구가 켜진 서버 (DEV_TOOLS=1)")
+	econ.phone.open(PhoneWindow.Tab.SETTINGS)
+	await get_tree().process_frame
+	var settings: SettingsPanel = econ.phone.get("_settings")
+	_check(settings != null and settings.dev_button != null, "설정에 '테스트: 2000억 솔 받기' 단추")
+	if settings != null and settings.dev_button != null:
+		var sol_before_dev: int = Net.sol
+		settings.dev_button.pressed.emit()
+		_check(await _wait_until(func() -> bool: return Net.sol - sol_before_dev == 200000000000, 3.0), "누르면 2000억 솔이 들어온다 (%s)" % Money.short(Net.sol - sol_before_dev))
 	econ.phone.close()
 
 	# ---- 식당 ----

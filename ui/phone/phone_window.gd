@@ -1261,6 +1261,12 @@ func _build_jobs() -> void:
 	var most: int = int(info.get("max", GameData.jobs.daily_max))
 	_body.add_child(_label("마을 일거리 · 오늘 %d / %d 건" % [done, most], 32, INK))
 	_body.add_child(_label("물건을 받아 주민 집까지 갖다주면 삯을 받아요. 멀수록 많이, 빨리 가면 팁, 친구와 같이 가면 두 사람 모두 보너스!", 24, SOFT))
+	var streak: int = int(info.get("streak", 0))
+	if streak > 0:
+		var next_pct: int = roundi(minf(GameData.jobs.streak_per * streak, GameData.jobs.streak_max) * 100.0)
+		_body.add_child(_label("🔥 연속 팁 %d번째! 다음에도 시간 안에 갖다주면 삯의 %d%% 를 더 받아요." % [streak, next_pct], 26, GOOD))
+	else:
+		_body.add_child(_label("시간 안에 연달아 갖다주면 2번째부터 연속 팁 보너스가 붙어요 (늦거나 그만두면 끊겨요).", 24, SOFT))
 	var j: Dictionary = Economy.job()
 	if not j.is_empty():
 		var card: VBoxContainer = _card()

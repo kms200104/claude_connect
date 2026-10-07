@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v16
+# 네트워크 프로토콜 v17
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -17,6 +17,7 @@ v13 → v14: 닉네임 — `set_name{rid name}` → `name{rid? id name}`(방 전
 v14 → v15: 휴대폰 연출 — `phone{on}`(꺼내 듦/넣음 → 플레이어 정보 · 스냅샷의 `phone`), `phone_tap`(들고 있을 때만, 120ms에 한 번 → 다른 사람에게 `act{kind: "phone_tap"}`). 끊기면 `phone` 은 false. 저장 파일은 그대로.
 v15 → v16: 휴대폰 앱 · 놀거리 — 도감 · 업적 · 칭호(`profile` 의 `stats dex ach title birthday`, 새로 이루면 `ach{ids}`, `set_title` → `title{id title}` 방 전체, 플레이어 정보의 `title`), 생일(`set_birthday`, 그날 주민 축하 마을톡 · 선물, 주민 생일은 `npcs.json` 의 `birthday` · `talk_open.bday`), 날씨 · 달력(`cal_info` → `cal`), 친구 집 놀러 가기(`home_visit` → `home` · 주인에게 `visit`), 방명록(`home.gb`, `gb_write` → `gb`), 마을톡 사진(`photo_up` → `photo_sent` · 메시지의 `ph`(글은 한마디, 없으면 "📷 사진"), `photo_get` → `photo`, 사진만 큰 메시지 허용). 에러 `bad_title bad_birthday not_visitable bad_photo no_photo`. 저장 파일은 schema 6 그대로 (프로필에 `stats dex ach title birthday bdayYear visitDay`, world 에 `guestbooks photos photoSeq notedDay` — 없으면 빈 값).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
+v16 → v17: 배달 연속 팁 — `job` 에 `streak`(지금 연속 횟수), `job_result` 에 `streak streakBonus` (2번째 연속부터 삯 × `jobs.json streak.per` × (연속 − 1), 최대 `streak.max`. 늦거나 들고 있던 배달을 그만두면 0, 프로필 `tipStreak` 에 저장). 테스트 도구 — `welcome.dev`(서버가 `DEV_TOOLS=1` 이면 true), `dev_grant{rid}` → `dev_granted{rid, amount, sol}` + `profile` (`DEV_GRANT_SOL`, 기본 2000억 솔. 꺼진 서버는 `dev_off`). 앱 안 테스트 서버는 늘 켜져 있다.
 
 ## 클라이언트 → 서버
 | t | 필드 | 설명 |

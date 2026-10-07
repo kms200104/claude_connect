@@ -14,6 +14,8 @@ const SAVE_PATH: String = "user://test_server.json"
 const FIRST_PORT: int = 18680
 const ROOM_CODE: String = "TEST01"
 const ERR_TEST_ONLY: String = "test_server"
+## 테스트 도구 한 번에 주는 솔 (진짜 서버 config.devGrantSol 과 같다).
+const DEV_GRANT_SOL: int = 200000000000
 ## 마을 시간대 (서버 기본 UTC+9).
 const UTC_OFFSET_MS: float = 9.0 * 3600.0 * 1000.0
 ## 나무·꽃이 자라는 빠르기 (진짜 서버의 게임 분 → 실제 초: 1분 = 6초).
@@ -338,6 +340,11 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			pass
 		"cal_info":
 			_send(peer, _calendar())
+		"dev_grant":
+			_sol += DEV_GRANT_SOL
+			_send(peer, {"t": "dev_granted", "rid": rid, "amount": DEV_GRANT_SOL, "sol": _sol})
+			_send(peer, {"t": "profile", "sol": _sol})
+			_save()
 		_:
 			if rid != null:
 				fail.call(ERR_TEST_ONLY)
@@ -886,6 +893,8 @@ func _welcome(resumed: bool) -> Dictionary:
 	w["token"] = "local-test-token"
 	w["code"] = ROOM_CODE
 	w["resumed"] = resumed
+	# 테스트 서버는 늘 테스트 도구를 켠다 (설정의 "테스트: 2000억 솔 받기").
+	w["dev"] = true
 	w["st"] = _now()
 	w["clock"] = {"g": Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS, "s": 1, "st": _now()}
 	w["inv"] = _inventory_wire()

@@ -107,6 +107,7 @@ function newProfile(uid, slot, cfg, data) {
     banksUsed: [], // 상품을 든 적이 있는 금융기관 (첫 거래 우대)
     coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
     jobDay: null, // 일거리: { day: 마을 날짜, done: 그날 한 배달 수 }
+    tipStreak: 0, // 배달 연속 팁 (시간 안에 갖다준 연속 횟수)
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },
@@ -399,6 +400,7 @@ export class Room {
         banksUsed: Array.isArray(p.banksUsed) ? p.banksUsed.filter((b) => data.savings?.institutions.has(b)) : [],
         coopMember: !!p.coopMember,
         jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
+        tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
         stats: sanitizeStats(p.stats),
         dex: sanitizeDex(p.dex, data),
         ach: data.achievements ? sanitizeAch(p.ach, data.achievements) : [],

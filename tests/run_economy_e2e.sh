@@ -12,7 +12,7 @@ trap cleanup EXIT
 
 NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
-(cd "$ROOT/server" && exec env CLOCK_OFFSET_MIN="$OFFSET" WEATHER_FORCE=clear MOVE_SLACK_M=200 DOOR_GRACE_MS=0 QUEST_CHANCE=0 EVENT_FORCE=none \
+(cd "$ROOT/server" && exec env DEV_TOOLS=1 CLOCK_OFFSET_MIN="$OFFSET" WEATHER_FORCE=clear MOVE_SLACK_M=200 DOOR_GRACE_MS=0 QUEST_CHANCE=0 EVENT_FORCE=none \
   EVENT_SPAWN_SCALE=0.02 MARKET_TICK_MS=1000 REST_SPAWN_SCALE=0.05 START_SOL=1000000000 START_ITEMS=rice:2,laver:2 \
   PORT="$PORT" SAVE_DIR="$DIR/saves" node src/index.js >"$DIR/server.log" 2>&1) &
 PID=$!

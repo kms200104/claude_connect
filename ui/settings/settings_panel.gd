@@ -15,6 +15,8 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const CARD: Color = Color(1.0, 1.0, 1.0, 0.72)
 const ACCENT: Color = Color("#F2A14A")
 
+## v17 테스트 도구 단추 (테스트 서버일 때만, 테스트에서 누른다).
+var dev_button: Button = null
 var _name_edit: LineEdit = null
 var _name_note: Label = null
 var _sliders: Dictionary[String, HSlider] = {}
@@ -46,6 +48,8 @@ func _ready() -> void:
 	_build_play()
 	_build_quality()
 	_build_screen()
+	if Net.state == Net.State.ONLINE and Net.dev_tools:
+		_build_dev()
 	Quality.changed.connect(refresh)
 	Prefs.events.changed.connect(func(_k: String) -> void: refresh())
 	Journal.changed.connect(_refresh_birthday)
@@ -358,6 +362,30 @@ func _build_screen() -> void:
 # ---- 모양 ----
 
 ## 제목 + 흰 카드. 카드 안 줄을 돌려준다.
+## 테스트 도구 (v17): 테스트 도구를 켠 서버(서버 실행 파일 · 앱 안 테스트 서버)에서만 보인다. 누르면 서버가 2000억 솔을 준다.
+func _build_dev() -> void:
+	var col: VBoxContainer = _section("테스트 도구")
+	col.add_child(_label("여러 기능(아파트 · 증권 · 은행 · 가구)을 바로 시험해 볼 수 있게 솔을 받아요. 테스트 서버에서만 보이는 단추예요.", 24, SOFT))
+	dev_button = _button("테스트: 2000억 솔 받기", 30)
+	dev_button.name = "DevGrantButton"
+	col.add_child(dev_button)
+	var note: Label = _label("", 24, SOFT)
+	col.add_child(note)
+	dev_button.pressed.connect(func() -> void:
+		dev_button.disabled = true
+		note.text = "받는 중…"
+		Net.request("dev_grant"))
+	Net.message_received.connect(func(msg: Dictionary) -> void:
+		if str(msg.get("t", "")) == "dev_granted" and is_instance_valid(note):
+			Audio.play_sfx("coin", -4.0)
+			note.text = "%s 을 받았어요! 지금 %s" % [Money.short(int(msg.get("amount", 0))), Money.short(int(msg.get("sol", 0)))]
+			dev_button.disabled = false)
+	Net.request_failed.connect(func(kind: String, code: String) -> void:
+		if kind == "dev_grant" and is_instance_valid(note):
+			note.text = "이 서버는 테스트 도구가 꺼져 있어요 (DEV_TOOLS=1 로 켜기)." if code == NetProtocol.ERR_DEV_OFF else "받지 못했어요 (%s)" % code
+			dev_button.disabled = false)
+
+
 func _section(title: String) -> VBoxContainer:
 	add_child(_label(title, 34, INK, false))
 	var card: PanelContainer = PanelContainer.new()

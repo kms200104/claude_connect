@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 16
+const VERSION: int = 17
 
 ## v14 닉네임: 최대 글자 수 (서버 nickname.js NAME_MAX 와 같다).
 const NAME_MAX: int = 10
@@ -140,6 +140,8 @@ const ERR_BAD_PRODUCT: String = "bad_product"
 const ERR_BAD_ACCOUNT: String = "bad_account"
 const ERR_ACCOUNT_LIMIT: String = "account_limit"
 const ERR_JOB_BUSY: String = "job_busy"
+## v17 테스트 도구가 꺼진 서버 (DEV_TOOLS=1 이 아님).
+const ERR_DEV_OFF: String = "dev_off"
 const ERR_JOB_LIMIT: String = "job_limit"
 const ERR_NO_JOB: String = "no_job"
 const ERR_NOT_AT_JOB: String = "not_at_job"

@@ -3,6 +3,7 @@ extends Node
 ## 일거리 (v0.12): 배달 알바의 화면. 휴대폰 '일거리' 앱에서 받으면 (Economy.take_job)
 ## 받을 곳 → 주민 집 차례로 땅에 빛기둥 표식을 세우고, 화면 위쪽 칩에 남은 거리·시간을 보여 준다.
 ## 가까이 가면 상황 버튼("물건 받기" · "배달하기")이 뜬다. 판정(거리 · 삯 · 팁 · 같이 배달)은 서버가 한다.
+## v0.13.7: 캐릭터 발밑 둘레에 가야 할 쪽(받을 곳 · 집)을 가리키는 화살표, 연속 팁(서버 jobs.json streak) 표시.
 
 @export var player: Player
 ## 칩을 붙일 곳.
@@ -15,6 +16,9 @@ extends Node
 @export_range(0.0, 1.0, 0.05, "suffix:m") var safety_margin: float = 0.4
 ## 표식 빛기둥 높이.
 @export_range(1.0, 12.0, 0.5, "suffix:m") var beacon_height: float = 6.0
+## 방향 화살표: 캐릭터에서 이만큼 떨어진 둘레에 놓고, 목적지가 이보다 가까우면 감춘다 (빛기둥이 보이니까).
+@export_range(0.5, 4.0, 0.05, "suffix:m") var arrow_radius: float = 1.7
+@export_range(1.0, 15.0, 0.5, "suffix:m") var arrow_hide_within: float = 5.0
 
 const TARGET_PICK: String = "job_pick"
 const TARGET_DROP: String = "job_drop"
@@ -28,12 +32,15 @@ var _beacon_ring: MeshInstance3D = null
 var _beacon_pillar: MeshInstance3D = null
 var _beacon_box: MeshInstance3D = null
 var _chip: Button = null
+var _arrow: Node3D = null
+var _arrow_material: StandardMaterial3D = null
 var _confirm_quit: bool = false
 var _t: float = 0.0
 
 
 func _ready() -> void:
 	_build_beacon()
+	_build_arrow()
 	_build_chip()
 	Economy.job_changed.connect(_refresh)
 	Economy.job_done.connect(_on_done)
@@ -93,6 +100,7 @@ func _process(delta: float) -> void:
 	var pulse: float = 1.0 + sin(_t * 3.0) * 0.08
 	_beacon_ring.scale = Vector3(pulse, 1.0, pulse)
 	_beacon.visible = not Home.is_inside()
+	_place_arrow(at)
 	if not _confirm_quit:
 		_chip.text = _chip_line(j, at)
 
@@ -103,6 +111,9 @@ func _chip_line(j: Dictionary, at: Vector3) -> String:
 		return "📦 %s · %s 에서 받기 · %dm" % [str(j.get("name", "")), str(j.get("from", {}).get("name", "")), dist]
 	var left_s: int = maxi(0, ceili((Economy.job_due_ms - Time.get_ticks_msec()) / 1000.0))
 	var who: String = "%s네 집" % GameData.npc_name(str(j.get("to", {}).get("npc", "")))
+	var streak: int = int(Economy.jobs.get("streak", 0))
+	if left_s > 0 and streak > 0:
+		return "📦 %s · %dm · 팁까지 %d:%02d · 🔥연속 %d" % [who, dist, left_s / 60, left_s % 60, streak]
 	if left_s > 0:
 		return "📦 %s · %dm · 팁까지 %d:%02d" % [who, dist, left_s / 60, left_s % 60]
 	return "📦 %s · %dm · (팁 시간 지남)" % [who, dist]
@@ -114,6 +125,7 @@ func _refresh() -> void:
 	_confirm_quit = false
 	_chip.visible = active
 	_beacon.visible = active
+	_arrow.visible = active
 	if not active:
 		return
 	var carry: bool = str(j.get("stage", "")) == "carry"
@@ -122,6 +134,7 @@ func _refresh() -> void:
 	(_beacon_ring.material_override as StandardMaterial3D).albedo_color = Color(color, 0.75)
 	_beacon_box.mesh = CharacterModel.carry_prop(str(j.get("item", "parcel")))
 	_beacon_box.visible = not carry
+	_arrow_material.albedo_color = color
 	_chip.add_theme_color_override("font_color", color.darkened(0.45))
 
 
@@ -135,6 +148,10 @@ func _on_done(r: Dictionary) -> void:
 		parts.append("빨리 와서 팁 %s" % Money.short(int(r.get("tip", 0))))
 	if int(r.get("bonus", 0)) > 0:
 		parts.append("같이 배달 %s" % Money.short(int(r.get("bonus", 0))))
+	if int(r.get("streakBonus", 0)) > 0:
+		parts.append("🔥연속 팁 %d번 %s" % [int(r.get("streak", 0)), Money.short(int(r.get("streakBonus", 0)))])
+	elif bool(r.get("onTime", true)) == false:
+		parts.append("시간이 지나 연속 팁이 끊겼어요")
 	toast_hud.show_toast("%s 님께 배달 완료! +%s (%s)" % [GameData.npc_name(str(r.get("npc", ""))), Money.short(int(r.get("total", 0))), " · ".join(parts)], true)
 	var actor: NpcActor = NpcActor.find(get_tree(), str(r.get("npc", "")))
 	if actor != null:
@@ -178,6 +195,63 @@ func _build_chip() -> void:
 	_chip.visible = false
 	if hud != null:
 		hud.add_child.call_deferred(_chip)
+
+
+## 화살표: 캐릭터 둘레(arrow_radius)에서 목적지 쪽을 가리킨다. 목적지가 가까우면(빛기둥이 보이면) · 집 안이면 감춘다.
+func _place_arrow(at: Vector3) -> void:
+	if player == null:
+		return
+	var from: Vector3 = player.global_position
+	var flat: Vector2 = Vector2(at.x - from.x, at.z - from.z)
+	var show: bool = flat.length() > arrow_hide_within and not Home.is_inside()
+	_arrow.visible = show
+	if not show:
+		return
+	var dir: Vector2 = flat.normalized()
+	# 앞으로 살짝 밀었다 당기며 (가는 쪽을 알기 쉽게).
+	var push: float = arrow_radius + 0.18 * sin(_t * 4.0)
+	_arrow.global_position = Vector3(from.x + dir.x * push, from.y + 0.25, from.z + dir.y * push)
+	# 화살표 모형의 앞은 -Z.
+	_arrow.rotation = Vector3(0.0, atan2(-dir.x, -dir.y), 0.0)
+
+
+## 납작한 화살표 (머리 삼각형 + 몸통), 위아래 두 장: 아래는 짙은 테두리라 풀밭 · 모래 어디서나 보인다.
+func _build_arrow() -> void:
+	_arrow = Node3D.new()
+	_arrow.name = "JobArrow"
+	add_child(_arrow)
+	_arrow.top_level = true
+	_arrow_material = StandardMaterial3D.new()
+	_arrow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_arrow_material.albedo_color = PICK_COLOR
+	var rim: StandardMaterial3D = StandardMaterial3D.new()
+	rim.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rim.albedo_color = Color(0.25, 0.18, 0.1)
+	for layer: Array in [[1.25, rim, 0.0], [1.0, _arrow_material, 0.02]]:
+		var mi: MeshInstance3D = MeshInstance3D.new()
+		mi.mesh = _arrow_mesh(float(layer[0]))
+		mi.material_override = layer[1]
+		mi.position.y = float(layer[2])
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_arrow.add_child(mi)
+	_arrow.visible = false
+
+
+static func _arrow_mesh(scale: float) -> ArrayMesh:
+	# 앞(-Z)을 가리키는 화살표 윤곽 (반시계, 위에서 볼 때).
+	var outline: PackedVector2Array = PackedVector2Array([
+		Vector2(0.0, -0.55), Vector2(0.42, -0.05), Vector2(0.16, -0.05), Vector2(0.16, 0.4),
+		Vector2(-0.16, 0.4), Vector2(-0.16, -0.05), Vector2(-0.42, -0.05),
+	])
+	var center: Vector2 = Vector2(0.0, -0.05)
+	var st: SurfaceTool = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	var tris: PackedInt32Array = Geometry2D.triangulate_polygon(outline)
+	for i: int in tris.size():
+		var p: Vector2 = center + (outline[tris[i]] - center) * scale
+		st.add_vertex(Vector3(p.x, 0.0, p.y))
+	return st.commit()
 
 
 func _build_beacon() -> void:

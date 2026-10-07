@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -8,6 +8,7 @@ export const SAY_MAX_CHARS = 90;
 export const ErrorCode = Object.freeze({
   badVersion: 'bad_version',
   badMessage: 'bad_message',
+  devOff: 'dev_off', // 테스트 도구가 꺼진 서버 (DEV_TOOLS=1 이 아님)
   notInRoom: 'not_in_room',
   alreadyInRoom: 'already_in_room',
   roomNotFound: 'room_not_found',

@@ -2,6 +2,8 @@
 // job_take → 서버가 받을 곳과 갖다줄 주민 집을 골라 job 으로 알린다. job_pick(받을 곳 곁) → 물건을 든다 (모두에게 들고 있는 모습).
 // job_drop(주민 집 곁) → 삯 + (시간 안이면) 팁 + (친구가 곁에 있으면) 두 사람 모두 같이 보너스. 시간이 지나도 실패는 없다.
 // 하던 배달은 접속 동안만 기억한다 (나갔다 오면 다시 받는다). 하루 건수만 프로필에 남긴다.
+// 연속 팁 (v0.13.7): 시간 안에 갖다줄 때마다 연속 횟수(profile.tipStreak)가 오르고, 2번째부터 삯 × streak.per × (연속 - 1)
+// (최대 streak.max)을 더 받는다. 늦게 갖다주거나 들고 있던 배달을 그만두면 0 으로.
 import { ErrorCode } from './protocol.js';
 import { earn } from './economy.js';
 import { addFriendship, relationOf } from './quests.js';
@@ -32,6 +34,13 @@ export function loadJobs(raw, npcs, realestate = null, floorplans = null) {
   return { ...raw, pickups, kindById: new Map(raw.kinds.map((k) => [k.id, k])), houses };
 }
 
+/** 연속 팁 보너스: 2번째 연속부터 삯 × per × (연속 - 1), 최대 삯 × max. 100 솔 단위. */
+export function streakBonusOf(rules, pay, streak) {
+  const s = rules.streak;
+  if (!s || streak < 2) return 0;
+  return Math.round((pay * Math.min(s.per * (streak - 1), s.max)) / 100) * 100;
+}
+
 /** 받을 곳 → 집 거리로 삯과 넉넉한 시간(초)을 매긴다. */
 export function quoteJob(rules, kind, from, to) {
   const dist = Math.hypot(to.x - from.x, to.z - from.z);
@@ -59,6 +68,7 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
       job: j
         ? { kind: j.kind, name: j.name, item: j.item, stage: j.stage, from: j.from, to: j.to, pay: j.pay, tip: j.tip, dist: j.dist, limit_s: j.limitS, left_ms: Math.max(0, j.dueAt - now()) }
         : null,
+      streak: p.tipStreak ?? 0,
       kinds: rules.kinds.map((k) => ({ id: k.id, name: k.name, about: k.about })),
     };
   }
@@ -116,12 +126,14 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
     const p = player.profile;
     const onTime = now() <= j.dueAt;
     const tip = onTime ? j.tip : 0;
+    p.tipStreak = onTime ? (p.tipStreak ?? 0) + 1 : 0;
+    const streakBonus = streakBonusOf(rules, j.pay, p.tipStreak);
     // 같이 배달: 같은 방의 다른 사람이 곁에 있으면 두 사람 모두 보너스 (빼앗지 않고 더한다).
     const friends = [...room.players.values()].filter(
       (o) => o !== player && o.online && Math.hypot(o.x - player.x, o.z - player.z) <= rules.together_m,
     );
     const bonus = friends.length > 0 ? Math.round((j.pay * rules.together) / 100) * 100 : 0;
-    const total = j.pay + tip + bonus;
+    const total = j.pay + tip + bonus + streakBonus;
     p.sol += total;
     earn(p, total);
     p.jobDay.done += 1;
@@ -137,7 +149,7 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
     player.job = null;
     room.dirty = true;
     room.saveDirty = true;
-    send(ctx.ws, { t: 'job_result', rid: msg.rid, by: player.id, kind: j.kind, npc: j.to.npc, pay: j.pay, tip, bonus, total, onTime, with: friends.map((o) => o.id), sol: p.sol });
+    send(ctx.ws, { t: 'job_result', rid: msg.rid, by: player.id, kind: j.kind, npc: j.to.npc, pay: j.pay, tip, bonus, streak: p.tipStreak, streakBonus, total, onTime, with: friends.map((o) => o.id), sol: p.sol });
     act(room, player, 'deliver', j.to.npc);
     sendProfile(player);
     sendJob(player);
@@ -148,6 +160,8 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
     if (player.job?.stage === 'carry') {
       act(room, player, 'carry', '');
       room.dirty = true;
+      // 들고 있던 배달을 그만두면 연속 팁도 끊긴다.
+      player.profile.tipStreak = 0;
     }
     player.job = null;
     sendJob(player);

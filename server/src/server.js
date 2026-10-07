@@ -495,6 +495,8 @@ export function createServer(overrides = {}) {
       chats: messenger.wire(room, player.profile),
       couriers: delivery.wire(room),
       deliv: delivery.mine(room, player.uid),
+      // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
+      dev: cfg.devTools,
     });
     room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
     // v16: 들어올 때 가진 가구 · 옷을 도감에 올리고 업적을 확인한다 (바뀌었으면 프로필을 다시).
@@ -1723,6 +1725,16 @@ export function createServer(overrides = {}) {
       case 'job_drop':
       case 'job_quit':
         return jobs.handle(ctx, msg, fail);
+      case 'dev_grant': {
+        // 테스트 도구: DEV_TOOLS=1 로 켠 서버에서만, 요청한 사람에게 devGrantSol 솔을 준다 (번 돈 · 업적에는 세지 않는다).
+        if (!player.acceptRid(msg.rid)) return;
+        if (!cfg.devTools) return fail(ErrorCode.devOff);
+        player.profile.sol += cfg.devGrantSol;
+        ctx.room.saveDirty = true;
+        send(ctx.ws, { t: 'dev_granted', rid: msg.rid, amount: cfg.devGrantSol, sol: player.profile.sol });
+        sendProfile(player);
+        return;
+      }
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
@@ -1903,6 +1915,7 @@ export function createServer(overrides = {}) {
       case 'job_pick':
       case 'job_drop':
       case 'job_quit':
+      case 'dev_grant':
       case 'bank_quote':
       case 'loan_take':
       case 'loan_repay':
