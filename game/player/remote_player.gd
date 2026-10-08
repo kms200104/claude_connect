@@ -82,16 +82,29 @@ func set_outfit(hat: String, top: String) -> void:
 		_outfit_known = true
 		return
 	if _outfit_known and online and visible and is_inside_tree():
-		OutfitBooth.play(rig, func() -> void: rig.set_outfit(_want_hat, _want_top))
+		OutfitBooth.play(rig, _apply_wanted)
 		return
 	_outfit_known = true
 	rig.set_outfit(hat, top)
 
 
-## 배달 알바 복장 (스냅샷마다 온다).
+## 배달 알바 복장 (스냅샷마다 온다). 보이던 친구가 배달을 받거나 끝내면 탈의소에서 갈아입는다.
 func set_uniform(on: bool) -> void:
-	if rig != null:
-		rig.set_uniform(on)
+	if rig == null:
+		return
+	_want_job = on
+	if OutfitBooth.is_pending(rig) or rig.is_uniformed() == on:
+		return
+	if _outfit_known and online and visible and is_inside_tree():
+		OutfitBooth.play(rig, _apply_wanted)
+		return
+	rig.set_uniform(on)
+
+
+## 커튼이 닫혔을 때: 그때까지 들어온 옷 · 복장을 입힌다.
+func _apply_wanted() -> void:
+	rig.set_outfit(_want_hat, _want_top)
+	rig.set_uniform(_want_job)
 
 
 func _ready() -> void:
@@ -107,6 +120,7 @@ func _ready() -> void:
 
 var _want_hat: String = ""
 var _want_top: String = ""
+var _want_job: bool = false
 var _outfit_known: bool = false
 
 
@@ -119,8 +133,9 @@ func setup(state: NetPlayerState) -> void:
 		body.rotation.y = state.yaw
 	set_online(state.online)
 	_apply_held(state.held)
-	set_outfit(state.hat, state.top)
+	# 처음 나타날 때는 탈의소 없이 바로 (복장을 먼저 — 옷을 입히면 그다음부터 바뀔 때 탈의소).
 	set_uniform(state.job)
+	set_outfit(state.hat, state.top)
 	set_phone(state.phone)
 
 

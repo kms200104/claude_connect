@@ -140,6 +140,8 @@ var _outfit: Dictionary[String, MeshInstance3D] = {}
 var _outfit_ids: Dictionary[String, String] = {"hat": "", "top": ""}
 ## 배달 알바 복장을 입은 중.
 var _uniform: bool = false
+## 탈의소에서 갈아입고 짜잔 하는 동안 손에 든 도구를 감춘다 (OutfitBooth).
+var _tools_hidden: bool = false
 var _helmet: MeshInstance3D = null
 var _bag: Node3D = null
 static var _text_material: Material = null
@@ -205,6 +207,23 @@ func set_uniform(on: bool) -> void:
 
 func is_uniformed() -> bool:
 	return _uniform
+
+
+## 손에 든 도구(낚싯대 · 도끼 · 삽 · 요리 도구 · 들고 가는 물건)를 잠깐 감추거나 되돌린다.
+func set_tools_hidden(on: bool) -> void:
+	if _tools_hidden == on:
+		return
+	_tools_hidden = on
+	if on:
+		_hide_tools()
+	else:
+		set_held(held_item)
+
+
+func _hide_tools() -> void:
+	for holder: Node3D in [rod, axe, tool]:
+		if holder != null:
+			holder.visible = false
 
 
 ## 갈아입고 나와 "짜잔!" 하는 자세 (한 바퀴 도는 것은 OutfitBooth 가 함께 맞춘다).
@@ -579,6 +598,9 @@ func get_eye_offset() -> Vector2:
 func _process(delta: float) -> void:
 	if tree == null:
 		return
+	# 휴대폰 넣기 · 가방 닫기처럼 도구를 다시 꺼내는 동작이 그사이 와도 감춘 채로.
+	if _tools_hidden:
+		_hide_tools()
 	if _expression != null and _expression.visible:
 		_expression_hold -= delta
 		if _expression_hold <= 0.0 and not is_emoting():

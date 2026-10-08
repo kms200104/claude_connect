@@ -139,14 +139,18 @@ func _refresh() -> void:
 	_chip.add_theme_color_override("font_color", color.darkened(0.45))
 
 
-## 배달하는 동안은 파란 헬멧(쓰던 모자 자리)과 "배달의 솔" 가방 (v0.15). 입고 벗을 때 뿅 하고 연기.
+## 배달하는 동안은 파란 헬멧(쓰던 모자 자리)과 "배달의 솔" 가방 (v0.15). 받을 때 · 끝낼 때 탈의소에서 갈아입는다.
 func _wear_uniform(on: bool) -> void:
-	if player == null or player.rig == null or player.rig.is_uniformed() == on:
+	if player == null or player.rig == null:
 		return
-	player.rig.set_uniform(on)
-	if player.is_inside_tree():
-		Puff.burst(player.get_parent(), player.global_position + Vector3(0.0, 1.1, 0.0), Color(1.0, 1.0, 1.0, 0.85), 8, 0.6, 0.5, 0.12, 0.5)
-		Audio.play_sfx("emote_pop", -8.0)
+	var rig: CharacterRig = player.rig
+	# 갈아입는 중이면 커튼이 닫힐 때 그때의 복장으로 입힌다.
+	if OutfitBooth.is_pending(rig) or rig.is_uniformed() == on:
+		return
+	if player.is_inside_tree() and player.body.visible:
+		OutfitBooth.play(rig, OutfitBooth.apply_local.bind(rig), player)
+	else:
+		rig.set_uniform(on)
 
 
 func _on_done(r: Dictionary) -> void:

@@ -33,6 +33,12 @@ const STRIPE_B: Color = Color("#FFF5EA")
 const RAIL_COLOR: Color = Color("#C9CFD8")
 const CANOPY_COLOR: Color = Color("#E98FA2")
 
+## 내 캐릭터의 옷 · 배달 복장을 지금 서버가 알려 준 대로 (탈의소의 change 로 쓴다).
+static func apply_local(of_rig: CharacterRig) -> void:
+	of_rig.set_outfit(Net.outfit_hat, Net.outfit_top)
+	of_rig.set_uniform(not Economy.job().is_empty() and Net.state == Net.State.ONLINE)
+
+
 ## 갈아입기를 내가 요청했는지 (가방 창의 입기 · 벗기). 서버 응답이 이 시간 안에 오면 탈의소를 연다.
 static var _local_until_ms: int = 0
 
@@ -171,6 +177,7 @@ func _update(_delta: float) -> void:
 		rig.visual.rotation.y += TAU * _ease_in_out(spin_t)
 	if _shown_again and not _tada_done and _t >= open_at + T_TADA:
 		_tada_done = true
+		rig.set_tools_hidden(false)
 		if player != null:
 			player.set_input_lock(&"booth", false)
 	# 커튼: 넓이(모음 ↔ 닫힘)와 옆으로 미끄러진 거리.
@@ -211,6 +218,8 @@ func _update(_delta: float) -> void:
 func _close_in() -> void:
 	applied = true
 	rig.visible = false
+	# 나와서 짜잔 하는 동안 손에 든 도구는 감춘다.
+	rig.set_tools_hidden(true)
 	if apply.is_valid():
 		apply.call()
 	if player != null:
@@ -254,6 +263,7 @@ func _cleanup() -> void:
 	_cleaned = true
 	if is_instance_valid(rig):
 		rig.visible = true
+		rig.set_tools_hidden(false)
 	if not applied and apply.is_valid():
 		applied = true
 		apply.call()

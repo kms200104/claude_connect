@@ -171,7 +171,7 @@ func _sync_outfit() -> void:
 		if OutfitBooth.is_pending(rig):
 			return
 		if changed and OutfitBooth.take_local() and player.is_inside_tree() and player.body.visible:
-			OutfitBooth.play(rig, func() -> void: rig.set_outfit(Net.outfit_hat, Net.outfit_top), player)
+			OutfitBooth.play(rig, OutfitBooth.apply_local.bind(rig), player)
 			return
 		rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
