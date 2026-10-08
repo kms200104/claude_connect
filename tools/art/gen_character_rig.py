@@ -329,7 +329,41 @@ anim('ride_bike', 1.0, bike, loop=True)
 # ride_moto: 시트에 앉아 발은 발판, 두 손은 핸들. 모터 진동처럼 아주 작게 떨리고 숨 쉬듯 오르내린다.
 MO = lambda y, rz: pose((0,y,0),(-0.18,0,rz),(1,1,1),(1.05,0,AL-0.2),(1.05,0,AR+0.2),(1.2,0,0.08),(1.2,0,-0.08),kl=-1.3,kr=-1.3,el=0.5,er=0.5)
 anim('ride_moto', 1.6, [(0, MO(0,0)), (0.4, MO(0.004,0.01)), (0.8, MO(0,0)), (1.2, MO(0.004,-0.01)), (1.6, MO(0,0))], loop=True)
-RIDES=['ride_bike','ride_moto']
+# ---- 킥보드 (v0.16) ----
+# 발판(바닥 위 DECK_H) 위에 왼발을 앞, 오른발을 뒤에 두고 서서 두 손은 핸들. 발 자리는 골반 관절 기준 (y 아래가 음수, z 앞이 음수)으로
+# 정하고 두 마디 IK 로 허벅지 · 정강이 각도를 푼다. 몸(Visual)을 LIFT 만큼 올리면 발판 위, 내리면 무릎이 굽는다.
+DECK_H=0.095
+LEG=THIGH+SHIN
+def on_deck(lift, z):
+    """몸을 lift 만큼 올렸을 때 발판 위 z 자리의 발 (골반 관절 기준)."""
+    return (round(-LEG+(DECK_H-lift),4), z)
+def on_ground(lift, z):
+    return (round(-LEG-lift,4), z)
+def KB(lift, rx, rz, lfoot, rfoot, el=0.5, er=0.5, ry=0.0, lr_out=0.0, al=None, ar=None):
+    l1,l2=leg_ik(*lfoot); r1,r2=leg_ik(*rfoot)
+    return pose((0,lift,0),(rx,ry,rz),(1,1,1),al or (1.12,0,0.1),ar or (1.12,0,-0.1),(round(l1,4),0,0),(round(r1,4),0,lr_out),
+                kl=round(l2,4),kr=round(r2,4),el=el,er=er)
+KL=0.075  # 발판 위에 선 몸 높이 (무릎을 살짝 굽힌다)
+FRONT=-0.07; BACK=0.11  # 앞발 · 뒷발 자리
+# ride_kick: 발판 위에서 미끄러져 가는 자세. 숨 쉬듯 살짝 오르내리고 몸이 좌우로 아주 조금 흔들린다.
+anim('ride_kick', 2.0, [(round(t,3), KB(KL+0.006*math.sin(t*math.pi), -0.12, 0.015*math.sin(t*math.pi), on_deck(KL+0.006*math.sin(t*math.pi),FRONT), on_deck(KL+0.006*math.sin(t*math.pi),BACK)))
+                        for t in [0.0,0.5,1.0,1.5,2.0]], loop=True)
+# ride_kick_brake: 뒷발 뒤꿈치로 뒷바퀴 흙받이를 꾹 밟고 몸을 살짝 뒤로 젖힌다 (잘게 떨리며 멈춘다).
+FENDER=(0.13, 0.25)  # 흙받이 높이 · 자리
+BK = lambda d: KB(0.06, 0.04+d, 0.0, on_deck(0.06,FRONT-0.02), (round(-LEG+(FENDER[0]-0.06),4), FENDER[1]), el=0.3, er=0.3)
+anim('ride_kick_brake', 0.3, [(0, BK(0)), (0.1, BK(0.012)), (0.2, BK(-0.006)), (0.3, BK(0))], loop=True)
+# kick: 한 번 땅 차기 (0.62초). 서 있는 무릎을 굽혀 몸을 낮추며(예비) 뒷발을 앞쪽 땅에 디뎌 →
+#       뒤로 쭉 밀고(이때 앞으로 나간다 · vehicles.json kick_push) → 발끝으로 차고 들어 올려 → 발판 위로 돌아온다.
+#       미는 동안 몸을 더 숙이고 팔꿈치가 굽는다.
+KK=[(0.0, KL, -0.12, on_deck(KL,BACK), 0.5, 0.0),
+    (0.1, 0.05, -0.15, (-0.27, 0.0), 0.55, 0.14),
+    (0.2, -0.005, -0.2, on_ground(-0.005,-0.02), 0.7, 0.15),
+    (0.31, -0.012, -0.22, on_ground(-0.012,0.11), 0.72, 0.13),
+    (0.42, 0.01, -0.2, (-0.31, 0.24), 0.65, 0.11),
+    (0.5, 0.045, -0.16, (-0.22, 0.25), 0.55, 0.09),
+    (0.62, KL, -0.12, on_deck(KL,BACK), 0.5, 0.0)]
+anim('kick', 0.62, [(t, KB(lift, rx, 0.0, on_deck(lift,FRONT), rf, el=e, er=e, lr_out=out)) for t,lift,rx,rf,e,out in KK])
+RIDES=['ride_bike','ride_moto','ride_kick','ride_kick_brake']
 
 # ---- 허리 · 목 나누기 (v0.13) ----
 # 예전에는 몸 전체(Visual)가 한 덩어리로 기울어 뻣뻣해 보였다. 몸통 회전을 골반(Visual) · 허리 · 목에 나눠 맡긴다:
@@ -407,7 +441,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -456,7 +490,7 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
-''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
 xfade_time = 0.15
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = false\n'%(i,e,i,i,i) for i,e in enumerate(RIDES)) + '''
 [sub_resource type="AnimationNodeTimeScale" id="TimeScale_ride"]
@@ -466,6 +500,10 @@ xfade_time = 0.15
 [sub_resource type="AnimationNodeOneShot" id="OneShot_dig"]
 fadein_time = 0.06
 fadeout_time = 0.12
+
+[sub_resource type="AnimationNodeOneShot" id="OneShot_kick"]
+fadein_time = 0.08
+fadeout_time = 0.1
 
 [sub_resource type="AnimationNodeTransition" id="Transition_cook"]
 xfade_time = 0.12
@@ -550,6 +588,10 @@ nodes/PlantShot/node = SubResource("OneShot_plant")
 nodes/PlantShot/position = Vector2(720, 40)
 nodes/Dig/node = SubResource("AN_dig")
 nodes/Dig/position = Vector2(720, 200)
+nodes/Kick/node = SubResource("AN_kick")
+nodes/Kick/position = Vector2(-120, 420)
+nodes/KickShot/node = SubResource("OneShot_kick")
+nodes/KickShot/position = Vector2(-60, 320)
 nodes/DigShot/node = SubResource("OneShot_dig")
 nodes/DigShot/position = Vector2(820, 40)
 ''' + ''.join('nodes/E_%s/node = SubResource("AN_%s")\nnodes/E_%s/position = Vector2(520, %d)\n'%(e,e,e,360+i*60) for i,e in enumerate(EMOTES)) + '''nodes/EmoteSwitch/node = SubResource("Transition_emote")
@@ -561,7 +603,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"RideBlend", 1, &"RideScale", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"KickShot", 0, &"RideScale", &"KickShot", 1, &"Kick", &"RideBlend", 1, &"KickShot", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "elbow_left", "elbow_right", "knee_left", "knee_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
@@ -664,6 +706,9 @@ parameters/ShowBlend/blend_amount = 0.0
 parameters/PlantShot/active = false
 parameters/PlantShot/internal_active = false
 parameters/PlantShot/request = 0
+parameters/KickShot/active = false
+parameters/KickShot/internal_active = false
+parameters/KickShot/request = 0
 parameters/DigShot/active = false
 parameters/DigShot/internal_active = false
 parameters/DigShot/request = 0

@@ -666,6 +666,46 @@ def v06_sounds() -> None:
         rng = saved
 
 
+def kickboard_sounds() -> None:
+    """v0.16 킥보드: 바퀴 구르는 소리(반복), 발로 땅 차기, 뒷발 브레이크, 접고 펴는 철컥."""
+    # 우레탄 바퀴가 보도를 구르는 소리: 낮게 웅웅 + 보도블록 이음매마다 톡.
+    seconds = 2.4 + 0.4
+    n = int(seconds * SR)
+    t = t_axis(seconds)
+    white = noise(n)
+    rumble = onepole_lp(white, 520) - onepole_lp(white, 90)
+    hum = 0.25 * np.sin(2 * np.pi * 95 * t + 0.6 * np.sin(2 * np.pi * 3.1 * t))
+    x = 0.9 * rumble + hum * onepole_lp(np.abs(white), 8)
+    for k in range(6):
+        start = int((0.2 + k * 0.4 + rng.uniform(-0.03, 0.03)) * SR)
+        ct = t_axis(0.04)
+        click = biquad_bp(noise(len(ct)), 900, 3.0) * env_ad(len(ct), 0.0008, 0.012)
+        mix_at(x, click, start, 0.35)
+    save_wav("kick_roll_loop", loop_crossfade(x, 0.4), 0.55)
+    # 땅 차기: 신발 밑창이 쓱 긁힌다.
+    seconds = 0.22
+    m = int(seconds * SR)
+    scrape = biquad_bp(noise(m), 1400, 1.2) * env_ad(m, 0.02, 0.11)
+    save_wav("kick_push", fade(scrape + 0.4 * onepole_lp(noise(m), 300) * env_ad(m, 0.005, 0.05), 0.002, 0.03), 0.6)
+    # 브레이크: 흙받이가 바퀴를 문지르는 끼익 (조금 떨린다).
+    seconds = 0.45
+    m = int(seconds * SR)
+    bt = t_axis(seconds)
+    squeal = np.sin(2 * np.pi * (1650 + 120 * np.sin(2 * np.pi * 23 * bt)) * bt) * 0.35
+    rub = biquad_bp(noise(m), 2200, 2.0)
+    save_wav("kick_brake", fade((squeal + rub) * env_ad(m, 0.02, 0.25), 0.002, 0.06), 0.5)
+    # 접고 펴기: 금속 걸쇠가 철컥 (두 번 겹친 딸깍 + 짧은 울림).
+    seconds = 0.3
+    m = int(seconds * SR)
+    x = np.zeros(m)
+    for at, f, g in ((0.0, 2400, 1.0), (0.045, 1700, 0.7)):
+        ct = t_axis(0.12)
+        ping = (np.sin(2 * np.pi * f * ct) + 0.5 * np.sin(2 * np.pi * f * 2.7 * ct)) * env_ad(len(ct), 0.0005, 0.03)
+        tick = highpass(noise(len(ct)), 3000) * env_ad(len(ct), 0.0003, 0.004)
+        mix_at(x, ping + tick, int(at * SR), g)
+    save_wav("kick_latch", fade(x, 0.001, 0.05), 0.7)
+
+
 if __name__ == "__main__":
     import sys
     if "--force" in sys.argv:
@@ -686,3 +726,4 @@ if __name__ == "__main__":
     event_sounds()
     music()
     v06_sounds()
+    kickboard_sounds()

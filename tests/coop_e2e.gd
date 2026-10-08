@@ -136,6 +136,7 @@ func _run() -> void:
 	await _shallows()
 	await _clams()
 	await _terrain()
+	await _ride()
 
 
 func _other_id() -> int:
@@ -443,3 +444,40 @@ func _terrain() -> void:
 	await _sync("paths")
 	_check(await _wait_until(func() -> bool: return Field.tiles.values().count(Field.TILE_PATH) == 2 and Field.tiles.values().count(Field.TILE_HOLE) == 0, 2.0), "구덩이는 메워지고 흙길 둘 (%s)" % str(Field.tiles))
 	await _sync("terrain_done")
+
+
+# ---- 킥보드 (v0.16): a 가 타고 달리면 b 화면에도 킥보드 · 차기 · 내리기가 보인다 ----
+
+func _ride() -> void:
+	await _teleport(Vector3(-44.0 if _role == "a" else -40.0, 0.1, 70.0))
+	await _sync("ride_ready")
+	if _role == "a":
+		var rider: KickboardRider = _village.get_node("Ride")
+		_check(rider.mount("kickboard"), "a: 킥보드를 꺼냄")
+		_check(await _wait_until(func() -> bool: return rider.is_riding(), 3.0), "a: 올라탐")
+		Input.action_press(&"ui_up")
+		await get_tree().create_timer(2.0).timeout
+		Input.action_release(&"ui_up")
+		await _sync("ride_seen")
+		rider.dismount()
+		_check(await _wait_until(func() -> bool: return rider.state == KickboardRider.State.OFF, 3.0), "a: 접어서 넣음")
+		await _sync("ride_off")
+	else:
+		var replicator: PlayerReplicator = _village.get_node("PlayerReplicator")
+		var friend: RemotePlayer = replicator.remote_nodes()[0] if not replicator.remote_nodes().is_empty() else null
+		_check(friend != null, "b: 친구 캐릭터가 보인다")
+		_check(await _wait_until(func() -> bool: return friend.rig.get_node_or_null("Kickboard") != null, 4.0), "b: 친구가 킥보드를 꺼내는 모습")
+		var kicked: Array[bool] = [false]
+		var start: Vector3 = friend.global_position
+		var watch: Callable = func() -> void:
+			if friend.rig.is_kicking():
+				kicked[0] = true
+		get_tree().process_frame.connect(watch)
+		_check(await _wait_until(func() -> bool: return friend.rig.riding_kind().begins_with("kick"), 3.0), "b: 친구가 발판 위에 선 자세")
+		_check(await _wait_until(func() -> bool: return kicked[0] and friend.global_position.distance_to(start) > 3.0, 4.0), "b: 친구가 땅을 차며 달려감 (%.1fm)" % friend.global_position.distance_to(start))
+		get_tree().process_frame.disconnect(watch)
+		await _sync("ride_seen")
+		await _sync("ride_off")
+		_check(await _wait_until(func() -> bool:
+			var b: Node = friend.rig.get_node_or_null("Kickboard")
+			return (b == null or b.is_queued_for_deletion()) and friend.rig.riding_kind() == "", 3.0), "b: 친구가 내려서 접어 넣음")

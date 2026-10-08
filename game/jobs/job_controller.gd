@@ -147,7 +147,8 @@ func _wear_uniform(on: bool) -> void:
 	# 갈아입는 중이면 커튼이 닫힐 때 그때의 복장으로 입힌다.
 	if OutfitBooth.is_pending(rig) or rig.is_uniformed() == on:
 		return
-	if player.is_inside_tree() and player.body.visible:
+	# 킥보드를 타고 있으면 탈의소 없이 뿅 (짜잔 자세가 발판 위에서 어긋난다).
+	if player.is_inside_tree() and player.body.visible and not player.is_riding():
 		OutfitBooth.play(rig, OutfitBooth.apply_local.bind(rig), player)
 	else:
 		rig.set_uniform(on)

@@ -64,7 +64,8 @@ const PHONE_GRIP: Vector3 = Vector3(0.0, 0.06, 0.04)
 const PHONE_SCALE: float = 1.75
 const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
 ## set_riding 으로 탈 수 있는 자세 (탈것 데이터 data/vehicles/vehicles.json 의 kind → 애니메이션).
-const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto"}
+## v0.16 킥보드: kick = 발판 위에서 미끄러져 가기, kick_brake = 뒷발로 흙받이 브레이크 (땅 차기는 play_kick).
+const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto", "kick": "ride_kick", "kick_brake": "ride_kick_brake"}
 ## 배달 알바 복장 (v0.15): 시스템이 잠깐 씌우는 파란 헬멧(쓰던 모자 자리를 대신한다)과 "배달의 솔" 가방.
 ## 머리 · 몸통 좌표는 옷 모형(items.json 의 model)과 같다 (머리 가운데 y 0.4, 앞 = -Z).
 const UNIFORM_TEXT: String = "배달의 솔"
@@ -385,6 +386,16 @@ func set_riding(kind: String) -> void:
 
 func riding_kind() -> String:
 	return _ride_kind
+
+
+## 킥보드: 뒷발로 땅을 한 번 찬다 (kick 애니메이션 0.62초). 타고 있지 않으면 무시.
+func play_kick() -> void:
+	if tree != null and _ride_kind.begins_with("kick"):
+		tree.set("parameters/KickShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+
+
+func is_kicking() -> bool:
+	return tree != null and bool(tree.get("parameters/KickShot/active"))
 
 
 ## 페달 밟는 빠르기 (초당 바퀴 수). 자전거 바퀴 속도에 맞춰 ride_bike 한 바퀴(1초)를 빠르게·느리게 돌린다. 0 = 멈춤.

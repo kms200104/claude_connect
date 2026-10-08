@@ -88,6 +88,69 @@ func set_outfit(hat: String, top: String) -> void:
 	rig.set_outfit(hat, top)
 
 
+## 탈것 (v0.16, 스냅샷마다 온다): 타면 꺼내 펼쳐 올라타는 모습, 내리면 접어 넣는 모습. 처음 나타날 때 이미 타고 있으면 바로.
+func set_ride(item_id: String) -> void:
+	if rig == null or item_id == _ride_item:
+		return
+	var animated: bool = _outfit_known and online and visible and is_inside_tree()
+	_ride_item = item_id
+	if _board_tween != null and _board_tween.is_valid():
+		_board_tween.kill()
+	if not item_id.is_empty():
+		if _board == null:
+			_board = Kickboard.new()
+			_board.build(rig.clay_material)
+			rig.add_child(_board)
+		_board.position = Vector3(0.0, -(_body_rest_y if not is_nan(_body_rest_y) else body.position.y), 0.0)
+		_board.scale = Vector3.ONE
+		_board.visible = true
+		_ride_speed = 0.0
+		if animated:
+			_board_tween = _board.play_unfold(rig, func() -> void: pass, false)
+		else:
+			_board.fold = 0.0
+			rig.set_riding("kick")
+		return
+	if _board == null:
+		rig.set_riding("")
+		return
+	var board: Kickboard = _board
+	_board = null
+	_ride_lean = 0.0
+	body.transform = Transform3D(Basis(Vector3.UP, body.rotation.y), Vector3(0.0, _body_rest_y if not is_nan(_body_rest_y) else 0.8, 0.0))
+	_board_tween = board.play_fold(rig, board.queue_free, false) if animated else null
+	if not animated:
+		rig.set_riding("")
+		board.queue_free()
+
+
+## 탄 친구: 화면에서 움직인 만큼 바퀴를 굴리고, 빨라지면 땅을 차고, 확 느려지면 브레이크 자세, 도는 만큼 바닥을 축으로 기운다.
+func _update_ride(delta: float, before: Vector3) -> void:
+	if _board == null or delta <= 0.0 or rig.riding_kind().is_empty():
+		return
+	var step: Vector3 = (global_position - before) * Vector3(1.0, 0.0, 1.0)
+	var forward: Vector3 = Vector3(-sin(body.rotation.y), 0.0, -cos(body.rotation.y))
+	_board.roll(step.dot(forward))
+	var spd: float = step.length() / delta
+	_ride_speed = lerpf(_ride_speed, spd, 1.0 - exp(-6.0 * delta))
+	_ride_check -= delta
+	if _ride_check <= 0.0:
+		var gain: float = _ride_speed - _ride_last
+		if gain > 0.3 and not rig.is_kicking():
+			rig.play_kick()
+			Audio.play_at("kick_push", global_position, -10.0)
+		rig.set_riding("kick_brake" if gain < -0.9 and _ride_speed > 0.4 else "kick")
+		_ride_last = _ride_speed
+		_ride_check = 0.25
+	var rate: float = wrapf(body.rotation.y - _ride_yaw, -PI, PI) / delta
+	_ride_yaw = body.rotation.y
+	_ride_lean = lerpf(_ride_lean, clampf(rate * _ride_speed * 0.085, -0.32, 0.32), 1.0 - exp(-7.0 * delta))
+	_board.steer = lerpf(_board.steer, clampf(atan(rate * 0.54 / maxf(_ride_speed, 0.6)), -0.55, 0.55), 1.0 - exp(-10.0 * delta))
+	var rest: float = _body_rest_y if not is_nan(_body_rest_y) else 0.8
+	var basis: Basis = Basis(Vector3.UP, body.rotation.y) * Basis(Vector3.BACK, _ride_lean)
+	body.transform = Transform3D(basis, basis * Vector3(0.0, rest, 0.0))
+
+
 ## 배달 알바 복장 (스냅샷마다 온다). 보이던 친구가 배달을 받거나 끝내면 탈의소에서 갈아입는다.
 func set_uniform(on: bool) -> void:
 	if rig == null:
@@ -121,6 +184,14 @@ func _ready() -> void:
 var _want_hat: String = ""
 var _want_top: String = ""
 var _want_job: bool = false
+var _ride_item: String = ""
+var _board: Kickboard = null
+var _board_tween: Tween = null
+var _ride_speed: float = 0.0
+var _ride_last: float = 0.0
+var _ride_check: float = 0.0
+var _ride_yaw: float = 0.0
+var _ride_lean: float = 0.0
 var _outfit_known: bool = false
 
 
@@ -135,6 +206,7 @@ func setup(state: NetPlayerState) -> void:
 	_apply_held(state.held)
 	# 처음 나타날 때는 탈의소 없이 바로 (복장을 먼저 — 옷을 입히면 그다음부터 바뀔 때 탈의소).
 	set_uniform(state.job)
+	set_ride(state.ride)
 	set_outfit(state.hat, state.top)
 	set_phone(state.phone)
 
@@ -368,7 +440,8 @@ func _process(delta: float) -> void:
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-speed_smoothing * delta))
 		rig.set_move_speed(0.0 if target_fishing else CharacterRig.speed_to_blend(_shown_speed, walk_speed_reference, run_speed_reference))
 		rig.set_fishing(target_fishing)
-		if not target_fishing:
+		if not target_fishing and _ride_item.is_empty():
 			_footsteps.advance(moved * delta, _shown_speed > walk_speed_reference * 1.25, global_position, true)
 	if body != null:
 		body.rotation.y = lerp_angle(body.rotation.y, target_yaw, weight)
+	_update_ride(delta, before)

@@ -152,6 +152,7 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 		remote.set_phone(state.phone)
 		remote.set_outfit(state.hat, state.top)
 		remote.set_uniform(state.job)
+		remote.set_ride(state.ride)
 
 
 ## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.
@@ -170,7 +171,7 @@ func _sync_outfit() -> void:
 		# 갈아입는 중이면 커튼이 닫힐 때 그때의 옷을 입힌다.
 		if OutfitBooth.is_pending(rig):
 			return
-		if changed and OutfitBooth.take_local() and player.is_inside_tree() and player.body.visible:
+		if changed and OutfitBooth.take_local() and player.is_inside_tree() and player.body.visible and not player.is_riding():
 			OutfitBooth.play(rig, OutfitBooth.apply_local.bind(rig), player)
 			return
 		rig.set_outfit(Net.outfit_hat, Net.outfit_top)

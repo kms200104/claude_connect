@@ -35,6 +35,8 @@ var tint: Color = Color(0.0, 0.0, 0.0, 0.0)
 ## 거울 가구 (앞에 서면 얼굴을 꾸밀 수 있다).
 var is_mirror: bool = false
 var plant_tree: String = ""
+## 탈것이면 그 종류 (data/vehicles/vehicles.json 의 키, v0.16). 아니면 빈 문자열.
+var ride: String = ""
 var plant_flower: String = ""
 
 
@@ -50,6 +52,7 @@ static func from_item_dict(data: Dictionary) -> ItemInfo:
 	info.buy_price = int(data.get("buy", 0))
 	info.wear_slot = str(data.get("wear", ""))
 	info.is_mirror = bool(data.get("mirror", false))
+	info.ride = str(data.get("ride", ""))
 	if data.has("tint"):
 		info.tint = Color.html(str(data["tint"]))
 	var plant: Variant = data.get("plant")

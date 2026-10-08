@@ -1,0 +1,19 @@
+{
+  "_doc": "탈것 (v0.16). 아이템(items.json 의 ride)으로 꺼내 탄다. 속도 m/s, 가속 m/s², 각도 rad. 서버 이동 한계(MAX_SPEED 7.2 × SPEED_TOLERANCE 1.6) 안이어야 한다.",
+  "kickboard": {
+    "name": "접이식 킥보드",
+    "anim": "kick",
+    "max_speed": 7.6,
+    "kick_boost": 1.45,
+    "kick_time": 0.62,
+    "kick_push": [0.2, 0.42],
+    "coast_drag": 0.55,
+    "idle_brake": 1.6,
+    "brake": 6.5,
+    "turn_radius": 1.5,
+    "slow_turn": 2.4,
+    "max_lean": 0.32,
+    "max_steer": 0.55,
+    "wade_speed": 1.2
+  }
+}

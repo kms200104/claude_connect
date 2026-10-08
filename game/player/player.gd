@@ -69,6 +69,8 @@ const WADE_SINK: float = 0.09
 var _splash_left: float = 0.0
 
 var _input_locks: Dictionary[StringName, bool] = {}
+## 킥보드 (v0.16). 타는 동안은 걷기 대신 vehicle.drive 가 속도 · 방향을 정한다.
+var vehicle: KickboardRider = null
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
@@ -82,6 +84,9 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if vehicle != null and vehicle.is_active():
+		_physics_ride(delta)
+		return
 	var input: Vector2 = _read_input()
 	_update_running(input.length(), delta)
 	var move_dir: Vector3 = _input_to_world(input)
@@ -135,6 +140,41 @@ func _physics_process(delta: float) -> void:
 		rig.set_move_speed(CharacterRig.speed_to_blend(Vector3(velocity.x, 0.0, velocity.z).length(), reference, run_speed))
 	if joystick != null:
 		joystick.boost = running
+
+
+## 킥보드를 타는 동안 (꺼내고 접는 동안 포함): 걷기 · 달리기 · 브레이크 대신 탈것이 속도와 방향을 정한다.
+func _physics_ride(delta: float) -> void:
+	var input: Vector2 = _read_input()
+	var move_dir: Vector3 = _input_to_world(input)
+	move_intent = move_dir * minf(input.length(), 1.0)
+	running = false
+	if braking:
+		_end_brake()
+	wading = not Field.zone_at(global_position, 0.1).is_empty()
+	vehicle.drive(delta, move_dir, minf(input.length(), 1.0))
+	if is_on_floor():
+		velocity.y = 0.0
+	else:
+		velocity.y -= gravity * delta
+	var before: Vector3 = global_position
+	move_and_slide()
+	vehicle.after_move(delta, before)
+	if rig != null:
+		rig.set_move_speed(0.0)
+	if joystick != null:
+		joystick.boost = false
+
+
+## 탔을 때 몸(Body)을 바닥에서 띄우는 높이 (씬에 놓인 자리).
+func body_rest_height() -> float:
+	if is_nan(_body_rest_y):
+		return body.position.y if body != null else 0.8
+	return _body_rest_y
+
+
+## 탔는지 (꺼내고 접는 동안 포함).
+func is_riding() -> bool:
+	return vehicle != null and vehicle.is_active()
 
 
 ## 이동 입력을 막거나 푼다. 사유별로 따로 기록해서 여러 곳(낚시, 가방 창)이 서로 간섭하지 않는다.

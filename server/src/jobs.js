@@ -102,6 +102,8 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
       limitS: q.limitS,
       dueAt: 0,
     };
+    // 친구 화면에 헬멧 · 가방이 바로 보이도록 (스냅샷의 job).
+    if (ctx.room) ctx.room.dirty = true;
     sendJob(player);
   }
 
@@ -164,6 +166,7 @@ export function createJobs({ data, random, now, clock, send, sendTo, sendProfile
       player.profile.tipStreak = 0;
     }
     player.job = null;
+    room.dirty = true;
     sendJob(player);
   }
 

@@ -183,6 +183,7 @@ export class Player {
     this.graceTimer = null;
     this.fishing = null; // 낚시 세션 (fishing.js)
     this.phone = false; // 휴대폰을 꺼내 보는 중 (v15, 연출용)
+    this.ride = ''; // v18: 타고 있는 탈것 (아이템 id, 예: kickboard). 가방에 그 아이템이 있을 때만 보인다
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
     this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
@@ -200,6 +201,11 @@ export class Player {
 
   get online() {
     return this.ws !== null;
+  }
+
+  /** 타고 있는 탈것 (가방에서 그 아이템을 팔거나 버리면 저절로 내린 것으로). */
+  get rideItem() {
+    return this.ride && this.profile.slots.some((s) => s && s.id === this.ride) ? this.ride : '';
   }
 
   /** 손에 든 아이템 id (퀵슬롯이 비었거나 아무것도 안 들었으면 ''). */
@@ -222,6 +228,7 @@ export class Player {
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
       job: this.job !== null, // v0.15: 배달 알바 중 (헬멧 · 가방 연출)
+      ride: this.rideItem,
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',

@@ -558,6 +558,11 @@ func set_phone(on: bool) -> void:
 	_send({"t": "phone", "on": on})
 
 
+## 탈것 타기 · 내리기 (v18, 연출용: 친구 화면에 타고 있는 모습). 가방에 그 아이템이 있어야 서버가 받아 준다.
+func set_ride(item_id: String, on: bool) -> void:
+	_send({"t": "ride", "on": on, "item": item_id})
+
+
 ## 휴대폰 화면을 눌렀다 (다른 사람 화면에서도 톡 누르는 손짓).
 func phone_tap() -> void:
 	_send({"t": "phone_tap"})

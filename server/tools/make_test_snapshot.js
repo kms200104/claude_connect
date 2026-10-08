@@ -19,7 +19,7 @@ const server = createServer({
   eventForce: 'none',
   questChance: 0,
   startSol: 30000000,
-  startItems: 'fishing_net:1,shovel:1,fabric_sofa:1,dining_table:1',
+  startItems: 'fishing_net:1,shovel:1,kickboard:1,fabric_sofa:1,dining_table:1',
 });
 await new Promise((r) => setTimeout(r, 200));
 const ws = new WebSocket(`ws://127.0.0.1:${server.port}`);

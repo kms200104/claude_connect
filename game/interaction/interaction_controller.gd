@@ -45,7 +45,9 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF }
+## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
+const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY]
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -85,7 +87,12 @@ func has_target() -> bool:
 
 func _process(_delta: float) -> void:
 	_pick_target()
+	if player.is_riding() and not target in RIDE_TARGETS:
+		target = Target.RIDE_OFF if player.vehicle.is_riding() and not player.is_input_locked() else Target.NONE
+		target_id = ""
 	match target:
+		Target.RIDE_OFF:
+			action_hud.show_action("내리기")
 		Target.TALK:
 			action_hud.show_action("대화")
 		Target.CHOP:
@@ -272,6 +279,8 @@ func _on_action_pressed() -> void:
 			home.activate(target_id)
 		Target.JOB:
 			jobs.activate(target_id)
+		Target.RIDE_OFF:
+			player.vehicle.dismount()
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))

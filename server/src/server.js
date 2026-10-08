@@ -1144,6 +1144,24 @@ export function createServer(overrides = {}) {
     act(room, player, 'phone_tap');
   }
 
+  /** 탈것 타기 · 내리기 (v18, 연출용): 가방에 탈것 아이템(items.json 의 ride)이 있어야 탄다. 속도 검사는 걷기와 같다. */
+  function handleRide(ctx, msg) {
+    const { room, player } = ctx;
+    const id = typeof msg.item === 'string' ? msg.item : '';
+    const on = msg.on === true;
+    if (!on) {
+      if (player.ride === '') return;
+      player.ride = '';
+      room.dirty = true;
+      return;
+    }
+    const info = data.items.get(id);
+    if (!info || !info.ride || !player.profile.slots.some((s) => s && s.id === id)) return;
+    if (player.ride === id) return;
+    player.ride = id;
+    room.dirty = true;
+  }
+
   /** 입장할 때 같이 보낸 닉네임 (처음 화면 설정). 쓸 수 없거나 비었으면 그대로 둔다. */
   function applyJoinName(player, raw) {
     const name = cleanName(raw);
@@ -1709,6 +1727,8 @@ export function createServer(overrides = {}) {
       case 'phone':
       case 'phone_tap':
         return handlePhone(ctx, msg);
+      case 'ride':
+        return handleRide(ctx, msg);
       case 'stock_order':
         return economy.handleStock(ctx, msg, fail);
       case 'apt_buy':
@@ -1902,6 +1922,7 @@ export function createServer(overrides = {}) {
       case 'set_name':
       case 'phone':
       case 'phone_tap':
+      case 'ride':
       case 'talk_topic':
       case 'stock_order':
       case 'apt_buy':
@@ -2002,6 +2023,8 @@ export function createServer(overrides = {}) {
           held: jobs.carried(p) ?? p.heldItem,
           hat: p.profile.outfit.hat,
           top: p.profile.outfit.top,
+          job: p.job !== null,
+          ride: p.rideItem,
           x: p.x,
           y: p.y,
           z: p.z,

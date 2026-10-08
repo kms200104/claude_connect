@@ -77,6 +77,8 @@ describe('일거리 서버', () => {
     assert.equal(j.stage, 'pickup');
     assert.equal(j.from.id, 'shop');
     assert.equal(player.toWire().job, true, '배달하는 동안은 플레이어 정보에 job (헬멧 · 가방 연출)');
+    const snapJob = await friend.c.next((m) => m.t === 'snap' && m.p?.some((p) => p.id === player.id && p.job === true), 2000);
+    assert.ok(snapJob, '친구 스냅샷에도 job');
     put(player, { x: j.from.x + 20, z: j.from.z });
     c.send({ t: 'job_pick', rid: newRid() });
     assert.equal((await c.type('error')).code, 'not_at_job');

@@ -307,7 +307,7 @@ func _refresh_detail() -> void:
 	var item: InventoryItem = _item_at(selected_slot)
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	_discard.visible = info != null and not info.is_tool()
-	_use.visible = info != null and (info.is_furniture() or info.is_clothing())
+	_use.visible = info != null and (info.is_furniture() or info.is_clothing() or not info.ride.is_empty())
 	if info == null:
 		_name.text = "아이템을 골라 보세요"
 		_name.add_theme_color_override("font_color", TITLE_COLOR)
@@ -321,6 +321,8 @@ func _refresh_detail() -> void:
 	var price: String = " · 상점에서 %s" % Money.sol(info.price) if info.price > 0 else ""
 	_meta.text = "%s · %d개%s%s" % [info.kind_label(), item.count, " · 손에 듦" if selected_slot == Net.held_slot else "", price]
 	_use.text = "설치하기" if info.is_furniture() else "입기"
+	if not info.ride.is_empty():
+		_use.text = "접어 넣기" if player != null and player.is_riding() else "꺼내 타기"
 	_hint.text = "옮길 칸을 누르거나 끌어다 놓아요"
 
 
@@ -333,6 +335,15 @@ func _on_use_pressed() -> void:
 	var item: InventoryItem = _item_at(selected_slot)
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	if info == null:
+		return
+	# v0.16 탈것: 가방 창을 닫고 꺼내 펼쳐 올라탄다 (타고 있으면 내려서 접어 넣는다).
+	if not info.ride.is_empty() and player != null and player.vehicle != null:
+		var riding: bool = player.is_riding()
+		close()
+		if riding:
+			player.vehicle.dismount()
+		else:
+			player.vehicle.mount(item.id)
 		return
 	if info.is_clothing():
 		# v0.15: 탈의소에서 갈아입는 모습이 보이도록 가방 창을 닫는다 (카메라가 탈의소로 다가간다).
