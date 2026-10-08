@@ -36,9 +36,6 @@ const LAYER_LIFT: float = 0.0009
 const EXPR_MOUTH_LIFT: float = 0.0068
 const EXPR_OVER_LIFT: float = 0.0155
 const MOUTH_COVER: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.004], "r": [0.1, 0.074], "color": "skin"}]
-## 덮는 판은 무늬 없는 피부라 크게 나눠도 된다 (머리 곡면에서 처지는 깊이가 띄운 높이보다 훨씬 작다).
-const COVER_EDGE: float = 0.06
-const OVER_EDGE: float = 0.045
 const CHEEK_BLUSH: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.056, 0.034], "color": "cheek"}]
 const EYE_COVER: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.006], "r": [0.088, 0.098], "color": "skin"}]
 ## 머리 타원체 [둘레 칸, 위아래 칸] — 촘촘함 0 (절약) / 1 / 2 (고화질). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
@@ -299,7 +296,7 @@ static func expression(look: CharacterLook, emote_id: String) -> ArrayMesh:
 	var mouth: Array[Dictionary] = _expression_layers(catalog, part.face.get("mouth"), "mouth")
 	if not mouth.is_empty():
 		var mouth_at: Vector2 = catalog.anchors.get("mouth", Vector2(0.0, 0.16))
-		_emit_face(st, MOUTH_COVER, palette, mouth_at, false, Vector3.ZERO, EXPR_MOUTH_LIFT, COVER_EDGE, 1.0)
+		_emit_face(st, MOUTH_COVER, palette, mouth_at, false, Vector3.ZERO, EXPR_MOUTH_LIFT)
 		_emit_face(st, mouth, palette, mouth_at, false, Vector3.ZERO, EXPR_MOUTH_LIFT + LAYER_LIFT * 2.0)
 	var eye_at: Vector2 = catalog.anchors.get("eye", Vector2(0.19, 0.35))
 	for side: float in [-1.0, 1.0]:
@@ -308,17 +305,16 @@ static func expression(look: CharacterLook, emote_id: String) -> ArrayMesh:
 		var mirror: bool = side < 0.0
 		if part.face.has("eye_" + tag):
 			# 한쪽만 (윙크): 원래 눈은 그대로 두고 그 눈만 피부로 덮어 새로 그린다.
-			_emit_face(st, EYE_COVER, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT, COVER_EDGE, 1.0)
+			_emit_face(st, EYE_COVER, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT)
 			# 덮은 판이 볼 홍조 위쪽을 가리므로 그 볼만 다시 그린다.
 			var cheek: Vector2 = catalog.anchors.get("cheek", Vector2(0.245, 0.262))
-			_emit_face(st, CHEEK_BLUSH, palette, Vector2(cheek.x * side, cheek.y), mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT, COVER_EDGE, 1.0)
+			_emit_face(st, CHEEK_BLUSH, palette, Vector2(cheek.x * side, cheek.y), mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT)
 			_emit_face(st, _expression_layers(catalog, part.face["eye_" + tag], "eyes"), palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT * 2.0)
 		elif part.face.has("eyes"):
 			_emit_face(st, _expression_layers(catalog, part.face["eyes"], "eyes"), palette, at, mirror, Vector3.ZERO, EYE_LIFT)
 		var over: Array[Dictionary] = _expression_layers(catalog, part.face.get("eyes_over_" + tag, part.face.get("eyes_over")), "eyes")
 		if not over.is_empty():
-			# 원래 눈 위에 얹는 층(눈꺼풀 · 반짝임)은 눈 테두리 바깥으로 넓지 않아 조금 성기게 나눠도 된다 (눈과 합쳐 캐릭터 예산 안).
-			_emit_face(st, over, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT * 4.0, OVER_EDGE, 1.0)
+			_emit_face(st, over, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT * 4.0)
 	_emit_face(st, part.layers, palette, Vector2.ZERO, false, Vector3.ZERO, FEATURE_LIFT)
 	for layer: Dictionary in part.layers:
 		if str(layer.get("shape", "")) == "sweat":
