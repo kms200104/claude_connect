@@ -66,6 +66,8 @@ func _chop(tree_id: String, times: int) -> void:
 	Net.equip(1)
 	await _wait_until(func() -> bool: return player.held_item == "axe", 2.0)
 	player.global_position = trees.tree_position(tree_id) + Vector3(1.3, 0.1, 0.0)
+	# 순간이동한 자리가 서버에 닿은 뒤 찍는다 (위치는 20Hz 로 보내므로 찍기 요청이 먼저 가면 not_near_tree).
+	await get_tree().create_timer(0.2).timeout
 	for i: int in times:
 		await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.CHOP and interaction.target_id == tree_id, 2.0)
 		interaction.action_hud.action_pressed.emit()

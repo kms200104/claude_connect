@@ -71,6 +71,19 @@ describe('v13 물고기 그림자 · 겨눠 던지기', () => {
     assert.ok(later);
   });
 
+  it('v0.16 상어는 그림자 종류(k)를 알린다 — 물 위로 등지느러미가 보이게 (다른 물고기는 k 없음)', async () => {
+    const a = await open();
+    const w = await enter(a);
+    const first = await a.next((x) => x.t === 'fishes' && x.spot === 'lake' && x.f.length >= 2, 3000);
+    assert.ok(first.f.every((f) => f.k === undefined), '보통 물고기는 종류를 알리지 않는다');
+    const room = server.rooms.getRoom(w.code);
+    const swimmer = [...room.swimmers.values()].find((f) => f.spot === 'lake');
+    swimmer.fish = server.data.fish.get('hammerhead');
+    const m = await a.next((x) => x.t === 'fishes' && x.spot === 'lake' && x.f.some((f) => f.id === swimmer.id && f.k === 'hammer'), 4000);
+    assert.equal(m.f.find((f) => f.id === swimmer.id).s, 'XL');
+    assert.ok([...server.data.spots.values(), server.data.fishingSpot('sea')].some((sp) => sp?.fish?.includes('starspotted_shark')), '상어는 바다에서');
+  });
+
   it('물고기 머리 앞에 찌를 던지면 그 물고기가 다가와 톡·톡 건드리고 문다 → 낚으면 사라진다', async () => {
     const a = await open();
     const w = await enter(a);

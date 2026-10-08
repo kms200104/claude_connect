@@ -113,6 +113,9 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return _count_fish() == 0, 2.0), "놓아주기 → 가방에서 빠짐")
 
 	# 한 마리 더 잡고, 서버를 재시작해도 남는지 본다
+	# 자랑하며 카메라 쪽(뒤)을 봤으니 다시 연못을 보고 던진다 (겨눌 물고기가 없으면 앞쪽 물가에 떨어져 bad_cast).
+	player.look_toward(pond.global_position - player.global_position)
+	await get_tree().process_frame
 	hud.action_pressed.emit()
 	await _wait_until(func() -> bool: return controller.phase == FishingController.Phase.BITE, 15.0)
 	await _hook_and_reel(hud, controller)

@@ -131,7 +131,7 @@
       "kind": "sea",
       "_comment": "v0.12: 섬 둘레 바닷가 어디서나 (해안선에서 cast_range 안의 젖은 모래). 수역 사각형 대신 섬 모양(village_layout island)으로 판정한다.",
       "cast_range": 3.5,
-      "fish": ["mackerel", "horse_mackerel", "rockfish", "black_rockfish", "mullet", "goby", "gizzard_shad", "halfbeak", "hairtail", "black_seabream", "red_seabream", "grass_puffer", "blue_crab", "conger", "yellowtail", "bluefin_tuna"]
+      "fish": ["mackerel", "horse_mackerel", "rockfish", "black_rockfish", "mullet", "goby", "gizzard_shad", "halfbeak", "hairtail", "black_seabream", "red_seabream", "grass_puffer", "blue_crab", "conger", "yellowtail", "bluefin_tuna", "starspotted_shark", "hammerhead"]
     }
   ]
 }

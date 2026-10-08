@@ -31,7 +31,10 @@ export const SWIM = {
 };
 
 /** 그림자 크기 배율 (몸 크기). 클라이언트 FishSchool 과 같다. */
-export const SIZE_SCALE = { S: 0.75, M: 1.0, L: 1.35 };
+export const SIZE_SCALE = { S: 0.75, M: 1.0, L: 1.35, XL: 1.7 };
+// v0.16: 상어는 그림자 모양이 달라 (등지느러미가 물 위로 나온다) 종류만 알린다. 어떤 상어인지는 낚아야 안다.
+const SHADOW_KIND = { shark: 'shark', hammerhead: 'hammer' };
+const kindOf = (fish) => SHADOW_KIND[fish.look?.shape] ?? '';
 
 const round = (v) => Math.round(v * 1000) / 1000;
 
@@ -296,7 +299,12 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
   function wire(room, spotId) {
     return [...(room.swimmers?.values() ?? [])]
       .filter((s) => s.spot === spotId)
-      .map((s) => ({ id: s.id, x: s.x, z: s.z, yaw: s.yaw, s: s.fish.size ?? 'M', r: s.fish.rarity ?? 'common', st: s.st, o: s.owner }));
+      .map((s) => {
+        const w = { id: s.id, x: s.x, z: s.z, yaw: s.yaw, s: s.fish.size ?? 'M', r: s.fish.rarity ?? 'common', st: s.st, o: s.owner };
+        const k = kindOf(s.fish);
+        if (k) w.k = k;
+        return w;
+      });
   }
 
   return { tick, engage, release, wire, inWater };

@@ -180,6 +180,7 @@ func _build_item(mi: MeshInstance3D, d: DropInfo) -> void:
 	var fish: FishInfo = GameData.fish.get(d.item)
 	if fish != null:
 		mesh = FishModel.mesh(fish)
+		material = FishModel.material(fish, clay_material)
 	elif info != null and not info.model.is_empty():
 		mesh = PartMesh.get_mesh(info.id, info.model)
 		material = PartMesh.material_for(info.id, clay_material)

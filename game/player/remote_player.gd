@@ -298,7 +298,7 @@ func fish_event(msg: Dictionary) -> void:
 			var fish: FishInfo = GameData.fish.get(str(msg.get("fish", "")))
 			if fish == null or rig == null:
 				return
-			rig.show_off(FishModel.mesh(fish), {"S": 0.75, "M": 1.0, "L": 1.25}.get(fish.size, 1.0))
+			rig.show_off(FishModel.mesh(fish), {"S": 0.75, "M": 1.0, "L": 1.25, "XL": 1.5}.get(fish.size, 1.0), FishModel.material(fish, rig.clay_material))
 			EmoteBubble.say(self, GameData.catch_shout(fish.rarity, fish.display_name), 2.95, SHOW_OFF_S - 0.4)
 			Audio.play_at("fanfare_small" if fish.rarity != "common" else "fish_catch", global_position, -4.0)
 			await get_tree().create_timer(SHOW_OFF_S).timeout

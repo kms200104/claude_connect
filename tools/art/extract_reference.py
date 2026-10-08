@@ -27,9 +27,6 @@ CROPS = [
     ("furniture.png", (856, 296, 957, 558), "assets/icons/items/floor_lamp.png", 128),
     ("fishing_items.png", (47, 49, 414, 533), "assets/icons/items/rod.png", 128, (300, 330, 414, 533)),
     ("fishing_items.png", (561, 49, 744, 284), "assets/icons/items/wooden_bucket.png", 128),
-    ("fishing_items.png", (815, 82, 1001, 256), "assets/icons/items/pale_chub.png", 128),
-    ("fishing_items.png", (314, 346, 532, 533), "assets/icons/items/goldfish.png", 128),
-    ("fishing_items.png", (600, 378, 739, 509), "assets/icons/items/river_puffer.png", 128),
     ("fishing_items.png", (817, 355, 1001, 524), "assets/icons/items/spiral_shell.png", 128),
 ]
 

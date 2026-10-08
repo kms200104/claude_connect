@@ -5,9 +5,9 @@ extends Node
 ## 식당 요리 그림도 찍는다: assets/icons/dishes/<id>.png (--only=dishes 로 요리만, --only=dish:<id>,dish:<id> 로 그 요리만).
 ## 사용: godot --path . res://tools/render_icons.tscn [-- --only=wood,acorn]
 
-## tools/art/extract_reference.py 가 참고 그림에서 오려 낸 아이콘.
+## tools/art/extract_reference.py 가 참고 그림에서 오려 낸 아이콘. (v0.16: 물고기는 사진 같은 모형으로 찍으므로 빠졌다.)
 const HAND_MADE: PackedStringArray = ["rod", "log_stool", "braided_rug", "bookshelf", "quilt_bed", "flower_pot", "floor_lamp",
-		"wooden_bucket", "pale_chub", "goldfish", "river_puffer", "spiral_shell"]
+		"wooden_bucket", "spiral_shell"]
 const OUT_DIR: String = "res://assets/icons/items"
 const RENDER_SIZE: int = 256
 const ICON_SIZE: int = 128
@@ -153,6 +153,15 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 
 func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:
 	_holder.mesh = mesh
+	# 물고기는 살갗 텍스처를 입힌다 (v0.16, FishModel.material — 아이콘은 같은 텍스처를 빛 받는 셰이더로).
+	var fish: FishInfo = GameData.fish.get(id)
+	var skin: Material = FishModel.material(fish, null) if fish != null else null
+	if skin is ShaderMaterial:
+		var lit: ShaderMaterial = _material.duplicate()
+		lit.set_shader_parameter("albedo_texture", (skin as ShaderMaterial).get_shader_parameter("albedo_texture"))
+		_holder.material_override = lit
+	else:
+		_holder.material_override = _material
 	var box: AABB = mesh.get_aabb()
 	var radius: float = box.size.length() * 0.5
 	var center: Vector3 = box.get_center()

@@ -177,9 +177,9 @@ func _refresh_fish() -> void:
 			continue
 		var mi: MeshInstance3D = MeshInstance3D.new()
 		mi.mesh = FishModel.mesh(fish)
-		mi.material_override = clay_material
+		mi.material_override = FishModel.material(fish, clay_material)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var s: float = {"S": 0.55, "M": 0.75, "L": 1.0}.get(fish.size, 0.75)
+		var s: float = {"S": 0.55, "M": 0.75, "L": 1.0, "XL": 1.15}.get(fish.size, 0.75)
 		mi.scale = Vector3.ONE * s
 		_tank.add_child(mi)
 		_swimmers[id] = mi

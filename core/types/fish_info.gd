@@ -24,6 +24,9 @@ var fin_color: Color = Color("#7A7A5A")
 ## 무늬: none / stripe(옆줄) / band(세로 띠) / spots(점).
 var pattern: String = "none"
 var accent_color: Color = Color("#4A4A3A")
+## v0.16 눈동자 테 색 · 입수염 (잉어처럼 몸 설계엔 없지만 이 종만 있는 수염).
+var iris_color: Color = Color("#C8A040")
+var barbels: bool = false
 
 
 static func from_dict(data: Dictionary) -> FishInfo:
@@ -54,6 +57,8 @@ static func from_dict(data: Dictionary) -> FishInfo:
 		info.fin_color = Color.html(str(look.get("fin", info.fin_color.to_html(false))))
 		info.pattern = str(look.get("pattern", info.pattern))
 		info.accent_color = Color.html(str(look.get("accent", info.accent_color.to_html(false))))
+		info.iris_color = Color.html(str(look.get("iris", info.iris_color.to_html(false))))
+		info.barbels = bool(look.get("barbels", false))
 	return info
 
 

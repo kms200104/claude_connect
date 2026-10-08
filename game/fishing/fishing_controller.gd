@@ -227,14 +227,16 @@ func _approach_from_school(fid: String) -> void:
 	var start: Vector3 = center + (center - player.global_position).normalized() * 1.6
 	var size_code: String = str(Net.last_fish.get("size", "M"))
 	var rarity: String = "common"
+	var kind: String = ""
 	if school != null:
 		var f: Dictionary = school.fish(fid)
 		if not f.is_empty():
 			start = f["position"]
 			size_code = str(f["size"])
 			rarity = str(f["rarity"])
+			kind = str(f.get("kind", ""))
 		school.hidden_id = fid
-	_shadow.appear_from(center, start, size_code, rarity, int(Net.last_fish.get("ms", 0)))
+	_shadow.appear_from(center, start, size_code, rarity, int(Net.last_fish.get("ms", 0)), kind)
 
 
 ## 가짜 입질: 그림자가 쏙 다가와 찌를 건드린다. 닿는 순간(_on_shadow_touched) 찌가 톡, 휴대폰이 살짝 떨린다.
@@ -359,8 +361,8 @@ func _show_off(fish_id: String) -> void:
 	var shout: String = GameData.catch_shout(fish.rarity, fish.display_name)
 	player.look_toward(Vector3.BACK)
 	if player.rig != null:
-		var size_scale: float = {"S": 0.75, "M": 1.0, "L": 1.25}.get(fish.size, 1.0)
-		player.rig.show_off(FishModel.mesh(fish), size_scale)
+		var size_scale: float = {"S": 0.75, "M": 1.0, "L": 1.25, "XL": 1.5}.get(fish.size, 1.0)
+		player.rig.show_off(FishModel.mesh(fish), size_scale, FishModel.material(fish, player.rig.clay_material))
 	if camera_rig != null:
 		camera_rig.set_focus(1.0, 0.7)
 	# 외침은 자랑 카드에 크게 뜨니 낚시 토스트에는 겹쳐 띄우지 않는다.

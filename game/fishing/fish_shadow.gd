@@ -54,13 +54,14 @@ func _ready() -> void:
 
 ## v13: 보이던 물고기(start, 몸 크기 size_code, 희귀도 rarity)가 찌(center)를 알아채고 곧장 다가온다.
 ## approach_ms: 서버가 정한 다가오는 시간 (멀리서 알아챈 물고기는 더 빨리 헤엄친다).
-func appear_from(center: Vector3, start: Vector3, size_code: String, rarity: String, approach_ms: int = 0) -> void:
+func appear_from(center: Vector3, start: Vector3, size_code: String, rarity: String, approach_ms: int = 0, kind: String = "") -> void:
 	_line = true
 	_center = center
 	var d: Vector3 = Vector3(center.x - start.x, 0.0, center.z - start.z)
 	_dir = d.normalized() if d.length() > 0.01 else Vector3.FORWARD
 	_size = float(FishSchool.SIZE_SCALE.get(size_code, 1.0))
 	_mesh.scale = Vector3.ONE * _size
+	_set_kind(kind)
 	_hover = 0.28 + 0.12 * _size
 	_distance = maxf(d.length(), _hover)
 	_line_speed = LINE_SPEED
@@ -80,6 +81,17 @@ func is_line() -> bool:
 	return _line and mode != Mode.HIDDEN
 
 
+## v0.16 상어(shark · hammer)면 상어 모양 그림자 + 물 위로 솟은 등지느러미, 아니면 보통 물고기 그림자.
+func _set_kind(kind: String) -> void:
+	_mesh.mesh = FishSchool.shark_mesh(kind == "hammer") if not kind.is_empty() else FishSchool.fish_mesh()
+	var old: Node = get_node_or_null(^"Fin")
+	if old != null:
+		old.name = "FinOld"
+		old.queue_free()
+	if not kind.is_empty():
+		add_child(FishSchool.make_fin(_size))
+
+
 func _set_aura(rarity: String) -> void:
 	if _aura != null:
 		_aura.queue_free()
@@ -93,6 +105,7 @@ func _set_aura(rarity: String) -> void:
 func appear(center: Vector3, size: float) -> void:
 	_line = false
 	_set_aura("")
+	_set_kind("")
 	_center = center
 	_size = clampf(size, 0.5, 1.8)
 	_mesh.scale = Vector3.ONE * _size
@@ -254,6 +267,7 @@ func _beat(delta: float, speed: float) -> void:
 	_mesh.set_instance_shader_parameter("phase", _phase)
 	_mesh.set_instance_shader_parameter("amp", _amp)
 	_mesh.set_instance_shader_parameter("alpha", clampf(_alpha, 0.0, 1.0))
+	FishSchool.update_fin(self, clampf(_alpha, 0.0, 1.0), _phase, _amp, speed, _time)
 
 
 func _place(delta: float) -> void:
