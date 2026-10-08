@@ -9,6 +9,7 @@ extends Node3D
 ##           hair_compare (--ids=<스타일>,<머리 색>[,side]: 머리카락 절차(왼쪽) ↔ 모형(오른쪽), 윗줄 앞 · 아랫줄 뒤 (side 면 양옆))
 ##           grips (손에 드는 아이템 × 대기·걷기·사용 자세를 옆에서 — 쥐는 방향 확인용, --side=front 면 앞에서)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
+##           vehicles (차고 탈것 v19: --ids=모델+부품+…, --night · --empty)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
@@ -288,6 +289,53 @@ func _ready() -> void:
 					add_child(mi)
 				z += maxf(size.z, 0.6) + 0.6
 			_camera(Vector3(0.0, 2.2 + z * 0.55, 2.6 + z * 0.4), Vector3(0.0, 0.3, -z * 0.45), 40.0)
+		"vehicles":
+			# 차고 탈것 (v19): --ids=모델+부품+부품,… (없으면 모델 전부), --night 이면 밤(전조등 · 빛 장식), --empty 면 사람 없이.
+			var args: PackedStringArray = OS.get_cmdline_user_args()
+			if "--night" in args:
+				RenderingServer.global_shader_parameter_set(&"night_light", 1.0)
+				SkyController.night_light = 1.0
+				for n: Node in get_children():
+					if n is WorldEnvironment:
+						(n as WorldEnvironment).environment.background_color = Color(0.08, 0.1, 0.16)
+						(n as WorldEnvironment).environment.ambient_light_energy = 0.12
+					elif n is DirectionalLight3D:
+						(n as DirectionalLight3D).light_energy = 0.05
+			var entries: Array[PackedStringArray] = []
+			if _ids.is_empty():
+				for m: VehicleCatalog.Model in GameData.garage.models:
+					entries.append(PackedStringArray([m.id]))
+			else:
+				for id: String in _ids:
+					entries.append(id.split("+"))
+			var gap: float = 1.9
+			for i: int in entries.size():
+				var model: VehicleCatalog.Model = GameData.garage.model(entries[i][0])
+				if model == null:
+					continue
+				var fit: Dictionary = {}
+				for k: int in range(1, entries[i].size()):
+					var part: VehicleCatalog.Part = GameData.garage.part(entries[i][k])
+					if part != null:
+						fit[part.slot] = part.id
+				var vm: VehicleModel = VehicleModel.new()
+				add_child(vm)
+				vm.position = Vector3((float(i) - float(entries.size() - 1) * 0.5) * gap, 0.0, 0.0)
+				vm.rotation.y = deg_to_rad(-62.0)
+				vm.build(model.id, fit)
+				vm.set_pedal(0.15)
+				if not "--empty" in args:
+					var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+					vm.add_child(rig)
+					rig.position = Vector3(0.0, 0.8 + model.lift, 0.0)
+					rig.set_look(CharacterLook.for_player(1 + i % 2))
+					rig.set_riding(model.kind)
+					rig.set_pedal_rate(0.15 / maxf(_wait, 0.1))
+			var span: float = float(entries.size()) * gap
+			if Array(args).any(func(s: String) -> bool: return s.begins_with("--cam=")):
+				_camera(_cam, _at, 40.0)
+			else:
+				_camera(Vector3(0.0, 1.5 + span * 0.08, 2.4 + span * 0.42), Vector3(0.0, 0.45, 0.0), 40.0)
 		"furniture", "clothes":
 			var kind: String = ItemInfo.KIND_FURNITURE if _what == "furniture" else ItemInfo.KIND_CLOTHING
 			var meshes: Array = []

@@ -55,7 +55,7 @@ func mount_problem(id: String) -> String:
 	var item: ItemInfo = GameData.item(id)
 	if item == null or item.ride.is_empty() or VehicleInfo.of(item.ride) == null:
 		return "탈 수 없는 물건이에요."
-	if state != State.OFF:
+	if state != State.OFF or player.garage_ride != null and player.garage_ride.is_active():
 		return "이미 타고 있어요."
 	if player.is_input_locked():
 		return "지금은 꺼낼 수 없어요."

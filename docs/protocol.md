@@ -1,4 +1,4 @@
-# 네트워크 프로토콜 v18
+# 네트워크 프로토콜 v19
 
 WebSocket 텍스트 프레임, 메시지 하나가 JSON 객체 하나. `t`가 종류. 서버가 권위이고 클라이언트가 보내는 건 전부 **요청**이다.
 상수는 `server/src/protocol.js` 와 `core/protocol/net_protocol.gd` 에 같은 값으로 둔다. 바꾸면 `VERSION`을 올린다.
@@ -18,6 +18,7 @@ v14 → v15: 휴대폰 연출 — `phone{on}`(꺼내 듦/넣음 → 플레이어
 v15 → v16: 휴대폰 앱 · 놀거리 — 도감 · 업적 · 칭호(`profile` 의 `stats dex ach title birthday`, 새로 이루면 `ach{ids}`, `set_title` → `title{id title}` 방 전체, 플레이어 정보의 `title`), 생일(`set_birthday`, 그날 주민 축하 마을톡 · 선물, 주민 생일은 `npcs.json` 의 `birthday` · `talk_open.bday`), 날씨 · 달력(`cal_info` → `cal`), 친구 집 놀러 가기(`home_visit` → `home` · 주인에게 `visit`), 방명록(`home.gb`, `gb_write` → `gb`), 마을톡 사진(`photo_up` → `photo_sent` · 메시지의 `ph`(글은 한마디, 없으면 "📷 사진"), `photo_get` → `photo`, 사진만 큰 메시지 허용). 에러 `bad_title bad_birthday not_visitable bad_photo no_photo`. 저장 파일은 schema 6 그대로 (프로필에 `stats dex ach title birthday bdayYear visitDay`, world 에 `guestbooks photos photoSeq notedDay` — 없으면 빈 값).
 v9 → v10: 아파트 집 안 — 공동 현관에서 들어가기·현관문으로 나가기(`home_enter` `home_exit` → `home`), 집 가구 놓기·옮기기·회수(`home_place` `home_move` `home_pickup` → `home_f`), 에러 `not_at_lobby` `not_home` `not_editable` `home_full`. 평형이 26·27·34·35평으로 바뀌었다(호수 id 는 그대로). 저장 파일은 schema 5 그대로 (world 에 `homeItems homeItemSeq`).
 v17 → v18: 탈것 — `ride{on, item}` (가방에 `items.json` 의 `ride` 가 있는 아이템이 있어야 탄다, 연출용 · 속도 검사는 걷기와 같은 `MAX_SPEED × SPEED_TOLERANCE`), 플레이어 정보 · 스냅샷에 `ride` · `job`.
+v18 → v19: 차고 탈것(자전거 · 전기오토바이, `data/vehicles/garage.json`) — 사기 `veh_buy{rid, model}` · 부품 사서 끼우기(산 적 있으면 공짜) `veh_part{rid, v, part}` · 빼기 `veh_unfit{rid, v, slot}` · 팔기(`resale` 배) `veh_sell{rid, v}` → `veh_result{rid, kind: buy|part|unfit|sell, v, model?, part?, slot?, cost, sol}` + `profile.vehicles[{id, model, owned, fit}]`. 타기 `veh_ride{rid, v}`(빈 `v` = 내림, 킥보드 `ride` 와 동시에 못 탄다) → `veh_ride{rid, id, mount}`, 플레이어 정보 · 스냅샷에 `mount{v, m, f}`(탈 때만). 타는 동안 이동 속도 검사는 그 탈것의 최고 속도(모델 × 부품 배율) × `SPEED_TOLERANCE`. 집 · 상점 안 · 낚시 중에는 못 타고(`cant_ride`), 문 · 집 드나들기 · 순간이동 · 낚싯대 던지기 · 끊김에 내린다. 에러 `bad_vehicle bad_part garage_full cant_ride`. 저장 파일은 schema 6 그대로 (프로필에 `vehicles vehSeq` — 없으면 빈 차고).
 
 v16 → v17: 배달 연속 팁 — `job` 에 `streak`(지금 연속 횟수), `job_result` 에 `streak streakBonus` (2번째 연속부터 삯 × `jobs.json streak.per` × (연속 − 1), 최대 `streak.max`. 늦거나 들고 있던 배달을 그만두면 0, 프로필 `tipStreak` 에 저장). 테스트 도구 — `welcome.dev`(서버가 `DEV_TOOLS=1` 이면 true), `dev_grant{rid}` → `dev_granted{rid, amount, sol}` + `profile` (`DEV_GRANT_SOL`, 기본 2000억 솔. 꺼진 서버는 `dev_off`). 앱 안 테스트 서버는 늘 켜져 있다.
 
@@ -179,7 +180,7 @@ v16 → v17: 배달 연속 팁 — `job` 에 `streak`(지금 연속 횟수), `jo
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, job, ride, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용, `job`은 배달 알바 중 — 파란 헬멧 · 배달 가방 연출, v0.15 추가 필드라 옛 클라이언트는 무시한다, `ride`는 타고 있는 탈것 아이템 id — v18, 가방에 그 아이템이 없으면 빈 문자열). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
+`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, job, ride, mount?, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용, `job`은 배달 알바 중 — 파란 헬멧 · 배달 가방 연출, v0.15 추가 필드라 옛 클라이언트는 무시한다, `ride`는 타고 있는 탈것 아이템 id — v18, 가방에 그 아이템이 없으면 빈 문자열, `mount`는 타고 있는 차고 탈것 `{v, m, f}` — v19, 탈 때만 실린다). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.

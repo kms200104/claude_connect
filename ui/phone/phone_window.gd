@@ -11,7 +11,7 @@ extends Control
 
 signal closed
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS, CAMERA, ALBUM, MAP, DEX, WEATHER, MUSIC, ACHIEVE }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS, CAMERA, ALBUM, MAP, DEX, WEATHER, MUSIC, ACHIEVE, VEHICLE }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -22,10 +22,10 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "지도", "도감", "날씨", "음악", "업적"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "지도", "도감", "날씨", "음악", "업적", "탈것"]
 ## 앱 아이콘 그림 · 색 (Tab 순서, PhoneProp.ICON_COLORS 와 같은 색).
-const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings", "camera", "album", "map", "dex", "weather", "music", "achieve"]
-const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "섬 지도", "도감", "날씨 · 달력", "음악", "업적 · 칭호"]
+const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings", "camera", "album", "map", "dex", "weather", "music", "achieve", "vehicle"]
+const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "섬 지도", "도감", "날씨 · 달력", "음악", "업적 · 칭호", "탈것 · 차고"]
 ## v16: 따로 만든 앱 화면 (ui/phone/apps/).
 const APP_SCENES: Dictionary[int, Script] = {
 	Tab.CAMERA: preload("res://ui/phone/apps/camera_app.gd"),
@@ -35,6 +35,7 @@ const APP_SCENES: Dictionary[int, Script] = {
 	Tab.WEATHER: preload("res://ui/phone/apps/calendar_app.gd"),
 	Tab.MUSIC: preload("res://ui/phone/apps/music_app.gd"),
 	Tab.ACHIEVE: preload("res://ui/phone/apps/achievements_app.gd"),
+	Tab.VEHICLE: preload("res://ui/phone/apps/vehicle_app.gd"),
 }
 ## 마을톡 말풍선: 내 것(노랑) · 받은 것(흰색).
 const MINE: Color = Color("#FFE27A")

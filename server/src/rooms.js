@@ -1,3 +1,4 @@
+import { mountWire, sanitizeVehicles } from './garage.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './protocol.js';
@@ -108,6 +109,8 @@ function newProfile(uid, slot, cfg, data) {
     coopMember: false, // 호수마을금고 조합원 (출자금을 냈다)
     jobDay: null, // 일거리: { day: 마을 날짜, done: 그날 한 배달 수 }
     tipStreak: 0, // 배달 연속 팁 (시간 안에 갖다준 연속 횟수)
+    vehicles: [], // v19 차고: [{ id, model, owned: [산 부품], fit: { 칸: 부품 } }]
+    vehSeq: 0,
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },
@@ -184,6 +187,7 @@ export class Player {
     this.fishing = null; // 낚시 세션 (fishing.js)
     this.phone = false; // 휴대폰을 꺼내 보는 중 (v15, 연출용)
     this.ride = ''; // v18: 타고 있는 탈것 (아이템 id, 예: kickboard). 가방에 그 아이템이 있을 때만 보인다
+    this.mount = null; // v19: 타고 있는 차고 탈것 id (자전거 · 전기오토바이, 접속 동안만)
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
     this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
@@ -229,6 +233,7 @@ export class Player {
       top: this.profile.outfit.top,
       job: this.job !== null, // v0.15: 배달 알바 중 (헬멧 · 가방 연출)
       ride: this.rideItem,
+      mount: mountWire(this),
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',
@@ -409,6 +414,8 @@ export class Room {
         coopMember: !!p.coopMember,
         jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
         tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
+        vehicles: sanitizeVehicles(p.vehicles, data.garage),
+        vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
         stats: sanitizeStats(p.stats),
         dex: sanitizeDex(p.dex, data),
         ach: data.achievements ? sanitizeAch(p.ach, data.achievements) : [],

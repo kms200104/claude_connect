@@ -10,6 +10,7 @@ import { insideOutline, nearestOnBoundary, signedDistance } from './outline.js';
 import { loadSavings } from './savings.js';
 import { loadJobs } from './jobs.js';
 import { loadAchievements, parseMonthDay } from './progress.js';
+import { loadGarage } from './garage.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -135,6 +136,8 @@ export function loadGameData(dataDir, cfg) {
   // 일거리 (v0.12): 배달 알바 — 받을 곳 · 주민 집 (집이 없는 주민은 사는 아파트 동의 공동 현관).
   const jobs = loadJobs(read('jobs/jobs.json'), npcs, realestate, floorplans);
   const plans = loadPlans(floorplans);
+  // 차고 (v19): 자전거 · 전기오토바이 모델과 꾸미기 부품.
+  const garage = loadGarage(read('vehicles/garage.json'));
   for (const u of units) if (!plans.has(planIdOf(realestate, u))) throw new Error(`apartment ${u.id}: unknown plan ${planIdOf(realestate, u)}`);
   for (const p of plans.values()) {
     for (const d of p.defaults) if (items.get(d.item)?.kind !== 'furniture') throw new Error(`plan ${p.id}: ${d.item} is not furniture`);
@@ -224,6 +227,7 @@ export function loadGameData(dataDir, cfg) {
     bank,
     savings,
     jobs,
+    garage,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),
     recipeSeasonWeight: recipesFile.season_weight ?? 1,

@@ -19,6 +19,10 @@ signal latency_updated(rtt_ms: float)
 signal inventory_updated(slots: Array[InventoryItem], held_slot: int)
 ## 솔(화폐)·부탁 목록·친밀도가 바뀜.
 signal profile_updated
+## v19 차고: 차고(vehicles)가 바뀜 · 사기/꾸미기/팔기 결과 (veh_result: kind, v, model, part, slot, cost, sol) · 내가 차고 탈것에 타고 내림 (mount: { v, m, f }, 빈 사전 = 내림).
+signal vehicles_changed
+signal vehicle_done(result: Dictionary)
+signal mount_changed(mount: Dictionary)
 signal weather_changed(weather: String)
 ## 번개 (뇌우일 때 서버가 방 전체에 같은 순간 보낸다). power 0.6~1.
 signal lightning_struck(power: float)
@@ -199,6 +203,8 @@ var server_version: int = 0
 var faces: Dictionary[int, Dictionary] = {}
 ## 자리 번호 → 닉네임 (v14). 없거나 빈 이름이면 GameData.player_name 의 기본 이름.
 var names: Dictionary[int, String] = {}
+## v19 내 차고: [{ id, model, owned: [부품], fit: { 칸: 부품 } }] (프로필).
+var vehicles: Array[Dictionary] = []
 
 var _ws: WebSocketPeer = null
 ## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
@@ -838,6 +844,12 @@ func _handle_text(text: String) -> void:
 			_apply_inventory(msg)
 		"profile":
 			_apply_profile(msg)
+		"veh_result":
+			sol = int(msg.get("sol", sol))
+			vehicle_done.emit(msg)
+		"veh_ride":
+			var mount: Variant = msg.get("mount", null)
+			mount_changed.emit(mount if mount is Dictionary else {})
 		"face":
 			var face_id: int = int(msg.get("id", 0))
 			_pending.erase(str(msg.get("rid", "")))
@@ -1200,6 +1212,13 @@ func _apply_profile(data: Variant) -> void:
 		faces[my_id] = my_face
 	if data.has("name") and my_id > 0:
 		names[my_id] = str(data.get("name", ""))
+	var garage: Variant = data.get("vehicles", null)
+	if garage is Array:
+		vehicles.clear()
+		for v: Variant in garage:
+			if v is Dictionary:
+				vehicles.append(v)
+		vehicles_changed.emit()
 	profile_updated.emit()
 
 
@@ -1379,3 +1398,11 @@ func _forget_session() -> void:
 	if cfg.has_section("session"):
 		cfg.erase_section("session")
 		cfg.save(_settings_path())
+
+
+## v19 내 차고 탈것 하나 (차고에 없으면 빈 사전).
+func vehicle(id: String) -> Dictionary:
+	for v: Dictionary in vehicles:
+		if str(v.get("id", "")) == id:
+			return v
+	return {}

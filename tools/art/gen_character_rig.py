@@ -296,7 +296,8 @@ anim('phone_tap', 0.26, [
  (0.26, PH(0,-0.3,0,0,PH_AL,PH_AR))], lag=(0.0,0.0,0.0,0.0))
 
 # ---- 탈것 (v0.15) ----
-# ride_bike: 안장에 앉아 몸을 앞으로 숙이고 두 손은 핸들, 발은 페달 원을 따라 돈다 (한 바퀴 = 1초, 리그가 빠르기를 바퀴 속도에 맞춘다).
+# ride_bike: 안장에 앉아 몸을 앞으로 숙이고 두 손은 핸들, 발은 페달 원을 따라 앞으로 돈다 (한 바퀴 = 1초, 리그가 빠르기를 바퀴 속도에 맞춘다).
+#            탈 때마다 0초(왼발 맨 위)부터 시작하고(reset), 리그가 같은 빠르기로 센 위상(pedal_phase)으로 탈것 크랭크를 돌린다.
 #            허벅지·정강이 각도는 페달 자리에서 두 마디 역기구학(IK)으로 구해 12 칸으로 나눈다 → 무릎이 자연스럽게 오르내린다.
 import math
 CRANK=(-0.26,-0.07)   # 골반 관절 기준 크랭크 가운데 (y, z) — z 가 음수면 앞
@@ -308,7 +309,8 @@ def leg_ik(y, z):
     b=math.acos(max(-1.0,min(1.0,(THIGH*THIGH+SHIN*SHIN-d*d)/(2*THIGH*SHIN))))
     return phi+a, -(math.pi-b)
 def pedal(angle):
-    return CRANK[0]+CRANK_R*math.cos(angle), CRANK[1]+CRANK_R*math.sin(angle)
+    # angle 0 = 위, 늘면 앞(-z) → 아래 → 뒤 (앞으로 밟기).
+    return CRANK[0]+CRANK_R*math.cos(angle), CRANK[1]-CRANK_R*math.sin(angle)
 # 검산: 허벅지 · 정강이로 되짚어 페달 자리에 닿는지.
 for k in range(8):
     py,pz=pedal(k*math.pi/4)
@@ -524,7 +526,7 @@ xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
 xfade_time = 0.15
-''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = false\n'%(i,e,i,i,i) for i,e in enumerate(RIDES)) + '''
+''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = %s\n'%(i,e,i,i,i,'true' if e == 'ride_bike' else 'false') for i,e in enumerate(RIDES)) + '''
 [sub_resource type="AnimationNodeTimeScale" id="TimeScale_ride"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_ride"]

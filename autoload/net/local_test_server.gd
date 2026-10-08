@@ -5,7 +5,7 @@ extends Node
 ## 입장 정보는 진짜 서버에서 찍어 둔 것(data/testserver/welcome.json, server/tools/make_test_snapshot.js)을 쓰고,
 ## 혼자 노는 데 필요한 것을 직접 처리한다: 걷기 · 가방(옮기기·버리기·손에 들기) · 상점(드나들기·사고팔기) · 마을 가구 ·
 ## 주민 대화(친밀도·수다) · 나무 베기(그루터기 → 다시 자람) · 낚시(입질·챔질) · 옷 입기 · 거울 얼굴 · 닉네임 · 씨앗 심기·꽃 따기 ·
-## 들판 채집 · 아파트 집 구경·꾸미기. 나무·꽃은 진짜 서버보다 10배 빨리 자란다.
+## 들판 채집 · 아파트 집 구경·꾸미기 · 차고 탈것(사기 · 꾸미기 · 팔기 · 타기, v19). 나무·꽃은 진짜 서버보다 10배 빨리 자란다.
 ## 여럿이 하는 일·경제(식당·증권·은행·동사무소·혼인신고·여울 그물·삽)는 "test_server" 오류로 알려 준다 — 판정이 너그럽고 다른 사람이 없다.
 ## 상태는 user://test_server.json 에 저장된다.
 
@@ -40,6 +40,9 @@ var _home_seq: int = 0
 var _placed: Dictionary = {}
 var _placed_seq: int = 0
 var _outfit: Dictionary = {"hat": "", "top": ""}
+## 차고 (v19): [{ id, model, owned, fit }] · 다음 번호.
+var _vehicles: Array = []
+var _veh_seq: int = 0
 ## 닉네임 (v14).
 var _name: String = ""
 var _face: Dictionary = {}
@@ -304,6 +307,8 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_face.merge(face, true)
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
 			_save()
+		"veh_buy", "veh_part", "veh_unfit", "veh_sell", "veh_ride":
+			_handle_garage(peer, msg, fail)
 		"phone", "phone_tap", "ride":
 			# 혼자 노는 테스트 서버: 다른 사람이 없으니 알릴 곳이 없다.
 			pass
@@ -885,6 +890,83 @@ static func _find(list: Array, id: String) -> Dictionary:
 	return {}
 
 
+# ---- 차고 (v19): 진짜 서버 garage.js 와 같은 규칙 (값 · 산 부품은 공짜로 다시 끼우기 · 되팔기) ----
+
+func _handle_garage(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var t: String = str(msg.get("t", ""))
+	var rid: Variant = msg.get("rid")
+	var cat: VehicleCatalog = GameData.garage
+	var v: Dictionary = {}
+	for x: Dictionary in _vehicles:
+		if str(x.get("id", "")) == str(msg.get("v", "")):
+			v = x
+	var result: Dictionary = {"t": "veh_result", "rid": rid}
+	match t:
+		"veh_buy":
+			var m: VehicleCatalog.Model = cat.model(str(msg.get("model", "")))
+			if m == null:
+				fail.call(NetProtocol.ERR_BAD_VEHICLE)
+				return
+			if _vehicles.size() >= cat.max_owned:
+				fail.call(NetProtocol.ERR_GARAGE_FULL)
+				return
+			if _sol < m.price:
+				fail.call(NetProtocol.ERR_NOT_ENOUGH_SOL)
+				return
+			_sol -= m.price
+			_veh_seq += 1
+			v = {"id": "V%d" % _veh_seq, "model": m.id, "owned": [], "fit": {}}
+			_vehicles.append(v)
+			result.merge({"kind": "buy", "v": v["id"], "model": m.id, "cost": m.price})
+		"veh_part":
+			if v.is_empty():
+				fail.call(NetProtocol.ERR_BAD_VEHICLE)
+				return
+			var kind: String = cat.model(str(v["model"])).kind
+			var part: VehicleCatalog.Part = cat.part(str(msg.get("part", "")))
+			if part == null or part.price_for(kind) <= 0:
+				fail.call(NetProtocol.ERR_BAD_PART)
+				return
+			var cost: int = 0
+			if not part.id in (v["owned"] as Array):
+				if _sol < part.price_for(kind):
+					fail.call(NetProtocol.ERR_NOT_ENOUGH_SOL)
+					return
+				cost = part.price_for(kind)
+				_sol -= cost
+				(v["owned"] as Array).append(part.id)
+			(v["fit"] as Dictionary)[part.slot] = part.id
+			result.merge({"kind": "part", "v": v["id"], "part": part.id, "cost": cost})
+		"veh_unfit":
+			var slot: String = str(msg.get("slot", ""))
+			if v.is_empty() or not (v["fit"] as Dictionary).has(slot):
+				fail.call(NetProtocol.ERR_BAD_PART)
+				return
+			(v["fit"] as Dictionary).erase(slot)
+			result.merge({"kind": "unfit", "v": v["id"], "slot": slot, "cost": 0})
+		"veh_sell":
+			if v.is_empty():
+				fail.call(NetProtocol.ERR_BAD_VEHICLE)
+				return
+			var back: int = cat.resale_value(str(v["model"]), PackedStringArray(v["owned"]))
+			_vehicles.erase(v)
+			_sol += back
+			result.merge({"kind": "sell", "v": v["id"], "cost": -back})
+		"veh_ride":
+			var wire: Variant = null
+			if not v.is_empty():
+				wire = {"v": v["id"], "m": v["model"], "f": (v["fit"] as Dictionary).duplicate()}
+			elif str(msg.get("v", "")) != "":
+				fail.call(NetProtocol.ERR_BAD_VEHICLE)
+				return
+			_send(peer, {"t": "veh_ride", "rid": rid, "id": 1, "mount": wire})
+			return
+	result["sol"] = _sol
+	_send(peer, result)
+	_send(peer, {"t": "profile", "sol": _sol, "vehicles": _vehicles.duplicate(true)})
+	_save()
+
+
 # ---- 입장 정보 · 가방 ----
 
 func _welcome(resumed: bool) -> Dictionary:
@@ -900,6 +982,7 @@ func _welcome(resumed: bool) -> Dictionary:
 	w["inv"] = _inventory_wire()
 	var prof: Dictionary = w.get("prof", {})
 	prof["sol"] = _sol
+	prof["vehicles"] = _vehicles.duplicate(true)
 	w["prof"] = prof
 	var players: Array = w.get("players", [])
 	if not players.is_empty():
@@ -1056,6 +1139,9 @@ func _load() -> void:
 		for f: Dictionary in _flowers.values():
 			f["s"] = "bloom"
 	_flower_seq = int(saved.get("flower_seq", 0))
+	if saved.get("vehicles") is Array:
+		_vehicles = (saved["vehicles"] as Array).filter(func(v: Variant) -> bool: return v is Dictionary and GameData.garage.model(str(v.get("model", ""))) != null)
+	_veh_seq = int(saved.get("veh_seq", 0))
 	for planted: Dictionary in _planted.values():
 		planted["s"] = NetProtocol.TREE_GROWN
 	if not _home.is_empty() and GameData.econ.plan_of(_home) == null:
@@ -1070,7 +1156,8 @@ func _save() -> void:
 		"home_items": _home_items, "home_seq": _home_seq, "placed": _placed, "placed_seq": _placed_seq,
 		"outfit": _outfit, "face": _face, "name": _name, "friends": _friends, "talk_days": _talk_days,
 		"planted": _planted, "plant_seq": _plant_seq, "flowers": _flowers, "flower_seq": _flower_seq, "chats": _chats,
-		"ground": _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "item"), "drop_seq": _drop_seq}))
+		"ground": _drops.values().filter(func(d: Dictionary) -> bool: return d.get("kind") == "item"), "drop_seq": _drop_seq,
+		"vehicles": _vehicles, "veh_seq": _veh_seq}))
 
 
 static func _read_json(path: String) -> Dictionary:

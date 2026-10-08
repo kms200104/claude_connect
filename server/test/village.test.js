@@ -72,7 +72,7 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     const { stocks, trades, loans, credit, income, worth, civ, stats, dex, ach, title, birthday, ...prof } = w.prof;
     assert.deepEqual({ dex, ach, title, birthday, fish: stats.fish }, { dex: { fish: {}, items: [] }, ach: [], title: '', birthday: null, fish: 0 }, 'v16: 도감 · 업적 · 칭호 · 생일은 비어 있다');
     assert.deepEqual({ partner: civ.partner, resident: civ.resident, card: civ.card }, { partner: 0, resident: false, card: false }, '처음엔 혼자 · 전입 전 · 카드 없음');
-    assert.deepEqual(prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' }, name: '' });
+    assert.deepEqual(prof, { sol: 0, quests: [], friends: {}, outfit: { hat: '', top: '' }, emotes: { known: ['hello'], quick: ['hello'] }, face: { eyes: 'round', eye_color: 'cocoa', nose: 'button', mouth: 'smile', skin: 'peach', hair: 'bob', hair_color: 'brown' }, name: '', vehicles: [] });
     assert.deepEqual({ stocks, trades, loans, income, worth }, { stocks: {}, trades: [], loans: [], income: { week: 0, year: 0 }, worth: { assets: 0, debt: 0, net: 0 } }, '처음엔 주식·대출·소득이 없다');
     assert.ok(credit.score > 0 && credit.grade >= 1 && credit.grade <= 10);
     assert.equal(w.market.stocks.length, server.data.market.stocks.length, '입장하면 증권 시세를 받는다');

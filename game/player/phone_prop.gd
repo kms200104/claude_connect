@@ -12,7 +12,7 @@ const LENS: Color = Color("#1B1E2A")
 const METAL: Color = Color("#D5D9DE")
 ## 홈 화면 앱 아이콘 색 (PhoneWindow.Tab 과 같은 순서, v16: 카메라 · 앨범 · 지도 · 도감 · 날씨 · 음악 · 업적).
 const ICON_COLORS: Array[Color] = [Color("#E8594A"), Color("#4C8FE0"), Color("#3DAA6D"), Color("#F2B53A"), Color("#FFD84D"), Color("#9B6AD8"), Color("#F28A3C"), Color("#8C97A6"),
-	Color("#5C6B7A"), Color("#F598B4"), Color("#3FB8A6"), Color("#7AAE48"), Color("#5AB0F0"), Color("#D46AB8"), Color("#E0A020")]
+	Color("#5C6B7A"), Color("#F598B4"), Color("#3FB8A6"), Color("#7AAE48"), Color("#5AB0F0"), Color("#D46AB8"), Color("#E0A020"), Color("#2FA0A8")]
 const SCREEN_ENERGY: float = 0.9
 
 static var _body_mesh: ArrayMesh = null

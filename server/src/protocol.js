@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -116,6 +116,11 @@ export const ErrorCode = Object.freeze({
   notVisitable: 'not_visitable', // 놀러 갈 수 없는 집 (주인 없음 · 다른 마을)
   badPhoto: 'bad_photo', // JPEG 가 아니거나 너무 큼
   noPhoto: 'no_photo', // 없는(지워진) 사진
+  // v19: 차고 (자전거 · 전기오토바이)
+  badVehicle: 'bad_vehicle', // 모르는 모델 · 내 차고에 없는 탈것
+  badPart: 'bad_part', // 그 탈것에 맞지 않는(모르는) 부품 · 빈 칸
+  garageFull: 'garage_full', // 차고가 꽉 찼다 (max_owned)
+  cantRide: 'cant_ride', // 집 · 상점 안이거나 낚시 중이라 탈 수 없다
 });
 
 // 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).

@@ -88,7 +88,7 @@ func has_target() -> bool:
 func _process(_delta: float) -> void:
 	_pick_target()
 	if player.is_riding() and not target in RIDE_TARGETS:
-		target = Target.RIDE_OFF if player.vehicle.is_riding() and not player.is_input_locked() else Target.NONE
+		target = Target.RIDE_OFF if player.is_ride_settled() and not player.is_input_locked() else Target.NONE
 		target_id = ""
 	match target:
 		Target.RIDE_OFF:
@@ -280,7 +280,7 @@ func _on_action_pressed() -> void:
 		Target.JOB:
 			jobs.activate(target_id)
 		Target.RIDE_OFF:
-			player.vehicle.dismount()
+			player.dismount_ride()
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))

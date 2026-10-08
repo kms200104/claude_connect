@@ -126,6 +126,8 @@ var _ride_kind: String = ""
 var _ride_target: float = 0.0
 var _ride_value: float = 0.0
 var _pedal_rate: float = 0.0
+## 페달 위상 (0~1, 0 = 왼발이 맨 위). ride_bike 를 돌리는 빠르기와 같이 세어 탈것 크랭크가 발과 같이 돈다.
+var _pedal_phase: float = 0.0
 var _tool_id: String = ""
 var _tug: float = 0.0
 ## 자랑할 때 머리 위로 드는 물건 (show_off).
@@ -387,6 +389,9 @@ func set_riding(kind: String) -> void:
 	_ride_target = 1.0 if active else 0.0
 	if active and tree != null:
 		tree.set("parameters/RideSwitch/transition_request", RIDE_ANIMS[kind])
+	if kind == "bike":
+		# ride_bike 는 탈 때마다 0초부터 (gen_character_rig.py reset).
+		_pedal_phase = 0.0
 	if active:
 		for n: Node3D in [rod, axe, tool]:
 			if n != null:
@@ -456,6 +461,11 @@ func is_kicking() -> bool:
 ## 페달 밟는 빠르기 (초당 바퀴 수). 자전거 바퀴 속도에 맞춰 ride_bike 한 바퀴(1초)를 빠르게·느리게 돌린다. 0 = 멈춤.
 func set_pedal_rate(rev_per_sec: float) -> void:
 	_pedal_rate = maxf(rev_per_sec, 0.0)
+
+
+## 지금 페달 위상 (0~1). VehicleModel 이 크랭크를 이 각도로 돌린다.
+func pedal_phase() -> float:
+	return _pedal_phase
 
 
 ## 휴대폰 꺼내 보기 (v0.14): 손에 든 물건을 주머니에 쏙 넣고(작아지며 사라짐) 휴대폰을 꺼내 오른손에 들고 내려다본다.
@@ -680,6 +690,9 @@ func _process(delta: float) -> void:
 	_ride_value = move_toward(_ride_value, _ride_target, 5.0 * delta)
 	tree.set("parameters/RideBlend/blend_amount", _ride_value)
 	tree.set("parameters/RideScale/scale", _pedal_rate if _ride_kind == "bike" else 1.0)
+	if _ride_kind == "bike":
+		# AnimationTree(자식)가 이 프레임에 delta × 빠르기만큼 나아가므로 같은 값을 센다.
+		_pedal_phase = fposmod(_pedal_phase + _pedal_rate * delta, 1.0)
 	_show_value = lerpf(_show_value, _show_target, 1.0 - exp(-10.0 * delta))
 	tree.set("parameters/ShowBlend/blend_amount", _show_value)
 	_cook_value = move_toward(_cook_value, _cook_target, 8.0 * delta)

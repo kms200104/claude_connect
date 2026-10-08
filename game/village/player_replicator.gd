@@ -153,6 +153,7 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 		remote.set_outfit(state.hat, state.top)
 		remote.set_uniform(state.job)
 		remote.set_ride(state.ride)
+		remote.set_mount(state.mount)
 
 
 ## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.

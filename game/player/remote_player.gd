@@ -124,6 +124,66 @@ func set_ride(item_id: String) -> void:
 		board.queue_free()
 
 
+## 차고 탈것 (v19, 스냅샷마다 온다 { v, m, f }, 빈 사전 = 안 탐): 탈것이 톡 나타나 올라앉고, 내리면 톡 사라진다.
+## 부품을 바꾸면(같은 탈것) 모양만 다시 빚는다.
+func set_mount(mount: Dictionary) -> void:
+	if rig == null:
+		return
+	var key: String = JSON.stringify(mount, "", true) if not mount.is_empty() else ""
+	if key == _mount_key:
+		return
+	_mount_key = key
+	if is_nan(_walk_display_speed):
+		_walk_display_speed = max_display_speed
+	var info: VehicleCatalog.Model = GameData.garage.model(str(mount.get("m", ""))) if not mount.is_empty() else null
+	if info == null:
+		if _mount != null:
+			var old: VehicleModel = _mount
+			_mount = null
+			old.create_tween().tween_property(old, "scale", Vector3.ONE * 0.05, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN).finished.connect(old.queue_free)
+			rig.set_riding("")
+			var rest: float = _body_rest_y if not is_nan(_body_rest_y) else 0.8
+			body.transform = Transform3D(Basis(Vector3.UP, body.rotation.y), Vector3(0.0, rest, 0.0))
+		_mount_info = null
+		max_display_speed = _walk_display_speed
+		return
+	var fresh: bool = _mount == null
+	if fresh:
+		_mount = VehicleModel.new()
+		_mount.name = "Vehicle"
+		rig.add_child(_mount)
+	_mount_info = info
+	_mount.build(info.id, mount.get("f", {}) as Dictionary)
+	if fresh:
+		_mount.scale = Vector3.ONE * 0.05
+		_mount.create_tween().tween_property(_mount, "scale", Vector3.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_mount_speed = 0.0
+		_mount_yaw = body.rotation.y
+	rig.set_riding(info.kind)
+	max_display_speed = maxf(_walk_display_speed, GameData.garage.stats(info.id, mount.get("f", {}) as Dictionary).top * 1.25)
+
+
+## 차고 탈것을 탄 친구: 화면에서 움직인 만큼 바퀴 · 페달을 돌리고, 도는 만큼 바닥을 축으로 눕고 핸들을 꺾는다.
+func _update_mount(delta: float, before: Vector3) -> void:
+	if _mount == null or _mount_info == null or delta <= 0.0:
+		return
+	var step: Vector3 = (global_position - before) * Vector3(1.0, 0.0, 1.0)
+	_mount_speed = lerpf(_mount_speed, step.length() / delta, 1.0 - exp(-6.0 * delta))
+	var rate: float = wrapf(body.rotation.y - _mount_yaw, -PI, PI) / delta
+	_mount_yaw = body.rotation.y
+	var max_lean: float = 0.5 if _mount_info.kind == "moto" else 0.36
+	_mount_lean = lerpf(_mount_lean, clampf(atan(_mount_speed * rate / VehicleDrive.GRAVITY), -max_lean, max_lean), 1.0 - exp(-6.0 * delta))
+	var base: float = absf(_mount_info.anchor("axle_r").z - _mount_info.anchor("axle_f").z)
+	_mount_steer = clampf(atan(base * rate / maxf(_mount_speed, 0.8)), -0.5, 0.5)
+	rig.set_pedal_rate(_mount.pedal_rate(_mount_speed) if _mount_info.kind == "bike" else 0.0)
+	_mount.set_pedal(rig.pedal_phase())
+	_mount.animate(_mount_speed, _mount_steer, delta)
+	var rest: float = (_body_rest_y if not is_nan(_body_rest_y) else 0.8) + _mount_info.lift
+	var basis: Basis = Basis(Vector3.UP, body.rotation.y) * Basis(Vector3.BACK, _mount_lean)
+	body.transform = Transform3D(basis, basis * Vector3(0.0, rest, 0.0))
+	_mount.position = Vector3(0.0, -rest, 0.0)
+
+
 ## 탄 친구: 화면에서 움직인 만큼 바퀴를 굴리고, 빨라지면 땅을 차고, 확 느려지면 브레이크 자세, 도는 만큼 바닥을 축으로 기운다.
 func _update_ride(delta: float, before: Vector3) -> void:
 	if _board == null or delta <= 0.0 or rig.riding_kind().is_empty():
@@ -185,6 +245,16 @@ var _want_hat: String = ""
 var _want_top: String = ""
 var _want_job: bool = false
 var _ride_item: String = ""
+## 차고 탈것 (v19): 스냅샷의 mount 그대로 (같으면 다시 빚지 않는다) · 모양 · 화면 빠르기 · 기울기.
+var _mount_key: String = ""
+var _mount: VehicleModel = null
+var _mount_info: VehicleCatalog.Model = null
+var _mount_speed: float = 0.0
+var _mount_yaw: float = 0.0
+var _mount_lean: float = 0.0
+var _mount_steer: float = 0.0
+## 걸을 때의 화면 빠르기 상한 (탈것을 타면 그 탈것 최고 속도에 맞춰 올린다).
+var _walk_display_speed: float = NAN
 var _board: Kickboard = null
 var _board_tween: Tween = null
 var _ride_speed: float = 0.0
@@ -207,6 +277,7 @@ func setup(state: NetPlayerState) -> void:
 	# 처음 나타날 때는 탈의소 없이 바로 (복장을 먼저 — 옷을 입히면 그다음부터 바뀔 때 탈의소).
 	set_uniform(state.job)
 	set_ride(state.ride)
+	set_mount(state.mount)
 	set_outfit(state.hat, state.top)
 	set_phone(state.phone)
 
@@ -440,8 +511,9 @@ func _process(delta: float) -> void:
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-speed_smoothing * delta))
 		rig.set_move_speed(0.0 if target_fishing else CharacterRig.speed_to_blend(_shown_speed, walk_speed_reference, run_speed_reference))
 		rig.set_fishing(target_fishing)
-		if not target_fishing and _ride_item.is_empty():
+		if not target_fishing and _ride_item.is_empty() and _mount == null:
 			_footsteps.advance(moved * delta, _shown_speed > walk_speed_reference * 1.25, global_position, true)
 	if body != null:
 		body.rotation.y = lerp_angle(body.rotation.y, target_yaw, weight)
 	_update_ride(delta, before)
+	_update_mount(delta, before)

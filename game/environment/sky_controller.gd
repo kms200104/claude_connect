@@ -7,6 +7,9 @@ extends Node
 ## 모바일 비용: 하늘 셰이더 대신 단색 배경(반사 맵 재계산 없음), 비는 카메라 앞 사각형 1장,
 ## 흐림·비·밤에는 그림자를 꺼서 오히려 가볍게 만든다.
 
+## 지금 밤 조명 세기 (0~1, 셰이더 전역 값 night_light 와 같다). 탈것 전조등처럼 스크립트가 읽는다 (전역 셰이더 값은 실행 중에 읽을 수 없다).
+static var night_light: float = 0.0
+
 @export_group("References")
 @export var sun: DirectionalLight3D
 @export var world_environment: WorldEnvironment
@@ -147,6 +150,7 @@ func _apply(delta: float, instant: bool) -> void:
 
 	var lamps: float = clampf(maxf(1.0 - daylight * 1.4, clouds * rain_amount * 0.5), 0.0, 1.0)
 	RenderingServer.global_shader_parameter_set("night_light", lamps)
+	night_light = lamps
 	RenderingServer.global_shader_parameter_set("world_wetness", 0.0 if indoor else wetness)
 	for light: OmniLight3D in lamp_lights:
 		if light != null:

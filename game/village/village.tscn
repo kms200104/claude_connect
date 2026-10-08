@@ -1,4 +1,4 @@
-[gd_scene load_steps=78 format=3]
+[gd_scene load_steps=79 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -72,6 +72,7 @@
 [ext_resource type="Material" path="res://assets/materials/building_clay.tres" id="90_bclay"]
 [ext_resource type="Material" path="res://assets/materials/building_window.tres" id="91_bwindow"]
 [ext_resource type="Script" path="res://game/vehicles/kickboard_rider.gd" id="92_ride"]
+[ext_resource type="Script" path="res://game/vehicles/garage_rider.gd" id="93_garage"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.55, 0.7, 0.85, 1)
@@ -461,6 +462,12 @@ toast_hud = NodePath("../HUD/FishingHud")
 script = ExtResource("92_ride")
 player = NodePath("../Player")
 toast_hud = NodePath("../HUD/FishingHud")
+
+[node name="GarageRide" type="Node" parent="." node_paths=PackedStringArray("player", "toast_hud", "hud")]
+script = ExtResource("93_garage")
+player = NodePath("../Player")
+toast_hud = NodePath("../HUD/FishingHud")
+hud = NodePath("../HUD")
 
 [node name="JournalNotices" type="Node" parent="." node_paths=PackedStringArray("hud")]
 script = ExtResource("72_journal")

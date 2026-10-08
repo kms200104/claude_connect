@@ -71,6 +71,8 @@ var _splash_left: float = 0.0
 var _input_locks: Dictionary[StringName, bool] = {}
 ## 킥보드 (v0.16). 타는 동안은 걷기 대신 vehicle.drive 가 속도 · 방향을 정한다.
 var vehicle: KickboardRider = null
+## 차고 탈것 (v19, 자전거 · 전기오토바이). 타는 동안은 garage_ride.drive 가 속도 · 방향을 정한다.
+var garage_ride: GarageRider = null
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
@@ -85,6 +87,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if vehicle != null and vehicle.is_active():
+		_physics_ride(delta)
+		return
+	if garage_ride != null and garage_ride.is_active():
 		_physics_ride(delta)
 		return
 	var input: Vector2 = _read_input()
@@ -142,7 +147,7 @@ func _physics_process(delta: float) -> void:
 		joystick.boost = running
 
 
-## 킥보드를 타는 동안 (꺼내고 접는 동안 포함): 걷기 · 달리기 · 브레이크 대신 탈것이 속도와 방향을 정한다.
+## 킥보드 · 차고 탈것을 타는 동안 (꺼내고 접는 동안 포함): 걷기 · 달리기 · 브레이크 대신 탈것이 속도와 방향을 정한다.
 func _physics_ride(delta: float) -> void:
 	var input: Vector2 = _read_input()
 	var move_dir: Vector3 = _input_to_world(input)
@@ -151,14 +156,21 @@ func _physics_ride(delta: float) -> void:
 	if braking:
 		_end_brake()
 	wading = not Field.zone_at(global_position, 0.1).is_empty()
-	vehicle.drive(delta, move_dir, minf(input.length(), 1.0))
+	var kick: bool = vehicle != null and vehicle.is_active()
+	if kick:
+		vehicle.drive(delta, move_dir, minf(input.length(), 1.0))
+	else:
+		garage_ride.drive(delta, move_dir, minf(input.length(), 1.0))
 	if is_on_floor():
 		velocity.y = 0.0
 	else:
 		velocity.y -= gravity * delta
 	var before: Vector3 = global_position
 	move_and_slide()
-	vehicle.after_move(delta, before)
+	if kick:
+		vehicle.after_move(delta, before)
+	else:
+		garage_ride.after_move(delta, before)
 	if rig != null:
 		rig.set_move_speed(0.0)
 	if joystick != null:
@@ -174,7 +186,20 @@ func body_rest_height() -> float:
 
 ## 탔는지 (꺼내고 접는 동안 포함).
 func is_riding() -> bool:
-	return vehicle != null and vehicle.is_active()
+	return vehicle != null and vehicle.is_active() or garage_ride != null and garage_ride.is_active()
+
+
+## 다 올라타서 달리는 중인지 (킥보드 · 차고 탈것).
+func is_ride_settled() -> bool:
+	return vehicle != null and vehicle.is_riding() or garage_ride != null and garage_ride.is_riding()
+
+
+## 타고 있는 것에서 내린다.
+func dismount_ride() -> void:
+	if vehicle != null and vehicle.is_active():
+		vehicle.dismount()
+	elif garage_ride != null and garage_ride.is_active():
+		garage_ride.dismount()
 
 
 ## 이동 입력을 막거나 푼다. 사유별로 따로 기록해서 여러 곳(낚시, 가방 창)이 서로 간섭하지 않는다.

@@ -210,6 +210,14 @@ func _glyph(o: Vector2, s: float, ink: Color) -> void:
 			draw_rect(Rect2(p.call(0.46, 0.5), Vector2(0.08, 0.14) * s), ink)
 			draw_rect(Rect2(p.call(0.32, 0.64), Vector2(0.36, 0.12) * s), ink)
 			draw_circle(p.call(0.43, 0.3), s * 0.035, Color(tint, 0.7))
+		"vehicle":
+			# 자전거: 두 바퀴 + 몸체 + 핸들.
+			draw_arc(p.call(0.3, 0.62), s * 0.15, 0.0, TAU, 24, ink, w * 1.1, true)
+			draw_arc(p.call(0.72, 0.62), s * 0.15, 0.0, TAU, 24, ink, w * 1.1, true)
+			draw_polyline(PackedVector2Array([p.call(0.3, 0.62), p.call(0.47, 0.62), p.call(0.4, 0.4), p.call(0.3, 0.62)]), ink, w, true)
+			draw_polyline(PackedVector2Array([p.call(0.47, 0.62), p.call(0.64, 0.36), p.call(0.72, 0.62)]), ink, w, true)
+			draw_line(p.call(0.34, 0.37), p.call(0.46, 0.37), ink, w * 1.2, true)
+			draw_line(p.call(0.64, 0.36), p.call(0.58, 0.3), ink, w, true)
 
 
 ## 아래 막대 단추: 뒤로(◁) · 홈(○) · 닫기(✕).

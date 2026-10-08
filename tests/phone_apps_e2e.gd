@@ -140,7 +140,7 @@ func _run() -> void:
 	for kind: String in PhoneWindow.APP_KINDS:
 		if _find(phone, "App_%s" % kind) != null:
 			icons += 1
-	_check(icons == 15, "홈 화면 앱 아이콘 15개 (%d)" % icons)
+	_check(icons == 16, "홈 화면 앱 아이콘 16개 (%d)" % icons)
 	await _shot("a02_home")
 
 	# ---- 업적 앱: 칭호 달기 → 친구 화면에도 ----

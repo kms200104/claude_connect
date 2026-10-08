@@ -67,6 +67,8 @@ var airport: KeeperPlace = null
 var econ: EconData = null
 ## 일거리 (v0.12): 배달 알바 거리.
 var jobs: JobRules = JobRules.new()
+## 차고 탈것 (v19): 자전거 · 전기오토바이와 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
+var garage: VehicleCatalog = VehicleCatalog.new()
 ## v16 업적 (데이터 순서 그대로) · id → 업적 · 판정 값 이름 → 설명.
 var achievements: Array[AchievementInfo] = []
 var achievement_by_id: Dictionary[String, AchievementInfo] = {}
@@ -138,6 +140,7 @@ func _ready() -> void:
 	airport = KeeperPlace.from_dict(_read_json(AIRPORT_PATH), "pilot", "shop_range")
 	econ = EconData.load_all()
 	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
+	garage = VehicleCatalog.from_dict(_read_json("res://data/vehicles/garage.json"))
 	econ.build_customers(npcs)
 	var ach_file: Dictionary = _read_json(ACHIEVEMENTS_PATH)
 	for key: Variant in ach_file.get("stats", {}):

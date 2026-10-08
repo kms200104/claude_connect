@@ -16,6 +16,8 @@ var top: String = ""
 var job: bool = false
 ## 타고 있는 탈것 아이템 id (v18, 빈 문자열 = 안 탐).
 var ride: String = ""
+## 타고 있는 차고 탈것 { v: 탈것 id, m: 모델, f: { 칸: 부품 } } (v19, 안 타면 빈 사전).
+var mount: Dictionary = {}
 ## 거울에서 고른 얼굴 (FaceCatalog id 사전, 입장·참가 때만 온다 — 스냅샷에는 없다).
 var face: Dictionary = {}
 ## 닉네임 (v14, 입장·참가 때만 온다). 빈 이름이면 기본 이름.
@@ -36,6 +38,8 @@ static func from_dict(data: Dictionary) -> NetPlayerState:
 	state.top = str(data.get("top", ""))
 	state.job = bool(data.get("job", false))
 	state.ride = str(data.get("ride", ""))
+	var m: Variant = data.get("mount", null)
+	state.mount = m if m is Dictionary else {}
 	var f: Variant = data.get("face", {})
 	if f is Dictionary:
 		state.face = f

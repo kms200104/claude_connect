@@ -38,6 +38,7 @@ import { calendarWire } from './calendar.js';
 import { GUESTBOOK, addEntry, cleanEntryText, guestbookWire } from './guestbook.js';
 import { PHOTO_RULES, createPhotoStore } from './photos.js';
 import { DAY_MS, DAY_START_HOUR } from './clock.js';
+import { createGarage, mountWire } from './garage.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -101,6 +102,7 @@ export function createServer(overrides = {}) {
       face: { ...player.profile.face },
       name: player.profile.name ?? '',
       ...economy.profileWire(roomOf(player), player.profile),
+      ...garage.profileWire(player.profile),
       ...progressWire(player.profile, progressValues(roomOf(player), player.profile)),
     };
   };
@@ -130,11 +132,14 @@ export function createServer(overrides = {}) {
   };
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
+  const garage = createGarage({ data, send, sendProfile, rooms });
   const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
+  /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
+  const rideBlocked = (player) => (player.home || inShop(player) || player.fishing !== null ? ErrorCode.cantRide : null);
   /** 상점에서 사는 값 (장바구니 물가가 오른 주에는 비싸다). */
   const buyPrice = (room, item, n) => Math.round(data.items.get(item).buy * n * buyMultiplier(activeOf(room), item, data.kindOf));
   const delivery = createDelivery({
@@ -434,6 +439,7 @@ export function createServer(overrides = {}) {
       player.phone = false;
       room.dirty = true;
     }
+    garage.dismount(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.broadcast({ t: 'peer_status', id: player.id, online: false });
@@ -827,6 +833,7 @@ export function createServer(overrides = {}) {
     player.vz = 0;
     player.lastMoveAt = now();
     player.doorAt = now();
+    garage.dismount(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.dirty = true;
@@ -1160,6 +1167,7 @@ export function createServer(overrides = {}) {
     if (!info || !info.ride || !player.profile.slots.some((s) => s && s.id === id)) return;
     if (player.ride === id) return;
     player.ride = id;
+    player.mount = null; // v19: 차고 탈것에서는 내린다
     room.dirty = true;
   }
 
@@ -1330,6 +1338,7 @@ export function createServer(overrides = {}) {
     player.vz = 0;
     player.lastMoveAt = now();
     player.doorAt = now();
+    garage.dismount(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.dirty = true;
@@ -1674,6 +1683,7 @@ export function createServer(overrides = {}) {
         const target = Number.isFinite(msg.x) && Number.isFinite(msg.z) ? { x: msg.x, z: msg.z } : null;
         const err = fishing.cast(player, msg.rid, msg.spot, target);
         if (err) fail(err);
+        else garage.dismount(player, ctx.room);
         return;
       }
       case 'fish_hook': {
@@ -1796,6 +1806,12 @@ export function createServer(overrides = {}) {
         return handlePhotoUp(ctx, msg, fail);
       case 'photo_get':
         return handlePhotoGet(ctx, msg, fail);
+      case 'veh_buy':
+      case 'veh_part':
+      case 'veh_unfit':
+      case 'veh_sell':
+      case 'veh_ride':
+        return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -1819,7 +1835,9 @@ export function createServer(overrides = {}) {
     const dist = Math.hypot(dx, dz);
     // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
     if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
-    const allowed = cfg.maxSpeed * cfg.speedTolerance * dt + cfg.moveSlackMeters;
+    // v19: 차고 탈것을 타는 동안은 그 탈것의 최고 속도까지.
+    const topSpeed = Math.max(cfg.maxSpeed, garage.topSpeed(player));
+    const allowed = topSpeed * cfg.speedTolerance * dt + cfg.moveSlackMeters;
     let corrected = tx !== msg.x || tz !== msg.z || ty !== msg.y;
     if (dist > allowed) {
       const k = allowed / dist;
@@ -1835,7 +1853,7 @@ export function createServer(overrides = {}) {
     const vx = isNum(msg.vx) ? msg.vx : 0;
     const vz = isNum(msg.vz) ? msg.vz : 0;
     const speed = Math.hypot(vx, vz);
-    const cap = cfg.maxSpeed * cfg.speedTolerance;
+    const cap = topSpeed * cfg.speedTolerance;
     const vk = speed > cap ? cap / speed : 1;
     player.vx = vx * vk;
     player.vz = vz * vk;
@@ -1965,6 +1983,11 @@ export function createServer(overrides = {}) {
       case 'home_visit':
       case 'photo_up':
       case 'photo_get':
+      case 'veh_buy':
+      case 'veh_part':
+      case 'veh_unfit':
+      case 'veh_sell':
+      case 'veh_ride':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -2026,6 +2049,7 @@ export function createServer(overrides = {}) {
           top: p.profile.outfit.top,
           job: p.job !== null,
           ride: p.rideItem,
+          ...(p.mount ? { mount: mountWire(p) } : {}),
           x: p.x,
           y: p.y,
           z: p.z,
