@@ -70,10 +70,28 @@ class Sample:
 		held = h
 
 
-## 입은 옷 (스냅샷마다 온다).
+## 입은 옷 (스냅샷마다 온다). 보이던 친구의 옷이 바뀌면 탈의소에서 갈아입는다 (v0.15). 처음 나타날 때는 바로 입는다.
 func set_outfit(hat: String, top: String) -> void:
+	if rig == null:
+		return
+	_want_hat = hat
+	_want_top = top
+	if OutfitBooth.is_pending(rig):
+		return
+	if rig.outfit_item("hat") == hat and rig.outfit_item("top") == top:
+		_outfit_known = true
+		return
+	if _outfit_known and online and visible and is_inside_tree():
+		OutfitBooth.play(rig, func() -> void: rig.set_outfit(_want_hat, _want_top))
+		return
+	_outfit_known = true
+	rig.set_outfit(hat, top)
+
+
+## 배달 알바 복장 (스냅샷마다 온다).
+func set_uniform(on: bool) -> void:
 	if rig != null:
-		rig.set_outfit(hat, top)
+		rig.set_uniform(on)
 
 
 func _ready() -> void:
@@ -87,6 +105,11 @@ func _ready() -> void:
 			set_online(online))
 
 
+var _want_hat: String = ""
+var _want_top: String = ""
+var _outfit_known: bool = false
+
+
 func setup(state: NetPlayerState) -> void:
 	player_id = state.id
 	if rig != null:
@@ -97,6 +120,7 @@ func setup(state: NetPlayerState) -> void:
 	set_online(state.online)
 	_apply_held(state.held)
 	set_outfit(state.hat, state.top)
+	set_uniform(state.job)
 	set_phone(state.phone)
 
 

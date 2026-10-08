@@ -76,6 +76,7 @@ describe('일거리 서버', () => {
     const j = (await c.type('job')).job;
     assert.equal(j.stage, 'pickup');
     assert.equal(j.from.id, 'shop');
+    assert.equal(player.toWire().job, true, '배달하는 동안은 플레이어 정보에 job (헬멧 · 가방 연출)');
     put(player, { x: j.from.x + 20, z: j.from.z });
     c.send({ t: 'job_pick', rid: newRid() });
     assert.equal((await c.type('error')).code, 'not_at_job');
@@ -94,6 +95,7 @@ describe('일거리 서버', () => {
     assert.equal(player.profile.sol, before + r.total);
     assert.ok(player.profile.npcs[j.to.npc].f >= data.jobs.friend, '받은 주민과 친해진다');
     assert.equal((await c.type('job')).job, null);
+    assert.equal(player.toWire().job, false);
   });
 
   it('같이 배달: 친구가 곁에 있으면 두 사람 모두 보너스', async () => {

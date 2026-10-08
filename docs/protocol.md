@@ -177,7 +177,7 @@ v16 → v17: 배달 연속 팁 — `job` 에 `streak`(지금 연속 횟수), `jo
 | `collect_result` | `rid id kind item` | 내가 주웠다. `item` 1개가 인벤토리에 들어갔다 |
 | `error` | `code msg rid?` | 아래 에러 코드 |
 
-`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
+`players[]`/`p[]` 항목: `{id, online, fishing, phone, held, hat, top, job, x, y, z, yaw, vx, vz}` (`fishing`은 낚시 자세, `held`는 손에 든 아이템 id, `hat`·`top`은 입은 옷 — 상대 캐릭터 표시용, `job`은 배달 알바 중 — 파란 헬멧 · 배달 가방 연출, v0.15 추가 필드라 옛 클라이언트는 무시한다). `welcome.players[]`·`peer_joined.p` 에는 `face` 도 실린다 (v7, 스냅샷 `snap.p[]` 에는 없다 — 바뀌면 `face` 메시지) · `name` 도 (v14, 빈 문자열 = 자리 기본 이름, 바뀌면 `name` 메시지). `prof.name` = 내 닉네임.
 `profile`에는 `outfit {hat, top}`도 실린다. `st`/`s`는 서버 단조 시계(ms).
 
 부탁(`quest`/`offer`/`quests[]`): `{id, npc, kind, item?, n, reward, exp, have}` — `kind` = `deliver`(재료 n개) / `deliver_fish`(그 물고기 n마리) / `any_fish`(아무 물고기 n마리), `exp` = 이 마을 날짜까지 유효, `have` = 지금 인벤토리로 채운 개수.

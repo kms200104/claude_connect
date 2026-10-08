@@ -126,6 +126,7 @@ func _refresh() -> void:
 	_chip.visible = active
 	_beacon.visible = active
 	_arrow.visible = active
+	_wear_uniform(active)
 	if not active:
 		return
 	var carry: bool = str(j.get("stage", "")) == "carry"
@@ -136,6 +137,16 @@ func _refresh() -> void:
 	_beacon_box.visible = not carry
 	_arrow_material.albedo_color = color
 	_chip.add_theme_color_override("font_color", color.darkened(0.45))
+
+
+## 배달하는 동안은 파란 헬멧(쓰던 모자 자리)과 "배달의 솔" 가방 (v0.15). 입고 벗을 때 뿅 하고 연기.
+func _wear_uniform(on: bool) -> void:
+	if player == null or player.rig == null or player.rig.is_uniformed() == on:
+		return
+	player.rig.set_uniform(on)
+	if player.is_inside_tree():
+		Puff.burst(player.get_parent(), player.global_position + Vector3(0.0, 1.1, 0.0), Color(1.0, 1.0, 1.0, 0.85), 8, 0.6, 0.5, 0.12, 0.5)
+		Audio.play_sfx("emote_pop", -8.0)
 
 
 func _on_done(r: Dictionary) -> void:

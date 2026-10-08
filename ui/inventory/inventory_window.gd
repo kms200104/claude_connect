@@ -335,8 +335,11 @@ func _on_use_pressed() -> void:
 	if info == null:
 		return
 	if info.is_clothing():
+		# v0.15: 탈의소에서 갈아입는 모습이 보이도록 가방 창을 닫는다 (카메라가 탈의소로 다가간다).
+		OutfitBooth.expect_local()
 		Net.wear(selected_slot)
 		_select(-1)
+		close()
 		return
 	if info.is_furniture() and player != null:
 		var yaw: float = player.body.rotation.y if player.body != null else 0.0
@@ -356,11 +359,20 @@ func _refresh_outfit() -> void:
 		for part: String in ["hat", "top"]:
 			var slot: ItemSlot = ItemSlot.new()
 			slot.custom_minimum_size = Vector2(slot_size, slot_size)
-			slot.pressed.connect(func() -> void: Net.unwear(part))
+			slot.pressed.connect(func() -> void: _unwear(part))
 			_outfit_row.add_child(slot)
 			_outfit_slots[part] = slot
 	_outfit_slots["hat"].set_item(InventoryItem.new(Net.outfit_hat, 1) if not Net.outfit_hat.is_empty() else null)
 	_outfit_slots["top"].set_item(InventoryItem.new(Net.outfit_top, 1) if not Net.outfit_top.is_empty() else null)
+
+
+## 입은 옷 칸을 눌러 벗는다 (탈의소에서, 가방 창을 닫고).
+func _unwear(part: String) -> void:
+	if (Net.outfit_hat if part == "hat" else Net.outfit_top).is_empty():
+		return
+	OutfitBooth.expect_local()
+	Net.unwear(part)
+	close()
 
 
 ## 버튼: 하나씩 발밑에 내려놓는다.

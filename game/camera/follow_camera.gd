@@ -41,6 +41,16 @@ var _focus_tween: Tween = null
 var bag_view: float = 0.0
 var _bag_tween: Tween = null
 
+@export_group("Booth")
+## 탈의소 (v0.15): 옷을 갈아입을 때 탈의소로 다가간다. 가방 창 구도보다 앞선다 (가방 창은 갈아입을 때 닫힌다).
+@export_range(1.0, 30.0, 0.1, "suffix:m") var booth_distance: float = 3.6
+@export_range(0.0, 85.0, 0.5, "suffix:°") var booth_pitch_degrees: float = 18.0
+@export_range(0.0, 3.0, 0.05, "suffix:m") var booth_height: float = 0.95
+
+## 0 = 평소, 1 = 탈의소 구도. set_booth_view 로 부드럽게 바꾼다.
+var booth_view: float = 0.0
+var _booth_tween: Tween = null
+
 @export_group("Water lean")
 ## 물가를 걸을 때 (v0.13.4): 바라보는 점을 물 쪽으로 살짝 옮겨 물 밑 물고기 그림자가 화면에 들어오게 한다.
 ## 바다는 해안선에서 water_lean_range 안이면 바다 쪽으로(가까울수록 더), 호수는 물가에서 그 절반 거리 안이면 호수 쪽으로.
@@ -140,6 +150,14 @@ func set_bag_view(on: bool, duration: float = 0.55) -> void:
 	_bag_tween.tween_property(self, "bag_view", 1.0 if on else 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT if on else Tween.EASE_IN_OUT)
 
 
+## 탈의소로 다가가거나(on) 평소로 돌아온다.
+func set_booth_view(on: bool, duration: float = 0.6) -> void:
+	if _booth_tween != null and _booth_tween.is_valid():
+		_booth_tween.kill()
+	_booth_tween = create_tween()
+	_booth_tween.tween_property(self, "booth_view", 1.0 if on else 0.0, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
 ## 이 자리에서 물 쪽으로 옮길 만큼 (물에서 멀거나 실내면 0).
 func water_lean_target(at: Vector3) -> Vector3:
 	var layout: VillageLayout = GameData.layout
@@ -191,13 +209,14 @@ func clear_point_focus(duration: float = 0.6) -> void:
 
 
 func _apply_framing() -> void:
-	var pitch: float = lerpf(lerpf(pitch_degrees, focus_pitch_degrees, focus), bag_pitch_degrees, bag_view)
+	var pitch: float = lerpf(lerpf(lerpf(pitch_degrees, focus_pitch_degrees, focus), bag_pitch_degrees, bag_view), booth_pitch_degrees, booth_view)
 	rotation_degrees = Vector3(-pitch, yaw_degrees, 0.0)
 	if camera != null:
 		var dist: float = lerpf(lerpf(distance, focus_distance, focus), bag_distance, bag_view)
 		var w: float = point_weight * (1.0 - focus)
 		if w > 0.0 and target != null:
 			dist = lerpf(dist, maxf(dist * point_zoom, _distance_to_fit_point()), w)
+		dist = lerpf(dist, booth_distance, booth_view)
 		camera.position = Vector3(0.0, 0.0, dist)
 		camera.fov = fov
 
@@ -219,9 +238,10 @@ func _goal_position() -> Vector3:
 	if ScreenFit.landscape:
 		bag_offset = right * bag_side + Vector3(0.0, bag_side_height, 0.0)
 	var offset: Vector3 = target_offset.lerp(Vector3(0.0, focus_height, 0.0) + right * focus_side, focus).lerp(bag_offset, bag_view)
-	var goal: Vector3 = target.global_position + offset + lean * (1.0 - bag_view) * (1.0 - focus)
+	offset = offset.lerp(Vector3(0.0, booth_height, 0.0), booth_view)
+	var goal: Vector3 = target.global_position + offset + lean * (1.0 - bag_view) * (1.0 - focus) * (1.0 - booth_view)
 	if point_weight > 0.0:
-		goal = goal.lerp(point + Vector3(0.0, 0.4, 0.0), point_share * point_weight * (1.0 - focus))
+		goal = goal.lerp(point + Vector3(0.0, 0.4, 0.0), point_share * point_weight * (1.0 - focus) * (1.0 - booth_view))
 	if look_ahead_time > 0.0 and target is CharacterBody3D:
 		var body: CharacterBody3D = target
 		goal += Vector3(body.velocity.x, 0.0, body.velocity.z) * look_ahead_time

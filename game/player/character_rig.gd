@@ -4,7 +4,8 @@ extends Node3D
 ## 로컬 플레이어·원격 플레이어·주민·가방 창 미리보기가 같은 리그를 쓰고,
 ## 게임 로직은 set_look / set_move_speed / set_fishing / set_held / play_chop / set_eye_offset / set_outfit,
 ## 그리고 set_braking(미끄러지며 멈춤) / play_emote(감정표현) / play_plant(심기) / show_off(잡은 물고기 자랑),
-## set_cooking(요리 동작 + 칼·팬·국자) / set_sitting(식당 의자에 앉기) / set_riding(자전거·전기오토바이 타기) 만 호출한다.
+## set_cooking(요리 동작 + 칼·팬·국자) / set_sitting(식당 의자에 앉기) / set_riding(자전거·전기오토바이 타기),
+## set_uniform(배달 알바 복장) / play_tada(갈아입고 나와 "짜잔") 만 호출한다.
 ## 몸·팔·다리 메시는 CharacterModel 이 겉모습(CharacterLook)마다 한 번 만들어 공유한다.
 
 @export_group("References")
@@ -64,6 +65,34 @@ const PHONE_SCALE: float = 1.75
 const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "cook_mix", "cook_plate"]
 ## set_riding 으로 탈 수 있는 자세 (탈것 데이터 data/vehicles/vehicles.json 의 kind → 애니메이션).
 const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto"}
+## 배달 알바 복장 (v0.15): 시스템이 잠깐 씌우는 파란 헬멧(쓰던 모자 자리를 대신한다)과 "배달의 솔" 가방.
+## 머리 · 몸통 좌표는 옷 모형(items.json 의 model)과 같다 (머리 가운데 y 0.4, 앞 = -Z).
+const UNIFORM_TEXT: String = "배달의 솔"
+const HELMET_BLUE: Color = Color("#2F6FD6")
+const HELMET_DARK: Color = Color("#1B4A9A")
+## 헬멧은 머리카락(꼭대기 0.95, 옆 0.56, 뒤 0.56)을 덮도록 모자보다 크다. 반구 껍질 · 줄무늬 · 테두리는 _helmet_mesh 가 만든다.
+const HELMET_CENTER: Vector3 = Vector3(0.0, 0.6, 0.07)
+const HELMET_RADII: Vector3 = Vector3(0.57, 0.4, 0.53)
+const HELMET_PARTS: Array = [
+	{"s": "sphere", "size": [0.27, 0.03, 0.14], "at": [0, 0.6, -0.5], "c": "#1B4A9A", "rot": [-12, 0, 0]},
+	{"s": "sphere", "size": [0.04, 0.022, 0.06], "at": [0.15, 0.968, -0.06], "c": "#1B4A9A", "rot": [25, 0, 0]},
+	{"s": "sphere", "size": [0.04, 0.022, 0.06], "at": [-0.15, 0.968, -0.06], "c": "#1B4A9A", "rot": [25, 0, 0]},
+	{"s": "sphere", "size": [0.04, 0.022, 0.06], "at": [0.15, 0.957, 0.25], "c": "#1B4A9A", "rot": [-30, 0, 0]},
+	{"s": "sphere", "size": [0.04, 0.022, 0.06], "at": [-0.15, 0.957, 0.25], "c": "#1B4A9A", "rot": [-30, 0, 0]},
+]
+## 가방: 등에 멘 보냉 상자 + 어깨끈. 글씨는 등 쪽(+Z) 면에 붙인다.
+const BAG_CENTER: Vector3 = Vector3(0.0, -0.13, 0.37)
+const BAG_SIZE: Vector3 = Vector3(0.44, 0.42, 0.26)
+const BAG_PARTS: Array = [
+	{"s": "rbox", "size": [0.44, 0.42, 0.26], "at": [0, -0.13, 0.37], "c": ["#1E9C98", "#2EC4BF"], "r": 0.18},
+	{"s": "rbox", "size": [0.455, 0.06, 0.275], "at": [0, 0.06, 0.37], "c": "#178480", "r": 0.4},
+	{"s": "rbox", "size": [0.3, 0.035, 0.03], "at": [0, -0.05, 0.505], "c": "#178480", "r": 0.4},
+	{"s": "cap", "size": [0.022], "at": [-0.12, 0.02, 0.25], "to": [-0.125, 0.11, 0.02], "c": "#2B3038"},
+	{"s": "cap", "size": [0.022], "at": [-0.125, 0.11, 0.02], "to": [-0.12, -0.2, -0.215], "c": "#2B3038"},
+	{"s": "cap", "size": [0.022], "at": [0.12, 0.02, 0.25], "to": [0.125, 0.11, 0.02], "c": "#2B3038"},
+	{"s": "cap", "size": [0.022], "at": [0.125, 0.11, 0.02], "to": [0.12, -0.2, -0.215], "c": "#2B3038"},
+	{"s": "rbox", "size": [0.2, 0.025, 0.02], "at": [0, -0.1, -0.222], "c": "#2B3038", "r": 0.4},
+]
 
 var held_item: String = "rod"
 var look: CharacterLook = CharacterLook.for_player(1)
@@ -109,6 +138,12 @@ var _limbs: Array[MeshInstance3D] = []
 var _limb_parts: PackedStringArray = []
 var _outfit: Dictionary[String, MeshInstance3D] = {}
 var _outfit_ids: Dictionary[String, String] = {"hat": "", "top": ""}
+## 배달 알바 복장을 입은 중.
+var _uniform: bool = false
+var _helmet: MeshInstance3D = null
+var _bag: Node3D = null
+static var _text_material: Material = null
+static var _helmet_cache: Dictionary[float, ArrayMesh] = {}
 
 
 func _ready() -> void:
@@ -151,6 +186,35 @@ func set_outfit(hat_id: String, top_id: String) -> void:
 
 func outfit_item(part: String) -> String:
 	return _outfit_ids.get(part, "")
+
+
+## 배달 알바 복장 (일거리를 받는 동안). 쓰던 모자는 감추고 그 자리에 파란 헬멧, 등에는 "배달의 솔" 가방.
+func set_uniform(on: bool) -> void:
+	if _uniform == on or visual == null:
+		return
+	_uniform = on
+	if on and _helmet == null:
+		_build_uniform()
+	if _helmet != null:
+		_helmet.visible = on
+		_bag.visible = on
+	var hat: MeshInstance3D = _outfit.get("hat")
+	if hat != null:
+		hat.visible = not on and hat.mesh != null
+
+
+func is_uniformed() -> bool:
+	return _uniform
+
+
+## 갈아입고 나와 "짜잔!" 하는 자세 (한 바퀴 도는 것은 OutfitBooth 가 함께 맞춘다).
+func play_tada() -> void:
+	if tree == null:
+		return
+	tree.set("parameters/EmoteSwitch/transition_request", "tada")
+	tree.set("parameters/EmoteShot/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	_show_expression("happy")
+	EmoteFx.play(_head_root(), "happy", 1.5)
 
 
 func set_fishing(active: bool) -> void:
@@ -663,3 +727,70 @@ func _set_outfit_part(part: String, item_id: String) -> void:
 	var info: ItemInfo = GameData.item(item_id) if not item_id.is_empty() else null
 	mi.visible = info != null and not info.model.is_empty()
 	mi.mesh = PartMesh.get_mesh(item_id, info.model) if mi.visible else null
+	# 배달 헬멧을 쓰는 동안은 모자를 감춘다 (헬멧이 그 자리를 대신한다).
+	if part == "hat" and _uniform:
+		mi.visible = false
+
+
+func _build_uniform() -> void:
+	_helmet = MeshInstance3D.new()
+	_helmet.name = "UniformHelmet"
+	_helmet.mesh = _helmet_mesh()
+	_helmet.material_override = clay_material
+	_head_root().add_child(_helmet)
+	_bag = Node3D.new()
+	_bag.name = "UniformBag"
+	_upper_root().add_child(_bag)
+	var box: MeshInstance3D = MeshInstance3D.new()
+	box.mesh = PartMesh.get_mesh("uniform_bag", BAG_PARTS)
+	box.material_override = clay_material
+	_bag.add_child(box)
+	# 등 쪽 면에 붙인 글씨 (점토 머티리얼을 흰색으로 — 몸처럼 빛·그늘을 받는다).
+	var text: TextMesh = TextMesh.new()
+	text.text = UNIFORM_TEXT
+	text.font_size = 64
+	text.depth = 0.008
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var font: Font = ThemeDB.fallback_font
+	var px: Vector2 = font.get_string_size(UNIFORM_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, text.font_size) if font != null else Vector2(320, 64)
+	text.pixel_size = minf((BAG_SIZE.x - 0.08) / maxf(px.x, 1.0), 0.1 / maxf(px.y, 1.0))
+	var label: MeshInstance3D = MeshInstance3D.new()
+	label.name = "Text"
+	label.mesh = text
+	label.material_override = _uniform_text_material(clay_material)
+	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	label.position = BAG_CENTER + Vector3(0.0, 0.025, BAG_SIZE.z * 0.5 + 0.006)
+	_bag.add_child(label)
+
+
+## 헬멧: 머리 · 머리카락을 덮는 반구 껍질 + 흰 줄무늬 (반구라서 얼굴을 가리지 않는다) + 챙 · 테두리 · 숨구멍.
+static func _helmet_mesh() -> ArrayMesh:
+	if _helmet_cache.has(PartMesh.detail):
+		return _helmet_cache[PartMesh.detail]
+	var st: SurfaceTool = ClayMesh.begin()
+	# 반지름 1 반구 윤곽 (적도 → 꼭대기).
+	var dome: PackedVector2Array = PackedVector2Array()
+	var rings: int = roundi(8.0 * PartMesh.detail)
+	for i: int in rings + 1:
+		var a: float = PI * 0.5 * float(i) / float(rings)
+		dome.append(Vector2(cos(a), sin(a)))
+	var segments: int = roundi(28.0 * PartMesh.detail)
+	var shell: Transform3D = Transform3D(Basis.from_scale(HELMET_RADII), HELMET_CENTER)
+	ClayMesh.add_lathe(st, dome, segments, shell, HELMET_BLUE)
+	ClayMesh.add_lathe(st, dome, segments, Transform3D(Basis.from_scale(Vector3(0.08, HELMET_RADII.y + 0.008, HELMET_RADII.z + 0.008)), HELMET_CENTER), Color("#F4F6FA"))
+	# 테두리: 껍질 밑단을 두르는 도톰한 띠 (둘레 방향만 늘린다 — 두께는 m 그대로).
+	var rim: PackedVector2Array = PackedVector2Array([Vector2(0.97, -0.035), Vector2(1.035, -0.02), Vector2(1.035, 0.02), Vector2(0.97, 0.035)])
+	ClayMesh.add_lathe(st, rim, segments, Transform3D(Basis.from_scale(Vector3(HELMET_RADII.x, 1.0, HELMET_RADII.z)), HELMET_CENTER), HELMET_DARK)
+	PartMesh.append(st, HELMET_PARTS)
+	var mesh: ArrayMesh = ClayMesh.commit(st)
+	_helmet_cache[PartMesh.detail] = mesh
+	return mesh
+
+
+static func _uniform_text_material(clay: Material) -> Material:
+	if _text_material == null:
+		_text_material = clay.duplicate() if clay != null else StandardMaterial3D.new()
+		if _text_material is ShaderMaterial:
+			(_text_material as ShaderMaterial).set_shader_parameter("albedo", Color("#FFFFFF"))
+	return _text_material

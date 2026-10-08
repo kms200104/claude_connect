@@ -234,6 +234,7 @@ func _run() -> void:
 	Economy.job_done.connect(func(r: Dictionary) -> void: job_done.append(r))
 	Economy.take_job("parcel")
 	_check(await _wait_until(func() -> bool: return not Economy.job().is_empty(), 2.0), "배달 알바를 받았다")
+	_check(me.rig.is_uniformed() and me.rig.get_node("Visual/Waist/Upper/Neck/Head/UniformHelmet").visible, "배달하는 동안 파란 헬멧 · 배달 가방")
 	_check(await _wait_until(func() -> bool: return jobs.chip_text().contains("받기"), 2.0), "칩: %s" % jobs.chip_text())
 	var job: Dictionary = Economy.job()
 	var from: Dictionary = job.get("from", {})
@@ -262,6 +263,7 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.sol - sol_before_job == int(job_done[0].get("total", 0)) and Economy.job().is_empty(), 2.0), "삯이 지갑에 · 일거리 끝")
 	_check(int(job_done[0].get("streak", 0)) == 1 and int(Economy.jobs.get("streak", 0)) == 1, "연속 팁 1번째 (보너스는 2번째부터)")
 	_check(not jobs.get_node("JobArrow").visible, "일이 끝나면 화살표도 사라진다")
+	_check(not me.rig.is_uniformed(), "일이 끝나면 헬멧 · 가방도 벗는다")
 	econ.phone.open(PhoneWindow.Tab.JOBS)
 	await get_tree().process_frame
 	_check(econ.phone.is_open() and int(Economy.jobs.get("done", 0)) == 1, "일거리 앱: 오늘 1건")

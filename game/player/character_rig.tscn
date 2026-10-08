@@ -3709,6 +3709,191 @@ tracks/14/keys = {
 "values": [Vector3(0, 0, 0), Vector3(-0.01, 0, 0), Vector3(0.032, 0, 0), Vector3(0.038, 0, 0), Vector3(-0.04, 0, 0.012), Vector3(-0.06, 0, 0.016), Vector3(0.004, 0, 0), Vector3(-0.052, 0, -0.012), Vector3(0, 0, 0)]
 }
 
+[sub_resource type="Animation" id="Animation_tada"]
+resource_name = "tada"
+length = 1.5
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visual:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.12, 0.3, 0.48, 0.6, 0.72, 1.15, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, -0.07, 0), Vector3(0, 0.2, 0), Vector3(0, 0.12, 0), Vector3(0, -0.05, 0), Vector3(0, 0.02, 0), Vector3(0, 0.01, 0), Vector3(0, 0, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Visual:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.12, 0.3, 0.48, 0.6, 0.72, 1.15, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(-0.027, 0, 0), Vector3(0.0225, 0, 0), Vector3(0, 0, 0), Vector3(0.009, 0, -0.02), Vector3(0.0225, 0, -0.05), Vector3(0.0225, 0, -0.04), Vector3(0, 0, 0)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Visual:scale")
+tracks/2/interp = 2
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.12, 0.3, 0.48, 0.6, 0.72, 1.15, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(1, 1, 1), Vector3(1.0483, 0.91, 1.0483), Vector3(0.9578, 1.09, 0.9578), Vector3(0.9853, 1.03, 0.9853), Vector3(1.037, 0.93, 1.037), Vector3(0.9853, 1.03, 0.9853), Vector3(0.9901, 1.02, 0.9901), Vector3(1, 1, 1)]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Visual/Waist/Upper/ArmL:rotation")
+tracks/3/interp = 2
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.165, 0.345, 0.525, 0.645, 0.765, 1.195, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, -0.16), Vector3(0.35, 0, 0.2), Vector3(0.2, 0, -0.5), Vector3(0.3, 0, -0.9), Vector3(0.4, 0, -1.35), Vector3(0.4, 0, -1.5), Vector3(0.4, 0, -1.5), Vector3(0, 0, -0.16)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("Visual/Waist/Upper/ArmR:rotation")
+tracks/4/interp = 2
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.165, 0.345, 0.525, 0.645, 0.765, 1.195, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0.16), Vector3(0.35, 0, -0.2), Vector3(0.2, 0, 0.5), Vector3(0.25, 0, 1.4), Vector3(0.4, 0, 1.5), Vector3(0.4, 0, 1.65), Vector3(0.4, 0, 1.65), Vector3(0, 0, 0.16)]
+}
+tracks/5/type = "value"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath("Visual/LegL:rotation")
+tracks/5/interp = 2
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0, 0.14, 0.32, 0.5, 0.62, 0.74, 1.17, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0.3, 0, 0), Vector3(-0.25, 0, 0), Vector3(-0.1, 0, 0), Vector3(0.1, 0, -0.1), Vector3(0.12, 0, -0.12), Vector3(0.12, 0, -0.12), Vector3(0, 0, 0)]
+}
+tracks/6/type = "value"
+tracks/6/imported = false
+tracks/6/enabled = true
+tracks/6/path = NodePath("Visual/LegR:rotation")
+tracks/6/interp = 2
+tracks/6/loop_wrap = true
+tracks/6/keys = {
+"times": PackedFloat32Array(0, 0.14, 0.32, 0.5, 0.62, 0.74, 1.17, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0.3, 0, 0), Vector3(-0.25, 0, 0), Vector3(-0.1, 0, 0), Vector3(0, 0, 0.05), Vector3(0, 0, 0.06), Vector3(0, 0, 0.06), Vector3(0, 0, 0)]
+}
+tracks/7/type = "value"
+tracks/7/imported = false
+tracks/7/enabled = true
+tracks/7/path = NodePath("Visual/Waist/Upper/ArmR/ElbowR/Rod:rotation")
+tracks/7/interp = 2
+tracks/7/loop_wrap = true
+tracks/7/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.36, 0.54, 0.66, 0.78, 1.21, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.6, 0, 0)]
+}
+tracks/8/type = "value"
+tracks/8/imported = false
+tracks/8/enabled = true
+tracks/8/path = NodePath("Visual/Waist/Upper/ArmR/ElbowR/Axe:rotation")
+tracks/8/interp = 2
+tracks/8/loop_wrap = true
+tracks/8/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.36, 0.54, 0.66, 0.78, 1.21, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.5, 0, 0)]
+}
+tracks/9/type = "value"
+tracks/9/imported = false
+tracks/9/enabled = true
+tracks/9/path = NodePath("Visual/LegL/KneeL:rotation")
+tracks/9/interp = 2
+tracks/9/loop_wrap = true
+tracks/9/keys = {
+"times": PackedFloat32Array(0, 0.14, 0.32, 0.5, 0.62, 0.74, 1.17, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.3, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.55, 0, 0), Vector3(-0.55, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/10/type = "value"
+tracks/10/imported = false
+tracks/10/enabled = true
+tracks/10/path = NodePath("Visual/LegR/KneeR:rotation")
+tracks/10/interp = 2
+tracks/10/loop_wrap = true
+tracks/10/keys = {
+"times": PackedFloat32Array(0, 0.14, 0.32, 0.5, 0.62, 0.74, 1.17, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(-0.6, 0, 0), Vector3(-0.5, 0, 0), Vector3(-0.3, 0, 0), Vector3(-0.2, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/11/type = "value"
+tracks/11/imported = false
+tracks/11/enabled = true
+tracks/11/path = NodePath("Visual/Waist/Upper/ArmL/ElbowL:rotation")
+tracks/11/interp = 2
+tracks/11/loop_wrap = true
+tracks/11/keys = {
+"times": PackedFloat32Array(0, 0.165, 0.345, 0.525, 0.645, 0.765, 1.195, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0.2, 0, 0), Vector3(0.3, 0, 0), Vector3(0.3, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/12/type = "value"
+tracks/12/imported = false
+tracks/12/enabled = true
+tracks/12/path = NodePath("Visual/Waist/Upper/ArmR/ElbowR:rotation")
+tracks/12/interp = 2
+tracks/12/loop_wrap = true
+tracks/12/keys = {
+"times": PackedFloat32Array(0, 0.165, 0.345, 0.525, 0.645, 0.765, 1.195, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0.2, 0, 0), Vector3(0.3, 0, 0), Vector3(0.3, 0, 0), Vector3(0, 0, 0)]
+}
+tracks/13/type = "value"
+tracks/13/imported = false
+tracks/13/enabled = true
+tracks/13/path = NodePath("Visual/Waist:rotation")
+tracks/13/interp = 2
+tracks/13/loop_wrap = true
+tracks/13/keys = {
+"times": PackedFloat32Array(0, 0.14, 0.32, 0.5, 0.62, 0.74, 1.17, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(-0.021, 0, 0), Vector3(0.0175, 0, 0), Vector3(0, 0, 0), Vector3(0.007, 0, -0.012), Vector3(0.0175, 0, -0.03), Vector3(0.0175, 0, -0.024), Vector3(0, 0, 0)]
+}
+tracks/14/type = "value"
+tracks/14/imported = false
+tracks/14/enabled = true
+tracks/14/path = NodePath("Visual/Waist/Upper/Neck:rotation")
+tracks/14/interp = 2
+tracks/14/loop_wrap = true
+tracks/14/keys = {
+"times": PackedFloat32Array(0, 0.175, 0.355, 0.535, 0.655, 0.775, 1.205, 1.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(-0.012, 0, 0), Vector3(0.01, 0, 0), Vector3(0, 0, 0), Vector3(0.004, 0, -0.008), Vector3(0.01, 0, -0.02), Vector3(0.01, 0, -0.016), Vector3(0, 0, 0)]
+}
+
 [sub_resource type="Animation" id="Animation_cook_chop"]
 resource_name = "cook_chop"
 length = 0.48
@@ -5961,6 +6146,7 @@ _data = {
 &"clap": SubResource("Animation_clap"),
 &"bow": SubResource("Animation_bow"),
 &"sleepy": SubResource("Animation_sleepy"),
+&"tada": SubResource("Animation_tada"),
 &"cook_chop": SubResource("Animation_cook_chop"),
 &"cook_stir": SubResource("Animation_cook_stir"),
 &"cook_flip": SubResource("Animation_cook_flip"),
@@ -6051,6 +6237,9 @@ animation = &"bow"
 [sub_resource type="AnimationNodeAnimation" id="AN_sleepy"]
 animation = &"sleepy"
 
+[sub_resource type="AnimationNodeAnimation" id="AN_tada"]
+animation = &"tada"
+
 [sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 input_0/name = "hello"
@@ -6097,6 +6286,10 @@ input_10/name = "sleepy"
 input_10/auto_advance = false
 input_10/break_loop_at_end = false
 input_10/reset = true
+input_11/name = "tada"
+input_11/auto_advance = false
+input_11/break_loop_at_end = false
+input_11/reset = true
 
 [sub_resource type="AnimationNodeAnimation" id="AN_cook_chop"]
 animation = &"cook_chop"
@@ -6294,6 +6487,8 @@ nodes/E_bow/node = SubResource("AN_bow")
 nodes/E_bow/position = Vector2(520, 900)
 nodes/E_sleepy/node = SubResource("AN_sleepy")
 nodes/E_sleepy/position = Vector2(520, 960)
+nodes/E_tada/node = SubResource("AN_tada")
+nodes/E_tada/position = Vector2(520, 1020)
 nodes/EmoteSwitch/node = SubResource("Transition_emote")
 nodes/EmoteSwitch/position = Vector2(720, 300)
 nodes/EmoteShot/node = SubResource("OneShot_emote")
@@ -6303,7 +6498,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"RideSwitch", 0, &"R_ride_bike", &"RideSwitch", 1, &"R_ride_moto", &"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"RideBlend", 1, &"RideScale", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", &"CookSwitch", 0, &"K_cook_chop", &"CookSwitch", 1, &"K_cook_stir", &"CookSwitch", 2, &"K_cook_flip", &"CookSwitch", 3, &"K_cook_mix", &"CookSwitch", 4, &"K_cook_plate", &"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", &"EmoteSwitch", 0, &"E_hello", &"EmoteSwitch", 1, &"E_happy", &"EmoteSwitch", 2, &"E_laugh", &"EmoteSwitch", 3, &"E_surprise", &"EmoteSwitch", 4, &"E_love", &"EmoteSwitch", 5, &"E_sad", &"EmoteSwitch", 6, &"E_angry", &"EmoteSwitch", 7, &"E_think", &"EmoteSwitch", 8, &"E_clap", &"EmoteSwitch", 9, &"E_bow", &"EmoteSwitch", 10, &"E_sleepy", &"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", &"RideSwitch", 0, &"R_ride_bike", &"RideSwitch", 1, &"R_ride_moto", &"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"RideBlend", 1, &"RideScale", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", &"CookSwitch", 0, &"K_cook_chop", &"CookSwitch", 1, &"K_cook_stir", &"CookSwitch", 2, &"K_cook_flip", &"CookSwitch", 3, &"K_cook_mix", &"CookSwitch", 4, &"K_cook_plate", &"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", &"EmoteSwitch", 0, &"E_hello", &"EmoteSwitch", 1, &"E_happy", &"EmoteSwitch", 2, &"E_laugh", &"EmoteSwitch", 3, &"E_surprise", &"EmoteSwitch", 4, &"E_love", &"EmoteSwitch", 5, &"E_sad", &"EmoteSwitch", 6, &"E_angry", &"EmoteSwitch", 7, &"E_think", &"EmoteSwitch", 8, &"E_clap", &"EmoteSwitch", 9, &"E_bow", &"EmoteSwitch", 10, &"E_sleepy", &"EmoteSwitch", 11, &"E_tada", &"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "elbow_left", "elbow_right", "knee_left", "knee_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")

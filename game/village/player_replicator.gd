@@ -151,6 +151,7 @@ func _on_snapshot(server_time_ms: float, states: Array[NetPlayerState]) -> void:
 		remote.push_sample(server_time_ms, state.position, state.yaw, state.velocity, state.fishing, state.held)
 		remote.set_phone(state.phone)
 		remote.set_outfit(state.hat, state.top)
+		remote.set_uniform(state.job)
 
 
 ## 손에 든 도구를 서버가 알려 준 퀵슬롯에 맞춘다.
@@ -160,11 +161,19 @@ func _sync_held_item() -> void:
 		player.set_held_item(carry if not carry.is_empty() else Net.held_item_id())
 
 
-## 내 옷을 서버가 알려 준 대로 입힌다.
+## 내 옷을 서버가 알려 준 대로 입힌다. 가방 창에서 입기 · 벗기를 눌러 바뀐 것이면 탈의소에서 갈아입는다 (v0.15).
 func _sync_outfit() -> void:
 	if player != null and player.rig != null:
 		player.rig.set_look(Net.look_of(Net.my_id))
-		player.rig.set_outfit(Net.outfit_hat, Net.outfit_top)
+		var rig: CharacterRig = player.rig
+		var changed: bool = rig.outfit_item("hat") != Net.outfit_hat or rig.outfit_item("top") != Net.outfit_top
+		# 갈아입는 중이면 커튼이 닫힐 때 그때의 옷을 입힌다.
+		if OutfitBooth.is_pending(rig):
+			return
+		if changed and OutfitBooth.take_local() and player.is_inside_tree() and player.body.visible:
+			OutfitBooth.play(rig, func() -> void: rig.set_outfit(Net.outfit_hat, Net.outfit_top), player)
+			return
+		rig.set_outfit(Net.outfit_hat, Net.outfit_top)
 
 
 ## 거울에서 얼굴을 바꿨다 (나 또는 상대).

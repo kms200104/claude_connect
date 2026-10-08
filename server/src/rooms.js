@@ -221,6 +221,7 @@ export class Player {
       held: this.heldItem,
       hat: this.profile.outfit.hat,
       top: this.profile.outfit.top,
+      job: this.job !== null, // v0.15: 배달 알바 중 (헬멧 · 가방 연출)
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',
