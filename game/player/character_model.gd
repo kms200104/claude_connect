@@ -32,6 +32,15 @@ const FEATURE_LIFT: float = 0.003
 const EYE_LIFT: float = 0.0055
 ## 같은 부품 안에서 층마다 더 띄우는 거리 (깊이 겹침 방지).
 const LAYER_LIFT: float = 0.0009
+## 표정 (v0.16): 원래 입을 덮는 피부 판 · 그 위 새 입 높이, 원래 눈 위에 덧그리는 눈꺼풀 · 윙크 높이 (눈 층이 여러 겹이라 그보다 위).
+const EXPR_MOUTH_LIFT: float = 0.0068
+const EXPR_OVER_LIFT: float = 0.0155
+const MOUTH_COVER: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.004], "r": [0.1, 0.074], "color": "skin"}]
+## 덮는 판은 무늬 없는 피부라 크게 나눠도 된다 (머리 곡면에서 처지는 깊이가 띄운 높이보다 훨씬 작다).
+const COVER_EDGE: float = 0.06
+const OVER_EDGE: float = 0.045
+const CHEEK_BLUSH: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.0], "r": [0.056, 0.034], "color": "cheek"}]
+const EYE_COVER: Array[Dictionary] = [{"shape": "ellipse", "c": [0.0, 0.006], "r": [0.088, 0.098], "color": "skin"}]
 ## 머리 타원체 [둘레 칸, 위아래 칸] — 촘촘함 0 (절약) / 1 / 2 (고화질). 머리카락에 늘 덮이는 정수리·뒤통수 면은 만들지 않는다.
 const HEAD_SEGMENTS: Array[Vector2i] = [Vector2i(24, 16), Vector2i(38, 26), Vector2i(48, 32)]
 ## 머리카락 껍질 [둘레 칸, 위아래 칸].
@@ -273,18 +282,43 @@ static func eyes(look: CharacterLook = null) -> ArrayMesh:
 	return mesh
 
 
-## 감정표현 하는 동안 얼굴에 덧그리는 눈썹·눈물(머리 겉면에 붙인 판)과 머리 옆 땀방울 (face_parts.json 의 expressions).
-## 표정이 없는 감정표현이면 null. 정점은 리그(Visual) 기준이라 몸 메시와 같은 자리에 둔다.
+## 감정표현 · 기분 · 몸짓 동안의 얼굴 (face_parts.json 의 expressions, v0.16): 눈썹 · 눈물 · 땀방울을 덧그리고,
+## 입은 원래 입을 피부색으로 덮은 위에 새 입을, 눈은 바꿔 그리거나(원래 눈은 리그가 감춘다 — expression_hides_eyes)
+## 원래 눈 위에 눈꺼풀 · 반짝임을 덧그린다. 한쪽 눈만 바꾸면(윙크) 그 눈을 피부색으로 덮는다.
+## 표정이 없으면 null. 정점은 머리(Head) 기준이라 표정 노드를 머리에 그대로 붙인다.
 static func expression(look: CharacterLook, emote_id: String) -> ArrayMesh:
 	var catalog: FaceCatalog = _catalog()
 	var part: FaceCatalog.Part = catalog.expressions.get(emote_id) if catalog != null else null
 	if part == null:
 		return null
-	var key: String = "expr|%d|%s|%s" % [detail, part.id, look.hair.to_html(false)]
+	var key: String = "expr|%d|%s|%s|%s|%s" % [detail, part.id, look.hair.to_html(false), look.skin.to_html(false), look.face_key()]
 	if _cache.has(key):
 		return _cache[key]
 	var st: SurfaceTool = ClayMesh.begin()
 	var palette: Dictionary[String, Color] = face_palette(look)
+	var mouth: Array[Dictionary] = _expression_layers(catalog, part.face.get("mouth"), "mouth")
+	if not mouth.is_empty():
+		var mouth_at: Vector2 = catalog.anchors.get("mouth", Vector2(0.0, 0.16))
+		_emit_face(st, MOUTH_COVER, palette, mouth_at, false, Vector3.ZERO, EXPR_MOUTH_LIFT, COVER_EDGE, 1.0)
+		_emit_face(st, mouth, palette, mouth_at, false, Vector3.ZERO, EXPR_MOUTH_LIFT + LAYER_LIFT * 2.0)
+	var eye_at: Vector2 = catalog.anchors.get("eye", Vector2(0.19, 0.35))
+	for side: float in [-1.0, 1.0]:
+		var tag: String = "l" if side < 0.0 else "r"
+		var at: Vector2 = Vector2(eye_at.x * side, eye_at.y)
+		var mirror: bool = side < 0.0
+		if part.face.has("eye_" + tag):
+			# 한쪽만 (윙크): 원래 눈은 그대로 두고 그 눈만 피부로 덮어 새로 그린다.
+			_emit_face(st, EYE_COVER, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT, COVER_EDGE, 1.0)
+			# 덮은 판이 볼 홍조 위쪽을 가리므로 그 볼만 다시 그린다.
+			var cheek: Vector2 = catalog.anchors.get("cheek", Vector2(0.245, 0.262))
+			_emit_face(st, CHEEK_BLUSH, palette, Vector2(cheek.x * side, cheek.y), mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT, COVER_EDGE, 1.0)
+			_emit_face(st, _expression_layers(catalog, part.face["eye_" + tag], "eyes"), palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT * 2.0)
+		elif part.face.has("eyes"):
+			_emit_face(st, _expression_layers(catalog, part.face["eyes"], "eyes"), palette, at, mirror, Vector3.ZERO, EYE_LIFT)
+		var over: Array[Dictionary] = _expression_layers(catalog, part.face.get("eyes_over_" + tag, part.face.get("eyes_over")), "eyes")
+		if not over.is_empty():
+			# 원래 눈 위에 얹는 층(눈꺼풀 · 반짝임)은 눈 테두리 바깥으로 넓지 않아 조금 성기게 나눠도 된다 (눈과 합쳐 캐릭터 예산 안).
+			_emit_face(st, over, palette, at, mirror, Vector3.ZERO, EXPR_OVER_LIFT + LAYER_LIFT * 4.0, OVER_EDGE, 1.0)
 	_emit_face(st, part.layers, palette, Vector2.ZERO, false, Vector3.ZERO, FEATURE_LIFT)
 	for layer: Dictionary in part.layers:
 		if str(layer.get("shape", "")) == "sweat":
@@ -292,6 +326,33 @@ static func expression(look: CharacterLook, emote_id: String) -> ArrayMesh:
 	var mesh: ArrayMesh = ClayMesh.commit(st)
 	_cache[key] = mesh
 	return mesh
+
+
+## 이 감정표현 · 기분 · 몸짓에 표정 데이터가 있는지.
+static func has_expression(emote_id: String) -> bool:
+	var catalog: FaceCatalog = _catalog()
+	return catalog != null and catalog.expressions.has(emote_id)
+
+
+## 이 표정이 두 눈을 바꿔 그리는지 (그동안 원래 눈 메시를 감춘다).
+static func expression_hides_eyes(emote_id: String) -> bool:
+	var catalog: FaceCatalog = _catalog()
+	var part: FaceCatalog.Part = catalog.expressions.get(emote_id) if catalog != null else null
+	return part != null and part.face.has("eyes")
+
+
+## 표정의 눈 · 입: 층 목록이면 그대로, 문자열이면 그 id 의 부품(eyes · mouth)의 층.
+static func _expression_layers(catalog: FaceCatalog, value: Variant, kind: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if value is String:
+		var found: FaceCatalog.Part = catalog.part(kind, value)
+		if found != null:
+			out.assign(found.layers)
+	elif value is Array:
+		for layer: Variant in value:
+			if layer is Dictionary:
+				out.append(layer)
+	return out
 
 
 ## 땀방울: 끝이 위로 뾰족한 물방울 회전체 + 작은 반짝임. at = 아래 둥근 부분의 중심, s = 전체 높이.
@@ -500,8 +561,8 @@ static func face_palette(look: CharacterLook) -> Dictionary[String, Color]:
 
 ## 도형 층들을 머리 겉면에 붙인다. anchor = 부품 자리(얼굴 x, y), mirror = 좌우 뒤집기(왼쪽 눈, gaze 층은 빼고),
 ## origin = 정점 좌표의 원점(눈은 머리 중심), lift = 겉면에서 띄우는 거리 (층마다 LAYER_LIFT 씩 더 띄운다).
-static func _emit_face(st: SurfaceTool, layers: Array[Dictionary], palette: Dictionary[String, Color], anchor: Vector2, mirror: bool, origin: Vector3, lift: float) -> void:
-	var entries: Array[Dictionary] = FaceShapes.triangles(layers, palette, _face_max_edge(), FACE_OUTLINE[clampi(detail, 0, MAX_DETAIL)])
+static func _emit_face(st: SurfaceTool, layers: Array[Dictionary], palette: Dictionary[String, Color], anchor: Vector2, mirror: bool, origin: Vector3, lift: float, max_edge: float = -1.0, outline: float = -1.0) -> void:
+	var entries: Array[Dictionary] = FaceShapes.triangles(layers, palette, max_edge if max_edge > 0.0 else _face_max_edge(), outline if outline > 0.0 else FACE_OUTLINE[clampi(detail, 0, MAX_DETAIL)])
 	for i: int in entries.size():
 		var entry: Dictionary = entries[i]
 		var tris: PackedVector2Array = entry["tris"]

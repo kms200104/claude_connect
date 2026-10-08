@@ -71,6 +71,9 @@ func apply_state(state: NetNpcState) -> void:
 	talking_with = state.talking_with
 	approaching = state.approaching
 	mood = state.mood
+	# 그날 기분이 얼굴에 드러난다 (기분 좋음 미소 · 우울하면 처진 눈꺼풀 · 졸리면 반쯤 감긴 눈 …).
+	if rig != null:
+		rig.set_mood_face(mood)
 	_target_yaw = state.yaw
 	_set_activity(state.activity)
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:

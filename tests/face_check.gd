@@ -42,6 +42,14 @@ func _ready() -> void:
 					worst = d
 					worst_name = "expression/%s" % emote_id
 		_check(not catalog.expressions.is_empty(), "detail %d: 표정 %d개" % [detail, catalog.expressions.size()])
+		# v0.16: 모든 감정표현에 눈 · 입이 바뀌는 얼굴, 주민 기분 · 몸짓 얼굴.
+		var missing: PackedStringArray = []
+		for emote_id: String in CharacterRig.EMOTES + PackedStringArray(["tada", "mood:happy", "mood:excited", "mood:sad", "mood:grumpy", "mood:sleepy", "act:sun", "act:stretch"]):
+			var part: FaceCatalog.Part = catalog.expressions.get(emote_id)
+			if part == null or not (part.face.has("mouth") or part.face.has("eyes") or part.face.has("eyes_over")):
+				missing.append(emote_id)
+		_check(missing.is_empty(), "detail %d: 감정표현 · 기분마다 눈이나 입이 바뀐다 (빠짐: %s)" % [detail, ", ".join(missing)])
+		_check(CharacterModel.expression_hides_eyes("sad") and not CharacterModel.expression_hides_eyes("mood:sad"), "ㅠ^ㅠ 는 눈을 바꿔 그리고, 우울한 기분은 원래 눈 위에 눈꺼풀만")
 		# 머리 메시의 면은 이상적인 겉면보다 안쪽이니, 이상적인 겉면 밖이면 면에 파묻히지 않는다.
 		_check(worst > 0.0, "detail %d: 얼굴 부품이 머리 겉면 밖 (가장 낮은 %s %.4fm, 면 깊이 %.4fm)" % [detail, worst_name, worst, sag])
 		var most: int = 0
@@ -52,7 +60,7 @@ func _ready() -> void:
 			look.eyes = "sparkle"
 			look.mouth = "laugh"
 			look.nose = "freckle"
-			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.head(look)) + _tris(CharacterModel.hips(look)) + _tris(CharacterModel.eyes(look)) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look)) + expr_tris
+			var tris: int = _tris(CharacterModel.body(look)) + _tris(CharacterModel.head(look)) + _tris(CharacterModel.hips(look)) + _face_tris(look, catalog) + 2 * _tris(CharacterModel.arm(look)) + 2 * _tris(CharacterModel.leg(look))
 			if tris > most:
 				most = tris
 				most_name = hair.id
@@ -90,3 +98,13 @@ func _check(ok: bool, label: String) -> void:
 	print("[face] %s: %s" % ["ok" if ok else "FAIL", label])
 	if not ok:
 		_failed += 1
+
+
+## 눈 + 가장 무거운 표정이 한 번에 그리는 삼각형 (두 눈을 바꿔 그리는 표정이면 그동안 원래 눈은 감춘다).
+func _face_tris(look: CharacterLook, catalog: FaceCatalog) -> int:
+	var eyes: int = _tris(CharacterModel.eyes(look))
+	var most: int = eyes
+	for emote_id: String in catalog.expressions:
+		var drawn: int = _tris(CharacterModel.expression(look, emote_id)) + (0 if CharacterModel.expression_hides_eyes(emote_id) else eyes)
+		most = maxi(most, drawn)
+	return most

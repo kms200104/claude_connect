@@ -12,6 +12,8 @@ class Part:
 	var layers: Array[Dictionary] = []
 	## 피부: skin, cheeks / 색 목록: color
 	var colors: Dictionary[String, Color] = {}
+	## 표정 (v0.16): 눈 · 입 바꾸기 (eyes · eyes_over · eye_l · eye_r · eyes_over_l · eyes_over_r · mouth). 값은 층 목록 또는 부품 id.
+	var face: Dictionary[String, Variant] = {}
 
 
 var anchors: Dictionary[String, Vector2] = {}
@@ -60,6 +62,10 @@ static func from_dict(data: Dictionary) -> FaceCatalog:
 	return c
 
 
+## 표정이 눈 · 입을 바꾸는 열쇠 (face_parts.json _expressions).
+const EXPRESSION_KEYS: PackedStringArray = ["eyes", "eyes_over", "eye_l", "eye_r", "eyes_over_l", "eyes_over_r", "mouth"]
+
+
 static func _parts(list: Array) -> Array[Part]:
 	var out: Array[Part] = []
 	for raw: Variant in list:
@@ -75,6 +81,9 @@ static func _parts(list: Array) -> Array[Part]:
 		for key: String in ["color", "skin", "cheeks"]:
 			if d.has(key):
 				p.colors[key] = Color.html(str(d[key]))
+		for key: String in EXPRESSION_KEYS:
+			if d.has(key):
+				p.face[key] = d[key]
 		out.append(p)
 	return out
 

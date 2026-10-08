@@ -68,7 +68,7 @@ const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "c
 ## v0.16 주민의 혼잣말 같은 몸짓 (set_activity, 서버 npcs.json activities 의 id → 애니메이션 · 그동안의 표정).
 ## fish 는 애니메이션 대신 낚싯대를 들고 낚시 자세 (set_fishing).
 const ACT_ANIMS: Dictionary[String, String] = {"stretch": "act_stretch", "warmup": "act_warmup", "sun": "act_sun", "sit": "act_sit"}
-const ACT_FACES: Dictionary[String, String] = {"stretch": "sleepy", "sun": "happy"}
+## 몸짓 · 기분 동안의 얼굴은 face_parts.json expressions 의 emotes 에 "act:<몸짓>" · "mood:<기분>" 으로 적는다.
 const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto", "kick": "ride_kick", "kick_brake": "ride_kick_brake"}
 ## 배달 알바 복장 (v0.15): 시스템이 잠깐 씌우는 파란 헬멧(쓰던 모자 자리를 대신한다)과 "배달의 솔" 가방.
 ## 머리 · 몸통 좌표는 옷 모형(items.json 의 model)과 같다 (머리 가운데 y 0.4, 앞 = -Z).
@@ -148,6 +148,8 @@ var _uniform: bool = false
 ## 지금 하는 몸짓 (빈 문자열 = 없음) · 그 표정.
 var _activity: String = ""
 var _activity_face: String = ""
+## 주민의 그날 기분 얼굴 ("mood:<기분>", 없으면 빈 문자열). 감정표현 · 몸짓 얼굴이 없을 때 보인다.
+var _mood_face: String = ""
 var _act_target: float = 0.0
 var _act_value: float = 0.0
 ## 탈의소에서 갈아입고 짜잔 하는 동안 손에 든 도구를 감춘다 (OutfitBooth).
@@ -399,7 +401,7 @@ func set_activity(activity_id: String) -> void:
 		return
 	var was_fishing: bool = _activity == "fish"
 	_activity = activity_id
-	_activity_face = ACT_FACES.get(activity_id, "")
+	_activity_face = _face_if_any("act:" + activity_id) if not activity_id.is_empty() else ""
 	if ACT_ANIMS.has(activity_id) and tree != null:
 		tree.set("parameters/ActSwitch/transition_request", ACT_ANIMS[activity_id])
 	_act_target = 1.0 if ACT_ANIMS.has(activity_id) else 0.0
@@ -410,14 +412,31 @@ func set_activity(activity_id: String) -> void:
 	elif was_fishing:
 		set_fishing(false)
 		set_held("")
-	if _activity_face.is_empty() and not is_emoting():
-		_show_expression("")
-	elif not _activity_face.is_empty():
-		_show_expression(_activity_face)
+	if not is_emoting():
+		_show_expression(_base_face())
 
 
 func activity() -> String:
 	return _activity
+
+
+## 기분 얼굴 (주민의 그날 기분: happy · excited · sad · grumpy · sleepy · calm). 표정 데이터가 없는 기분이면 평소 얼굴.
+func set_mood_face(mood: String) -> void:
+	var face: String = _face_if_any("mood:" + mood) if not mood.is_empty() else ""
+	if face == _mood_face:
+		return
+	_mood_face = face
+	if not is_emoting() and (_expression_id.is_empty() or _expression_id.begins_with("mood:")):
+		_show_expression(_base_face())
+
+
+## 감정표현이 없을 때의 얼굴: 몸짓 얼굴 > 기분 얼굴.
+func _base_face() -> String:
+	return _activity_face if not _activity_face.is_empty() else _mood_face
+
+
+static func _face_if_any(face_id: String) -> String:
+	return face_id if CharacterModel.has_expression(face_id) else ""
 
 
 func riding_kind() -> String:
@@ -648,10 +667,10 @@ func _process(delta: float) -> void:
 	# 휴대폰 넣기 · 가방 닫기처럼 도구를 다시 꺼내는 동작이 그사이 와도 감춘 채로.
 	if _tools_hidden:
 		_hide_tools()
-	if _expression != null and _expression.visible:
+	if _expression != null and not _expression_id.is_empty() and _expression_id != _base_face():
 		_expression_hold -= delta
-		if _expression_hold <= 0.0 and not is_emoting() and (_activity_face.is_empty() or _expression_id != _activity_face):
-			_show_expression("")
+		if _expression_hold <= 0.0 and not is_emoting():
+			_show_expression(_base_face())
 	_move_value = lerpf(_move_value, _move_target, 1.0 - exp(-speed_smoothing * delta))
 	_fishing_value = lerpf(_fishing_value, _fishing_target, 1.0 - exp(-fishing_blend_speed * delta))
 	tree.set("parameters/Locomotion/blend_position", _move_value)
@@ -668,9 +687,6 @@ func _process(delta: float) -> void:
 	_sit_value = move_toward(_sit_value, _sit_target, 6.0 * delta)
 	_act_value = move_toward(_act_value, _act_target, 2.5 * delta)
 	tree.set("parameters/ActBlend/blend_amount", _act_value)
-	# 감정표현이 끝나면 몸짓 표정으로 돌아온다.
-	if not _activity_face.is_empty() and _expression_id.is_empty():
-		_show_expression(_activity_face)
 	tree.set("parameters/SitBlend/blend_amount", _sit_value)
 	_rummage_value = move_toward(_rummage_value, _rummage_target, 5.0 * delta)
 	tree.set("parameters/RummageBlend/blend_amount", _rummage_value)
@@ -745,6 +761,9 @@ func _show_expression(emote_id: String) -> void:
 	var mesh: ArrayMesh = CharacterModel.expression(look, emote_id) if not emote_id.is_empty() else null
 	_expression.mesh = mesh
 	_expression.visible = mesh != null
+	# 두 눈을 바꿔 그리는 표정이면 원래 눈을 감춘다.
+	if _eyes != null:
+		_eyes.visible = mesh == null or not CharacterModel.expression_hides_eyes(emote_id)
 
 
 func _add_tool_mesh(holder: Node3D, mesh: Mesh) -> void:
