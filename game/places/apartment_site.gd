@@ -29,10 +29,13 @@ const RAIL_GLASS: Array = ["#9FB8C6", "#C2D4DE"]
 const BRAND_ORANGE: String = "#E9822E"
 const BRAND_TEXT: String = "e편한세상"
 const SKY_LOUNGE_TOWER: String = "105"
+## 벽에 칠한 글씨를 벽면에서 띄우는 거리 (깜빡이지 않을 만큼만).
+const WALL_TEXT_OFFSET: float = 0.015
 const MINE: Color = Color("#F2C14E")
 const FRIEND: Color = Color("#7EC8E8")
 
 var _towers: Dictionary[String, Node3D] = {}
+var _text_materials: Dictionary[String, Material] = {}
 var _flags: Node3D = null
 var _office: Vector3 = Vector3.ZERO
 var _office_range: float = 3.0
@@ -177,23 +180,19 @@ func _build_tower(b: Dictionary) -> void:
 		glass.append(KeeperSite.p("box", [cw - 0.5, crown_h - 0.5, d * 0.62], Vector3(0.0, top + (crown_h - 0.5) * 0.5 + 0.3, 0.0), "#FFFFFF"))
 	tower.add_child(_mesh(PartMesh.build(parts), clay_material))
 	tower.add_child(_mesh(PartMesh.build(glass), window_material))
-	# ---- 측벽: 브랜드와 동 번호 (양쪽 옆면 꼭대기), 주황 포인트 띠 ----
+	# ---- 측벽: 브랜드와 동 번호 (양쪽 옆면 꼭대기), 주황 포인트 띠 — 벽에 칠한 글씨처럼 벽 폭 안에 맞춘다 ----
 	for side: float in [-1.0, 1.0]:
-		var brand: Label3D = _label(BRAND_TEXT, 72, Color(CHARCOAL))
-		brand.outline_size = 0
-		brand.double_sided = false
+		var brand: MeshInstance3D = _wall_label(BRAND_TEXT, 72, d * 0.78, 0.55)
 		tower.add_child(brand)
-		brand.position = Vector3(side * (w * 0.5 + 0.03), top - 0.9, 0.0)
+		brand.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 0.95, 0.0)
 		brand.rotation.y = side * PI * 0.5
-		var number: Label3D = _label(id, 150, Color(CHARCOAL))
-		number.outline_size = 0
-		number.double_sided = false
+		var number: MeshInstance3D = _wall_label(id, 150, d * 0.7, 1.1)
 		tower.add_child(number)
-		number.position = Vector3(side * (w * 0.5 + 0.03), top - 2.4, 0.0)
+		number.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 2.25, 0.0)
 		number.rotation.y = side * PI * 0.5
 	parts.clear()
 	for side: float in [-1.0, 1.0]:
-		parts.append(KeeperSite.p("box", [0.02, 0.1, d * 0.5], Vector3(side * (w * 0.5 + 0.02), top - 1.45, 0.0), BRAND_ORANGE))
+		parts.append(KeeperSite.p("box", [0.02, 0.08, d * 0.5], Vector3(side * (w * 0.5 + 0.01), top - 1.45, 0.0), BRAND_ORANGE))
 	tower.add_child(_mesh(PartMesh.build(parts), clay_material))
 	var body: StaticBody3D = StaticBody3D.new()
 	var shape: CollisionShape3D = CollisionShape3D.new()
@@ -265,10 +264,9 @@ func _build_gate_at(econ: EconData, gate: Dictionary) -> void:
 	root.add_child(_mesh(PartMesh.build(parts), clay_material))
 	root.add_child(_mesh(PartMesh.build(glow), window_material))
 	for face: float in [1.0, -1.0]:
-		var sign_label: Label3D = _label(econ.complex_name(), 64, Color("#FFFFFF"))
-		sign_label.outline_size = 0
+		var sign_label: MeshInstance3D = _wall_label(econ.complex_name(), 64, half * 2.0 + 1.0, 0.5, Color("#F4F2EE"))
 		root.add_child(sign_label)
-		sign_label.position = Vector3(0.0, 5.0, face * 0.37)
+		sign_label.position = Vector3(0.0, 5.0, face * (0.35 + WALL_TEXT_OFFSET))
 		sign_label.rotation.y = 0.0 if face > 0.0 else PI
 
 
@@ -408,6 +406,38 @@ func _mesh(mesh: Mesh, material: Material) -> MeshInstance3D:
 	mi.mesh = mesh
 	mi.material_override = material
 	return mi
+
+
+## 벽에 칠한 글씨 (옆면 동 번호 · 브랜드 · 문주 간판): 건물과 같은 셰이더를 쓰는 글자 메시(TextMesh)라 땅 휘기를 같이 따르고
+## (Label3D 는 따르지 않아 먼 동일수록 글씨가 건물 위로 떠 보였다), 빛도 벽처럼 받는다. 벽 폭(max_width) · 높이(max_height, m) 안에 맞춘다.
+func _wall_label(text: String, font_size: int, max_width: float, max_height: float, color: Color = Color(CHARCOAL)) -> MeshInstance3D:
+	var mesh: TextMesh = TextMesh.new()
+	mesh.text = text
+	mesh.font_size = font_size
+	mesh.depth = 0.01
+	mesh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mesh.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var font: Font = mesh.font if mesh.font != null else ThemeDB.fallback_font
+	var px: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size) if font != null else Vector2(font_size * text.length(), font_size)
+	mesh.pixel_size = minf(max_width / maxf(px.x, 1.0), max_height / maxf(px.y, 1.0))
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = _text_material(color)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## 글씨 색마다 하나씩 (점토 머티리얼을 그 색으로).
+func _text_material(color: Color) -> Material:
+	var key: String = color.to_html(false)
+	if not _text_materials.has(key):
+		var m: Material = clay_material.duplicate() if clay_material != null else StandardMaterial3D.new()
+		if m is ShaderMaterial:
+			(m as ShaderMaterial).set_shader_parameter("albedo", color)
+		elif m is StandardMaterial3D:
+			(m as StandardMaterial3D).albedo_color = color
+		_text_materials[key] = m
+	return _text_materials[key]
 
 
 func _label(text: String, size: int, color: Color) -> Label3D:

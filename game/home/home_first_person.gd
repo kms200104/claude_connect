@@ -37,6 +37,8 @@ var _saved_fov: float = 55.0
 var _saved_camera: Transform3D = Transform3D.IDENTITY
 var _vp: SubViewport = null
 var _live_cam: Camera3D = null
+## 마을 환경 (창밖 카메라가 하늘빛 · 밝기를 따라간다).
+var _world_env: Environment = null
 var _hidden: Array[VisualInstance3D] = []
 var _hidden_layers: Array[int] = []
 var _unit: String = ""
@@ -139,6 +141,7 @@ func _place_camera() -> void:
 	cam.global_transform = Transform3D(Basis.from_euler(Vector3(_pitch, _yaw, 0.0)), eye)
 	cam.fov = fov
 	if _live_cam != null:
+		HomeView.sync_view_environment(_live_cam.environment, _world_env)
 		# 자리만 줄여 옮기고(view_depth_scale), 보는 방향은 동 방향만큼 돌리기만 한다. 줄인 변환을 카메라 방향에까지 곱하면
 		# 시야가 가로로 찌그러지고 위아래로 볼 때 기울어져 창밖이 "사진을 우겨넣은" 것처럼 보인다.
 		var to_village: Transform3D = _to_village()
@@ -172,8 +175,10 @@ func _start_live_view() -> void:
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_live_cam = Camera3D.new()
 	_live_cam.near = 0.3
-	# 섬(±100m) 너머 남쪽 바다 위에 있는 집 안들은 보이지 않게.
-	_live_cam.far = 160.0
+	# 섬(±100m) 너머 남쪽 바다 위에 있는 상점 · 집 안 세트는 보이지 않게 (끝은 하늘빛 안개로 흐린다).
+	_live_cam.far = HomeView.VIEW_FAR
+	_world_env = HomeView.world_environment(self)
+	_live_cam.environment = HomeView.view_environment(_world_env)
 	_live_cam.cull_mask = 0xFFFFF & ~HIDDEN_LAYER
 	_vp.add_child(_live_cam)
 	add_child(_vp)
