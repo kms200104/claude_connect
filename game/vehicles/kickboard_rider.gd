@@ -35,6 +35,8 @@ var _last_pos: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
+	# 퀵슬롯(Hotbar)이 찾는다.
+	add_to_group(&"kickboard_rider")
 	if player != null:
 		player.vehicle = self
 
@@ -55,6 +57,8 @@ func mount_problem(id: String) -> String:
 		return "탈 수 없는 물건이에요."
 	if state != State.OFF:
 		return "이미 타고 있어요."
+	if player.is_input_locked():
+		return "지금은 꺼낼 수 없어요."
 	if Net.state != Net.State.ONLINE:
 		return "마을에 접속해야 탈 수 있어요."
 	if Home.is_inside() or (GameData.shop != null and GameData.shop.is_inside(player.global_position)):

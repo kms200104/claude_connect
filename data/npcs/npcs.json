@@ -251,6 +251,10 @@
         [
           -30,
           46
+        ],
+        [
+          -30.4,
+          41.2
         ]
       ],
       "likes": [
@@ -464,6 +468,10 @@
         [
           -52,
           20
+        ],
+        [
+          -50.0,
+          28.2
         ]
       ],
       "likes": [
@@ -643,6 +651,17 @@
   },
   "topic_friend_per_day": 3,
   "talk_extra_friend": 1,
+  "_activities_doc": "v0.16 길목에 멈췄을 때 하는 몸짓. chance = 멈출 때마다 몸짓을 할 확률, 머무는 시간은 min_s~max_s. need: sun(맑은 낮만) · water(물가 water_range m 안만, 물 쪽을 보고 낚시).",
+  "activities": {
+    "chance": 0.7,
+    "list": [
+      {"id": "stretch", "weight": 3, "min_s": 5, "max_s": 8},
+      {"id": "warmup", "weight": 2, "min_s": 8, "max_s": 12},
+      {"id": "sun", "weight": 2, "min_s": 9, "max_s": 15, "need": "sun"},
+      {"id": "sit", "weight": 3, "min_s": 14, "max_s": 24},
+      {"id": "fish", "weight": 8, "min_s": 22, "max_s": 40, "need": "water", "water_range": 4.5}
+    ]
+  },
   "approach": {
     "min_friendship": 6,
     "range": 9.0,

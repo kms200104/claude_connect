@@ -365,6 +365,38 @@ KK=[(0.0, KL, -0.12, on_deck(KL,BACK), 0.5, 0.0),
 anim('kick', 0.62, [(t, KB(lift, rx, 0.0, on_deck(lift,FRONT), rf, el=e, er=e, lr_out=out)) for t,lift,rx,rf,e,out in KK])
 RIDES=['ride_bike','ride_moto','ride_kick','ride_kick_brake']
 
+# ---- 주민의 혼잣말 같은 몸짓 (v0.16, 서버가 길목에 멈췄을 때 고른다 — npcs.json activities) ----
+# 반복 동작이라 처음과 끝 자세를 같게, 한 바퀴 안에서 쉬는 순간(머무름)을 둔다.
+# act_stretch: 깍지 끼듯 두 팔을 머리 위로 쭉 (발끝을 들고 몸이 늘어남) → 좌우로 기울이며 옆구리 늘이기 → 팔을 툭 내려 어깨를 털고 → 잠깐 쉼.
+ST_UP = lambda rz, k, y: pose((0,y,0),(0.1,0,rz),sq(k),(0.25,0,-2.55),(0.25,0,2.55),kl=0.0,kr=0.0,el=0.25,er=0.25)
+anim('act_stretch', 4.6, [
+ (0, REST),
+ (0.35, pose((0,-0.02,0),(-0.05,0,0),sq(-0.03),(0.6,0,-0.4),(0.6,0,0.4))),
+ (0.9, ST_UP(0.0,0.07,0.035)), (1.3, ST_UP(0.0,0.08,0.04)),
+ (1.9, ST_UP(0.16,0.05,0.025)), (2.5, ST_UP(-0.16,0.05,0.025)), (2.9, ST_UP(0.0,0.06,0.03)),
+ (3.25, pose((0,-0.015,0),(-0.04,0,0),sq(-0.03),(0.05,0,AL-0.1),(0.05,0,AR+0.1))),
+ (3.45, pose((0,0.01,0),(0.0,0,0.03),sq(0.01),(0.0,0,AL+0.05),(0.0,0,AR-0.05))),
+ (3.65, pose((0,0.0,0),(0.0,0,-0.03),(1,1,1),(0.0,0,AL-0.05),(0.0,0,AR+0.05))),
+ (4.6, REST)], loop=True)
+# act_warmup: 달리기 전 몸풀기 — 앞으로 런지하며 무릎에 손 짚고 지그시 → 일어나 제자리에서 무릎 높이 들며 콩콩 네 번 → 다시 런지.
+LU = lambda y, d: pose((0,y,0),(-0.22+d,0,0),(1,1,1),(0.75,0,0.1),(0.75,0,-0.1),(0.75,0,0),(-0.45,0,0),kl=-1.0,kr=-0.05,el=0.45,er=0.45)
+JG = lambda y, side, k: pose((0,y,0),(-0.08,0,0.03*side),sq(k),(-0.55*side,0,AL),(0.55*side,0,AR),(1.0 if side>0 else -0.1,0,0),(1.0 if side<0 else -0.1,0,0),
+                            kl=-1.45 if side>0 else -0.15, kr=-1.45 if side<0 else -0.15, el=1.3, er=1.3)
+anim('act_warmup', 4.0, [
+ (0, LU(-0.1,0.0)), (0.6, LU(-0.12,-0.04)), (1.2, LU(-0.1,0.0)),
+ (1.5, pose((0,0.0,0),(-0.05,0,0),(1,1,1),(0.3,0,AL),(0.3,0,AR),kl=-0.2,kr=-0.2,el=1.0,er=1.0)),
+ (1.8, JG(0.05,1,0.03)), (2.1, JG(0.0,-1,-0.03)), (2.4, JG(0.05,-1,0.03)), (2.7, JG(0.0,1,-0.03)),
+ (3.0, JG(0.05,1,0.03)), (3.3, JG(0.0,-1,-0.03)),
+ (3.7, pose((0,-0.05,0),(-0.15,0,0),(1,1,1),(0.6,0,0.05),(0.6,0,-0.05),(0.4,0,0),(-0.2,0,0),kl=-0.6,kr=-0.1,el=0.5,er=0.5)),
+ (4.0, LU(-0.1,0.0))], loop=True)
+# act_sun: 해를 바라보며 행복 — 고개를 들고 두 손을 뒤로 모아 눈을 감고 햇볕을 쬔다. 좌우로 살랑, 가끔 발끝을 들었다 놓는다.
+SN = lambda rz, y: pose((0,y,0),(0.4,0,rz),(1,1,1),(-0.35,0,-0.12),(-0.35,0,0.12),el=0.6,er=0.6)
+anim('act_sun', 4.0, [(0, SN(0.0,0.0)), (1.0, SN(0.06,0.008)), (2.0, SN(0.0,0.025)), (2.3, SN(0.0,0.0)), (3.0, SN(-0.06,0.008)), (4.0, SN(0.0,0.0))], loop=True)
+# act_sit: 풀밭에 털썩 앉아 다리를 앞으로 뻗고 두 손을 뒤로 짚는다. 몸을 살짝 젖힌 채 발을 까딱까딱.
+SG = lambda rz, a, b: pose((0,-0.3,0),(0.16,0,rz),(1,1,1),(-0.6,0,-0.35),(-0.6,0,0.35),(1.42+a,0,0.06),(1.42+b,0,-0.06),kl=-0.15-a,kr=-0.15-b,el=-0.1,er=-0.1)
+anim('act_sit', 4.0, [(0, SG(0,0,0)), (0.8, SG(0.03,0.12,0.0)), (1.6, SG(0,0,0)), (2.4, SG(-0.03,0.0,0.12)), (3.2, SG(0,0.05,0.05)), (4.0, SG(0,0,0))], loop=True)
+ACTS=['act_stretch','act_warmup','act_sun','act_sit']
+
 # ---- 허리 · 목 나누기 (v0.13) ----
 # 예전에는 몸 전체(Visual)가 한 덩어리로 기울어 뻣뻣해 보였다. 몸통 회전을 골반(Visual) · 허리 · 목에 나눠 맡긴다:
 # 숙이기·젖히기(x) 는 골반 45% · 허리 35% · 목 20%, 비틀기(y) 는 40 · 40 · 20, 갸웃(z) 은 50 · 30 · 20.
@@ -441,7 +473,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -490,7 +522,7 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
-''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
 xfade_time = 0.15
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = false\n'%(i,e,i,i,i) for i,e in enumerate(RIDES)) + '''
 [sub_resource type="AnimationNodeTimeScale" id="TimeScale_ride"]
@@ -511,6 +543,11 @@ xfade_time = 0.12
 [sub_resource type="AnimationNodeBlend2" id="Blend2_cook"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_sit"]
+
+[sub_resource type="AnimationNodeTransition" id="Transition_act"]
+xfade_time = 0.3
+''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(ACTS)) + '''
+[sub_resource type="AnimationNodeBlend2" id="Blend2_act"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_rummage"]
 
@@ -560,6 +597,10 @@ nodes/CookBlend/node = SubResource("Blend2_cook")
 nodes/CookBlend/position = Vector2(220, 40)
 nodes/Sit/node = SubResource("AN_sit")
 nodes/Sit/position = Vector2(220, 200)
+''' + ''.join('nodes/A_%s/node = SubResource("AN_%s")\nnodes/A_%s/position = Vector2(220, %d)\n'%(e,e,e,420+i*60) for i,e in enumerate(ACTS)) + '''nodes/ActSwitch/node = SubResource("Transition_act")
+nodes/ActSwitch/position = Vector2(300, 300)
+nodes/ActBlend/node = SubResource("Blend2_act")
+nodes/ActBlend/position = Vector2(320, 40)
 nodes/SitBlend/node = SubResource("Blend2_sit")
 nodes/SitBlend/position = Vector2(270, 40)
 nodes/Rummage/node = SubResource("AN_rummage")
@@ -603,7 +644,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"KickShot", 0, &"RideScale", &"KickShot", 1, &"Kick", &"RideBlend", 1, &"KickShot", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", &"RummageBlend", 0, &"SitBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"KickShot", 0, &"RideScale", &"KickShot", 1, &"Kick", &"RideBlend", 1, &"KickShot", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", ''' + ''.join('&"ActSwitch", %d, &"A_%s", '%(i,e) for i,e in enumerate(ACTS)) + '''&"ActBlend", 0, &"SitBlend", &"ActBlend", 1, &"ActSwitch", &"RummageBlend", 0, &"ActBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "elbow_left", "elbow_right", "knee_left", "knee_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
@@ -723,6 +764,10 @@ parameters/CookSwitch/current_state = "cook_chop"
 parameters/CookSwitch/transition_request = ""
 parameters/CookSwitch/current_index = 0
 parameters/SitBlend/blend_amount = 0.0
+parameters/ActBlend/blend_amount = 0.0
+parameters/ActSwitch/current_state = "act_stretch"
+parameters/ActSwitch/transition_request = ""
+parameters/ActSwitch/current_index = 0
 parameters/RummageBlend/blend_amount = 0.0
 parameters/PhoneBlend/blend_amount = 0.0
 parameters/PhoneTapShot/active = false

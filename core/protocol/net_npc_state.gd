@@ -11,6 +11,8 @@ var talking_with: int = 0
 var mood: String = "calm"
 ## 먼저 말을 걸러 다가가는 플레이어 id (0이면 아무도 아님, v0.11).
 var approaching: int = 0
+## 길목에 멈춰 하는 몸짓 (v0.16: stretch · warmup · sun · sit · fish, 빈 문자열 = 없음).
+var activity: String = ""
 
 
 static func from_dict(data: Dictionary) -> NetNpcState:
@@ -21,4 +23,5 @@ static func from_dict(data: Dictionary) -> NetNpcState:
 	state.talking_with = int(data.get("talk", 0))
 	state.mood = str(data.get("m", "calm"))
 	state.approaching = int(data.get("ap", 0))
+	state.activity = str(data.get("a", ""))
 	return state

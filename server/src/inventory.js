@@ -11,8 +11,16 @@ export function emptySlots(cfg) {
 }
 
 /** 새 아이템을 넣을 칸 순서: 가방 칸 → 퀵슬롯. (같은 아이템이 쌓인 칸은 이 순서로 먼저 채운다.) */
-function placementOrder(slots, cfg) {
+/** 퀵슬롯에 먼저 넣는 아이템 (v0.16: 탈것 — 퀵슬롯을 눌러 바로 탄다). gamedata 가 채운다. */
+export const QUICK_FIRST = new Set();
+
+function placementOrder(slots, cfg, id = '') {
   const order = [];
+  if (QUICK_FIRST.has(id)) {
+    for (let i = 0; i < Math.min(cfg.quickSlots, slots.length); i++) order.push(i);
+    for (let i = cfg.quickSlots; i < slots.length; i++) order.push(i);
+    return order;
+  }
   for (let i = cfg.quickSlots; i < slots.length; i++) order.push(i);
   for (let i = 0; i < Math.min(cfg.quickSlots, slots.length); i++) order.push(i);
   return order;
@@ -40,7 +48,7 @@ export function addItem(slots, id, n, cfg, limitOf) {
   if (!Number.isInteger(n) || n < 1 || !canAdd(slots, id, n, limitOf)) return false;
   const limit = limitOf(id);
   let left = n;
-  const order = placementOrder(slots, cfg);
+  const order = placementOrder(slots, cfg, id);
   for (const i of order) {
     const s = slots[i];
     if (s !== null && s.id === id && s.n < limit) {

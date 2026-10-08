@@ -25,6 +25,8 @@ var info: NpcInfo = null
 var talking_with: int = 0
 ## 나에게 다가오는 중인 플레이어 id (0 = 없음).
 var approaching: int = 0
+## 길목에 멈춰 하는 몸짓 (서버가 정한다, v0.16).
+var activity: String = ""
 ## 돌아볼 대상 (내 캐릭터). NpcCrowd 가 채운다.
 var look_target: Node3D = null
 
@@ -70,6 +72,7 @@ func apply_state(state: NetNpcState) -> void:
 	approaching = state.approaching
 	mood = state.mood
 	_target_yaw = state.yaw
+	_set_activity(state.activity)
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:
 		global_position = state.position
 		if body != null:
@@ -125,8 +128,30 @@ func _process(delta: float) -> void:
 		mark.position.y = 2.45 + sin(_mark_time * 4.0) * 0.06
 
 
+## 몸짓 바꾸기: 리그 자세 · 표정 · 낚싯대. 해 바라보기는 지금 해가 있는 쪽으로 돌아선다.
+func _set_activity(activity_id: String) -> void:
+	if activity_id == activity:
+		return
+	activity = activity_id
+	if rig != null:
+		rig.set_activity(activity_id)
+
+
+## 해가 있는 쪽 (SkyController 의 해 방향과 같은 식).
+static func sun_yaw() -> float:
+	var hour: float = Net.game_hour() if Net.state == Net.State.ONLINE else 13.0
+	var light: Vector3 = Basis.from_euler(SkyController._sun_rotation(hour, true)) * Vector3.FORWARD
+	# 빛이 오는 쪽(해)을 바라본다 (모델 정면은 -Z).
+	return atan2(light.x, light.z)
+
+
 ## 서 있을 때 가까이 온 내 캐릭터를 돌아본다 (대화 중이 아니고, 걷는 중이 아닐 때). 아니면 서버가 정한 방향.
+## 몸짓 중에는 돌아보지 않는다 (낚시는 물 쪽, 해 바라보기는 해 쪽).
 func _look_yaw() -> float:
+	if activity == "sun":
+		return sun_yaw()
+	if not activity.is_empty():
+		return _target_yaw
 	if look_target == null or talking_with != 0 or _shown_speed > 0.25 or not look_target.is_inside_tree():
 		return _target_yaw
 	var d: Vector3 = look_target.global_position - global_position

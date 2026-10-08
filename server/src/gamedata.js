@@ -1,3 +1,4 @@
+import { QUICK_FIRST } from './inventory.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { SEASONS, inHours } from './clock.js';
@@ -43,6 +44,7 @@ export function loadGameData(dataDir, cfg) {
 
   const itemsFile = read('items/items.json');
   const items = new Map(itemsFile.items.map((it) => [it.id, it]));
+  for (const it of itemsFile.items) if (it.ride) QUICK_FIRST.add(it.id);
   for (const id of items.keys()) if (fish.has(id)) throw new Error(`item ${id} 가 물고기 id 와 겹침`);
   // 나무 종류별로 나오는 목재·소지품 가중치.
   const chopDrops = itemsFile.chop_drops;
@@ -196,6 +198,7 @@ export function loadGameData(dataDir, cfg) {
       topicFriendPerDay: npcsFile.topic_friend_per_day ?? 3,
       talkExtraFriend: npcsFile.talk_extra_friend ?? 1,
       approach: npcsFile.approach ?? null,
+      activities: npcsFile.activities ?? null,
     },
     quests,
     shop,

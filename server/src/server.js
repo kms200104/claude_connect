@@ -9,7 +9,8 @@ import { createFishing } from './fishing.js';
 import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
 import { createClock, isWeather, seasonOf, timeBand, weatherAt } from './clock.js';
 import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
-import { beginTalk, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
+import { beginTalk, chooseActivity, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
+import { insideOutline, nearestOnBoundary } from './outline.js';
 import { createMessenger } from './messenger.js';
 import { addChatFriendship, addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
 import { flowerWire, onPath, pickFlower, plantProblem, refreshFlower, snapPlant } from './plants.js';
@@ -2080,6 +2081,8 @@ export function createServer(overrides = {}) {
         speed: data.npcRules.walkSpeed,
         idleMinMs: cfg.npcIdleMinMs,
         idleMaxMs: cfg.npcIdleMaxMs,
+        pickActivity: (npc, mode) =>
+          chooseActivity(npc, data.npcRules.activities, { random, mode, sunny: weather === 'clear' && clock.hour() >= 7 && clock.hour() < 17, waterNear }),
       });
       if (moved || room.npcsDirty) {
         room.npcsDirty = false;
@@ -2090,6 +2093,30 @@ export function createServer(overrides = {}) {
       for (const spotId of swimmers.tick(room, dtMs, t, online)) room.broadcast({ t: 'fishes', spot: spotId, f: swimmers.wire(room, spotId) });
     }
   }, 1000 / cfg.npcTickRate);
+
+  /** 주민 낚시 자리 (v0.16): 낚시터(윤곽 · 사각형) 물가가 range 안이면 그 물가 점. 물 안에 서 있으면 null. */
+  function waterNear(x, z, range) {
+    let best = null;
+    let bestD = range;
+    for (const s of data.spots.values()) {
+      let p;
+      if (s.outline) {
+        if (insideOutline(s.outline, x, z)) return null;
+        p = nearestOnBoundary(s.outline, x, z);
+      } else {
+        const cx = Math.min(Math.max(x, s.x - s.half_x), s.x + s.half_x);
+        const cz = Math.min(Math.max(z, s.z - s.half_z), s.z + s.half_z);
+        if (cx === x && cz === z) return null;
+        p = { x: cx, z: cz };
+      }
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best;
+  }
 
   // 마을톡: 친한 주민이 가끔 먼저 연락한다.
   const messengerTimer = setInterval(() => {

@@ -57,7 +57,7 @@ func _process(delta: float) -> void:
 	_gesture_left = randf_range(mood_gesture_interval * 0.6, mood_gesture_interval * 1.4)
 	var candidates: Array[NpcActor] = []
 	for a: NpcActor in _actors.values():
-		if a.talking_with == 0 and MOOD_GESTURES.has(a.mood) and a.rig != null and a.rig.tree != null and a.rig.tree.active:
+		if a.talking_with == 0 and a.activity.is_empty() and MOOD_GESTURES.has(a.mood) and a.rig != null and a.rig.tree != null and a.rig.tree.active:
 			candidates.append(a)
 	if candidates.is_empty():
 		return

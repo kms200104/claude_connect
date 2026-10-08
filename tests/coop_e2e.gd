@@ -137,6 +137,7 @@ func _run() -> void:
 	await _clams()
 	await _terrain()
 	await _ride()
+	await _villager_acts()
 
 
 func _other_id() -> int:
@@ -481,3 +482,23 @@ func _ride() -> void:
 		_check(await _wait_until(func() -> bool:
 			var b: Node = friend.rig.get_node_or_null("Kickboard")
 			return (b == null or b.is_queued_for_deletion()) and friend.rig.riding_kind() == "", 3.0), "b: 친구가 내려서 접어 넣음")
+
+
+# ---- 주민 몸짓 (v0.16): 길목에 멈춘 주민이 서버가 고른 몸짓을 두 화면에서 똑같이 한다 ----
+
+func _villager_acts() -> void:
+	var npcs: NpcCrowd = _village.get_node("Npcs")
+	var seen: Dictionary[String, String] = {}
+	var deadline: float = float(Time.get_ticks_msec()) + 40000.0
+	while seen.size() < 2 and float(Time.get_ticks_msec()) < deadline:
+		for npc: NetNpcState in Net.npc_states:
+			var a: NpcActor = npcs.actor(npc.id)
+			if a != null and not a.activity.is_empty() and a.rig.activity() == a.activity:
+				seen[npc.id] = a.activity
+		await get_tree().create_timer(0.25).timeout
+	print("[%s] 주민 몸짓: %s" % [_role, str(seen)])
+	_check(seen.size() >= 2, "주민들이 길목에서 몸짓을 한다 (%s)" % str(seen))
+	for id: String in seen:
+		var a: NpcActor = npcs.actor(id)
+		if a != null and a.activity == "fish":
+			_check(a.rig.held_item == "rod", "낚시하는 주민은 낚싯대를 들었다 (%s)" % id)

@@ -134,6 +134,19 @@ func _run() -> void:
 	_check(not is_instance_valid(board) or board.is_queued_for_deletion(), "킥보드 모형이 사라짐")
 	_check(player.rig.riding_kind() == "" and not player.is_input_locked() and _slot_of("kickboard") >= 0, "다시 걷고, 킥보드는 가방에 그대로")
 
+	# ---- 퀵슬롯: 킥보드 칸을 누르면 바로 타고, 다시 누르면 접어 넣는다 ----
+	var hotbar: Hotbar = _village.get_node("HUD/Hotbar")
+	var quick: int = _slot_of("kickboard")
+	_check(quick >= 0 and quick < Net.quick_slot_count, "킥보드는 퀵슬롯에 있다 (%d번 칸)" % quick)
+	var held_before: int = Net.held_slot
+	hotbar.slot_button(quick).pressed.emit()
+	_check(rider.state == KickboardRider.State.MOUNTING, "퀵슬롯 킥보드를 누르면 꺼내 탄다")
+	_check(await _wait_until(func() -> bool: return rider.is_riding(), 3.0) and hotbar.slot_button(quick).held, "타는 동안 그 칸이 빛난다")
+	await get_tree().create_timer(0.3).timeout
+	_check(Net.held_slot == held_before, "손에 든 도구는 그대로 (킥보드를 손에 들지 않는다)")
+	hotbar.slot_button(quick).pressed.emit()
+	_check(await _wait_until(func() -> bool: return rider.state == KickboardRider.State.OFF, 3.0) and not hotbar.slot_button(quick).held, "다시 누르면 접어 넣는다")
+
 	# ---- 순간이동하면 바로 내린다 ----
 	rider.mount("kickboard")
 	_check(await _wait_until(func() -> bool: return rider.is_riding(), 3.0), "다시 탐 (바로 꺼내기)")
