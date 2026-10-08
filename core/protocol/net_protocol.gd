@@ -63,6 +63,8 @@ const ERR_BAD_VEHICLE: String = "bad_vehicle"
 const ERR_BAD_PART: String = "bad_part"
 const ERR_GARAGE_FULL: String = "garage_full"
 const ERR_CANT_RIDE: String = "cant_ride"
+## v19.1: 세워 둔 그 탈것 곁이 아니다 (아직 오는 중 포함).
+const ERR_NOT_NEAR_VEHICLE: String = "not_near_vehicle"
 const ERR_CANT_SELL: String = "cant_sell"
 const ERR_BAD_PLACE: String = "bad_place"
 const ERR_PLACE_LIMIT: String = "place_limit"

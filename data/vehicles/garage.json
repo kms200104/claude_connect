@@ -2,6 +2,12 @@
  "version": 1,
  "max_owned": 6,
  "resale": 0.55,
+ "delivery": {
+  "eta_ms": 6500,
+  "park_range": 4.0,
+  "ride_range": 3.0,
+  "speed_grace_ms": 1500
+ },
  "kinds": {
   "bike": {
    "name": "자전거",

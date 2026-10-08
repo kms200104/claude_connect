@@ -1,6 +1,7 @@
 class_name VehicleApp
 extends PhoneApp
-## 탈것 · 차고 (v19): 자전거 · 전기오토바이 매장(실제 시세에 가까운 값)과 내 차고, 꾸미기.
+## 탈것 · 차고 (v19): 자전거 · 전기오토바이 매장(실제 시세에 가까운 값)과 내 차고(어디 있는지 · 부르기), 꾸미기.
+## 부르면 동네 주민이 타고 와서 내 곁에 세워 두고 간다 (GarageRider.call_vehicle).
 ## 꾸미기는 칸(도색 · 포인트 색 · 전조등 · 미등 · 빛 장식 · 구동 · 브레이크 · 타이어 · 시트 · 앞/뒤 장착 · 장식)마다 부품을 골라
 ## 처음이면 사서 끼우고, 산 부품은 공짜로 다시 끼운다. 위에서 3D 미리보기가 돌며 끼운 모양을 바로 보여 준다 (밤이면 전조등 · 빛 장식도).
 ## 사기 · 끼우기 · 팔기 · 타기는 서버가 정한다 (Net.request → veh_result · veh_ride).
@@ -37,6 +38,9 @@ func _ready() -> void:
 	Net.vehicle_done.connect(_on_done)
 	Net.request_failed.connect(_on_failed)
 	Net.mount_changed.connect(func(_m: Dictionary) -> void: _rebuild())
+	Net.parked_changed.connect(func() -> void:
+		if _mode == Mode.GARAGE:
+			_rebuild())
 
 
 func _process(delta: float) -> void:
@@ -70,6 +74,8 @@ func _on_done(result: Dictionary) -> void:
 	var kind: String = str(result.get("kind", ""))
 	var cost: int = int(result.get("cost", 0))
 	match kind:
+		"call":
+			return
 		"buy":
 			var m: VehicleCatalog.Model = GameData.garage.model(str(result.get("model", "")))
 			_note = "%s 을(를) 샀어요! 차고에 넣어 뒀어요 (%s)." % [m.name if m != null else "탈것", Money.short(cost)]
@@ -228,19 +234,28 @@ func _build_garage() -> void:
 		var row: HBoxContainer = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		c.add_child(row)
-		var ride: Button = button("내리기" if riding else "타기", 28, INK, riding)
-		ride.name = "Ride_%s" % id
-		ride.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		ride.pressed.connect(func() -> void:
+		# 어디 있나: 타는 중 · 주민이 가져오는 중 · 세워 둠(거리) · 차고.
+		var spot: Dictionary = Net.parked_of(id)
+		var coming: bool = not spot.is_empty() and float(spot.get("t", 0.0)) > Net.server_time_ms()
+		var where: String = "차고에 있어요"
+		if riding:
+			where = "타는 중"
+		elif coming:
+			where = "%s님이 가져오는 중" % GameData.npc_name(str(spot.get("npc", "")))
+		elif not spot.is_empty() and phone != null and phone.player != null:
+			var d: float = Vector2(float(spot.get("x", 0.0)) - phone.player.global_position.x, float(spot.get("z", 0.0)) - phone.player.global_position.z).length()
+			where = "세워 둠 · %dm 떨어져 있어요" % roundi(d)
+		c.add_child(label(where, 24, GOOD if riding or coming else SOFT))
+		var call: Button = button("타는 중" if riding else ("오는 중" if coming else "부르기"), 28, INK, riding or coming)
+		call.name = "Call_%s" % id
+		call.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		call.disabled = riding or coming
+		call.pressed.connect(func() -> void:
 			Audio.play_ui(Audio.SFX_CLICK)
 			var r: GarageRider = _rider()
-			if r == null:
-				return
-			if r.is_active():
-				r.dismount()
-			elif r.mount(id) and phone != null:
+			if r != null and r.call_vehicle(id) and phone != null:
 				phone.close())
-		row.add_child(ride)
+		row.add_child(call)
 		var custom: Button = button("꾸미기", 28)
 		custom.name = "Custom_%s" % id
 		custom.size_flags_horizontal = Control.SIZE_EXPAND_FILL

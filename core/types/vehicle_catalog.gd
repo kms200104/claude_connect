@@ -73,6 +73,8 @@ class Part:
 
 var max_owned: int = 6
 var resale: float = 0.55
+## 호출 (v19.1): { eta_ms, park_range, ride_range, speed_grace_ms } — 서버 garage.js 와 같은 값.
+var delivery: Dictionary = {}
 ## 종류 → { name, pose, turn_speed, throttle_rise, throttle_fall, brake_rise, jerk }
 var kinds: Dictionary[String, Dictionary] = {}
 ## 칸 [{ id, name }] (보여 주는 순서).
@@ -86,6 +88,9 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 	var c: VehicleCatalog = VehicleCatalog.new()
 	c.max_owned = int(d.get("max_owned", 6))
 	c.resale = float(d.get("resale", 0.55))
+	var delivery: Variant = d.get("delivery", {})
+	if delivery is Dictionary:
+		c.delivery = delivery
 	var k: Variant = d.get("kinds", {})
 	if k is Dictionary:
 		for key: Variant in k:

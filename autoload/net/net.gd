@@ -23,6 +23,8 @@ signal profile_updated
 signal vehicles_changed
 signal vehicle_done(result: Dictionary)
 signal mount_changed(mount: Dictionary)
+## v19.1 세워 둔 · 주민이 가져오는 중인 차고 탈것 목록이 바뀜 (Net.parked).
+signal parked_changed
 signal weather_changed(weather: String)
 ## 번개 (뇌우일 때 서버가 방 전체에 같은 순간 보낸다). power 0.6~1.
 signal lightning_struck(power: float)
@@ -205,6 +207,8 @@ var faces: Dictionary[int, Dictionary] = {}
 var names: Dictionary[int, String] = {}
 ## v19 내 차고: [{ id, model, owned: [부품], fit: { 칸: 부품 } }] (프로필).
 var vehicles: Array[Dictionary] = []
+## v19.1 방에 세워 둔(또는 오는 중인) 차고 탈것: [{ v, o(주인 자리), m, f, x, z, yaw, t(도착 서버 시각, 0 = 이미 있음), npc }].
+var parked: Array[Dictionary] = []
 
 var _ws: WebSocketPeer = null
 ## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
@@ -847,6 +851,8 @@ func _handle_text(text: String) -> void:
 		"veh_result":
 			sol = int(msg.get("sol", sol))
 			vehicle_done.emit(msg)
+		"veh_parked":
+			_apply_parked(msg.get("list", []))
 		"veh_ride":
 			var mount: Variant = msg.get("mount", null)
 			mount_changed.emit(mount if mount is Dictionary else {})
@@ -1099,6 +1105,7 @@ func _on_welcome(msg: Dictionary) -> void:
 				placed[p.id] = p
 	drops.clear()
 	_apply_couriers(msg.get("couriers", []))
+	_apply_parked(msg.get("parked", []))
 	my_deliveries.clear()
 	for entry: Variant in msg.get("deliv", []):
 		if entry is Dictionary:
@@ -1405,4 +1412,21 @@ func vehicle(id: String) -> Dictionary:
 	for v: Dictionary in vehicles:
 		if str(v.get("id", "")) == id:
 			return v
+	return {}
+
+
+func _apply_parked(list: Variant) -> void:
+	parked.clear()
+	if list is Array:
+		for e: Variant in list:
+			if e is Dictionary:
+				parked.append(e)
+	parked_changed.emit()
+
+
+## v19.1 세워 둔 그 탈것 (없으면 빈 사전).
+func parked_of(vehicle_id: String, owner: int = -1) -> Dictionary:
+	for e: Dictionary in parked:
+		if str(e.get("v", "")) == vehicle_id and int(e.get("o", 0)) == (my_id if owner < 0 else owner):
+			return e
 	return {}

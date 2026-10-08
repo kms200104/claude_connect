@@ -1,8 +1,10 @@
 extends Node
 ## 차고 탈것 종단 테스트 (v19, 앱 안 테스트 서버 · tests/run_garage_e2e.sh).
 ##   휴대폰 "탈것" 앱: 매장에서 자전거 사기(한 번 더 눌러 확인) → 꾸미기(도색 · 전조등, 산 색은 공짜로 다시) → 성능 막대
-##   → HUD 탈것 단추로 올라탐 → 페달(리그 위상 = 크랭크) · 빨라짐 · 미끄러짐 · 기울기 · 브레이크 → "내리기"
-##   → 전기오토바이: 스로틀이 부드럽게 열리고(가속도가 덜컥이지 않음) 최고 속도 안, 놓으면 회생 제동 → 순간이동하면 내림 → 팔기
+##   → HUD 탈것 단추(휴대폰 단추와 안 겹침)로 부르기 → 주민이 타고 와서 곁에 세우고 떠남 → "타기"
+##   → 페달(리그 위상 = 크랭크) · 빨라짐 · 미끄러짐 · 기울기 · 브레이크 → "세우기" (그 자리에 남음)
+##   → 앱에서 오토바이 부르기 → 스로틀이 부드럽게 열리고(가속도가 덜컥이지 않음) 최고 속도 안, 놓으면 회생 제동
+##   → 탄 채 자전거 불러 바꿔 타기 → 순간이동하면 떠나기 전 자리에 세움 → 팔기
 
 var _failures: Array[String] = []
 var _village: Node = null
@@ -49,6 +51,25 @@ func _find_app(root: Node) -> VehicleApp:
 		var found: VehicleApp = _find_app(c)
 		if found != null:
 			return found
+	return null
+
+
+## --shots=폴더 를 주고 화면이 있는 채로 돌리면 (xvfb) 그 장면을 PNG 로 남긴다.
+func _shot(shot_name: String) -> void:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--shots=") and DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("%s/%s.png" % [arg.trim_prefix("--shots="), shot_name])
+
+
+static func _flat(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+func _find_courier(root: Node) -> VehicleCourier:
+	for c: Node in root.get_children():
+		if c is VehicleCourier and not c.is_queued_for_deletion():
+			return c
 	return null
 
 
@@ -127,13 +148,38 @@ func _run() -> void:
 	phone.close()
 	await get_tree().create_timer(0.4).timeout
 	_check(button.visible, "탈것이 생기면 HUD 탈것 단추가 보인다")
+	var phone_button: Button = _village.get_node("HUD").find_child("PhoneButton", true, false) as Button
+	_check(phone_button != null and not button.get_global_rect().intersects(phone_button.get_global_rect()), "탈것 단추가 휴대폰 단추에 가리지 않는다")
+	var parked: ParkedVehicles = _village.get_node("ParkedVehicles")
 
-	# ---- 자전거 타기 ----
+	# ---- 부르기: 동네 주민이 타고 와서 곁에 세워 두고 간다 ----
+	_check(interaction.target != InteractionController.Target.VEHICLE, "부르기 전에는 곁에 탈것이 없다")
 	button.pressed.emit()
-	_check(await _wait_until(func() -> bool: return rider.is_riding(), 3.0), "탈것 단추로 올라탐")
+	_check(await _wait_until(func() -> bool: return parked.courier_count() == 1, 3.0), "탈것 단추를 누르면 주민이 탈것을 타고 온다")
+	var courier: VehicleCourier = _find_courier(parked)
+	_check(courier != null and not courier.npc_id.is_empty() and courier.rig.riding_kind() == "bike", "주민이 자전거를 타고 온다 (%s)" % (courier.npc_id if courier != null else "-"))
+	var spot: Dictionary = parked.spot_of(bike)
+	_check(not spot.is_empty() and _flat(spot["at"], player.global_position) <= 4.0, "내 곁에 세울 자리")
+	var far0: float = _flat(courier.global_position, spot["at"]) if courier != null else 0.0
+	await get_tree().create_timer(1.5).timeout
+	await _shot("1_courier")
+	var far1: float = _flat(courier.global_position, spot["at"]) if is_instance_valid(courier) else 0.0
+	_check(far0 > 3.0 and far1 < far0 - 0.5, "멀리서 다가온다 (%.1fm → %.1fm)" % [far0, far1])
+	_check(interaction.target != InteractionController.Target.VEHICLE, "오는 중에는 아직 탈 수 없다")
+	_check(await _wait_until(func() -> bool: return parked.courier_count() == 0, 9.0), "세워 두고 내린다")
+	_check(parked.nearest_own(player.global_position, GarageRider.RIDE_RANGE) == bike, "탈것이 곁에 세워져 있다")
+	await get_tree().create_timer(0.3).timeout
+	await _shot("2_wave")
+	_check(await _wait_until(func() -> bool: return _find_courier(parked) == null, 6.0), "손을 흔들고 걸어서 떠난다")
+
+	# ---- 타기 ----
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.VEHICLE, 2.0) and interaction.action_hud.current_text() == "타기", "곁에 가면 상황 버튼 '타기'")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return rider.is_riding(), 3.0), "세워 둔 자전거에 올라탐")
 	_check(rider.model != null and rider.model.get_parent() == player.rig and str(rider.model.fit.get("paint", "")) == "paint_mint", "꾸민 자전거 모형 (민트)")
 	_check(player.rig.riding_kind() == "bike" and not player.is_input_locked(), "안장에 앉은 자세")
-	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF, 2.0), "탄 동안 상황 버튼은 '내리기'")
+	_check(parked.spot_of(bike).is_empty(), "탄 자전거는 세워 둔 목록에서 빠짐")
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF and interaction.action_hud.current_text() == "세우기", 2.0), "탄 동안 상황 버튼은 '세우기'")
 	var start: Vector3 = player.global_position
 	var top: Array[float] = [0.0]
 	var phase_ok: Array[bool] = [true]
@@ -172,19 +218,30 @@ func _run() -> void:
 	player.joystick.output = Vector2.ZERO
 	get_tree().process_frame.disconnect(watch)
 	await get_tree().create_timer(0.4).timeout
-	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF, 2.0), "'내리기' 버튼 (%s · %s)" % [InteractionController.Target.keys()[interaction.target], interaction.action_hud.current_text()])
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF, 2.0), "'세우기' 버튼 (%s · %s)" % [InteractionController.Target.keys()[interaction.target], interaction.action_hud.current_text()])
+	var stop_at: Vector3 = player.global_position
 	interaction.action_hud.action_pressed.emit()
-	_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 3.0), "내려서 탈것이 사라짐")
+	_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 3.0), "내려섬")
 	_check(player.rig.riding_kind() == "" and absf(player.body.position.y - player.body_rest_height()) < 0.01, "다시 걷는 자세 · 몸 높이 원래대로")
+	var stood: Dictionary = parked.spot_of(bike)
+	_check(not stood.is_empty() and _flat(stood["at"], stop_at) < 0.3 and _flat(player.global_position, stop_at) > 0.5, "자전거는 사라지지 않고 그 자리에 세워 둠 · 사람은 옆으로 내려섬")
+	_check(await _wait_until(func() -> bool: return not Net.parked_of(bike).is_empty(), 2.0), "서버에도 세워 둔 자리가 남는다")
+	await _shot("3_parked")
 
 	# ---- 전기오토바이: 부드러운 가감속 ----
 	Net.request("veh_buy", {"model": "moto_sport"})
 	_check(await _wait_until(func() -> bool: return Net.vehicles.size() == 2, 3.0), "전기오토바이도 산다")
 	var moto: String = str(Net.vehicles[1].get("id", ""))
-	# 광장 북쪽 길에서 동쪽으로 (가로막는 건물 없이 40m 넘게 달릴 수 있다).
+	# 광장 북쪽 길에서 동쪽으로 (가로막는 건물 없이 40m 넘게 달릴 수 있다). 휴대폰 앱에서 부른다.
 	player.global_position = Vector3(-18.0, 0.1, 74.0)
 	await get_tree().create_timer(0.3).timeout
-	rider.toggle(moto)
+	phone.open(PhoneWindow.Tab.VEHICLE)
+	await get_tree().create_timer(0.3).timeout
+	app = _find_app(phone)
+	_check(app != null and _press(app, "Call_%s" % moto), "휴대폰 앱에서 오토바이 부르기")
+	_check(await _wait_until(func() -> bool: return not phone.visible and parked.courier_count() == 1, 3.0), "휴대폰을 닫고 주민이 오토바이를 타고 온다")
+	_check(await _wait_until(func() -> bool: return parked.nearest_own(player.global_position, GarageRider.RIDE_RANGE) == moto, 9.0), "오토바이가 곁에 세워짐")
+	button.pressed.emit()
 	await _wait_until(func() -> bool: return rider.is_riding(), 3.0)
 	rider.drive_state.yaw = -PI * 0.5
 	(_village.get_node("CameraRig") as FollowCamera).snap_to_target()
@@ -212,9 +269,20 @@ func _run() -> void:
 	_check(rider.drive_state.speed < cruise - 0.5 and rider.drive_state.speed > cruise - 4.0, "스로틀을 놓으면 회생 제동으로 부드럽게 준다 (%.1f → %.1f)" % [cruise, rider.drive_state.speed])
 	_check(rider.speed_kmh() > 1.0, "속도계 (%d km/h)" % roundi(rider.speed_kmh()))
 
-	# ---- 순간이동하면 내린다 · 팔기 ----
+	# ---- 바꿔 타기: 오토바이를 탄 채 자전거를 불러 옮겨 탄다 (오토바이는 그 자리에 세워 둔다) ----
+	await _wait_until(func() -> bool: return rider.drive_state.speed < 0.2, 6.0)
+	rider.call_vehicle(bike)
+	_check(await _wait_until(func() -> bool: return parked.nearest_own(player.global_position, GarageRider.RIDE_RANGE) == bike, 10.0), "타는 중에도 다른 탈것을 부를 수 있다")
+	_check(rider.mount(bike), "곁에 온 자전거로 바꿔 타기")
+	_check(await _wait_until(func() -> bool: return rider.is_riding() and rider.vehicle_id == bike and player.rig.riding_kind() == "bike", 3.0), "자전거로 바꿔 탔다")
+	_check(not parked.spot_of(moto).is_empty() and parked.spot_of(bike).is_empty(), "오토바이는 그 자리에 세워 둠")
+	_check(rider.model != null and rider.model.model_id == "bike_city" and rider.model.get_parent() == player.rig, "자전거 모형으로 바뀜")
+
+	# ---- 순간이동하면 떠나기 전 자리에 세운다 · 팔기 ----
+	var before_tp: Vector3 = player.global_position
 	player.global_position += Vector3(0.0, 0.0, 20.0)
 	_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 1.0), "순간이동하면 바로 내림")
+	_check(not parked.spot_of(bike).is_empty() and _flat(parked.spot_of(bike)["at"], before_tp) < 1.0, "떠나기 전 자리에 세워 둠")
 	var sol3: int = Net.sol
 	Net.request("veh_sell", {"v": bike})
 	_check(await _wait_until(func() -> bool: return Net.vehicles.size() == 1, 3.0), "자전거를 팔았다")

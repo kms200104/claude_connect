@@ -273,6 +273,8 @@ data = {
     'version': 1,
     'max_owned': 6,
     'resale': 0.55,
+    # 호출 (v19.1): 주민이 탈것을 타고 와서 곁(park_range 안)에 세워 두고 간다. 오는 데 걸리는 시간 · 올라탈 수 있는 거리.
+    'delivery': {'eta_ms': 6500, 'park_range': 4.0, 'ride_range': 3.0, 'speed_grace_ms': 1500},
     'kinds': {
         'bike': {'name': '자전거', 'pose': 'bike', 'turn_speed': 0.55},
         'moto': {'name': '전기오토바이', 'pose': 'moto', 'turn_speed': 0.4,

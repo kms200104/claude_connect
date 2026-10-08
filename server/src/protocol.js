@@ -121,6 +121,7 @@ export const ErrorCode = Object.freeze({
   badPart: 'bad_part', // 그 탈것에 맞지 않는(모르는) 부품 · 빈 칸
   garageFull: 'garage_full', // 차고가 꽉 찼다 (max_owned)
   cantRide: 'cant_ride', // 집 · 상점 안이거나 낚시 중이라 탈 수 없다
+  notNearVehicle: 'not_near_vehicle', // v19.1: 세워 둔 그 탈것 곁이 아니다 (아직 오는 중 포함)
 });
 
 // 감정표현 외에 보낼 수 있는 몸짓 (배우지 않아도 된다).

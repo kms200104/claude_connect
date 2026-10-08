@@ -55,7 +55,9 @@ describe('v19 차고 탈것 규칙', () => {
       { id: 'V2', model: 'jet_ski', owned: [], fit: {} },
       { id: 'V1', model: 'bike_road', owned: [], fit: {} },
     ], rules);
-    assert.deepEqual(out, [{ id: 'V1', model: 'bike_city', owned: ['paint_mint'], fit: { paint: 'paint_mint' } }]);
+    assert.deepEqual(out, [{ id: 'V1', model: 'bike_city', owned: ['paint_mint'], fit: { paint: 'paint_mint' }, at: null }]);
+    const parked = sanitizeVehicles([{ id: 'V2', model: 'moto_sport', owned: [], fit: {}, at: { x: 3, z: 4, yaw: 1, t: 999999, npc: 'rara' } }], rules);
+    assert.deepEqual(parked[0].at, { x: 3, z: 4, yaw: 1, t: 0, npc: '' }, '세워 둔 자리는 남고, 다시 켜면 이미 도착한 것으로');
   });
 });
 
@@ -79,7 +81,7 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
 
   before(() => {
     saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-veh-'));
-    server = createServer({ port: 0, saveDir, saveIntervalMs: 60000, weatherForce: 'clear', startSol: 12000000 });
+    server = createServer({ port: 0, saveDir, saveIntervalMs: 60000, weatherForce: 'clear', startSol: 12000000, vehicleEtaMs: 300 });
   });
   after(async () => {
     for (const c of clients) c.kill();
@@ -101,7 +103,7 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     assert.equal(bought.cost, 6890000);
     assert.equal(bought.sol, 12000000 - 6890000);
     const prof = await a.next((m) => m.t === 'profile' && m.vehicles?.length === 1, 2000);
-    assert.deepEqual(prof.vehicles, [{ id: bought.v, model: 'moto_sport', owned: [], fit: {} }]);
+    assert.deepEqual(prof.vehicles, [{ id: bought.v, model: 'moto_sport', owned: [], fit: {}, at: null }]);
     assert.equal((await ask(a, { t: 'veh_buy', model: 'moto_sport' })).code, 'not_enough_sol', '두 대째는 돈이 모자란다');
 
     const v = bought.v;
@@ -119,6 +121,21 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     assert.equal((await ask(a, { t: 'veh_unfit', v, slot: 'light' })).code, 'bad_part');
     await ask(a, { t: 'veh_part', v, part: 'light_hi' });
 
+    // 산 탈것은 차고에 있다: 바로 탈 수 없고 주민에게 가져다 달라고 부른다.
+    assert.equal((await ask(a, { t: 'veh_ride', v })).code, 'not_near_vehicle', '부르기 전에는 탈 수 없다');
+    const me = wa.players.find((p) => p.id === wa.id);
+    const called = await ask(a, { t: 'veh_call', v, x: me.x + 1.5, z: me.z, yaw: 0.5 });
+    assert.equal(called.kind, 'call');
+    assert.ok(typeof called.npc === 'string' && called.npc.length > 0, '주민이 가져다준다');
+    const coming = await b.next((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === v), 2000);
+    const entry = coming.list.find((x) => x.v === v);
+    assert.equal(entry.o, wa.id);
+    assert.ok(entry.t > 0 && entry.npc === called.npc, '친구 화면에도 오는 중 (도착 시각 · 주민)');
+    assert.deepEqual([entry.x, entry.z, entry.yaw], [me.x + 1.5, me.z, 0.5]);
+    assert.equal((await ask(a, { t: 'veh_ride', v })).code, 'not_near_vehicle', '아직 오는 중이면 탈 수 없다');
+    await sleep(350);
+    const far = await ask(a, { t: 'veh_call', v: 'V999', x: 0, z: 0 });
+    assert.equal(far.code, 'bad_vehicle');
     const rode = await ask(a, { t: 'veh_ride', v });
     assert.deepEqual(rode.mount, { v, m: 'moto_sport', f: { paint: 'paint_cherry', light: 'light_hi' } });
     const seen = await b.next((m) => m.t === 'snap' && m.p.some((p) => p.id === wa.id && p.mount?.m === 'moto_sport'), 3000);
@@ -131,6 +148,19 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     const off = await ask(a, { t: 'veh_ride', v: '' });
     assert.equal(off.mount, null);
     await b.next((m) => m.t === 'snap' && m.p.some((p) => p.id === wa.id && !p.mount), 3000);
+    // 내리면 그 자리에 세워 둔다 (사라지지 않는다).
+    const stood = await b.next((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === v && x.t === 0), 2000);
+    assert.equal(stood.list.find((x) => x.v === v).f.rear, 'rear_topbox');
+    // 멀리 가면 탈 수 없고, 다시 오면 탄다.
+    a.send({ t: 'move', x: me.x + 6, y: me.y, z: me.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    assert.equal((await ask(a, { t: 'veh_ride', v })).code, 'not_near_vehicle', '세워 둔 곳에서 멀면 못 탄다');
+    a.send({ t: 'move', x: me.x + 1.5, y: me.y, z: me.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    assert.deepEqual((await ask(a, { t: 'veh_ride', v })).mount?.v, v, '세워 둔 곳에서 다시 탄다');
+    // 끊기면 그 자리에 세워 둔 채로 남고, 다시 들어오는 사람도 본다.
+    a.kill();
+    await b.next((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === v && x.t === 0), 3000);
   });
 
   it('이동 속도 검사: 걸을 때는 고쳐지는 빠르기도 오토바이를 타면 받아 준다', async () => {
@@ -158,7 +188,9 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     const fixes = a.inbox.filter((m) => m.t === 'correct');
     a.inbox = a.inbox.filter((m) => m.t !== 'correct');
     me.x = fixes.length ? fixes[fixes.length - 1].x : walking.x;
-    await ask(a, { t: 'veh_ride', v: bought.v });
+    await ask(a, { t: 'veh_call', v: bought.v, x: me.x, z: me.z });
+    await sleep(350);
+    assert.ok((await ask(a, { t: 'veh_ride', v: bought.v })).mount, '불러서 올라탐');
     const riding = await run();
     assert.equal(riding.corrected, false, '스쿠터로는 받아 준다');
   });
@@ -170,6 +202,17 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     const ids = [];
     for (let i = 0; i < rules.max_owned; i++) ids.push((await ask(a, { t: 'veh_buy', model: 'bike_city' })).v);
     assert.equal((await ask(a, { t: 'veh_buy', model: 'bike_city' })).code, 'garage_full');
+    await ask(a, { t: 'veh_call', v: ids[0] });
+    await sleep(350);
+    assert.ok((await ask(a, { t: 'veh_ride', v: ids[0] })).mount);
+    // 타는 중에 다른 탈것을 불러 바꿔 탄다: 타던 것은 그 자리에 세워 둔다.
+    await ask(a, { t: 'veh_call', v: ids[1] });
+    await sleep(350);
+    const swap = await ask(a, { t: 'veh_ride', v: ids[1] });
+    assert.equal(swap.mount?.v, ids[1], '바꿔 탐');
+    const list = await a.next((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === ids[0] && x.t === 0), 2000);
+    assert.ok(list, '타던 탈것은 세워 둠');
+    await ask(a, { t: 'veh_ride', v: '' });
     await ask(a, { t: 'veh_ride', v: ids[0] });
     const sold = await ask(a, { t: 'veh_sell', v: ids[0] });
     assert.equal(sold.cost, -Math.round((239000 * rules.resale) / 100) * 100);

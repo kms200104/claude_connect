@@ -43,6 +43,9 @@ var _outfit: Dictionary = {"hat": "", "top": ""}
 ## 차고 (v19): [{ id, model, owned, fit }] · 다음 번호.
 var _vehicles: Array = []
 var _veh_seq: int = 0
+## v19.1 타고 있는 차고 탈것 (접속 동안만) · 마지막 방향.
+var _mount: String = ""
+var _yaw: float = 0.0
 ## 닉네임 (v14).
 var _name: String = ""
 var _face: Dictionary = {}
@@ -185,6 +188,7 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 				_send(peer, _home_message(null))
 		"move":
 			_pos = Vector3(float(msg.get("x", _pos.x)), 0.1, float(msg.get("z", _pos.z)))
+			_yaw = float(msg.get("yaw", _yaw))
 		"equip":
 			var slot: int = int(msg.get("slot", -1))
 			if slot >= -1 and slot < _quick():
@@ -212,6 +216,7 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 		"shop_enter", "shop_exit":
 			var inside: bool = t == "shop_enter"
 			var spot: Dictionary = _shop_data.get("inside_spawn" if inside else "outside_spawn", {})
+			_garage_dismount(peer)
 			_pos = Vector3(float(spot.get("x", 0.0)), 0.1, float(spot.get("z", 0.0)))
 			_send(peer, {"t": "shop_door", "rid": rid, "inside": inside, "x": _pos.x, "y": _pos.y, "z": _pos.z, "shop": _snapshot.get("shop", {})})
 		"shop_buy":
@@ -307,7 +312,7 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_face.merge(face, true)
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
 			_save()
-		"veh_buy", "veh_part", "veh_unfit", "veh_sell", "veh_ride":
+		"veh_buy", "veh_part", "veh_unfit", "veh_sell", "veh_ride", "veh_call":
 			_handle_garage(peer, msg, fail)
 		"phone", "phone_tap", "ride":
 			# 혼자 노는 테스트 서버: 다른 사람이 없으니 알릴 곳이 없다.
@@ -799,6 +804,7 @@ func _handle_home(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
 		if plan == null:
 			fail.call(NetProtocol.ERR_BAD_UNIT)
 			return
+		_garage_dismount(peer)
 		_home = unit
 		_pos = econ.home_origin(unit) + Vector3(plan.spawn.x, 0.1, plan.spawn.y)
 		_send(peer, _home_message(msg.get("rid")))
@@ -949,22 +955,86 @@ func _handle_garage(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> voi
 				fail.call(NetProtocol.ERR_BAD_VEHICLE)
 				return
 			var back: int = cat.resale_value(str(v["model"]), PackedStringArray(v["owned"]))
+			if str(v["id"]) == _mount:
+				_mount = ""
 			_vehicles.erase(v)
+			_send(peer, {"t": "veh_parked", "list": _parked_list()})
 			_sol += back
 			result.merge({"kind": "sell", "v": v["id"], "cost": -back})
 		"veh_ride":
 			var wire: Variant = null
-			if not v.is_empty():
-				wire = {"v": v["id"], "m": v["model"], "f": (v["fit"] as Dictionary).duplicate()}
-			elif str(msg.get("v", "")) != "":
+			if v.is_empty() and str(msg.get("v", "")) != "":
 				fail.call(NetProtocol.ERR_BAD_VEHICLE)
 				return
+			if v.is_empty():
+				_garage_dismount(peer)
+			elif str(v["id"]) != _mount:
+				# 세워 둔(도착한) 그 탈것 곁에서만 탄다.
+				var at: Variant = v.get("at")
+				var ride_range: float = float(cat.delivery.get("ride_range", 3.0)) + 0.5
+				if not at is Dictionary or float(at.get("t", 0.0)) > _now() or Vector2(float(at["x"]) - _pos.x, float(at["z"]) - _pos.z).length() > ride_range:
+					fail.call(NetProtocol.ERR_NOT_NEAR_VEHICLE)
+					return
+				_garage_dismount(peer)
+				v["at"] = null
+				_mount = str(v["id"])
+				_send(peer, {"t": "veh_parked", "list": _parked_list()})
+			if not _mount.is_empty():
+				var mv: Dictionary = _vehicle(_mount)
+				wire = {"v": mv["id"], "m": mv["model"], "f": (mv["fit"] as Dictionary).duplicate()}
 			_send(peer, {"t": "veh_ride", "rid": rid, "id": 1, "mount": wire})
+			_save()
 			return
+		"veh_call":
+			if v.is_empty() or str(v["id"]) == _mount:
+				fail.call(NetProtocol.ERR_BAD_VEHICLE)
+				return
+			if not _home.is_empty():
+				fail.call(NetProtocol.ERR_CANT_RIDE)
+				return
+			var x: float = float(msg.get("x", _pos.x))
+			var z: float = float(msg.get("z", _pos.z))
+			if Vector2(x - _pos.x, z - _pos.z).length() > float(cat.delivery.get("park_range", 4.0)):
+				x = _pos.x
+				z = _pos.z
+			var npcs: Array = GameData.npcs.keys()
+			var npc: String = str(npcs[randi() % npcs.size()]) if not npcs.is_empty() else ""
+			var arrive: float = _now() + float(cat.delivery.get("eta_ms", 6500.0))
+			v["at"] = {"x": x, "z": z, "yaw": float(msg.get("yaw", _yaw)), "t": arrive, "npc": npc}
+			result.merge({"kind": "call", "v": v["id"], "npc": npc, "at": arrive, "cost": 0})
+			_send(peer, {"t": "veh_parked", "list": _parked_list()})
 	result["sol"] = _sol
 	_send(peer, result)
 	_send(peer, {"t": "profile", "sol": _sol, "vehicles": _vehicles.duplicate(true)})
+	if t == "veh_part" or t == "veh_unfit":
+		_send(peer, {"t": "veh_parked", "list": _parked_list()})
 	_save()
+
+
+func _vehicle(id: String) -> Dictionary:
+	for x: Dictionary in _vehicles:
+		if str(x.get("id", "")) == id:
+			return x
+	return {}
+
+
+## 타던 차고 탈것을 지금 자리에 세워 둔다 (문 · 집 드나들기 전에도).
+func _garage_dismount(peer: WebSocketPeer) -> void:
+	var v: Dictionary = _vehicle(_mount)
+	_mount = ""
+	if v.is_empty():
+		return
+	v["at"] = {"x": _pos.x, "z": _pos.z, "yaw": _yaw, "t": 0.0, "npc": ""}
+	_send(peer, {"t": "veh_parked", "list": _parked_list()})
+
+
+func _parked_list() -> Array:
+	var out: Array = []
+	for v: Dictionary in _vehicles:
+		var at: Variant = v.get("at")
+		if at is Dictionary:
+			out.append({"v": v["id"], "o": 1, "m": v["model"], "f": (v["fit"] as Dictionary).duplicate(), "x": at["x"], "z": at["z"], "yaw": at.get("yaw", 0.0), "t": at.get("t", 0.0), "npc": at.get("npc", "")})
+	return out
 
 
 # ---- 입장 정보 · 가방 ----
@@ -984,6 +1054,7 @@ func _welcome(resumed: bool) -> Dictionary:
 	prof["sol"] = _sol
 	prof["vehicles"] = _vehicles.duplicate(true)
 	w["prof"] = prof
+	w["parked"] = _parked_list()
 	var players: Array = w.get("players", [])
 	if not players.is_empty():
 		players[0]["x"] = _pos.x
@@ -1141,6 +1212,10 @@ func _load() -> void:
 	_flower_seq = int(saved.get("flower_seq", 0))
 	if saved.get("vehicles") is Array:
 		_vehicles = (saved["vehicles"] as Array).filter(func(v: Variant) -> bool: return v is Dictionary and GameData.garage.model(str(v.get("model", ""))) != null)
+		# 다시 켜면 오는 중이던 탈것도 이미 도착한 것으로.
+		for v: Dictionary in _vehicles:
+			if v.get("at") is Dictionary:
+				v["at"]["t"] = 0.0
 	_veh_seq = int(saved.get("veh_seq", 0))
 	for planted: Dictionary in _planted.values():
 		planted["s"] = NetProtocol.TREE_GROWN

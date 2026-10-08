@@ -124,7 +124,7 @@ func set_ride(item_id: String) -> void:
 		board.queue_free()
 
 
-## 차고 탈것 (v19, 스냅샷마다 온다 { v, m, f }, 빈 사전 = 안 탐): 탈것이 톡 나타나 올라앉고, 내리면 톡 사라진다.
+## 차고 탈것 (v19, 스냅샷마다 온다 { v, m, f }, 빈 사전 = 안 탐): 세워 둔 탈것(ParkedVehicles)에서 옮겨 탄 모습, 내리면 다시 세워 둔 목록이 그린다.
 ## 부품을 바꾸면(같은 탈것) 모양만 다시 빚는다.
 func set_mount(mount: Dictionary) -> void:
 	if rig == null:
@@ -140,7 +140,8 @@ func set_mount(mount: Dictionary) -> void:
 		if _mount != null:
 			var old: VehicleModel = _mount
 			_mount = null
-			old.create_tween().tween_property(old, "scale", Vector3.ONE * 0.05, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN).finished.connect(old.queue_free)
+			# 내린 탈것은 세워 둔 목록(ParkedVehicles)이 그 자리에 그린다.
+			old.queue_free()
 			rig.set_riding("")
 			var rest: float = _body_rest_y if not is_nan(_body_rest_y) else 0.8
 			body.transform = Transform3D(Basis(Vector3.UP, body.rotation.y), Vector3(0.0, rest, 0.0))
@@ -155,8 +156,6 @@ func set_mount(mount: Dictionary) -> void:
 	_mount_info = info
 	_mount.build(info.id, mount.get("f", {}) as Dictionary)
 	if fresh:
-		_mount.scale = Vector3.ONE * 0.05
-		_mount.create_tween().tween_property(_mount, "scale", Vector3.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		_mount_speed = 0.0
 		_mount_yaw = body.rotation.y
 	rig.set_riding(info.kind)

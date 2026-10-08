@@ -132,7 +132,7 @@ export function createServer(overrides = {}) {
   };
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
-  const garage = createGarage({ data, send, sendProfile, rooms });
+  const garage = createGarage({ data, send, sendProfile, rooms, now, random, etaMs: cfg.vehicleEtaMs });
   const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
   const shopLevels = data.shop.levels;
@@ -502,6 +502,8 @@ export function createServer(overrides = {}) {
       chats: messenger.wire(room, player.profile),
       couriers: delivery.wire(room),
       deliv: delivery.mine(room, player.uid),
+      // v19.1: 세워 둔 · 오는 중인 차고 탈것 (방 전체).
+      parked: garage.parkedWire(room),
       // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
       dev: cfg.devTools,
     });
@@ -826,6 +828,7 @@ export function createServer(overrides = {}) {
   function moveThroughDoor(ctx, inside) {
     const { player, room } = ctx;
     const spot = inside ? data.shop.inside_spawn : data.shop.outside_spawn;
+    garage.dismount(player, room);
     player.x = spot.x;
     player.z = spot.z;
     player.y = 0.1;
@@ -833,7 +836,6 @@ export function createServer(overrides = {}) {
     player.vz = 0;
     player.lastMoveAt = now();
     player.doorAt = now();
-    garage.dismount(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.dirty = true;
@@ -1167,7 +1169,7 @@ export function createServer(overrides = {}) {
     if (!info || !info.ride || !player.profile.slots.some((s) => s && s.id === id)) return;
     if (player.ride === id) return;
     player.ride = id;
-    player.mount = null; // v19: 차고 탈것에서는 내린다
+    garage.dismount(player, room); // v19: 차고 탈것에서는 내려 세워 둔다
     room.dirty = true;
   }
 
@@ -1331,6 +1333,8 @@ export function createServer(overrides = {}) {
   }
   function teleport(ctx, x, z) {
     const { player, room } = ctx;
+    // 타던 탈것은 떠나기 전 자리에 세워 둔다.
+    garage.dismount(player, room);
     player.x = x;
     player.z = z;
     player.y = 0.1;
@@ -1338,7 +1342,6 @@ export function createServer(overrides = {}) {
     player.vz = 0;
     player.lastMoveAt = now();
     player.doorAt = now();
-    garage.dismount(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.dirty = true;
@@ -1811,6 +1814,7 @@ export function createServer(overrides = {}) {
       case 'veh_unfit':
       case 'veh_sell':
       case 'veh_ride':
+      case 'veh_call':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       default:
         return handleTalk(ctx, msg, fail);
@@ -1988,6 +1992,7 @@ export function createServer(overrides = {}) {
       case 'veh_unfit':
       case 'veh_sell':
       case 'veh_ride':
+      case 'veh_call':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');

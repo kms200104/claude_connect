@@ -137,6 +137,7 @@ func _run() -> void:
 	await _clams()
 	await _terrain()
 	await _ride()
+	await _garage()
 	await _villager_acts()
 
 
@@ -482,6 +483,50 @@ func _ride() -> void:
 		_check(await _wait_until(func() -> bool:
 			var b: Node = friend.rig.get_node_or_null("Kickboard")
 			return (b == null or b.is_queued_for_deletion()) and friend.rig.riding_kind() == "", 3.0), "b: 친구가 내려서 접어 넣음")
+
+
+# ---- 차고 탈것 (v19.1): a 가 자전거를 부르면 b 화면에도 주민이 타고 와서 세우고, a 가 타고 달리다 세우면 그 자리에 남는다 ----
+
+func _garage() -> void:
+	await _teleport(Vector3(-44.0 if _role == "a" else -40.0, 0.1, 70.0))
+	await _sync("garage_ready")
+	var parked: ParkedVehicles = _village.get_node("ParkedVehicles")
+	var me: Player = _village.get_node("Player")
+	if _role == "a":
+		var rider: GarageRider = _village.get_node("GarageRide")
+		Net.request("veh_buy", {"model": "bike_city"})
+		_check(await _wait_until(func() -> bool: return Net.vehicles.size() == 1, 3.0), "a: 자전거를 샀다")
+		var bike: String = str(Net.vehicles[0].get("id", ""))
+		Net.request("veh_part", {"v": bike, "part": "paint_cherry"})
+		await _wait_until(func() -> bool: return str((Net.vehicle(bike).get("fit", {}) as Dictionary).get("paint", "")) == "paint_cherry", 3.0)
+		_check(rider.call_vehicle(bike), "a: 자전거를 부름")
+		_check(await _wait_until(func() -> bool: return parked.nearest_own(me.global_position, GarageRider.RIDE_RANGE) == bike, 10.0), "a: 주민이 곁에 세워 둠")
+		await _sync("garage_arrived")
+		_check(rider.mount(bike) and await _wait_until(func() -> bool: return rider.is_riding(), 3.0), "a: 올라탐")
+		Input.action_press(&"ui_up")
+		await get_tree().create_timer(2.0).timeout
+		Input.action_release(&"ui_up")
+		await _wait_until(func() -> bool: return rider.drive_state.speed < 0.3, 5.0)
+		await _sync("garage_seen")
+		rider.dismount()
+		_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 3.0), "a: 세움")
+		await _sync("garage_off")
+	else:
+		_check(await _wait_until(func() -> bool: return parked.courier_count() == 1, 6.0), "b: 친구 탈것을 주민이 타고 오는 모습")
+		_check(await _wait_until(func() -> bool: return parked.courier_count() == 0 and parked.count() == 1, 10.0), "b: 친구 곁에 세워짐")
+		await _sync("garage_arrived")
+		var replicator: PlayerReplicator = _village.get_node("PlayerReplicator")
+		var friend: RemotePlayer = replicator.remote_nodes()[0] if not replicator.remote_nodes().is_empty() else null
+		_check(await _wait_until(func() -> bool: return friend != null and friend.rig.riding_kind() == "bike" and friend.rig.get_node_or_null("Vehicle") is VehicleModel, 4.0), "b: 친구가 자전거에 탄 모습")
+		var model: VehicleModel = friend.rig.get_node_or_null("Vehicle") as VehicleModel
+		_check(model != null and str(model.fit.get("paint", "")) == "paint_cherry", "b: 친구가 꾸민 색 그대로 (체리)")
+		_check(await _wait_until(func() -> bool: return parked.count() == 0, 3.0), "b: 탄 자전거는 세워 둔 자리에서 빠짐")
+		var start: Vector3 = friend.global_position
+		_check(await _wait_until(func() -> bool: return friend.global_position.distance_to(start) > 3.0, 4.0), "b: 친구가 자전거로 달려감 (%.1fm)" % friend.global_position.distance_to(start))
+		await _sync("garage_seen")
+		await _sync("garage_off")
+		_check(await _wait_until(func() -> bool: return parked.count() == 1 and friend.rig.riding_kind() == "", 3.0), "b: 친구가 내려서 자전거를 그 자리에 세워 둠")
+		_check(Vector2(friend.global_position.x - start.x, friend.global_position.z - start.z).length() > 3.0, "b: 세운 자리는 달려간 곳")
 
 
 # ---- 주민 몸짓 (v0.16): 길목에 멈춘 주민이 서버가 고른 몸짓을 두 화면에서 똑같이 한다 ----

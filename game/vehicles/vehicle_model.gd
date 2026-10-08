@@ -23,6 +23,8 @@ var fit: Dictionary = {}
 var info: VehicleCatalog.Model = null
 ## 크랭크 위치 (0~1, 0 = 왼발 페달이 맨 위). 리그가 다리 자세를 여기에 맞춘다.
 var pedal_phase: float = 0.0
+## 전조등 켜기 (탈 때 · 배달 올 때). 세워 두면 끈다 (빛 장식 · 미등 렌즈는 그대로 빛난다).
+var lights_on: bool = true
 
 var _frame: MeshInstance3D = null
 var _steer: Node3D = null
@@ -106,7 +108,7 @@ func pedal_rate(speed: float) -> float:
 func _process(_delta: float) -> void:
 	var night: float = SkyController.night_light
 	if _head_light != null:
-		_head_light.visible = night > 0.04
+		_head_light.visible = night > 0.04 and lights_on
 		_head_light.light_energy = _light_energy * night
 	if _under_light != null:
 		_under_light.visible = night > 0.04
@@ -156,8 +158,9 @@ func _glow() -> Dictionary:
 	return p.glow if p != null else {}
 
 
+## 둥근 면을 나누는 칸 수: 탈것은 가까이서 오래 보니 다른 소품보다 1.6배 촘촘히 (삼각형 예산보다 매끈함을 먼저).
 func _seg(n: int) -> int:
-	return maxi(4, roundi(float(n) * PartMesh.detail))
+	return maxi(6, roundi(float(n) * PartMesh.detail * 1.6))
 
 
 ## 크랭크 가운데 (타는 높이에 맞춘 페달 원의 가운데).
@@ -449,7 +452,7 @@ func _wheel_node(node_name: String, at: Vector3, parent: Node3D, front: bool) ->
 	var tire_color: Color = Color.html(str(tire.get("c", "#2A2A2E")))
 	var axis: Basis = Basis(Vector3.BACK, PI * 0.5)
 	var ws: SurfaceTool = ClayMesh.begin()
-	ClayMesh.add_torus(ws, Vector3.ZERO, r - width, width, RUBBER, _seg(18), 5, axis)
+	ClayMesh.add_torus(ws, Vector3.ZERO, r - width, width, RUBBER, _seg(20), 7, axis)
 	if tire_color != Color("#2A2A2E") and tire_color != RUBBER:
 		# 화이트월: 옆면 띠.
 		for side: float in [-1.0, 1.0]:

@@ -29,6 +29,8 @@ extends Node
 @export var home: HomeController
 ## 배달 알바 받을 곳 · 갖다줄 집 (v0.12, 없어도 된다).
 @export var jobs: JobController
+## 세워 둔 차고 탈것 (v19.1, 없어도 된다): 내 것 곁이면 "타기".
+@export var parked: ParkedVehicles
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -45,9 +47,11 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
-const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY]
+const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE]
+## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리 (그보다 멀면 "세우기").
+const SWAP_RANGE: float = 1.4
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
 const PICKUP_RANGE: float = 2.0
@@ -92,7 +96,10 @@ func _process(_delta: float) -> void:
 		target_id = ""
 	match target:
 		Target.RIDE_OFF:
-			action_hud.show_action("내리기")
+			# 차고 탈것은 그 자리에 세워 둔다 (킥보드는 접어 넣는다).
+			action_hud.show_action("세우기" if player.garage_ride != null and player.garage_ride.is_active() else "내리기")
+		Target.VEHICLE:
+			action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
 		Target.TALK:
 			action_hud.show_action("대화")
 		Target.CHOP:
@@ -199,6 +206,13 @@ func _pick_target() -> void:
 		if shop.near_entrance(pos):
 			target = Target.ENTER_SHOP
 			return
+	# 세워 둔 내 탈것 곁 (킥보드를 타는 중에는 아니다).
+	if parked != null and player.garage_ride != null and not (player.vehicle != null and player.vehicle.is_active()):
+		var vehicle_id: String = parked.nearest_own(pos, SWAP_RANGE if player.is_riding() else GarageRider.RIDE_RANGE - safety_margin)
+		if not vehicle_id.is_empty():
+			target = Target.VEHICLE
+			target_id = vehicle_id
+			return
 	if drops != null:
 		var drop_id: String = drops.nearest(pos, GameData.collect_range - safety_margin)
 		if not drop_id.is_empty():
@@ -281,6 +295,9 @@ func _on_action_pressed() -> void:
 			jobs.activate(target_id)
 		Target.RIDE_OFF:
 			player.dismount_ride()
+		Target.VEHICLE:
+			if player.garage_ride != null:
+				player.garage_ride.mount(target_id)
 		Target.MIRROR:
 			if mirror_window != null:
 				var at: Vector3 = Net.placed[target_id].position if Net.placed.has(target_id) else mirrors.spot_position(mirrors.nearest(player.global_position, 4.0))

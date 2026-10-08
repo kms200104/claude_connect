@@ -1,7 +1,7 @@
 class_name MiniMap
 extends Control
 ## 화면 오른쪽 위 작은 지도 (설정 "지도 항상 보기", Prefs.MINIMAP): 내 자리를 가운데 두고 둘레 radius m 를 북쪽 위로 그린다.
-## 바닥 색 지도(ground_map) · 호수 윤곽 · 장소 글자 · 친구 · 주민 · 내 방향 화살표. 누르면 휴대폰 지도 앱.
+## 바닥 색 지도(ground_map) · 호수 윤곽 · 장소 글자 · 세워 둔 내 탈것 · 친구 · 주민 · 내 방향 화살표. 누르면 휴대폰 지도 앱.
 ## 집 안 · 휴대폰을 연 동안 · 마을 밖(접속 전)에는 감춘다. 그리는 값일 뿐 판정과 상관없다.
 
 const GROUND_MAP: String = "res://assets/packs/low/ground_map.png"
@@ -140,6 +140,19 @@ func _draw() -> void:
 		draw_arc(p, 15.0, 0.0, TAU, 20, EDGE, 2.0, true)
 		var w: float = font.get_string_size(place[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
 		draw_string(font, p + Vector2(-w * 0.5, 6.5), place[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, INK)
+	# 세워 둔 내 탈것 (v19.1, 주황 테두리 · 바퀴 둘).
+	for e: Dictionary in Net.parked:
+		if int(e.get("o", 0)) != Net.my_id:
+			continue
+		var vp: Vector2 = _to_mini(Vector2(float(e.get("x", 0.0)), float(e.get("z", 0.0))), me)
+		if not Rect2(Vector2.ZERO, s).grow(-6.0).has_point(vp):
+			continue
+		draw_circle(vp, 12.0, Color.WHITE)
+		draw_arc(vp, 12.0, 0.0, TAU, 18, ME, 2.5, true)
+		draw_arc(vp + Vector2(-4.5, 2.0), 3.5, 0.0, TAU, 10, INK, 1.8, true)
+		draw_arc(vp + Vector2(4.5, 2.0), 3.5, 0.0, TAU, 10, INK, 1.8, true)
+		draw_line(vp + Vector2(-4.5, 2.0), vp + Vector2(0.0, -3.5), INK, 1.8, true)
+		draw_line(vp + Vector2(0.0, -3.5), vp + Vector2(4.5, 2.0), INK, 1.8, true)
 	for npc: NetNpcState in Net.npc_states:
 		draw_circle(_to_mini(Vector2(npc.position.x, npc.position.z), me), 6.0, NPC)
 	var rep: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
