@@ -26,7 +26,7 @@ enum Phase { IDLE, CASTING, WAITING, BITE, REEL, RESULT }
 ## 캐릭터 앞쪽 몇 미터에 찌를 던질지 (수역 안쪽으로 잘라 쓴다).
 @export_range(1.0, 8.0, 0.1, "suffix:m") var cast_distance: float = 2.8
 ## 던지는 동작에서 낚싯대를 놓는 순간 (이때 찌가 날아가기 시작한다).
-@export_range(0.0, 1.0, 0.01, "suffix:s") var release_delay: float = 0.24
+@export_range(0.0, 1.0, 0.01, "suffix:s") var release_delay: float = 0.44
 ## 찌가 날아가는 시간 (물에 닿을 때 퐁당 소리).
 @export_range(0.1, 2.0, 0.05, "suffix:s") var flight_time: float = 0.55
 ## 결과를 보여 주고 다시 움직일 수 있게 되기까지의 시간.

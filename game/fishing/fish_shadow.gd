@@ -6,6 +6,7 @@ extends Node3D
 ## 어떤 물고기인지는 모른다. 그림자 모양은 모두 같고 크기만 다르다.
 ## v13 겨눠 던지기: appear_from — 물 밑에 보이던 그 물고기(FishSchool)가 찌 쪽으로 몸을 돌려 곧장 헤엄쳐 와
 ##   찌 앞에 멈춘다(line). 찌를 바라본 채로 톡·톡 건드렸다 물러나고(dart), 문다(bite). 둘레의 아우라도 그대로 따라온다.
+## 거리는 모두 입(머리 앞 끝) 기준이다: 톡 · 물기 · 버둥거리기 때 몸통 가운데가 아니라 입이 찌에 닿고, 머리는 찌를 향한다.
 
 ## 그림자가 닿았다 (가짜 입질·진짜 입질 모두). 찌 연출·진동을 여기에 맞춘다.
 signal touched(strong: bool)
@@ -62,7 +63,7 @@ func appear_from(center: Vector3, start: Vector3, size_code: String, rarity: Str
 	_size = float(FishSchool.SIZE_SCALE.get(size_code, 1.0))
 	_mesh.scale = Vector3.ONE * _size
 	_set_kind(kind)
-	_hover = 0.28 + 0.12 * _size
+	_hover = _mouth() + 0.22
 	_distance = maxf(d.length(), _hover)
 	_line_speed = LINE_SPEED
 	if approach_ms > 0:
@@ -188,7 +189,7 @@ func _process(delta: float) -> void:
 		Mode.DART:
 			# 0.18초 만에 찌에 닿고 → 0.5초 동안 물러난다.
 			if _mode_time < 0.18:
-				_distance = lerpf(_distance, 0.12 * _size, 1.0 - exp(-delta * 22.0))
+				_distance = lerpf(_distance, _mouth() + 0.01, 1.0 - exp(-delta * 22.0))
 			else:
 				if _mode_time - delta < 0.18:
 					touched.emit(false)
@@ -199,13 +200,15 @@ func _process(delta: float) -> void:
 					_time = approach_time
 			_fade_to(alpha, delta)
 		Mode.BITE:
-			_distance = lerpf(_distance, 0.02, 1.0 - exp(-delta * 26.0))
+			# 입으로 찌를 문다 (찌가 입 안으로 살짝).
+			_distance = lerpf(_distance, _mouth() - 0.03, 1.0 - exp(-delta * 26.0))
 			if _mode_time >= 0.12 and _mode_time - delta < 0.12:
 				touched.emit(true)
 			# 물고 들어가며 그림자가 짙어졌다가 조금 흐려진다 (깊이 들어감).
 			_fade_to(alpha * (1.25 if _mode_time < 0.3 else 0.8), delta)
 		Mode.STRUGGLE:
-			_distance = 0.25 + 0.15 * absf(sin(_time * 7.0))
+			# 입은 찌에 걸린 채로 몸을 이리저리 틀며 버틴다.
+			_distance = _mouth() + 0.04 + 0.1 * absf(sin(_time * 7.0))
 			_angle += delta * _swim_dir * (5.0 + 3.0 * sin(_time * 3.1))
 			if randf() < delta * 1.5:
 				_swim_dir = -_swim_dir
@@ -221,7 +224,7 @@ func _process(delta: float) -> void:
 
 ## 곧장 다가오기: 찌를 바라본 채로 다가와 멈추고, 톡(앞으로 쏙 → 뒤로 살짝), 문다(확 달려든다).
 func _process_line(delta: float, alpha: float) -> void:
-	var touch: float = 0.06 * _size
+	var touch: float = _mouth() + 0.01
 	match mode:
 		Mode.APPROACH:
 			_distance = move_toward(_distance, _hover, _line_speed * delta)
@@ -237,7 +240,7 @@ func _process_line(delta: float, alpha: float) -> void:
 					_set_mode(Mode.APPROACH)
 			_fade_to(alpha, delta)
 		Mode.BITE:
-			_distance = lerpf(_distance, 0.0, 1.0 - exp(-delta * 26.0))
+			_distance = lerpf(_distance, _mouth() - 0.03, 1.0 - exp(-delta * 26.0))
 			if _mode_time >= 0.12 and _mode_time - delta < 0.12:
 				touched.emit(true)
 			_fade_to(alpha * (1.25 if _mode_time < 0.3 else 0.8), delta)
@@ -253,6 +256,13 @@ func _process_line(delta: float, alpha: float) -> void:
 	_beat(delta, speed)
 	if _aura != null:
 		_aura.scale = Vector3.ONE * (1.0 + sin(_time * 3.0) * 0.1)
+
+
+## 몸 가운데(이 노드 자리)에서 입(머리 앞 끝, -Z)까지 거리 — 지금 모양(물고기 · 상어)과 크기대로.
+func _mouth() -> float:
+	if _mesh == null or _mesh.mesh == null:
+		return 0.36 * _size
+	return maxf(0.0, -_mesh.mesh.get_aabb().position.z) * _mesh.scale.z
 
 
 func _fade_to(a: float, delta: float) -> void:
@@ -276,7 +286,12 @@ func _place(delta: float) -> void:
 	var vel: Vector3 = pos - _prev
 	_prev = pos
 	# 헤엄치는 쪽을 바라보고, 꼬리를 흔든다 (빨리 움직일수록 크게).
-	if delta > 0.0 and vel.length() > 0.0005:
+	if mode == Mode.DART or mode == Mode.BITE or mode == Mode.STRUGGLE:
+		# 찌를 건드리고 · 물고 · 걸려 버티는 동안은 머리(입)가 찌를 향한다.
+		var to_center: Vector3 = _center - pos
+		if to_center.length() > 0.001:
+			rotation.y = lerp_angle(rotation.y, atan2(-to_center.x, -to_center.z), 1.0 - exp(-delta * 14.0))
+	elif delta > 0.0 and vel.length() > 0.0005:
 		var target_yaw: float = atan2(-vel.x, -vel.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-delta * 10.0))
 	var speed: float = vel.length() / maxf(delta, 0.001)

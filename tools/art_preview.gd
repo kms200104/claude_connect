@@ -10,6 +10,7 @@ extends Node3D
 ##           grips (손에 드는 아이템 × 대기·걷기·사용 자세를 옆에서 — 쥐는 방향 확인용, --side=front 면 앞에서)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 ##           vehicles (차고 탈것 v19: --ids=모델+부품+…, --night · --empty)
+##           frames (애니메이션 하나를 시간순 8칸: --ids=애니메이션,도구 · --side=front)
 ##           carry (들고 다니기: 낚싯대 · 도끼 · 삽 · 뜰채 × 서 있기 · 걷기 · 달리기, --side=front)
 
 var _what: String = "trees"
@@ -185,6 +186,32 @@ func _ready() -> void:
 				_camera(Vector3(0.0, mid_y, -40.0), Vector3(0.0, mid_y, 0.0), fov)
 			else:
 				_camera(Vector3(40.0, mid_y, 0.0), Vector3(0.0, mid_y, 0.0), fov)
+		"frames":
+			# 애니메이션 한 개를 시간순으로 (--ids=애니메이션,도구, 기본 cast,rod). 옆에서 보고, --side=front 면 앞에서.
+			var anim_name: String = _ids[0] if _ids.size() > 0 else "cast"
+			var item: String = _ids[1] if _ids.size() > 1 else "rod"
+			var front: bool = "--side=front" in OS.get_cmdline_user_args()
+			var probe: AnimationPlayer = (load("res://game/player/character_rig.tscn").instantiate() as CharacterRig).get_node("AnimationPlayer")
+			var length: float = probe.get_animation(anim_name).length if probe.has_animation(anim_name) else 1.0
+			probe.get_parent().free()
+			var count: int = 8
+			for i: int in count:
+				var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+				add_child(rig)
+				rig.position = Vector3((float(count - 1) * 0.5 - float(i)) * 2.2, 0.8, 0.0)
+				rig.rotation.y = 0.0 if front else -PI * 0.5
+				rig.set_look(CharacterLook.for_player(1))
+				rig.set_held(item)
+				rig.tree.active = false
+				var player: AnimationPlayer = rig.get_node("AnimationPlayer")
+				player.play(anim_name)
+				player.seek(length * float(i) / float(count - 1), true)
+				player.pause()
+				rig.set_process(false)
+			_camera(Vector3(0.0, 1.15, -30.0), Vector3(0.0, 1.15, 0.0), 24.0)
+			var ortho: Camera3D = get_viewport().get_camera_3d()
+			ortho.projection = Camera3D.PROJECTION_ORTHOGONAL
+			ortho.size = 4.4
 		"carry":
 			# 들고 다니기 (v0.16.1): 줄 = 낚싯대 · 도끼 · 삽 · 뜰채, 칸 = 서 있기 · 걷기 · 달리기. 애니메이션 트리를 돌려 실제 섞인 자세로 (--side=front 면 앞에서).
 			var items: PackedStringArray = ["rod", "axe", "shovel", "fishing_net"] if _ids.is_empty() else _ids

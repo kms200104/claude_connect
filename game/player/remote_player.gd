@@ -41,7 +41,7 @@ var held_item: String = "rod"
 ## v12: 상대 낚시 장면 (던진 찌가 날아가 떨어지고, 톡·쑥 입질, 끌어올리기, 낚으면 들어 올려 자랑). FishingController 와 같은 값.
 const BOBBER_SCENE: PackedScene = preload("res://game/fishing/bobber.tscn")
 const CAST_DISTANCE: float = 2.8
-const CAST_RELEASE_S: float = 0.24
+const CAST_RELEASE_S: float = 0.44
 const CAST_FLIGHT_S: float = 0.55
 const SHOW_OFF_S: float = 2.6
 
