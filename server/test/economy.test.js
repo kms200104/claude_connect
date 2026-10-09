@@ -178,6 +178,28 @@ describe('식당 계산', () => {
     assert.ok(minCookMs(r, steps) > 2000);
   });
 
+  it('요리 장면 (v20): 동작마다 scene, 새 동작도 기존 판정 종류로 매긴다', () => {
+    const steps = data.cookSteps;
+    const scenes = ['chop', 'season', 'skewer', 'wok', 'grill', 'flip', 'boil', 'simmer', 'fry', 'plate', 'mix', 'knead', 'steam'];
+    for (const [id, s] of Object.entries(steps)) {
+      assert.ok(scenes.includes(s.scene), `${id}: scene ${s.scene}`);
+      assert.ok(['beats', 'timing', 'grill', 'steam', 'mash'].includes(s.kind), `${id}: kind ${s.kind}`);
+    }
+    assert.equal(stepQuality(steps.season, [420, 840, 1260, 1680]), 1);
+    assert.equal(stepQuality(steps.stir_fry, [440, 880, 1320, 1760, 2200]), 1);
+    assert.equal(stepQuality(steps.deep_fry, [2600]), 1);
+    assert.ok(stepQuality(steps.deep_fry, [4000]) < 0.4, '너무 오래 튀김');
+    assert.equal(stepQuality(steps.knead, Array.from({ length: 12 }, (_, i) => i * 150)), 1);
+    // 고기 요리: 상점 재료로 만든다.
+    const avail = { pork_belly: 1, garlic: 1 };
+    assert.deepEqual(pickIngredients(recipe('samgyeopsal'), avail, data), { pork_belly: 1, garlic: 1 });
+    for (const id of ['samgyeopsal', 'chicken_skewer', 'potato_jeon', 'bulgogi', 'jeyuk', 'dumplings', 'fried_chicken', 'beef_steak', 'galbijjim']) {
+      const r = recipe(id);
+      const cost = r.ingredients.reduce((a, i) => a + (data.items.get(i.item)?.buy ?? 0) * i.n, 0);
+      assert.ok(r.price > cost * 1.5, `${id}: 값 ${r.price} > 재료값 ${cost} × 1.5`);
+    }
+  });
+
   it('F 손님은 늦어도 너그럽고, T 손님은 솜씨를 깐깐하게 본다', () => {
     const rules = data.restaurant;
     const late = { quality: 1, taste: 0.7, timeLeft: 0 };

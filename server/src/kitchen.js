@@ -73,6 +73,7 @@ export function createKitchen(deps) {
             cooking: o.steps.some((s) => s.by),
             regular: o.regular,
             steps: o.steps.map((s) => [s.by, s.taps ? 1 : 0]),
+            used: o.used,
           }))
         : [],
     };

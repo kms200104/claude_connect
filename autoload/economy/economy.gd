@@ -90,7 +90,7 @@ var job_due_ms: float = 0.0
 
 ## 식당: open, owner, rating, tier, served, revenue, regulars{손님: 요리}, capacity, shift{served, revenue}
 var rest: Dictionary = {"open": false, "owner": 0, "rating": 2.0, "tier": 1, "served": 0, "revenue": 0, "regulars": {}, "capacity": 0}
-## 지금 앉아 있는 손님 주문 (id → { id, customer, dish, seat, deadline_ms, patience, cooking, regular, steps: [[맡은 자리, 끝났으면 1]] }).
+## 지금 앉아 있는 손님 주문 (id → { id, customer, dish, seat, deadline_ms, patience, cooking, regular, steps: [[맡은 자리, 끝났으면 1]], used: {떼어 둔 재료: 개수} }).
 var orders: Dictionary[String, Dictionary] = {}
 
 ## 동사무소 (civic 메시지): resident, movedIn, age, married, partner, income_year, homes, card, approvals, programs[{id, ok, reasons, terms, got}]
@@ -502,6 +502,7 @@ func _apply_rest(data: Variant) -> void:
 		o["cooking"] = bool(entry.get("cooking", false))
 		o["regular"] = bool(entry.get("regular", false))
 		o["steps"] = entry.get("steps", [])
+		o["used"] = entry.get("used", {}) if entry.get("used") is Dictionary else {}
 		orders[id] = o
 	for id: String in orders.keys():
 		if not seen.has(id):

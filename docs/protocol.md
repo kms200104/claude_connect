@@ -116,7 +116,7 @@ v16 → v17: 배달 연속 팁 — `job` 에 `streak`(지금 연속 횟수), `jo
 | `bank` | `base score grade rate_credit rate_mortgage credit_limit ltv dsr income_year income_week week loans[]` | 은행 창구 정보 (v8) |
 | `loan_result` | `rid kind(take/repay) loan? id? paid? left? sol` | 대출·상환 결과 (v8) |
 | `week` | `week rent interest capitalized missed base index sol` | 한 주 정산 (v8): 월세 수입, 낸 이자, 못 내서 원금에 붙은 이자, 연체 여부, 새 기준금리·집값 지수 |
-| `rest` | `open owner rating tier served revenue regulars{손님: 요리} capacity shift{served, revenue} orders[]` | 식당 상태 (v8). `orders[]` = `{id, customer, dish, seat, left(ms), patience(ms), cooking, regular}`, `capacity` = 남은 재료로 더 만들 수 있는 그릇 수(예상) |
+| `rest` | `open owner rating tier served revenue regulars{손님: 요리} capacity shift{served, revenue} orders[]` | 식당 상태 (v8). `orders[]` = `{id, customer, dish, seat, left(ms), patience(ms), cooking, regular, steps, used}` (`used` = 주문 때 떼어 둔 재료 `{id: 개수}` — 주방 장면이 그 물고기를 그린다), `capacity` = 남은 재료로 더 만들 수 있는 그릇 수(예상) |
 | `rest_opened` / `rest_closed` | `rid` / `reason` | 문 열림 / 닫힘 (`closed` `owner_left` `idle` `no_ingredients`) |
 | `rest_order` | `order customer dish seat regular` | 손님이 앉아 주문 (v8) |
 | `rest_result` | `rid order stars pay share team quality taste sol` | 함께 만든 요리의 판정 (v8, v9 에서 만든 사람 모두에게). `share` = 내 몫(팀이면 값 +10% 를 나눔), `rid` 는 마지막 동작을 낸 사람에게만 |
