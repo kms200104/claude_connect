@@ -126,6 +126,9 @@ var _ride_kind: String = ""
 var _ride_target: float = 0.0
 var _ride_value: float = 0.0
 var _pedal_rate: float = 0.0
+## 들고 다니기 (v0.16.1): 낚싯대는 어깨에 메고(rod), 도끼 · 삽 · 뜰채는 두 손으로 옆으로 쥔다(axe). 빈 문자열 = 맨손.
+var _carry_kind: String = ""
+var _carry_value: float = 0.0
 ## 페달 위상 (0~1, 0 = 왼발이 맨 위). ride_bike 를 돌리는 빠르기와 같이 세어 탈것 크랭크가 발과 같이 돈다.
 var _pedal_phase: float = 0.0
 var _tool_id: String = ""
@@ -603,8 +606,15 @@ func _set_swing(tool_id: String) -> void:
 			swing.mesh = CharacterModel.shovel()
 		_:
 			swing.mesh = null
+	swing.basis = _swing_basis(tool_id, false)
+
+
+## 휘두르는 도구의 쥐는 방향 (carry = 들고 다닐 때: 자루 축 돌림만 남긴다).
+static func _swing_basis(tool_id: String, carry: bool) -> Basis:
 	var grip: Vector3 = SWING_GRIPS.get(tool_id, Vector3.ZERO)
-	swing.basis = Basis(Vector3.BACK, deg_to_rad(grip.z)) * Basis(Vector3.RIGHT, deg_to_rad(grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
+	if carry:
+		return Basis(Vector3.UP, deg_to_rad(grip.y))
+	return Basis(Vector3.BACK, deg_to_rad(grip.z)) * Basis(Vector3.RIGHT, deg_to_rad(grip.x)) * Basis(Vector3.UP, deg_to_rad(grip.y))
 
 
 ## 잡은 물건을 두 손으로 앞으로 쭉 내밀어 들고 자랑한다. mesh 가 null 이면 내려놓는다. 드는 동안 도구는 숨긴다.
@@ -684,6 +694,7 @@ func _process(delta: float) -> void:
 	_move_value = lerpf(_move_value, _move_target, 1.0 - exp(-speed_smoothing * delta))
 	_fishing_value = lerpf(_fishing_value, _fishing_target, 1.0 - exp(-fishing_blend_speed * delta))
 	tree.set("parameters/Locomotion/blend_position", _move_value)
+	_update_carry(delta)
 	tree.set("parameters/FishBlend/blend_amount", _fishing_value)
 	_brake_value = move_toward(_brake_value, _brake_target, brake_blend_speed * delta)
 	tree.set("parameters/BrakeBlend/blend_amount", _brake_value)
@@ -716,6 +727,34 @@ func _process(delta: float) -> void:
 		rotation.x = lerpf(rotation.x, _tug, 1.0 - exp(-30.0 * delta))
 		if _tug == 0.0 and absf(rotation.x) < 0.002:
 			rotation.x = 0.0
+
+
+## 들고 다니는 자세: 보이는 도구가 낚싯대면 어깨에 메고, 도끼 자리(도끼 · 삽 · 뜰채)면 두 손으로 옆으로 쥔다.
+## 걷기 · 달리기 위에 팔 · 팔꿈치 · 도구 트랙만 덮는다 (CarryBlend 필터, gen_character_rig.py) — 빠르기는 걸음과 같이 맞춘다.
+func _update_carry(delta: float) -> void:
+	var kind: String = carry_kind()
+	if not kind.is_empty() and kind != _carry_kind:
+		tree.set("parameters/CarrySwitch/transition_request", kind)
+	if not kind.is_empty():
+		_carry_kind = kind
+	_carry_value = move_toward(_carry_value, 1.0 if not kind.is_empty() else 0.0, 6.0 * delta)
+	tree.set("parameters/CarryBlend/blend_amount", _carry_value)
+	tree.set("parameters/CarryRod/blend_position", _move_value)
+	tree.set("parameters/CarryAxe/blend_position", _move_value)
+	# 삽 · 뜰채: 쓰는 동작(뜨기 · 삽질)의 기울기는 들고 다닐 때 빼서 도끼 · 낚싯대와 같은 방향으로.
+	var swing: MeshInstance3D = axe.get_node_or_null("Swing") if axe != null else null
+	if swing != null and swing.mesh != null:
+		var using: bool = is_chopping() or bool(tree.get("parameters/DigShot/active"))
+		swing.basis = _swing_basis(held_item, _carry_value > 0.5 and not using)
+
+
+## 지금 들고 다니는 자세 ("rod" | "axe" | "", 꺼내고 넣는 중처럼 작아진 도구는 맨손). 뜰채는 낚싯대처럼 어깨에 멘다.
+func carry_kind() -> String:
+	if rod != null and rod.visible and rod.scale.x > 0.5:
+		return "rod"
+	if axe != null and axe.visible and axe.scale.x > 0.5:
+		return "rod" if held_item == "fishing_net" else "axe"
+	return ""
 
 
 ## 허리 위 (없으면 Visual — 옛 리그).

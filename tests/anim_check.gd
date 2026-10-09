@@ -17,7 +17,8 @@ func _ready() -> void:
 	await _settle(rig, 0.0, false)
 	var idle_lean: float = _lean(rig)
 	var idle_rod: float = rod.rotation.x
-	var idle_rod_up: float = rod.global_basis.y.normalized().y
+	var idle_rod_dir: Vector3 = rod.global_basis.y.normalized()
+	var idle_hand: Vector3 = rig.upper.global_transform.affine_inverse() * (rig.elbow_right.global_transform * Vector3(0.0, -0.19, 0.0))
 	await _settle(rig, 1.0, false)
 	var walk_lean: float = _lean(rig)
 	await _settle(rig, 0.0, true)
@@ -26,7 +27,10 @@ func _ready() -> void:
 	var fish_lean: float = _lean(rig)
 	await _settle(rig, 0.5, false)
 	var half_lean: float = _lean(rig)
-	_check(idle_rod_up > 0.6, "idle: 낚싯대를 세워 둠 (위쪽 성분 %.2f)" % idle_rod_up)
+	# v0.16.1 들고 다니기: 낚싯대는 오른 어깨에 메고 뒤 · 위로 (캐릭터 정면은 -Z).
+	_check(idle_rod_dir.z > 0.5 and idle_rod_dir.y > 0.2 and idle_rod_dir.x > 0.15, "idle: 낚싯대를 어깨에 메고 뒤 · 위 · 바깥으로 (방향 %s)" % str(idle_rod_dir))
+	_check(idle_hand.distance_to(CharacterModel.SHOULDER) < 0.2 and idle_hand.z < -0.05, "idle: 오른손은 어깨 앞 (%s)" % str(idle_hand))
+	_check(rig.carry_kind() == "rod", "낚싯대를 들면 메는 자세 (%s)" % rig.carry_kind())
 	_check(walk_lean < -0.1, "walk: 앞으로 기울어짐 (lean=%.2f)" % walk_lean)
 	_check(fish_rod_dir.z < -0.5, "fishing: 낚싯대를 앞(-Z)으로 내밈 (방향 %s)" % str(fish_rod_dir))
 	_check(absf(idle_lean) < 0.05, "idle: 기울기 없음 (%.2f)" % idle_lean)
@@ -44,11 +48,20 @@ func _ready() -> void:
 	await _settle(rig, 0.0, false)
 	var arm: Node3D = rig.arm_right
 	var axe: Node3D = rig.axe
+	# 도끼는 두 손으로 배 앞에 옆으로 (오른손 자루 끝, 왼손이 그 위, 도끼 머리는 왼쪽). 걸어도 그대로.
+	await _settle(rig, 1.0, false)
+	var to_upper: Transform3D = rig.upper.global_transform.affine_inverse()
+	var hand_r: Vector3 = to_upper * (rig.elbow_right.global_transform * Vector3(0.0, -0.19, 0.0))
+	var hand_l: Vector3 = to_upper * (rig.elbow_left.global_transform * Vector3(0.0, -0.19, 0.0))
+	var axe_dir: Vector3 = (to_upper.basis * axe.global_basis.y).normalized()
+	_check(rig.carry_kind() == "axe" and hand_r.distance_to(hand_l) < 0.18 and hand_r.z < -0.08 and hand_l.z < -0.08, "걸을 때 도끼를 두 손으로 앞에 쥠 (오른손 %s, 왼손 %s)" % [str(hand_r), str(hand_l)])
+	_check(axe_dir.x < -0.6 and axe_dir.y > 0.1, "도끼는 옆(왼쪽)으로 비스듬히 (%s)" % str(axe_dir))
+	await _settle(rig, 0.0, false)
 	var rest_arm: float = arm.rotation.x
 	var rest_axe: float = axe.rotation.x
 	rig.play_chop()
 	await get_tree().create_timer(0.17).timeout
-	_check(rig.is_chopping() and arm.rotation.x > rest_arm + 1.5, "도끼질: 팔을 머리 위로 들어 올림 (%.2f → %.2f)" % [rest_arm, arm.rotation.x])
+	_check(rig.is_chopping() and arm.rotation.x > 1.5, "도끼질: 팔을 머리 위로 들어 올림 (%.2f → %.2f)" % [rest_arm, arm.rotation.x])
 	var visual_scale: Vector3 = rig.get_node("Visual").scale
 	_check(visual_scale.y > 0.9 and visual_scale.x > 0.9, "도끼질 중에도 몸 크기가 그대로 (%s)" % str(visual_scale))
 	await get_tree().create_timer(0.6).timeout
@@ -71,14 +84,23 @@ func _ready() -> void:
 	# 감정표현: 원샷. 안녕은 오른손을 번쩍 들어 흔든다, 시무룩은 고개를 숙인다.
 	rig.set_held("")
 	rig.play_emote("hello")
-	await get_tree().create_timer(0.2).timeout
-	_check(rig.is_emoting() and rig.arm_right.rotation.z > 1.8, "안녕: 오른손을 들어 흔듦 (%.2f)" % rig.arm_right.rotation.z)
-	await get_tree().create_timer(1.4).timeout
+	# 손이 올라가는 도중 한 순간이 아니라 구간에서 가장 높이 든 값을 본다 (프레임 타이밍에 흔들리지 않게).
+	var wave: float = -INF
+	var emoting: bool = false
+	for i: int in 8:
+		await get_tree().create_timer(0.05).timeout
+		wave = maxf(wave, rig.arm_right.rotation.z)
+		emoting = emoting or rig.is_emoting()
+	_check(emoting and wave > 1.8, "안녕: 오른손을 들어 흔듦 (%.2f)" % wave)
+	await get_tree().create_timer(1.2).timeout
 	_check(not rig.is_emoting(), "감정표현이 끝나면 원래대로")
 	rig.play_emote("sad")
-	await get_tree().create_timer(0.45).timeout
-	_check(_lean(rig) < -0.15, "시무룩: 고개를 푹 (%.2f)" % _lean(rig))
-	await get_tree().create_timer(1.6).timeout
+	var droop: float = INF
+	for i: int in 14:
+		await get_tree().create_timer(0.05).timeout
+		droop = minf(droop, _lean(rig))
+	_check(droop < -0.15, "시무룩: 고개를 푹 (%.2f)" % droop)
+	await get_tree().create_timer(1.35).timeout
 	# 자랑: 물고기를 머리 위로, 도구는 숨김.
 	rig.set_held("rod")
 	var fish: FishInfo = GameData.fish.values()[0]

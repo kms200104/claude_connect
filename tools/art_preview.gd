@@ -10,6 +10,7 @@ extends Node3D
 ##           grips (손에 드는 아이템 × 대기·걷기·사용 자세를 옆에서 — 쥐는 방향 확인용, --side=front 면 앞에서)
 ##           expressions (감정표현 표정: 웃음 · 깜짝 · 화남 · 슬픔 · 고민 · 졸림 — 눈썹·눈물·땀방울)
 ##           vehicles (차고 탈것 v19: --ids=모델+부품+…, --night · --empty)
+##           carry (들고 다니기: 낚싯대 · 도끼 · 삽 · 뜰채 × 서 있기 · 걷기 · 달리기, --side=front)
 
 var _what: String = "trees"
 var _out: String = "user://preview.png"
@@ -184,6 +185,21 @@ func _ready() -> void:
 				_camera(Vector3(0.0, mid_y, -40.0), Vector3(0.0, mid_y, 0.0), fov)
 			else:
 				_camera(Vector3(40.0, mid_y, 0.0), Vector3(0.0, mid_y, 0.0), fov)
+		"carry":
+			# 들고 다니기 (v0.16.1): 줄 = 낚싯대 · 도끼 · 삽 · 뜰채, 칸 = 서 있기 · 걷기 · 달리기. 애니메이션 트리를 돌려 실제 섞인 자세로 (--side=front 면 앞에서).
+			var items: PackedStringArray = ["rod", "axe", "shovel", "fishing_net"] if _ids.is_empty() else _ids
+			var front: bool = "--side=front" in OS.get_cmdline_user_args()
+			for r: int in items.size():
+				for c: int in 3:
+					var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
+					add_child(rig)
+					rig.position = Vector3((float(c) - 1.0) * 1.5, 0.8 + float(items.size() - 1 - r) * 1.9, 0.0)
+					rig.rotation.y = 0.0 if front else -PI * 0.5 - 0.35
+					rig.set_look(CharacterLook.for_player(1 + r % 2))
+					rig.set_held(items[r])
+					rig.set_move_speed(float(c))
+			var mid: float = 0.9 + float(items.size() - 1) * 0.95
+			_camera(Vector3(0.0, mid + 0.6, -40.0), Vector3(0.0, mid, 0.0), 3.0 * float(items.size()) + 2.0)
 		"expressions":
 			var emotes: PackedStringArray = ["happy", "surprise", "angry", "sad", "think", "sleepy", "love"]
 			var hairs: PackedStringArray = ["short", "bob", "spiky", "long", "buzz", "pigtails", "curly"]

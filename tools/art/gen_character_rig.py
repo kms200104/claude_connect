@@ -75,7 +75,9 @@ anims['fishing']=dict(length=2.0,loop=True,times=T,keys=[
 # - 찌그러짐·늘어남(squash & stretch): 부피를 지키며(가로 ↔ 세로) 몸을 누르고 늘린다.
 # 참고: Disney 12 principles (Thomas & Johnston), Mixamo · Rokoko 인사·박수 모캡의 타이밍.
 def pose(vp=(0,0,0), vr=(0,0,0), vs=(1,1,1), al=(0,0,AL), ar=(0,0,AR), ll=(0,0,0), lr=(0,0,0), rod=ROD, axe=AXE, kl=0.0, kr=0.0, el=0.0, er=0.0):
-    return [V(*vp), V(*vr), V(*vs), V(*al), V(*ar), V(*ll), V(*lr), V(rod,0,0), V(axe,0,0), V(kl,0,0), V(kr,0,0), V(el,0,0), V(er,0,0)]
+    # rod · axe 는 x 회전만(숫자) 또는 (x, y, z) 회전 (들고 다니기 자세처럼 비스듬히 쥘 때).
+    tool = lambda r: V(*r) if isinstance(r, tuple) else V(r,0,0)
+    return [V(*vp), V(*vr), V(*vs), V(*al), V(*ar), V(*ll), V(*lr), tool(rod), tool(axe), V(kl,0,0), V(kr,0,0), V(el,0,0), V(er,0,0)]
 REST = pose()
 def sq(k):
     """k>0 늘어남, k<0 찌그러짐. 부피를 대략 지킨다."""
@@ -399,6 +401,106 @@ SG = lambda rz, a, b: pose((0,-0.3,0),(0.16,0,rz),(1,1,1),(-0.6,0,-0.35),(-0.6,0
 anim('act_sit', 4.0, [(0, SG(0,0,0)), (0.8, SG(0.03,0.12,0.0)), (1.6, SG(0,0,0)), (2.4, SG(-0.03,0.0,0.12)), (3.2, SG(0,0.05,0.05)), (4.0, SG(0,0,0))], loop=True)
 ACTS=['act_stretch','act_warmup','act_sun','act_sit']
 
+# ---- 들고 다니기 (v0.16.1): 손에 든 도구마다 대기 · 걷기 · 달리기 팔 자세 (모동숲처럼) ----
+# carry_rod_*: 낚싯대(· 뜰채)를 오른 어깨에 멘다 — 오른손은 어깨 앞, 낚싯대는 어깨 위로 뒤쪽 · 바깥으로 비스듬히 (큰 머리를 비켜 간다). 왼팔은 걸음대로 흔든다.
+# carry_axe_*: 도끼(· 삽)를 두 손으로 배 앞에 옆으로 쥔다 — 오른손이 자루 끝, 왼손이 그 위, 도끼 머리는 왼쪽 위.
+# 팔 각도는 손이 닿을 자리에서 두 마디 역기구학(IK)으로 구한다 (어깨 → 팔꿈치 0.11 → 손 0.19, Godot 오일러 YXZ).
+# 트리에서는 CarryBlend(필터: 팔 · 팔꿈치 · 도구 트랙만)로 걷기 · 달리기 위에 덮으니, 다리 · 몸통은 원래 걸음 그대로다.
+def _rx(a):
+    c,s=math.cos(a),math.sin(a); return [[1,0,0],[0,c,-s],[0,s,c]]
+def _ry(a):
+    c,s=math.cos(a),math.sin(a); return [[c,0,s],[0,1,0],[-s,0,c]]
+def _rz(a):
+    c,s=math.cos(a),math.sin(a); return [[c,-s,0],[s,c,0],[0,0,1]]
+def _mm(A,B): return [[sum(A[i][k]*B[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+def _mv(A,v): return [sum(A[i][k]*v[k] for k in range(3)) for i in range(3)]
+def _tr(A): return [[A[j][i] for j in range(3)] for i in range(3)]
+def _euler(x,y,z): return _mm(_ry(y), _mm(_rx(x), _rz(z)))
+def _norm(v):
+    l=math.sqrt(sum(c*c for c in v)); return [c/l for c in v]
+def _cross(a,b): return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
+SHOULDER_L=(-0.23,-0.05,0.0); SHOULDER_R=(0.23,-0.05,0.0)
+FOREARM=0.3+ELBOW_Y  # 팔꿈치 → 손 (0.19)
+def _hand(shoulder, arm, el):
+    b=_euler(*arm)
+    elbow=[shoulder[i]+_mv(b,[0,ELBOW_Y,0])[i] for i in range(3)]
+    hb=_mm(b,_rx(el))
+    return [elbow[i]+_mv(hb,[0,-FOREARM,0])[i] for i in range(3)], hb
+def arm_ik(shoulder, target, side):
+    """손이 target 에 닿는 팔 (x, y 비틀기, z) · 팔꿈치 x. 팔꿈치는 앞으로만 굽고(0~2.7), 비틀기 · 벌리기는 적을수록 좋다."""
+    def err(ax,ay,az,el):
+        h,_=_hand(shoulder,(ax,ay,az),el)
+        return sum((h[i]-target[i])**2 for i in range(3)) + 0.0002*(az*az+ay*ay) + 0.0001*(el*el)
+    best=None
+    for ax in [i*0.2-1.0 for i in range(19)]:
+        for ay in [i*0.3-1.2 for i in range(9)]:
+            for az in [i*0.2-1.4 for i in range(15)]:
+                for el in [i*0.3 for i in range(10)]:
+                    e=err(ax,ay,az,el)
+                    if best is None or e<best[0]: best=(e,ax,ay,az,el)
+    _,ax,ay,az,el=best
+    cur=[ax,ay,az,el]
+    step=0.1
+    while step>0.0002:
+        moved=False
+        for k in range(4):
+            for s in (step,-step):
+                c=cur[:]; c[k]+=s; c[3]=min(2.7,max(0.0,c[3]))
+                if err(*c)<err(*cur):
+                    cur=c; moved=True
+        if not moved: step*=0.5
+    ax,ay,az,el=cur
+    h,_=_hand(shoulder,(ax,ay,az),el)
+    assert math.dist(h,target)<0.01,(target,h)
+    return (round(ax,4),round(ay,4),round(az,4)), round(el,4)
+def _yxz(m):
+    """Godot 오일러 (YXZ) 를 회전 행렬에서."""
+    x=math.asin(max(-1,min(1,-m[1][2])))
+    y=math.atan2(m[0][2],m[2][2])
+    z=math.atan2(m[1][0],m[1][1])
+    return x,y,z
+def tool_rot(arm, el, up, fwd):
+    """도구(손에서 +Y 로 뻗는다)가 Upper 좌표 up 방향을 향하고, 도구의 -Z(도끼 날 · 낚싯대 손잡이 앞)가 fwd 쪽을 보게 하는 손 기준 회전."""
+    _,hb=_hand((0,0,0),arm,el)
+    y=_norm(up); z=_norm([-c for c in fwd]); x=_norm(_cross(y,z)); z=_cross(x,y)
+    world=[[x[i],y[i],z[i]] for i in range(3)]
+    local=_mm(_tr(hb),world)
+    r=_yxz(local)
+    back=_euler(*r)
+    assert all(abs(back[i][j]-local[i][j])<1e-6 for i in range(3) for j in range(3))
+    return tuple(round(c,4) for c in r)
+CARRY_T={'idle':[0,0.8,1.6,2.4,3.2], 'walk':[0,0.15,0.3,0.45,0.6], 'run':[0,0.1,0.2,0.3,0.4]}
+CARRY_BOB={'idle':[0,0.006,0.01,0.006,0], 'walk':[-0.012,0.01,-0.012,0.01,-0.012], 'run':[-0.022,0.018,-0.022,0.018,-0.022]}
+# 낚싯대: 오른손은 어깨 앞 · 조금 바깥, 낚싯대는 뒤 · 위 · 바깥으로.
+ROD_HAND=(0.29,-0.03,-0.14); ROD_DIR=(0.34,0.36,0.87); ROD_FACE=(0.0,0.3,-1.0)
+# 도끼: 오른손은 배 앞, 자루는 왼쪽 위로 비스듬히 (왼손은 자루를 따라 위, 짧은 팔이 닿는 만큼), 날은 앞을 본다.
+AXE_HAND=(0.08,-0.21,-0.16); AXE_DIR=(-1.0,0.42,-0.1); AXE_FACE=(0.0,0.25,-1.0)
+AXE_GAP=0.11  # 오른손 → 왼손 (자루를 따라)
+for gait in ['idle','walk','run']:
+    times=CARRY_T[gait]; bob=CARRY_BOB[gait]
+    src=anims[gait]['keys']
+    rod_frames=[]; axe_frames=[]
+    for j,tm in enumerate(times):
+        hr=(ROD_HAND[0],ROD_HAND[1]+bob[j],ROD_HAND[2])
+        ar,er=arm_ik(SHOULDER_R,hr,1)
+        rod=tool_rot(ar,er,ROD_DIR,ROD_FACE)
+        # 왼팔은 그 걸음의 흔들기 그대로 (낚싯대를 멘 쪽만 고정).
+        al=src[3][j]; el=src[11][j][0]
+        # 도끼 자리(뜰채)도 같은 방향으로 멘다.
+        rod_frames.append((tm, pose(al=al, ar=ar, er=er, el=el, rod=rod, axe=rod)))
+        hr=(AXE_HAND[0],AXE_HAND[1]+bob[j],AXE_HAND[2])
+        d=_norm(AXE_DIR)
+        hl=(hr[0]+d[0]*AXE_GAP,hr[1]+d[1]*AXE_GAP,hr[2]+d[2]*AXE_GAP)
+        ar,er=arm_ik(SHOULDER_R,hr,1)
+        al,el=arm_ik(SHOULDER_L,hl,-1)
+        axe=tool_rot(ar,er,AXE_DIR,AXE_FACE)
+        axe_frames.append((tm, pose(al=al, ar=ar, er=er, el=el, axe=axe)))
+    anim('carry_rod_'+gait, times[-1], rod_frames, loop=True)
+    anim('carry_axe_'+gait, times[-1], axe_frames, loop=True)
+CARRIES=['carry_rod_idle','carry_rod_walk','carry_rod_run','carry_axe_idle','carry_axe_walk','carry_axe_run']
+# CarryBlend 이 덮는 트랙 (팔 · 팔꿈치 · 손에 든 도구).
+CARRY_FILTER=[UP+'/ArmL:rotation',UP+'/ArmR:rotation',UP+'/ArmL/ElbowL:rotation',UP+'/ArmR/ElbowR:rotation',UP+'/ArmR/ElbowR/Rod:rotation',UP+'/ArmR/ElbowR/Axe:rotation']
+
 # ---- 허리 · 목 나누기 (v0.13) ----
 # 예전에는 몸 전체(Visual)가 한 덩어리로 기울어 뻣뻣해 보였다. 몸통 회전을 골반(Visual) · 허리 · 목에 나눠 맡긴다:
 # 숙이기·젖히기(x) 는 골반 45% · 허리 35% · 목 20%, 비틀기(y) 는 40 · 40 · 20, 갸웃(z) 은 50 · 30 · 20.
@@ -475,7 +577,7 @@ _data = {
 &"idle": SubResource("Animation_idle"),
 &"run": SubResource("Animation_run"),
 &"walk": SubResource("Animation_walk"),
-''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS) + '''
+''' + ',\n'.join('&"%s": SubResource("Animation_%s")'%(n,n) for n in ['brake','show','plant']+EMOTES+COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS+CARRIES) + '''
 }
 
 [sub_resource type="AnimationNodeAnimation" id="AN_idle"]
@@ -524,7 +626,7 @@ animation = &"show"
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in EMOTES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_emote"]
 xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
-''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
+''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS+CARRIES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
 xfade_time = 0.15
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = %s\n'%(i,e,i,i,i,'true' if e == 'ride_bike' else 'false') for i,e in enumerate(RIDES)) + '''
 [sub_resource type="AnimationNodeTimeScale" id="TimeScale_ride"]
@@ -575,10 +677,34 @@ max_space = 2.0
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_fishing"]
 
+''' + ''.join('[sub_resource type="AnimationNodeBlendSpace1D" id="BlendSpace_carry_%s"]\nblend_point_0/node = SubResource("AN_carry_%s_idle")\nblend_point_0/pos = 0.0\nblend_point_1/node = SubResource("AN_carry_%s_walk")\nblend_point_1/pos = 1.0\nblend_point_2/node = SubResource("AN_carry_%s_run")\nblend_point_2/pos = 2.0\nmin_space = 0.0\nmax_space = 2.0\n\n'%(k,k,k,k) for k in ['rod','axe']) + '''[sub_resource type="AnimationNodeTransition" id="Transition_carry"]
+xfade_time = 0.2
+input_0/name = "rod"
+input_0/auto_advance = false
+input_0/break_loop_at_end = false
+input_0/reset = false
+input_1/name = "axe"
+input_1/auto_advance = false
+input_1/break_loop_at_end = false
+input_1/reset = false
+
+[sub_resource type="AnimationNodeBlend2" id="Blend2_carry"]
+filter_enabled = true
+filters = [''' + ', '.join('NodePath("%s")'%f for f in CARRY_FILTER) + ''']
+sync = true
+
 [sub_resource type="AnimationNodeBlendTree" id="BlendTree_rig"]
 graph_offset = Vector2(-300, 0)
 nodes/Locomotion/node = SubResource("BlendSpace_locomotion")
 nodes/Locomotion/position = Vector2(-300, 0)
+nodes/CarryRod/node = SubResource("BlendSpace_carry_rod")
+nodes/CarryRod/position = Vector2(-500, 120)
+nodes/CarryAxe/node = SubResource("BlendSpace_carry_axe")
+nodes/CarryAxe/position = Vector2(-500, 200)
+nodes/CarrySwitch/node = SubResource("Transition_carry")
+nodes/CarrySwitch/position = Vector2(-400, 140)
+nodes/CarryBlend/node = SubResource("Blend2_carry")
+nodes/CarryBlend/position = Vector2(-200, 0)
 nodes/Brake/node = SubResource("AN_brake")
 nodes/Brake/position = Vector2(-300, 160)
 nodes/BrakeBlend/node = SubResource("Blend2_brake")
@@ -646,7 +772,7 @@ nodes/Show/position = Vector2(920, 200)
 nodes/ShowBlend/node = SubResource("Blend2_show")
 nodes/ShowBlend/position = Vector2(1120, 40)
 nodes/output/position = Vector2(1320, 40)
-node_connections = [&"BrakeBlend", 0, &"Locomotion", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"KickShot", 0, &"RideScale", &"KickShot", 1, &"Kick", &"RideBlend", 1, &"KickShot", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", ''' + ''.join('&"ActSwitch", %d, &"A_%s", '%(i,e) for i,e in enumerate(ACTS)) + '''&"ActBlend", 0, &"SitBlend", &"ActBlend", 1, &"ActSwitch", &"RummageBlend", 0, &"ActBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
+node_connections = [&"CarrySwitch", 0, &"CarryRod", &"CarrySwitch", 1, &"CarryAxe", &"CarryBlend", 0, &"Locomotion", &"CarryBlend", 1, &"CarrySwitch", &"BrakeBlend", 0, &"CarryBlend", &"BrakeBlend", 1, &"Brake", ''' + ''.join('&"RideSwitch", %d, &"R_%s", '%(i,e) for i,e in enumerate(RIDES)) + '''&"RideScale", 0, &"RideSwitch", &"RideBlend", 0, &"BrakeBlend", &"KickShot", 0, &"RideScale", &"KickShot", 1, &"Kick", &"RideBlend", 1, &"KickShot", &"FishBlend", 0, &"RideBlend", &"FishBlend", 1, &"Fishing", ''' + ''.join('&"CookSwitch", %d, &"K_%s", '%(i,e) for i,e in enumerate(COOKS)) + '''&"CookBlend", 0, &"FishBlend", &"CookBlend", 1, &"CookSwitch", &"SitBlend", 0, &"CookBlend", &"SitBlend", 1, &"Sit", ''' + ''.join('&"ActSwitch", %d, &"A_%s", '%(i,e) for i,e in enumerate(ACTS)) + '''&"ActBlend", 0, &"SitBlend", &"ActBlend", 1, &"ActSwitch", &"RummageBlend", 0, &"ActBlend", &"RummageBlend", 1, &"Rummage", &"PhoneBlend", 0, &"RummageBlend", &"PhoneBlend", 1, &"Phone", &"PhoneTapShot", 0, &"PhoneBlend", &"PhoneTapShot", 1, &"PhoneTap", &"ChopShot", 0, &"PhoneTapShot", &"ChopShot", 1, &"Chop", &"CastShot", 0, &"ChopShot", &"CastShot", 1, &"Cast", &"PlantShot", 0, &"CastShot", &"PlantShot", 1, &"Plant", ''' + ''.join('&"EmoteSwitch", %d, &"E_%s", '%(i,e) for i,e in enumerate(EMOTES)) + '''&"DigShot", 0, &"PlantShot", &"DigShot", 1, &"Dig", &"EmoteShot", 0, &"DigShot", &"EmoteShot", 1, &"EmoteSwitch", &"ShowBlend", 0, &"EmoteShot", &"ShowBlend", 1, &"Show", &"output", 0, &"ShowBlend"]
 
 [node name="Rig" type="Node3D" node_paths=PackedStringArray("tree", "visual", "body_mesh", "hips_mesh", "head_mesh", "waist", "upper", "neck", "head", "arm_left", "arm_right", "leg_left", "leg_right", "elbow_left", "elbow_right", "knee_left", "knee_right", "rod", "axe", "tool")]
 script = ExtResource("1_rig")
@@ -737,6 +863,12 @@ tree_root = SubResource("BlendTree_rig")
 anim_player = NodePath("../AnimationPlayer")
 active = true
 parameters/Locomotion/blend_position = 0.0
+parameters/CarryRod/blend_position = 0.0
+parameters/CarryAxe/blend_position = 0.0
+parameters/CarryBlend/blend_amount = 0.0
+parameters/CarrySwitch/current_state = "rod"
+parameters/CarrySwitch/transition_request = ""
+parameters/CarrySwitch/current_index = 0
 parameters/FishBlend/blend_amount = 0.0
 parameters/ChopShot/active = false
 parameters/ChopShot/internal_active = false
