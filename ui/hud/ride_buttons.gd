@@ -13,6 +13,10 @@ const INK: Color = Color(1, 1, 1, 0.95)
 const STEER_ANGLE: float = 0.7
 ## 가속 없이 핸들만 꺾을 때의 세기 (천천히 돌며 나아간다).
 const CREEP: float = 0.3
+## 가로 화면에서 오른쪽 아래 상황 버튼의 왼쪽 끝 (오른쪽 가장자리에서, HudLayout.landscape_shift 로 비킨 자리).
+const LANDSCAPE_ACTION_X: float = 670.0
+## 가로 화면에서 오른쪽 단추 줄(지도 · P · 휴대폰 · 감정표현)의 왼쪽 끝 + 여유 (오른쪽 가장자리에서).
+const LANDSCAPE_COLUMN_X: float = 320.0
 
 enum Pad { UP, DOWN, LEFT, RIGHT }
 
@@ -42,20 +46,27 @@ func set_shown(on: bool) -> void:
 
 
 ## 패드 자리 (화면 좌표). 왼쪽 = 가속 · 브레이크, 오른쪽 = 핸들 (조이스틱을 오른쪽에 두면 반대).
+## 세로 화면: 핸들은 감정표현 단추 아래 · 상황 버튼 위 사이에.
+## 가로 화면: 오른쪽 단추 줄(지도 · P · 휴대폰 · 감정표현)과 상황 버튼이 높이를 다 쓰므로, 핸들은 상황 버튼 왼쪽에 붙이고
+## (조이스틱을 오른쪽에 두면) 가속 · 브레이크는 오른쪽 단추 줄 왼쪽에 둔다.
 func pad_rect(pad: Pad) -> Rect2:
 	var s: Vector2 = get_viewport_rect().size
 	var swap: bool = Prefs.stick_on_right()
-	var pedal_x: float = 70.0 if not swap else s.x - 270.0
-	# 핸들은 감정표현 단추 아래 · 상황 버튼 위 사이에.
-	var wheel_x: float = s.x - 470.0 if not swap else 70.0
+	var wide: bool = s.x > s.y
+	var pedal_x: float = 70.0
+	if swap:
+		pedal_x = s.x - (LANDSCAPE_COLUMN_X + 200.0 if wide else 270.0)
+	var wheel: Vector2 = Vector2(70.0, s.y - 646.0)
+	if not swap:
+		wheel = Vector2(s.x - LANDSCAPE_ACTION_X - 24.0 - 400.0, s.y - 370.0) if wide else Vector2(s.x - 470.0, s.y - 646.0)
 	match pad:
 		Pad.UP:
 			return Rect2(pedal_x, s.y - 630.0, 200.0, 180.0)
 		Pad.DOWN:
 			return Rect2(pedal_x, s.y - 430.0, 200.0, 160.0)
 		Pad.LEFT:
-			return Rect2(wheel_x, s.y - 646.0, 190.0, 140.0)
-	return Rect2(wheel_x + 210.0, s.y - 646.0, 190.0, 140.0)
+			return Rect2(wheel.x, wheel.y, 190.0, 140.0)
+	return Rect2(wheel.x + 210.0, wheel.y, 190.0, 140.0)
 
 
 func _input(event: InputEvent) -> void:

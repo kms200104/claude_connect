@@ -116,6 +116,25 @@ func _stick_toward(dir: Vector3) -> Vector2:
 	return Vector2(dir.dot(right), -dir.dot(fwd)).normalized()
 
 
+## ▲▼ · ◀▶ 패드와 겹치는 HUD 단추 · 지도 이름 (없으면 빈 문자열). 지도는 켜 놓고 잰다.
+func _pad_overlap(pad: RideButtons) -> String:
+	var hud: Node = _village.get_node("HUD")
+	var minimap: Control = hud.find_child("MiniMap", true, false) as Control
+	var targets: Array[Control] = [minimap]
+	for n: Node in hud.find_children("*", "Button", true, false):
+		targets.append(n as Control)
+	var speed: Control = hud.find_child("Speedometer", true, false) as Control
+	if speed != null:
+		targets.append(speed)
+	for c: Control in targets:
+		if c == null or (not c.is_visible_in_tree() and c != minimap):
+			continue
+		for which: RideButtons.Pad in [RideButtons.Pad.UP, RideButtons.Pad.DOWN, RideButtons.Pad.LEFT, RideButtons.Pad.RIGHT]:
+			if pad.pad_rect(which).intersects(c.get_global_rect()):
+				return "%s ↔ %s" % [RideButtons.Pad.keys()[which], c.name]
+	return ""
+
+
 ## 설정 "탈것 조작: 버튼": 조이스틱 대신 ▲▼ · ◀▶. 손가락 둘로 ▲ 를 누른 채 ◀ 도 누른다.
 func _button_drive(player: Player, rider: GarageRider) -> void:
 	Prefs.set_value(Prefs.RIDE_CONTROL, "buttons")
@@ -139,6 +158,12 @@ func _button_drive(player: Player, rider: GarageRider) -> void:
 	touch.call(6, RideButtons.Pad.LEFT, true)
 	await get_tree().create_timer(0.7).timeout
 	await _shot("ride_buttons")
+	for side: String in ["left", "right"]:
+		Prefs.set_value(Prefs.STICK_SIDE, side)
+		await get_tree().process_frame
+		var hit: String = _pad_overlap(pad)
+		_check(hit.is_empty(), "버튼 조작 패드가 다른 단추와 겹치지 않는다 (조이스틱 %s%s)" % [side, ": " + hit if not hit.is_empty() else ""])
+	Prefs.set_value(Prefs.STICK_SIDE, "left")
 	_check(pad.steer == -1 and angle_difference(yaw0, rider.drive_state.yaw) > 0.3, "▲ 를 누른 채 ◀ 를 누르면 왼쪽으로 돈다 (%.2f rad)" % angle_difference(yaw0, rider.drive_state.yaw))
 	touch.call(6, RideButtons.Pad.LEFT, false)
 	touch.call(5, RideButtons.Pad.UP, false)
