@@ -30,6 +30,14 @@ extends Control
 @export var idle_alpha_scale: float = 0.6
 
 var output: Vector2 = Vector2.ZERO
+## 잠시 쉬기 (탈것 버튼 조작 중): 터치를 받지 않고 그리지 않는다 (Player 가 켠다).
+var suspended: bool = false:
+	set(value):
+		if suspended != value:
+			suspended = value
+			if value:
+				_release()
+			queue_redraw()
 ## 달리는 중이면 테두리를 주황빛으로 (Player 가 켠다).
 var boost: bool = false:
 	set(value):
@@ -87,6 +95,8 @@ func idle_center() -> Vector2:
 
 
 func _input(event: InputEvent) -> void:
+	if suspended:
+		return
 	if event is InputEventScreenTouch:
 		var touch: InputEventScreenTouch = event
 		if touch.pressed:
@@ -147,6 +157,8 @@ func _reset_to_idle() -> void:
 
 
 func _draw() -> void:
+	if suspended:
+		return
 	var scale_a: float = 1.0 if _touch_index != -1 else idle_alpha_scale
 	var base: Color = Color(base_color, base_color.a * scale_a)
 	var rim: Color = Color(rim_color, rim_color.a * scale_a)

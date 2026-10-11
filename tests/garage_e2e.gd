@@ -81,6 +81,42 @@ func _stick_toward(dir: Vector3) -> Vector2:
 	return Vector2(dir.dot(right), -dir.dot(fwd)).normalized()
 
 
+## 설정 "탈것 조작: 버튼": 조이스틱 대신 ▲▼ · ◀▶. 손가락 둘로 ▲ 를 누른 채 ◀ 도 누른다.
+func _button_drive(player: Player, rider: GarageRider) -> void:
+	Prefs.set_value(Prefs.RIDE_CONTROL, "buttons")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var pad: RideButtons = player.ride_buttons
+	_check(pad != null and pad.visible and player.joystick.suspended, "버튼 조작: 타는 동안 ▲▼ · ◀▶ 가 나오고 조이스틱은 쉰다")
+	if pad == null:
+		return
+	var touch: Callable = func(index: int, which: RideButtons.Pad, down: bool) -> void:
+		var e: InputEventScreenTouch = InputEventScreenTouch.new()
+		e.index = index
+		e.position = pad.pad_rect(which).get_center()
+		e.pressed = down
+		pad._input(e)
+	var rest: float = rider.drive_state.speed
+	touch.call(5, RideButtons.Pad.UP, true)
+	await get_tree().create_timer(1.2).timeout
+	_check(pad.throttle == 1 and rider.drive_state.speed > rest + 1.0, "▲ 를 누르면 나아간다 (%.2f → %.2f m/s)" % [rest, rider.drive_state.speed])
+	var yaw0: float = rider.drive_state.yaw
+	touch.call(6, RideButtons.Pad.LEFT, true)
+	await get_tree().create_timer(0.7).timeout
+	await _shot("ride_buttons")
+	_check(pad.steer == -1 and angle_difference(yaw0, rider.drive_state.yaw) > 0.3, "▲ 를 누른 채 ◀ 를 누르면 왼쪽으로 돈다 (%.2f rad)" % angle_difference(yaw0, rider.drive_state.yaw))
+	touch.call(6, RideButtons.Pad.LEFT, false)
+	touch.call(5, RideButtons.Pad.UP, false)
+	var fast: float = rider.drive_state.speed
+	touch.call(7, RideButtons.Pad.DOWN, true)
+	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < 0.4, 2.5), "▼ 를 누르면 브레이크로 선다 (%.2f m/s 에서)" % fast)
+	touch.call(7, RideButtons.Pad.DOWN, false)
+	Prefs.set_value(Prefs.RIDE_CONTROL, "stick")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_check(not pad.visible and not player.joystick.suspended, "조이스틱 조작으로 돌리면 버튼이 사라지고 조이스틱이 돌아온다")
+
+
 func _run() -> void:
 	var player: Player = _village.get_node("Player")
 	var rider: GarageRider = _village.get_node("GarageRide")
@@ -217,6 +253,7 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < 0.4, 2.0), "반대로 밀면 브레이크로 선다 (%.2f m/s 에서)" % fast)
 	player.joystick.output = Vector2.ZERO
 	get_tree().process_frame.disconnect(watch)
+	await _button_drive(player, rider)
 	await get_tree().create_timer(0.4).timeout
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF, 2.0), "'세우기' 버튼 (%s · %s)" % [InteractionController.Target.keys()[interaction.target], interaction.action_hud.current_text()])
 	var stop_at: Vector3 = player.global_position

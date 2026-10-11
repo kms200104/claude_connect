@@ -1,6 +1,6 @@
 class_name Prefs
 extends RefCounted
-## 플레이 설정 (v16, 설정 앱): 진동 · 글자 크기 · 조이스틱 위치와 크기 · 음악 앱에서 고른 곡 · 지도 항상 보기.
+## 플레이 설정 (v16, 설정 앱): 진동 · 글자 크기 · 조이스틱 위치와 크기 · 음악 앱에서 고른 곡 · 지도 항상 보기 · 탈것 조작(조이스틱/버튼).
 ## user://settings.cfg 의 "play" 칸에 기억한다 (소리 · 화질 · 화면 방향은 각자 저장). 바뀌면 Prefs.events.changed(key).
 
 const PATH: String = "user://settings.cfg"
@@ -15,12 +15,15 @@ const MUSIC: String = "music"
 const MUSIC_OFF: String = "off"
 ## 화면 오른쪽 위 작은 지도(MiniMap)를 늘 띄울지.
 const MINIMAP: String = "minimap"
+## 탈것 조작: "stick" = 조이스틱 방향으로, "buttons" = 왼쪽 ▲▼(가속 · 브레이크) · 오른쪽 ◀▶(핸들) (RideButtons).
+const RIDE_CONTROL: String = "ride_control"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
 const STICK_SIDES: Dictionary[String, String] = {"left": "왼쪽 (오른손잡이)", "right": "오른쪽 (왼손잡이)"}
 const STICK_SCALES: Dictionary[String, float] = {"small": 0.8, "normal": 1.0, "large": 1.22}
 const STICK_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
+const RIDE_CONTROLS: Dictionary[String, String] = {"stick": "조이스틱", "buttons": "버튼 (▲▼ · ◀▶)"}
 
 const DEFAULTS: Dictionary[String, Variant] = {
 	"vibration": true,
@@ -29,6 +32,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"stick_size": "normal",
 	"music": "",
 	"minimap": false,
+	"ride_control": "stick",
 }
 
 
@@ -81,6 +85,11 @@ static func music() -> String:
 
 static func minimap() -> bool:
 	return bool(get_value(MINIMAP))
+
+
+## 탈것을 버튼(▲▼ · ◀▶)으로 모는지.
+static func ride_buttons() -> bool:
+	return str(get_value(RIDE_CONTROL)) == "buttons"
 
 
 ## 짧게 떨기 (진동을 껐으면 아무것도 안 한다).

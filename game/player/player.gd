@@ -73,6 +73,8 @@ var _input_locks: Dictionary[StringName, bool] = {}
 var vehicle: KickboardRider = null
 ## 차고 탈것 (v19, 자전거 · 전기오토바이). 타는 동안은 garage_ride.drive 가 속도 · 방향을 정한다.
 var garage_ride: GarageRider = null
+## 탈것 버튼 조작 (설정 "탈것 조작: 버튼"): 타는 동안 조이스틱 대신 ▲▼ · ◀▶ (처음 탈 때 HUD 에 만든다).
+var ride_buttons: RideButtons = null
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
@@ -86,6 +88,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_ride_buttons()
 	if vehicle != null and vehicle.is_active():
 		_physics_ride(delta)
 		return
@@ -151,16 +154,23 @@ func _physics_process(delta: float) -> void:
 func _physics_ride(delta: float) -> void:
 	var input: Vector2 = _read_input()
 	var move_dir: Vector3 = _input_to_world(input)
-	move_intent = move_dir * minf(input.length(), 1.0)
+	var amount: float = minf(input.length(), 1.0)
+	if ride_buttons != null and ride_buttons.visible:
+		# 버튼 조작: ▲▼ · ◀▶ 를 조이스틱과 같은 (가고 싶은 방향, 세기)로 바꿔 넘긴다.
+		var heading: Vector2 = ride_heading()
+		var want: Array = RideButtons.drive_input(heading.x, heading.y, ride_buttons.throttle, ride_buttons.steer)
+		move_dir = want[0]
+		amount = want[1]
+	move_intent = move_dir * amount
 	running = false
 	if braking:
 		_end_brake()
 	wading = not Field.zone_at(global_position, 0.1).is_empty()
 	var kick: bool = vehicle != null and vehicle.is_active()
 	if kick:
-		vehicle.drive(delta, move_dir, minf(input.length(), 1.0))
+		vehicle.drive(delta, move_dir, amount)
 	else:
-		garage_ride.drive(delta, move_dir, minf(input.length(), 1.0))
+		garage_ride.drive(delta, move_dir, amount)
 	if is_on_floor():
 		velocity.y = 0.0
 	else:
@@ -175,6 +185,27 @@ func _physics_ride(delta: float) -> void:
 		rig.set_move_speed(0.0)
 	if joystick != null:
 		joystick.boost = false
+
+
+## 타고 있는 탈것의 (방향 yaw, 빠르기 m/s). 안 타면 (몸 방향, 0).
+func ride_heading() -> Vector2:
+	if vehicle != null and vehicle.is_active():
+		return Vector2(vehicle.yaw, vehicle.speed)
+	if garage_ride != null and garage_ride.is_active():
+		return Vector2(garage_ride.drive_state.yaw, garage_ride.drive_state.speed)
+	return Vector2(body.global_rotation.y if body != null else rotation.y, 0.0)
+
+
+## 버튼 조작을 켰고 타는 중이면 ▲▼ · ◀▶ 를 보이고 조이스틱을 쉬게 한다 (휴대폰 · 대화 등으로 입력이 잠기면 감춘다).
+func _update_ride_buttons() -> void:
+	var want: bool = Prefs.ride_buttons() and is_ride_settled() and not is_input_locked()
+	if want and ride_buttons == null and joystick != null and joystick.get_parent() != null:
+		ride_buttons = RideButtons.new()
+		joystick.get_parent().add_child(ride_buttons)
+	if ride_buttons != null:
+		ride_buttons.set_shown(want)
+	if joystick != null:
+		joystick.suspended = want
 
 
 ## 탔을 때 몸(Body)을 바닥에서 띄우는 높이 (씬에 놓인 자리).
