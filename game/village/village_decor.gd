@@ -315,27 +315,99 @@ func _near_runway_or_building(p: Vector2, pad: float) -> bool:
 	return not runway.is_empty() and p.x > float(runway.x0) - pad and p.x < float(runway.x1) + pad and absf(p.y - float(runway.z)) < float(runway.width) * 0.5 + pad
 
 
-## 야자수: 마디진 줄기 + 늘어진 잎 일곱 장 + 코코넛 셋 (삼각형 약 600개).
+## 야자수: 마디(고리)가 도드라진 휜 줄기 + 아치로 휘어 늘어지는 잎 아홉 장 + 코코넛 셋 (삼각형 약 2,100개 — 나무 예산 2,500 안).
+## 잎 한 장 = 가운데 잎자루 + 양옆으로 빗살처럼 돋은 가늘고 뾰족한 작은 잎(우상엽) 열둘씩. 작은 잎은 V 자로 살짝 처지고 끝으로 갈수록 짧다.
+## 위쪽 어린 잎은 하늘로 서고 진한 초록, 아래 묵은 잎은 크게 늘어지고 끝이 누렇다.
 static func _palm_mesh() -> ArrayMesh:
 	var st: SurfaceTool = ClayMesh.begin()
-	var bark: Color = Color("#A9824E")
-	var top: Vector3 = Vector3.ZERO
-	for i: int in 6:
-		var a: Vector3 = Vector3(0.05 * i * i * 0.08, 0.55 * i, 0.0)
-		var b: Vector3 = Vector3(0.05 * (i + 1) * (i + 1) * 0.08, 0.55 * (i + 1), 0.0)
-		ClayMesh.add_rod(st, a, b, 0.17 - 0.012 * i, 0.15 - 0.012 * i, bark.lightened(0.06 * float(i % 2)), 8)
-		top = b
-	var leaf: Callable = ClayMesh.vertical_gradient(Color("#3E7A3A"), Color("#7FBF5A"), 0.6)
-	for k: int in 7:
-		var a: float = TAU * float(k) / 7.0
-		var out: Vector3 = Vector3(cos(a), 0.0, sin(a))
-		var mid: Vector3 = top + out * 0.75 + Vector3(0.0, 0.18, 0.0)
-		ClayMesh.add_ellipsoid(st, mid, Vector3(0.85, 0.05, 0.22), leaf, 10, 3, Basis(Vector3.UP, -a) * Basis(Vector3.FORWARD, -0.32))
-		ClayMesh.add_ellipsoid(st, top + out * 1.45 - Vector3(0.0, 0.18, 0.0), Vector3(0.45, 0.04, 0.16), leaf, 8, 3, Basis(Vector3.UP, -a) * Basis(Vector3.FORWARD, -0.75))
+	var height: float = 3.3
+	# 줄기: 위로 갈수록 가늘고 살짝 휜다. 마디마다 도톰한 고리와 밝고 어두운 띠.
+	var trunk: PackedVector3Array = PackedVector3Array()
+	var rows: int = 23
+	for r: int in rows:
+		var u: float = float(r) / float(rows - 1)
+		trunk.append(Vector3(0.22 * u * u, height * u, 0.0))
+	var rings: float = 11.0
+	var bark: Callable = func(at: Vector3, _n: Vector3) -> Color:
+		var band: float = 0.5 + 0.5 * cos(at.y / height * rings * TAU)
+		return Color("#8E6A40").lerp(Color("#BC9460"), band)
+	var trunk_profile: Callable = func(u: float) -> float:
+		return (1.0 - 0.35 * u) * (1.0 + 0.07 * cos(u * rings * TAU))
+	ClayMesh.add_strand(st, trunk, 0.19, 0.19, Vector3(-10.0, height * 0.5, 0.0), bark, trunk_profile, 8)
+	var top: Vector3 = trunk[rows - 1]
+	# 잎이 모이는 머리 (마른 잎자루 뭉치).
+	ClayMesh.add_ellipsoid(st, top + Vector3(0.0, 0.02, 0.0), Vector3(0.24, 0.2, 0.24), Color("#6B4A28"), 8, 4)
+	# 잎 아홉 장: 위쪽 어린 잎(높이 섬) → 아래 묵은 잎(크게 늘어짐).
+	var fronds: int = 9
+	for k: int in fronds:
+		var age: float = float(k % 3) / 2.0
+		var azimuth: float = TAU * float(k) / float(fronds) + 0.35 * sin(float(k) * 2.3)
+		var rise: float = lerpf(0.75, 0.15, age)
+		var droop: float = lerpf(0.5, 0.95, age)
+		var length: float = lerpf(1.7, 2.05, age)
+		_palm_frond(st, top + Vector3(0.0, 0.08, 0.0), azimuth, rise, droop, length, age)
+	# 코코넛 셋 (잎 밑).
 	for k: int in 3:
 		var a: float = TAU * float(k) / 3.0 + 0.5
-		ClayMesh.add_ellipsoid(st, top + Vector3(cos(a) * 0.17, -0.14, sin(a) * 0.17), Vector3(0.13, 0.14, 0.13), Color("#7A5230"), 8, 5)
+		ClayMesh.add_ellipsoid(st, top + Vector3(cos(a) * 0.2, -0.16, sin(a) * 0.2), Vector3(0.13, 0.15, 0.13), ClayMesh.vertical_gradient(Color("#5E3E20"), Color("#8A6236"), 0.3), 8, 5)
 	return ClayMesh.commit(st)
+
+
+## 야자 잎 한 장: 잎자루 곡선 P(u) = 머리 + 바깥 · 길이 · u + 위 · 길이 · (오름 · u − 처짐 · u²).
+static func _palm_frond(st: SurfaceTool, base: Vector3, azimuth: float, rise: float, droop: float, length: float, age: float) -> void:
+	var out: Vector3 = Vector3(cos(azimuth), 0.0, sin(azimuth))
+	var rib: PackedVector3Array = PackedVector3Array()
+	var steps: int = 7
+	for i: int in steps:
+		var u: float = float(i) / float(steps - 1)
+		rib.append(_frond_point(base, out, rise, droop, length, u))
+	var rib_profile: Callable = func(u: float) -> float:
+		return 1.0 - 0.75 * u
+	ClayMesh.add_strand(st, rib, 0.035, 0.025, base - Vector3(0.0, 1.0, 0.0), Color("#8FAE52").lerp(Color("#B8A55A"), age * 0.5), rib_profile, 3)
+	var dark: Color = Color("#356A2E").lerp(Color("#55702E"), age * 0.6)
+	var light: Color = Color("#7EC257").lerp(Color("#C2B65A"), age * 0.7)
+	var leaflets: int = 12
+	for i: int in leaflets:
+		var u: float = lerpf(0.1, 0.97, float(i) / float(leaflets - 1))
+		var p: Vector3 = _frond_point(base, out, rise, droop, length, u)
+		var tangent: Vector3 = (_frond_point(base, out, rise, droop, length, u + 0.02) - p).normalized()
+		var side: Vector3 = tangent.cross(Vector3.UP).normalized()
+		# 가운데쯤이 가장 길고 끝으로 갈수록 짧다.
+		var size: float = 0.72 * pow(sin(PI * lerpf(0.12, 1.0, u)), 0.7) * (1.0 - 0.4 * u) * length / 2.0
+		for s: float in [-1.0, 1.0]:
+			# 옆으로 뻗고, V 자로 처지고, 잎 끝 쪽으로 쓸린다.
+			var dir: Vector3 = (side * s * 0.9 - Vector3.UP * 0.32 + tangent * 0.4).normalized()
+			var w: float = 0.07 * length / 2.0
+			var mid: Vector3 = p + dir * size * 0.5 - Vector3.UP * size * 0.06
+			var tip: Vector3 = p + dir * size - Vector3.UP * size * (0.2 + 0.15 * age)
+			_leaflet(st, p - tangent * w, p + tangent * w, mid - tangent * w * 0.85, mid + tangent * w * 0.85, tip, dark, dark.lerp(light, 0.55), light)
+
+
+static func _frond_point(base: Vector3, out: Vector3, rise: float, droop: float, length: float, u: float) -> Vector3:
+	return base + out * (length * u) + Vector3.UP * (length * (rise * u - droop * u * u))
+
+
+## 작은 잎 하나 (밑 둘 → 가운데 둘 → 끝): 앞뒤 두 면 (얇은 판이라 아래에서 봐도 보인다).
+static func _leaflet(st: SurfaceTool, b0: Vector3, b1: Vector3, m0: Vector3, m1: Vector3, tip: Vector3, c_base: Color, c_mid: Color, c_tip: Color) -> void:
+	var tris: Array = [[b0, b1, m1, c_base, c_base, c_mid], [b0, m1, m0, c_base, c_mid, c_mid], [m0, m1, tip, c_mid, c_mid, c_tip]]
+	for tri: Array in tris:
+		var p0: Vector3 = tri[0]
+		var p1: Vector3 = tri[1]
+		var p2: Vector3 = tri[2]
+		var n: Vector3 = (p1 - p0).cross(p2 - p0).normalized()
+		if n.y < 0.0:
+			n = -n
+		# 위를 보는 면 (Godot 앞면 = 시계 방향) · 아래를 보는 면.
+		for face: int in 2:
+			var order: Array = [0, 2, 1] if face == 0 else [0, 1, 2]
+			var fn: Vector3 = n if face == 0 else -n
+			var ccw: Vector3 = (tri[order[1]] as Vector3 - tri[order[0]]).cross(tri[order[2]] as Vector3 - tri[order[0]])
+			if ccw.dot(fn) > 0.0:
+				order = [order[0], order[2], order[1]]
+			for k: int in 3:
+				st.set_color(tri[3 + order[k]])
+				st.set_normal(fn)
+				st.add_vertex(tri[order[k]])
 
 
 static func _shell_mesh() -> ArrayMesh:
