@@ -5,6 +5,9 @@ extends Node
 ## 접속이 실패하면 마을 화면의 방 패널(RoomPanel)이 오류와 입력 칸을 보여 준다.
 ## 실행 인자(--server, --create, --join, --resume)가 있으면 첫 화면을 건너뛴다 (테스트·개발용).
 
+## 에디터 실행 때 class_name 이 모두 등록됐는지 확인하는 게임 스크립트 폴더 (broken_scripts).
+const SCRIPT_DIRS: PackedStringArray = ["res://autoload", "res://core", "res://game", "res://ui"]
+
 @export var village_scene: PackedScene
 @export_group("Camera")
 ## 비행기 시점: 섬 바깥 물가를 크게 돌며 낮게 날아 섬과 하늘이 같이 보이게 비스듬히 본다.
@@ -216,12 +219,15 @@ func _on_start() -> void:
 ## 게임 데이터(GameData)를 못 읽었으면 (git pull 로 새 스크립트가 생겼는데 Godot 에디터가 아직 등록하지 않은 경우가 대부분)
 ## 들어가 봐야 땅만 있고 움직이지 못하므로, 카드에 고치는 법을 띄우고 들어가기 단추를 막는다.
 func _warn_if_broken() -> void:
-	if not scripts_broken():
+	var broken: PackedStringArray = broken_scripts()
+	if scripts_broken():
+		broken.insert(0, "res://autoload/game_data/game_data.gd")
+	if broken.is_empty():
 		return
-	push_error("GameData 를 불러오지 못했어요. Godot 에디터에서 프로젝트 → 현재 프로젝트 새로고침 뒤 다시 실행하세요.")
+	push_error("스크립트를 불러오지 못했어요 (%s). Godot 에디터에서 프로젝트 → 현재 프로젝트 새로고침 뒤 다시 실행하세요." % ", ".join(broken))
 	var warn: Label = Label.new()
 	warn.name = "ScriptsBroken"
-	warn.text = "게임 스크립트를 불러오지 못했어요.\n새로 받은 파일이 Godot 에디터에 아직 등록되지 않았어요.\n에디터 메뉴 [프로젝트 → 현재 프로젝트 새로고침] 뒤 다시 실행해 주세요."
+	warn.text = "게임 스크립트를 불러오지 못했어요 (%s).\n새로 받은 파일이 Godot 에디터에 아직 등록되지 않았어요.\n에디터 메뉴 [프로젝트 → 현재 프로젝트 새로고침] 뒤 다시 실행해 주세요." % broken[0].get_file()
 	warn.add_theme_font_size_override("font_size", 26)
 	warn.add_theme_color_override("font_color", Color("#D9483B"))
 	warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -239,6 +245,46 @@ func _warn_if_broken() -> void:
 func scripts_broken() -> bool:
 	var data: Node = get_node_or_null(^"/root/GameData")
 	return data == null or data.get_script() == null or not ("items" in data)
+
+
+## 에디터에 아직 등록되지 않은 class_name 스크립트 경로들. GameData 가 멀쩡해도 새 class_name 이 등록되지 않으면
+## 그 이름을 쓰는 스크립트만 조용히 빠진다 (탈것이 안 오고 선착장이 안 보이는 식). 컴파일은 느리므로 파일 머리의
+## class_name 만 읽어 전역 클래스 목록과 견준다. 내보낸 게임은 등록이 빌드에 굳어 있어 건너뛴다.
+static func broken_scripts() -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	if not OS.has_feature("editor"):
+		return out
+	var known: Dictionary = {}
+	for entry: Dictionary in ProjectSettings.get_global_class_list():
+		known[str(entry.get("class", ""))] = true
+	var todo: PackedStringArray = PackedStringArray(SCRIPT_DIRS)
+	while not todo.is_empty():
+		var dir: String = todo[todo.size() - 1]
+		todo.remove_at(todo.size() - 1)
+		for sub: String in DirAccess.get_directories_at(dir):
+			todo.append(dir.path_join(sub))
+		for file: String in DirAccess.get_files_at(dir):
+			if not file.ends_with(".gd"):
+				continue
+			var path: String = dir.path_join(file)
+			var declared: String = _declared_class(path)
+			if not declared.is_empty() and not known.has(declared):
+				out.append(path)
+	return out
+
+
+## 스크립트 머리(첫 몇 줄)에 적힌 class_name. 없으면 빈 문자열.
+static func _declared_class(path: String) -> String:
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	for i: int in 4:
+		if f.eof_reached():
+			break
+		var line: String = f.get_line().strip_edges()
+		if line.begins_with("class_name "):
+			return line.substr(11).get_slice(" ", 0).strip_edges()
+	return ""
 
 
 func _refresh_start_label() -> void:

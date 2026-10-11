@@ -1,4 +1,3 @@
-class_name VehicleShapes
 extends RefCounted
 ## 탈것을 실제 모양처럼 빚는 도구 (v21): 단면을 이어 붙인 매끈한 곡면(loft — 선체 · 탱크 · 카울 · 바나나 튜브),
 ## 부드러운 곡선을 따라 굴린 관(sweep — 자전거 프레임 · 핸들 · 난간), 축 둘레로 돌린 바퀴 부품(lathe — 타이어 · 림 · 허브).

@@ -1,10 +1,14 @@
 class_name VehicleModel
 extends Node3D
 ## 차고 탈것 모형 (v19): 자전거 · 전기오토바이 · 보트를 모델(style)과 끼운 부품(fit)대로 빚는다.
-## v21: 실제 제품 모양을 따라 매끈한 곡면(로프트 · 스윕 · 회전체)으로 — BikeParts · MotoParts · BoatParts (도구는 VehicleShapes).
+## v21: 실제 제품 모양을 따라 매끈한 곡면(로프트 · 스윕 · 회전체)으로 — bike_parts · moto_parts · boat_parts (도구는 vehicle_shapes).
 ## 원점 = 바닥(두 바퀴 사이), 앞 = -Z. 타는 캐릭터의 리그 자세(ride_bike · ride_moto)에 맞춘 자리(anchors)를 쓴다.
 ## 나뉜 마디: 몸체(Frame) · 앞바퀴와 핸들(Steer, 조향축으로 돈다) · 뒷바퀴 · 크랭크와 페달(자전거) · 빛나는 렌즈와 장식.
 ## animate(속도, 조향, delta) 로 바퀴 · 크랭크 · 핸들을 돌린다. 밤(night_light)에는 전조등(SpotLight)과 언더글로우가 켜진다.
+const Shapes := preload("res://game/vehicles/vehicle_shapes.gd")
+const BikeKit := preload("res://game/vehicles/bike_parts.gd")
+const MotoKit := preload("res://game/vehicles/moto_parts.gd")
+const BoatKit := preload("res://game/vehicles/boat_parts.gd")
 
 const DARK: Color = Color("#2A2A2E")
 const LENS: Color = Color("#F4F1E6")
@@ -232,13 +236,13 @@ func _build_bike() -> void:
 	var seat_top: Vector3 = Vector3(0.0, seat.y - 0.07, seat.z - 0.03)
 	var rear_part: VehicleCatalog.Part = part_in("rear")
 	var front_part: VehicleCatalog.Part = part_in("front")
-	# 몸체: 실제 자전거 모양 (BikeParts — 프레임 · 체인 · 흙받이 · 짐받이 · 받침대) + 안장 + 끼운 부품.
+	# 몸체: 실제 자전거 모양 (bike_parts — 프레임 · 체인 · 흙받이 · 짐받이 · 받침대) + 안장 + 끼운 부품.
 	var points: Dictionary = {"head_top": head_top, "head_bottom": head_bottom, "bb": bb, "seat_top": seat_top, "seat": seat, "axle_r": axle_r, "axle_f": axle_f, "r": r}
 	var seat_part: VehicleCatalog.Part = part_in("seat")
 	_frame = _add_mesh("Frame", _cached("frame", func() -> ArrayMesh:
 		var st: SurfaceTool = ClayMesh.begin()
-		BikeParts.frame(st, info.style, paint, trim, points, rear_part != null and not rear_part.model.is_empty(), _seg(8))
-		BikeParts.saddle(st, seat, info.style, _seat_color(), seat_part != null and str(seat_part.seat.get("shape", "")) == "wide")
+		BikeKit.frame(st, info.style, paint, trim, points, rear_part != null and not rear_part.model.is_empty(), _seg(8))
+		BikeKit.saddle(st, seat, info.style, _seat_color(), seat_part != null and str(seat_part.seat.get("shape", "")) == "wide")
 		_add_body_parts(st)
 		return ClayMesh.commit(st)), self)
 	# 크랭크 · 페달 (돈다).
@@ -248,7 +252,7 @@ func _build_bike() -> void:
 	add_child(_crank)
 	_add_mesh("Mesh", _cached("crank", func() -> ArrayMesh:
 		var cs: SurfaceTool = ClayMesh.begin()
-		BikeParts.crank(cs, info.style, CRANK_R)
+		BikeKit.crank(cs, info.style, CRANK_R)
 		return ClayMesh.commit(cs)), _crank)
 	for side: float in [-1.0, 1.0]:
 		var pedal: Node3D = Node3D.new()
@@ -257,7 +261,7 @@ func _build_bike() -> void:
 		_crank.add_child(pedal)
 		_add_mesh("Mesh", _cached("pedal%d" % int(side), func() -> ArrayMesh:
 			var ps: SurfaceTool = ClayMesh.begin()
-			BikeParts.pedal(ps, side, info.style)
+			BikeKit.pedal(ps, side, info.style)
 			return ClayMesh.commit(ps)), pedal)
 		_pedals.append(pedal)
 	# 뒷바퀴.
@@ -274,8 +278,8 @@ func _build_bike() -> void:
 	var q: Dictionary = {"head_bottom": to_local.call(head_bottom), "axle_f": to_local.call(axle_f), "bar": to_local.call(bar), "head": head, "front": to_local.call(info.anchor("front"))}
 	_add_mesh("Mesh", _cached("steer", func() -> ArrayMesh:
 		var ss: SurfaceTool = ClayMesh.begin()
-		BikeParts.steer(ss, info.style, paint, trim, q, r, front_part != null and not front_part.model.is_empty(), _seg(8))
-		BikeParts.lamp(ss, info.style, head, lens_r, trim)
+		BikeKit.steer(ss, info.style, paint, trim, q, r, front_part != null and not front_part.model.is_empty(), _seg(8))
+		BikeKit.lamp(ss, info.style, head, lens_r, trim)
 		_add_steer_parts(ss, head_top)
 		return ClayMesh.commit(ss)), _steer)
 	_front_spin = _wheel_node("FrontWheel", to_local.call(axle_f), _steer, true)
@@ -284,8 +288,8 @@ func _build_bike() -> void:
 	var glow: Dictionary = _glow()
 	if str(glow.get("where", "")) == "frame":
 		var gs: SurfaceTool = ClayMesh.begin()
-		VehicleShapes.sweep(gs, PackedVector3Array([head_bottom + Vector3(0.024, 0.0, 0.0), bb + Vector3(0.024, 0.03, 0.0)]), 0.006, LENS, 6, true)
-		VehicleShapes.sweep(gs, PackedVector3Array([bb + Vector3(0.05, 0.0, 0.0), axle_r + Vector3(0.06, 0.0, 0.0)]), 0.005, LENS, 6, true)
+		Shapes.sweep(gs, PackedVector3Array([head_bottom + Vector3(0.024, 0.0, 0.0), bb + Vector3(0.024, 0.03, 0.0)]), 0.006, LENS, 6, true)
+		Shapes.sweep(gs, PackedVector3Array([bb + Vector3(0.05, 0.0, 0.0), axle_r + Vector3(0.06, 0.0, 0.0)]), 0.005, LENS, 6, true)
 		_add_glow_mesh("FrameGlow", ClayMesh.commit(gs), self, Color.html(str(glow.get("c", "#FFFFFF"))), 1.1)
 
 
@@ -301,11 +305,11 @@ func _build_moto() -> void:
 	var head_top: Vector3 = Vector3(0.0, bar.y - 0.06, bar.z - 0.08)
 	var seat_part: VehicleCatalog.Part = part_in("seat")
 	var shape: String = str(seat_part.seat.get("shape", "")) if seat_part != null else ""
-	# 몸체: 실제 전기 오토바이 모양 (MotoParts — 스쿠터 모노코크 · 카페 레이서 · 풀 카울 스포츠) + 끼운 부품.
+	# 몸체: 실제 전기 오토바이 모양 (moto_parts — 스쿠터 모노코크 · 카페 레이서 · 풀 카울 스포츠) + 끼운 부품.
 	var points: Dictionary = {"axle_f": axle_f, "axle_r": axle_r, "head_top": head_top, "seat": info.anchor("seat"), "floor": info.anchor("floor"), "tail": info.anchor("tail"), "frame": info.anchor("frame"), "r": r}
 	_frame = _add_mesh("Frame", _cached("frame", func() -> ArrayMesh:
 		var st: SurfaceTool = ClayMesh.begin()
-		MotoParts.body(st, info.style, paint, trim, _seat_color(), shape, points, _seg(8))
+		MotoKit.body(st, info.style, paint, trim, _seat_color(), shape, points, _seg(8))
 		_add_body_parts(st)
 		return ClayMesh.commit(st)), self)
 	_rear_spin = _wheel_node("RearWheel", axle_r, self, false)
@@ -321,7 +325,7 @@ func _build_moto() -> void:
 	var q: Dictionary = {"axle_f": to_local.call(axle_f), "bar": to_local.call(bar), "head": head}
 	_add_mesh("Mesh", _cached("steer", func() -> ArrayMesh:
 		var ss: SurfaceTool = ClayMesh.begin()
-		MotoParts.steer(ss, info.style, paint, trim, q, r, lens_r, _seg(8))
+		MotoKit.steer(ss, info.style, paint, trim, q, r, lens_r, _seg(8))
 		_add_steer_parts(ss, head_top)
 		return ClayMesh.commit(ss)), _steer)
 	_front_spin = _wheel_node("FrontWheel", to_local.call(axle_f), _steer, true)
@@ -370,7 +374,7 @@ func _build_boat() -> void:
 			add_child(_paddle)
 			_add_mesh("PaddleMesh", _cached("paddle", func() -> ArrayMesh:
 				var ps: SurfaceTool = ClayMesh.begin()
-				BoatParts.paddle(ps, trim)
+				BoatKit.paddle(ps, trim)
 				return ClayMesh.commit(ps)), _paddle)
 			_steer.position = info.anchor("head")
 		"motor":
@@ -380,12 +384,12 @@ func _build_boat() -> void:
 			_add_mesh("Wheel", _cached("helm", func() -> ArrayMesh:
 				var ws: SurfaceTool = ClayMesh.begin()
 				var tilt: Basis = Basis(Vector3.RIGHT, deg_to_rad(35.0))
-				ClayMesh.add_torus(ws, Vector3.ZERO, 0.13, 0.014, VehicleShapes.chrome(), 28, 8, tilt)
+				ClayMesh.add_torus(ws, Vector3.ZERO, 0.13, 0.014, Shapes.chrome(), 28, 8, tilt)
 				for k: int in 3:
 					var a: float = TAU * float(k) / 3.0 + PI * 0.5
-					VehicleShapes.rod(ws, Vector3.ZERO, tilt * Vector3(cos(a) * 0.125, 0.0, sin(a) * 0.125), 0.008, VehicleShapes.chrome(), 6)
-				ClayMesh.add_lathe(ws, PackedVector2Array([Vector2(0.0, -0.02), Vector2(0.03, -0.02), Vector2(0.026, 0.02), Vector2(0.0, 0.022)]), 16, Transform3D(tilt, Vector3.ZERO), VehicleShapes.gloss(DARK))
-				VehicleShapes.rod(ws, Vector3.ZERO, tilt * Vector3(0.0, -0.18, 0.0), 0.014, VehicleShapes.gloss(DARK), 8)
+					Shapes.rod(ws, Vector3.ZERO, tilt * Vector3(cos(a) * 0.125, 0.0, sin(a) * 0.125), 0.008, Shapes.chrome(), 6)
+				ClayMesh.add_lathe(ws, PackedVector2Array([Vector2(0.0, -0.02), Vector2(0.03, -0.02), Vector2(0.026, 0.02), Vector2(0.0, 0.022)]), 16, Transform3D(tilt, Vector3.ZERO), Shapes.gloss(DARK))
+				Shapes.rod(ws, Vector3.ZERO, tilt * Vector3(0.0, -0.18, 0.0), 0.014, Shapes.gloss(DARK), 8)
 				return ClayMesh.commit(ws)), _steer)
 			# 선외기 (고물, 키 반대로 돈다).
 			_motor = Node3D.new()
@@ -394,7 +398,7 @@ func _build_boat() -> void:
 			add_child(_motor)
 			_add_mesh("OutboardMesh", _cached("outboard", func() -> ArrayMesh:
 				var ms: SurfaceTool = ClayMesh.begin()
-				BoatParts.outboard(ms, trim)
+				BoatKit.outboard(ms, trim)
 				return ClayMesh.commit(ms)), _motor)
 			_steer_head = info.anchor("head")
 		_:
@@ -404,19 +408,19 @@ func _build_boat() -> void:
 			_steer_axis = (bar - column).normalized()
 			_add_mesh("Bars", _cached("bars", func() -> ArrayMesh:
 				var hs: SurfaceTool = ClayMesh.begin()
-				BoatParts.jet_bars(hs, paint, bar - column)
+				BoatKit.jet_bars(hs, paint, bar - column)
 				return ClayMesh.commit(hs)), _steer)
 			_steer_head = info.anchor("head")
-	# 선체 (BoatParts — 카약 · 낚시 스키프 · 수상오토바이) + 끼운 부품.
+	# 선체 (boat_parts — 카약 · 낚시 스키프 · 수상오토바이) + 끼운 부품.
 	_frame = _add_mesh("Frame", _cached("frame", func() -> ArrayMesh:
 		var st: SurfaceTool = ClayMesh.begin()
 		match info.style:
 			"kayak":
-				BoatParts.kayak(st, paint, trim, seat_c, _seg(8))
+				BoatKit.kayak(st, paint, trim, seat_c, _seg(8))
 			"motor":
-				BoatParts.skiff(st, paint, trim, seat_c, _seg(8))
+				BoatKit.skiff(st, paint, trim, seat_c, _seg(8))
 			_:
-				BoatParts.jetski(st, paint, trim, seat_c, _seg(8))
+				BoatKit.jetski(st, paint, trim, seat_c, _seg(8))
 		_add_body_parts(st)
 		var front: VehicleCatalog.Part = part_in("front")
 		if front != null and not front.model.is_empty():
@@ -493,17 +497,17 @@ func _wheel_node(node_name: String, at: Vector3, parent: Node3D, front: bool) ->
 	var trim: Color = _trim()
 	var rim_r: float
 	if bike:
-		rim_r = r - BikeParts.tire_width(info.style, tire) * 0.92 - 0.02
+		rim_r = r - BikeKit.tire_width(info.style, tire) * 0.92 - 0.02
 	else:
-		rim_r = r - MotoParts.tire_width(info.style, not front, tire) * 0.82 * 0.92 - 0.02
+		rim_r = r - MotoKit.tire_width(info.style, not front, tire) * 0.82 * 0.92 - 0.02
 	_add_mesh("Mesh", _cached("wheel_f" if front else "wheel_r", func() -> ArrayMesh:
 		var ws: SurfaceTool = ClayMesh.begin()
 		if bike:
 			# 실제 자전거 바퀴: 타이어 · 림 · 허브 · 엇갈린 바퀴살 (MTB · 로드는 디스크 원판, 뒤는 스프로킷).
-			BikeParts.wheel(ws, r, info.style, tire, trim, not front, info.style == "mtb" or info.style == "road", _seg(8))
+			BikeKit.wheel(ws, r, info.style, tire, trim, not front, info.style == "mtb" or info.style == "road", _seg(8))
 		else:
 			# 실제 오토바이 바퀴: 둥근 타이어 · 림 · 휠(스쿠터 5 살 · 클래식 철사살 · 스포츠 Y 살) · 디스크 · 허브 모터.
-			MotoParts.wheel(ws, r, info.style, tire, trim, not front, _seg(8))
+			MotoKit.wheel(ws, r, info.style, tire, trim, not front, _seg(8))
 		return ClayMesh.commit(ws)), spin)
 	var glow: Dictionary = _glow()
 	if str(glow.get("where", "")) == "spoke":

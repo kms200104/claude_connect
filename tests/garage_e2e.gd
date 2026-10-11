@@ -44,6 +44,18 @@ func _press(app: Node, node_name: String) -> bool:
 	return true
 
 
+func _find_model(root: Node) -> VehicleModel:
+	if root == null:
+		return null
+	for c: Node in root.get_children():
+		if c is VehicleModel:
+			return c as VehicleModel
+		var found: VehicleModel = _find_model(c)
+		if found != null:
+			return found
+	return null
+
+
 func _find_app(root: Node) -> VehicleApp:
 	for c: Node in root.get_children():
 		if c is VehicleApp:
@@ -214,6 +226,9 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return str((Net.vehicle(bike).get("fit", {}) as Dictionary).get("drive", "")) == "drive_gear11", 3.0), "11단 구동계 (성능 업그레이드)")
 	var stats: VehicleCatalog.Stats = GameData.garage.stats("bike_city", Net.vehicle(bike).get("fit", {}) as Dictionary)
 	_check(absf(stats.top - 6.2 * 1.13) < 0.001, "최고 속도가 13%% 올랐다 (%.2f m/s)" % stats.top)
+	var preview_model: VehicleModel = _find_model(app.find_child("Preview", true, false))
+	_check(preview_model != null and preview_model.get_child_count() > 0, "미리보기에 탈것 모형이 있다")
+	await _shot("0_preview")
 	phone.close()
 	await get_tree().create_timer(0.4).timeout
 	_check(button.visible, "탈것이 생기면 HUD 탈것 단추가 보인다")
