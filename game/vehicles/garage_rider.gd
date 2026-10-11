@@ -505,7 +505,7 @@ func _process(delta: float) -> void:
 	if model != null:
 		model.set_pedal(player.rig.pedal_phase())
 	if state == State.RIDING and _gauge != null:
-		_gauge.text = "%d km/h" % roundi(speed_kmh())
+		_gauge.text = ("R · %d km/h" if drive_state.speed < -0.05 else "%d km/h") % roundi(speed_kmh())
 
 
 ## 차고가 바뀌었다 (부품을 바꿨으면 타고 있는 모양도 바꾼다).
@@ -535,10 +535,12 @@ func drive(delta: float, move_dir: Vector3, amount: float) -> void:
 	player.velocity.x = v.x
 	player.velocity.z = v.z
 	var speed: float = drive_state.speed
-	player.rig.set_pedal_rate(model.pedal_rate(speed) if info.pose in CharacterRig.PHASED_RIDES else 0.0)
+	# 후진: 자전거는 페달을 멈추고(프리휠) 카약은 거꾸로 젓는다.
+	var pedal_speed: float = absf(speed) if info.kind == "boat" else maxf(speed, 0.0)
+	player.rig.set_pedal_rate(model.pedal_rate(pedal_speed) if info.pose in CharacterRig.PHASED_RIDES else 0.0)
 	model.animate(speed, drive_state.steer, delta)
 	# 바퀴 구르는 소리: 빠를수록 크게 (오토바이는 조금 더 크게). 보트는 물 가르는 소리 대신 조용히.
-	Audio.set_loop("kick_roll_loop", clampf(speed / maxf(drive_state.stats.top, 0.1), 0.0, 1.0) * (0.35 if info.kind == "bike" else (0.2 if boat else 0.5)), delta)
+	Audio.set_loop("kick_roll_loop", clampf(absf(speed) / maxf(drive_state.stats.top, 0.1), 0.0, 1.0) * (0.35 if info.kind == "bike" else (0.2 if boat else 0.5)), delta)
 	_place_body()
 
 
@@ -553,7 +555,7 @@ func _keep_on_water(v: Vector3, delta: float) -> Vector3:
 			var keep: Vector2 = along / delta
 			drive_state.speed *= 0.97
 			return Vector3(keep.x, 0.0, keep.y)
-	if drive_state.speed > 1.5:
+	if absf(drive_state.speed) > 1.5:
 		Prefs.vibrate(40, 0.4)
 		Audio.play_sfx("fish_plop", -12.0, 0.7)
 	drive_state.speed = 0.0
@@ -584,7 +586,7 @@ func _place_body() -> void:
 	if is_boat():
 		# 물결에 출렁 (멈춰 있을수록 조금 더).
 		_bob_t += get_physics_process_delta_time()
-		var calm: float = 1.0 - clampf(drive_state.speed / 4.0, 0.0, 0.7)
+		var calm: float = 1.0 - clampf(absf(drive_state.speed) / 4.0, 0.0, 0.7)
 		height += sin(_bob_t * 1.7) * 0.025 * calm
 		basis = basis * Basis(Vector3.BACK, sin(_bob_t * 1.3) * 0.03 * calm)
 	player.body.transform = Transform3D(basis, basis * Vector3(0.0, height, 0.0))
@@ -593,7 +595,7 @@ func _place_body() -> void:
 
 ## 속도 (km/h, HUD · 테스트용).
 func speed_kmh() -> float:
-	return drive_state.speed * 3.6 if state == State.RIDING else 0.0
+	return absf(drive_state.speed) * 3.6 if state == State.RIDING else 0.0
 
 
 static func _flat(a: Vector3, b: Vector3) -> float:

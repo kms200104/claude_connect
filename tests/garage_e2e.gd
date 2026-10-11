@@ -133,7 +133,17 @@ func _button_drive(player: Player, rider: GarageRider) -> void:
 	var fast: float = rider.drive_state.speed
 	touch.call(7, RideButtons.Pad.DOWN, true)
 	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < 0.4, 2.5), "▼ 를 누르면 브레이크로 선다 (%.2f m/s 에서)" % fast)
+	var back_from: Vector3 = player.global_position
+	var facing: Vector3 = rider.drive_state.forward()
+	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < -0.5, 3.0), "선 뒤에도 ▼ 를 누르고 있으면 후진 (%.2f m/s)" % rider.drive_state.speed)
+	await get_tree().create_timer(0.6).timeout
+	_check((player.global_position - back_from).dot(facing) < -0.3, "뒤로 간다 (%.2fm)" % (player.global_position - back_from).dot(facing))
+	_check(rider.speed_kmh() > 0.5 and rider._gauge.text.begins_with("R"), "속도계에 후진 표시 (%s)" % rider._gauge.text)
 	touch.call(7, RideButtons.Pad.DOWN, false)
+	touch.call(8, RideButtons.Pad.UP, true)
+	_check(await _wait_until(func() -> bool: return rider.drive_state.speed > -0.05, 2.0), "후진 중 ▲ 를 누르면 먼저 선다")
+	touch.call(8, RideButtons.Pad.UP, false)
+	await _wait_until(func() -> bool: return absf(rider.drive_state.speed) < 0.1, 3.0)
 	Prefs.set_value(Prefs.RIDE_CONTROL, "stick")
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -275,7 +285,9 @@ func _run() -> void:
 	var fast: float = rider.drive_state.speed
 	player.joystick.output = _stick_toward(-rider.drive_state.forward())
 	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < 0.4, 2.0), "반대로 밀면 브레이크로 선다 (%.2f m/s 에서)" % fast)
+	_check(await _wait_until(func() -> bool: return rider.drive_state.speed < -0.4, 3.0), "선 뒤에도 반대로 밀고 있으면 후진 (%.2f m/s)" % rider.drive_state.speed)
 	player.joystick.output = Vector2.ZERO
+	await _wait_until(func() -> bool: return absf(rider.drive_state.speed) < 0.05, 3.0)
 	get_tree().process_frame.disconnect(watch)
 	await _button_drive(player, rider)
 	await get_tree().create_timer(0.4).timeout

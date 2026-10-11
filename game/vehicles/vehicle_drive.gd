@@ -7,15 +7,23 @@ extends RefCounted
 ##   가속도 자체도 jerk 만큼씩만 바뀌어 덜컥거리지 않는다. 브레이크도 꾹 누르듯 차오른다.
 ## 몸(차체)은 도는 만큼 안쪽으로 눕고(lean), 가속하면 앞이 들리고 브레이크면 숙인다(pitch).
 ## - 보트(v20): 오토바이처럼 스로틀이 천천히 열리고 닫히며, 놓으면 물 저항으로 미끄러지듯 선다. 덜 눕고, 가속하면 뱃머리가 든다.
+## - 후진(v21): 뒤로 밀면(버튼 ▼) 앞으로 가는 동안은 브레이크, 완전히 선 뒤에는 천천히 뒤로 간다 (최고 속도의 REVERSE_SHARE).
+##   후진 중에는 앞으로 밀어야 다시 선다. 뒤로 가며 밀면 그쪽으로 꽁무니를 돌린다.
 ## 판정이 아니라 내 화면의 움직임이다 — 서버는 그 탈것의 최고 속도까지만 받아 준다.
 
 const GRAVITY: float = 9.8
 ## 이 각도보다 크게 뒤로 밀면 브레이크 (도).
 const BRAKE_ANGLE: float = 125.0
+## 이보다 느리면 "섰다"로 보고, 뒤로 밀면 후진한다 (m/s).
+const STOP_SPEED: float = 0.15
+## 후진 최고 속도 = 최고 속도 × 이만큼 (REVERSE_MIN ~ REVERSE_MAX m/s).
+const REVERSE_SHARE: float = 0.22
+const REVERSE_MIN: float = 0.9
+const REVERSE_MAX: float = 2.6
 
 ## 진행 방향 (rad, Node3D.rotation.y 와 같다: 정면 = -Z 를 yaw 만큼 돌린 쪽).
 var yaw: float = 0.0
-## 앞으로 가는 속도 (m/s, 0 이상).
+## 앞으로 가는 속도 (m/s, 후진이면 음수).
 var speed: float = 0.0
 var yaw_rate: float = 0.0
 var throttle: float = 0.0
@@ -62,11 +70,21 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	var want_throttle: float = 0.0
 	var want_brake: float = 0.0
 	var want_rate: float = 0.0
+	var want_reverse: float = 0.0
 	var push: float = clampf(amount, 0.0, 1.0)
 	if push > 0.05 and dir != Vector3.ZERO:
 		var desired: float = atan2(-dir.x, -dir.z)
 		var diff: float = angle_difference(yaw, desired)
-		if absf(diff) > deg_to_rad(BRAKE_ANGLE) and speed > 1.0:
+		var back: bool = absf(diff) > deg_to_rad(BRAKE_ANGLE)
+		if back and speed > STOP_SPEED:
+			want_brake = push
+		elif back:
+			# 섰다 → 후진: 꽁무니가 민 쪽을 보도록 천천히 돈다.
+			want_reverse = push
+			var rate_back: float = stats.turn * 0.55
+			want_rate = clampf(angle_difference(yaw, desired + PI) / delta, -rate_back, rate_back)
+		elif speed < -STOP_SPEED:
+			# 후진 중에 앞으로 밀면 먼저 선다.
 			want_brake = push
 		else:
 			# 빠를수록 핸들을 덜 꺾는다 (최고 속도에서 turn_speed 배). 멈춘 채로도 끌듯이 천천히 돈다.
@@ -79,7 +97,10 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	yaw = wrapf(yaw + yaw_rate * delta, -PI, PI)
 	var top: float = stats.top * clampf(wade, 0.2, 1.0)
 	var a_cmd: float = 0.0
-	if kind == "moto" or kind == "boat":
+	var reversing: bool = want_reverse > 0.0 or speed < 0.0
+	if reversing:
+		_step_reverse(want_reverse, want_brake, top, delta)
+	elif kind == "moto" or kind == "boat":
 		var rise: float = float(rules.get("throttle_rise", 1.6))
 		var fall: float = float(rules.get("throttle_fall", 3.5))
 		throttle = move_toward(throttle, want_throttle, (rise if want_throttle > throttle else fall) * delta)
@@ -107,7 +128,8 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 		a_cmd -= stats.brake * brake
 		a_cmd -= stats.coast + 0.01 * speed * speed
 		accel = lerpf(accel, a_cmd, 1.0 - exp(-12.0 * delta))
-	speed = maxf(0.0, speed + accel * delta)
+	if not reversing:
+		speed = maxf(0.0, speed + accel * delta)
 	if speed == 0.0 and accel < 0.0:
 		accel = 0.0
 	# 눕기: 원운동에 필요한 기울기 atan(v·ω/g), 오토바이가 조금 더 눕는다.
@@ -119,14 +141,34 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 		pitch = lerpf(pitch, clampf(accel * 0.02 + speed * 0.004, -0.04, 0.1), 1.0 - exp(-3.0 * delta))
 	else:
 		pitch = lerpf(pitch, clampf(accel * 0.012, -0.06, 0.05), 1.0 - exp(-8.0 * delta))
-	# 핸들: 자전거 운동학 tan(δ) = L·ω / v (느릴 때는 크게).
-	steer = clampf(atan(wheelbase * yaw_rate / maxf(speed, 0.8)), -0.5, 0.5)
+	# 핸들: 자전거 운동학 tan(δ) = L·ω / v (느릴 때는 크게, 후진이면 반대로 꺾는다).
+	var v: float = speed if absf(speed) > 0.8 else (-0.8 if speed < 0.0 else 0.8)
+	steer = clampf(atan(wheelbase * yaw_rate / v), -0.5, 0.5)
 	return forward() * speed
+
+
+## 후진 최고 속도 (m/s).
+func reverse_top() -> float:
+	return clampf(stats.top * REVERSE_SHARE, REVERSE_MIN, REVERSE_MAX)
+
+
+## 후진: 미는 만큼 천천히 뒤로 (손을 떼거나 앞으로 밀면 선다). 스로틀 · 브레이크 표시는 쉰다.
+func _step_reverse(want: float, want_brake: float, top: float, delta: float) -> void:
+	throttle = move_toward(throttle, 0.0, 6.0 * delta)
+	brake = move_toward(brake, want_brake, 8.0 * delta)
+	var target: float = -minf(reverse_top(), top) * want
+	var rate: float = stats.accel * 0.5 if target < speed else maxf(stats.brake * maxf(brake, 0.4), stats.coast * 3.0)
+	var before: float = speed
+	speed = move_toward(speed, target, rate * delta)
+	accel = (speed - before) / delta
 
 
 ## 벽 · 나무에 막혀 실제로 간 만큼으로 속도를 줄인다 (부딪치면 선다).
 func after_move(real_velocity: Vector3) -> void:
 	var along: float = Vector3(real_velocity.x, 0.0, real_velocity.z).dot(forward())
-	if along < speed - 0.05:
+	if speed >= 0.0 and along < speed - 0.05:
 		speed = maxf(0.0, along)
 		accel = minf(accel, 0.0)
+	elif speed < 0.0 and along > speed + 0.05:
+		speed = minf(0.0, along)
+		accel = maxf(accel, 0.0)

@@ -1,7 +1,7 @@
 class_name RideButtons
 extends Control
 ## 탈것 버튼 조작 (설정 "탈것 조작: 버튼", Prefs.RIDE_CONTROL): 타는 동안 조이스틱 대신
-## 왼쪽 ▲ 가속 · ▼ 브레이크, 오른쪽 ◀ ▶ 핸들 (조이스틱을 오른쪽에 두는 설정이면 좌우가 바뀐다).
+## 왼쪽 ▲ 가속 · ▼ 브레이크/후진(달리는 중이면 브레이크, 선 뒤에는 후진), 오른쪽 ◀ ▶ 핸들 (조이스틱을 오른쪽에 두는 설정이면 좌우가 바뀐다).
 ## 손가락마다(터치 index) 따로 잡아 ▲ 를 누른 채 ◀ 도 누를 수 있다. 마우스는 터치로 흉내 낸다 (emulate_touch_from_mouse).
 ## 버튼 입력은 조이스틱과 같은 (가고 싶은 방향, 세기)로 바꿔 탈것에 넘긴다 (drive_input) — 탈것마다 따로 고칠 필요가 없다.
 
@@ -98,17 +98,17 @@ func _refresh() -> void:
 	queue_redraw()
 
 
-## 버튼 → 탈것이 받는 (가고 싶은 방향, 세기). yaw = 지금 탈것 방향 (Node3D.rotation.y), speed = 지금 빠르기.
-## ▲ = 앞으로 (◀ ▶ 면 그쪽으로 꺾으며), ▼ = 달리는 중이면 브레이크, 핸들만 = 천천히 돌며 나아감.
-static func drive_input(yaw: float, speed: float, throttle_in: int, steer_in: int) -> Array:
-	var forward: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+## 버튼 → 탈것이 받는 (가고 싶은 방향, 세기). yaw = 지금 탈것 방향 (Node3D.rotation.y). 브레이크 · 후진은 VehicleDrive 가 빠르기로 가른다.
+## ▲ = 앞으로 (◀ ▶ 면 그쪽으로 꺾으며), ▼ = 달리는 중이면 브레이크 · 선 뒤에는 후진 (◀ ▶ 면 뱃머리 · 앞바퀴를 그쪽으로 돌리며),
+## 핸들만 = 천천히 돌며 나아감. 후진 중에 ▲ 를 누르면 먼저 선다 (VehicleDrive).
+static func drive_input(yaw: float, _speed: float, throttle_in: int, steer_in: int) -> Array:
 	# + yaw = 왼쪽으로 돈다. ◀(steer -1) 이면 yaw + STEER_ANGLE.
 	var aim: float = yaw - float(steer_in) * STEER_ANGLE
 	var aimed: Vector3 = Vector3(-sin(aim), 0.0, -cos(aim))
 	if throttle_in > 0:
 		return [aimed, 1.0]
 	if throttle_in < 0:
-		return [-forward, 1.0] if speed > 0.3 else [Vector3.ZERO, 0.0]
+		return [-aimed, 1.0]
 	if steer_in != 0:
 		return [aimed, CREEP]
 	return [Vector3.ZERO, 0.0]
@@ -117,7 +117,7 @@ static func drive_input(yaw: float, speed: float, throttle_in: int, steer_in: in
 func _draw() -> void:
 	var held: Array = _touches.values()
 	var font: Font = get_theme_default_font()
-	var words: Dictionary[Pad, String] = {Pad.UP: "가속", Pad.DOWN: "브레이크", Pad.LEFT: "왼쪽", Pad.RIGHT: "오른쪽"}
+	var words: Dictionary[Pad, String] = {Pad.UP: "가속", Pad.DOWN: "브레이크·후진", Pad.LEFT: "왼쪽", Pad.RIGHT: "오른쪽"}
 	for pad: Pad in [Pad.UP, Pad.DOWN, Pad.LEFT, Pad.RIGHT]:
 		var r: Rect2 = pad_rect(pad)
 		var box: StyleBoxFlat = StyleBoxFlat.new()
