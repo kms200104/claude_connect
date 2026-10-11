@@ -63,6 +63,14 @@ float noise2(vec2 p) {
 	return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), u.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
+// 빗방울 하나 (칸 cell 안 어딘가에 떨어져 0.7m 까지 퍼지는 고리): 점 p 에서의 진하기.
+float rain_ring(vec2 cell, vec2 p, float t) {
+	vec2 center = (cell + 0.3 + 0.4 * vec2(hash2(cell), hash2(cell + 7.1))) * 1.5;
+	float phase = fract(t * 0.8 + hash2(cell + 3.3));
+	float ring = abs(length(p - center) - phase * 0.7);
+	return smoothstep(0.05, 0.0, ring) * (1.0 - phase);
+}
+
 // 여울 안이면 1, 가장자리에서 1.4m 에 걸쳐 0 으로.
 float shallow_of(vec4 rect, vec2 p) {
 	if (rect.z <= 0.0) {
@@ -171,12 +179,17 @@ void fragment() {
 	}
 	color = mix(color, foam_color.rgb, foam * 0.85);
 	// 빗방울 동심원 (1.5m 칸마다 하나, 칸마다 다른 시각에 떨어진다).
-	if (world_wetness > 0.01) {
-		vec2 cell = floor(local_xz / 1.5);
-		vec2 center = (cell + 0.3 + 0.4 * vec2(hash2(cell), hash2(cell + 7.1))) * 1.5;
-		float phase = fract(t * 0.8 + hash2(cell + 3.3));
-		float ring = abs(length(local_xz - center) - phase * 0.7);
-		color = mix(color, foam_color.rgb, smoothstep(0.05, 0.0, ring) * (1.0 - phase) * world_wetness * 0.7);
+	// 고리는 0.7m 까지 퍼져 제 칸 경계를 넘으므로 둘레 3×3 칸의 고리를 모두 본다 (제 칸만 보면 경계에서 반듯하게 잘린다).
+	// 40m 너머는 고리가 화소보다 작아 건너뛴다 (비 올 때만, 가까운 물만 계산이 늘어난다).
+	if (world_wetness > 0.01 && cam_dist < 40.0) {
+		vec2 base = floor(local_xz / 1.5) - 1.0;
+		float drops = 0.0;
+		for (int j = 0; j < 3; j++) {
+			for (int i = 0; i < 3; i++) {
+				drops = max(drops, rain_ring(base + vec2(float(i), float(j)), local_xz, t));
+			}
+		}
+		color = mix(color, foam_color.rgb, drops * world_wetness * 0.7);
 	}
 	// 잔물결 법선: 하늘 반사(비스듬히 볼수록) · 윤슬.
 	vec2 slope = ripple_slope(local_xz, t) * (1.0 - smoothstep(30.0, 70.0, cam_dist) * 0.7);
