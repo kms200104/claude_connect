@@ -65,6 +65,9 @@ ipconfig | findstr /i "IPv4"
 
 echo.
 echo === 4. Starting server on port !PORT! - close this window to stop ===
+rem Test tools for your own PC: the settings app shows "Test: get 200 billion sol". Run "set DEV_TOOLS=0" first to turn them off.
+if not defined DEV_TOOLS set "DEV_TOOLS=1"
+echo Test tools DEV_TOOLS=!DEV_TOOLS! - settings app: "Test: get 200 billion sol"
 call npm start
 if errorlevel 2 echo The port was taken while starting. Run this file again.
 

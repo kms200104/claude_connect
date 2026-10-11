@@ -20,6 +20,9 @@ ipconfig | findstr /i "IPv4"
 
 echo.
 echo === 3. Starting server - close this window to stop ===
+rem Test tools for your own PC: the settings app shows "Test: get 200 billion sol". Run "set DEV_TOOLS=0" first to turn them off.
+if not defined DEV_TOOLS set "DEV_TOOLS=1"
+echo Test tools DEV_TOOLS=%DEV_TOOLS% - settings app: "Test: get 200 billion sol"
 call npm start
 
 echo.
