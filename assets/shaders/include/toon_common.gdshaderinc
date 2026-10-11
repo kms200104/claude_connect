@@ -40,10 +40,14 @@ uniform float emission_energy = 0.0;
 const vec3 HAIR_CENTER = vec3(0.0, 0.43, 0.02);
 varying vec3 v_local;
 varying float v_hair;
+// 표면 마감 (v21, 탈것 — VehicleShapes): 정점 색 알파 0.72 = 광택 도장, 0.82 = 크롬 · 연마 금속, 0.62 = 유리.
+// 하늘(위) · 땅(아래)을 비추는 반사를 더해 매끈한 칠 · 금속 · 유리처럼 보이게 한다. 그 밖의 메시(알파 1)는 그대로.
+varying float v_finish;
 
 void vertex() {
 	v_local = VERTEX;
 	v_hair = 1.0 - step(0.02, abs(COLOR.a - 0.5));
+	v_finish = COLOR.a;
 	VERTEX += world_curve_local_offset(MODEL_MATRIX, VERTEX);
 	// 정점 색(메시·MultiMesh 인스턴스 색)은 sRGB 로 칠해 두었다. 조명 계산은 선형 공간이라 여기서 바꾼다 (정점마다 한 번).
 	COLOR.rgb = mix(COLOR.rgb / 12.92, pow((COLOR.rgb + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), COLOR.rgb));
@@ -138,6 +142,28 @@ void fragment() {
 	ROUGHNESS = toon_softness;
 	METALLIC = 0.0;
 	EMISSION = emission * emission_energy * night_light;
+	if (v_finish > 0.58 && v_finish < 0.86) {
+		vec3 n = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 v = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+		vec3 r = reflect(-v, n);
+		// 둘레 풍경: 위는 하늘, 지평선은 밝은 띠, 아래는 땅빛.
+		vec3 sky = mix(vec3(0.62, 0.74, 0.88), vec3(0.42, 0.6, 0.86), smoothstep(0.1, 0.9, r.y));
+		vec3 env = mix(vec3(0.24, 0.23, 0.2), sky, smoothstep(-0.12, 0.08, r.y)) + vec3(0.35) * exp(-abs(r.y) * 14.0);
+		float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
+		float day = 1.0 - night_light * 0.85;
+		if (v_finish > 0.78) {
+			// 크롬: 바탕은 어둡게, 반사가 색을 정한다.
+			ALBEDO *= 0.3;
+			EMISSION += env * base * 0.85 * day;
+		} else if (v_finish > 0.68) {
+			// 광택 도장: 가장자리일수록 강하게 비치고, 하늘 쪽 하이라이트.
+			EMISSION += env * (0.06 + 0.42 * fres) * day + vec3(0.5) * pow(max(r.y, 0.0), 30.0) * 0.35 * day;
+		} else {
+			// 유리: 어둡게 비치는 면.
+			ALBEDO *= 0.45;
+			EMISSION += env * (0.18 + 0.6 * fres) * day;
+		}
+	}
 #ifdef SEE_THROUGH
 	if (sight_overlay) {
 		ALBEDO = vec3(0.0);

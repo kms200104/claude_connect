@@ -332,6 +332,29 @@ func _ready() -> void:
 					add_child(mi)
 				z += maxf(size.z, 0.6) + 0.6
 			_camera(Vector3(0.0, 2.2 + z * 0.55, 2.6 + z * 0.4), Vector3(0.0, 0.3, -z * 0.45), 40.0)
+		"aqua":
+			# 물놀이 배 (v21): 바나나 튜브 · 끄는 모터보트 · 유람선을 물 위에 (--ids=banana,cruise 로 고른다).
+			var sea2: MeshInstance3D = MeshInstance3D.new()
+			var plane2: PlaneMesh = PlaneMesh.new()
+			plane2.size = Vector2(60.0, 60.0)
+			plane2.subdivide_width = 59
+			plane2.subdivide_depth = 59
+			sea2.mesh = plane2
+			var mat2: ShaderMaterial = (load("res://assets/materials/water.tres") as ShaderMaterial).duplicate()
+			mat2.set_shader_parameter("half_extent", Vector2(1000.0, 1000.0))
+			sea2.material_override = mat2
+			add_child(sea2)
+			var which: PackedStringArray = _ids if not _ids.is_empty() else PackedStringArray(["banana", "cruise"])
+			var x0: float = -2.6 * float(which.size() - 1)
+			for w: String in which:
+				var mi2: MeshInstance3D = MeshInstance3D.new()
+				mi2.material_override = load("res://assets/materials/foliage.tres")
+				mi2.mesh = AquaBoats.banana_mesh() if w == "banana" else AquaBoats.cruise_mesh()
+				mi2.position = Vector3(x0, 0.0, 0.0)
+				mi2.rotation.y = deg_to_rad(-58.0)
+				add_child(mi2)
+				x0 += 5.2
+			_camera(_cam if Array(OS.get_cmdline_user_args()).any(func(a: String) -> bool: return a.begins_with("--cam=")) else Vector3(0.0, 3.2, 7.5), _at, 40.0)
 		"vehicles":
 			# 차고 탈것 (v19): --ids=모델+부품+부품,… (없으면 모델 전부), --night 이면 밤(전조등 · 빛 장식), --empty 면 사람 없이.
 			var args: PackedStringArray = OS.get_cmdline_user_args()

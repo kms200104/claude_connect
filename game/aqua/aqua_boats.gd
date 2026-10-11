@@ -10,7 +10,7 @@ const ROPE_BLUE: Color = Color("#2F5FA8")
 const HULL_WHITE: Color = Color("#F4F1EA")
 const HULL_BLUE: Color = Color("#2E6FB5")
 const HULL_RED: Color = Color("#D24B3C")
-const DECK: Color = Color("#B98A57")
+const DECK: Color = Color("#A98E70")
 const GLASS: Color = Color("#3D5B78")
 const CANOPY: Color = Color("#F2F0E6")
 const CANOPY_STRIPE: Color = Color("#3C8FD0")
@@ -45,69 +45,211 @@ static func cruise_seats() -> Array[Dictionary]:
 
 ## 끄는 줄을 매는 바나나 코 (배 좌표).
 static func banana_nose() -> Vector3:
-	return Vector3(0.0, 0.55, -2.05)
+	return Vector3(0.0, 0.39, -2.02)
 
 
+## 바나나 튜브: 실제 놀이용 바나나 보트처럼 — 한 줄로 이어진 PVC 본 튜브(앞은 위로 휘며 뾰족한 원뿔 코),
+## 이음매 띠 · 옆면 빨간 띠, 양옆 발 받침 튜브, 자리마다 양쪽 손잡이 고리, 바람 밸브, 코 아래 끄는 고리.
 static func banana_mesh() -> ArrayMesh:
 	var st: SurfaceTool = ClayMesh.begin()
-	# 몸통: 앞이 들린 굽은 튜브 (마디마다 타원체를 겹쳐 매끈하게).
-	var n: int = 9
-	for i: int in n:
-		var t: float = float(i) / float(n - 1)
-		var z: float = lerpf(1.75, -1.75, t)
-		var lift: float = 0.18 + pow(maxf(0.0, t - 0.55) / 0.45, 2.0) * 0.32
-		var r: float = 0.34 * (1.0 - pow(absf(t - 0.45) / 0.55, 3.0) * 0.45)
-		var c: Color = BANANA.lerp(BANANA_DARK, 0.25 * absf(t - 0.5))
-		ClayMesh.add_ellipsoid(st, Vector3(0.0, lift, z), Vector3(r, r * 0.95, 0.42), c, 12, 7)
-	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.58, -2.0), Vector3(0.11, 0.1, 0.16), BANANA_TIP, 8, 5)
-	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.17, 1.95), Vector3(0.1, 0.09, 0.12), BANANA_TIP, 8, 5)
-	# 양옆 받침 튜브 (뒤집히지 않게): 몸통보다 짧고 가늘게, 앞뒤 끝이 둥글게.
+	var yellow: Color = VehicleShapes.gloss(BANANA)
+	var stripe: Color = VehicleShapes.gloss(Color("#D8402F"))
+	# 본 튜브의 가운데 줄: 꼬리(+z) → 몸통 → 앞에서 위로 휘어 코끝.
+	var spine: PackedVector3Array = VehicleShapes.spline(PackedVector3Array([
+		Vector3(0.0, 0.2, 1.62), Vector3(0.0, 0.2, 1.0), Vector3(0.0, 0.2, 0.0), Vector3(0.0, 0.205, -0.9),
+		Vector3(0.0, 0.24, -1.45), Vector3(0.0, 0.36, -1.85), Vector3(0.0, 0.56, -2.08), Vector3(0.0, 0.74, -2.18),
+	]), 8)
+	# 꼬리는 반구로 둥글게 닫는다 (앞쪽에 점을 더해 굵기를 줄인다).
+	var tail: PackedVector3Array = PackedVector3Array()
+	var tail_r: PackedFloat32Array = PackedFloat32Array()
+	for i: int in 6:
+		var a: float = PI * 0.5 * float(6 - i) / 6.0
+		tail.append(Vector3(0.0, 0.2, 1.62 + sin(a) * 0.3))
+		tail_r.append(cos(a) * 0.3)
+	var path: PackedVector3Array = PackedVector3Array()
+	var radii: PackedFloat32Array = PackedFloat32Array()
+	for i: int in tail.size():
+		path.append(tail[i])
+		radii.append(maxf(tail_r[i], 0.004))
+	var total: float = 0.0
+	var lengths: PackedFloat32Array = PackedFloat32Array([0.0])
+	for i: int in range(1, spine.size()):
+		total += spine[i].distance_to(spine[i - 1])
+		lengths.append(total)
+	for i: int in spine.size():
+		var t: float = lengths[i] / total
+		# 몸통은 굵기 그대로, 앞 35% 에서 원뿔처럼 가늘어져 코끝은 손가락만큼.
+		var taper: float = clampf((t - 0.62) / 0.38, 0.0, 1.0)
+		path.append(spine[i])
+		radii.append(lerpf(0.3, 0.035, pow(taper, 0.85)))
+	# 꼬리 끝(반구) → 몸통 → 코 차례로 한 줄.
+	var main_color: Callable = func(p: Vector3, _n: Vector3) -> Color:
+		# 옆면 가운데 높이의 빨간 띠 (몸통 구간만).
+		if absf(p.x) > 0.2 and absf(p.y - 0.2) < 0.06 and p.z > -1.5 and p.z < 1.55:
+			return stripe
+		return yellow
+	VehicleShapes.sweep(st, path, radii, main_color, 40, true)
+	# 이음매 띠 (용접 자리) · 코 이음매.
+	for z: float in [-1.25, -0.6, 0.12, 0.85, 1.45]:
+		ClayMesh.add_torus(st, Vector3(0.0, 0.2, z), 0.3, 0.012, VehicleShapes.gloss(BANANA_DARK), 30, 5, Basis(Vector3.RIGHT, PI * 0.5))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.745, -2.185), Vector3(0.042, 0.042, 0.042), VehicleShapes.gloss(BANANA_TIP), 10, 6)
+	# 발 받침 튜브 (양옆, 앞뒤 둥근 끝) — 본 튜브 옆구리 아래에 붙는다.
 	for side: float in [-1.0, 1.0]:
-		ClayMesh.add_capsule(st, Vector3(side * 0.5, 0.06, 1.05), Vector3(side * 0.5, 0.1, -0.95), 0.14, BANANA.darkened(0.08), 10, 3)
-		ClayMesh.add_rod(st, Vector3(side * 0.2, 0.14, 0.05), Vector3(side * 0.45, 0.09, 0.05), 0.06, 0.06, BANANA.darkened(0.12), 6)
-	# 손잡이 고리 (자리마다 앞에).
+		var pp: PackedVector3Array = PackedVector3Array()
+		var pr: PackedFloat32Array = PackedFloat32Array()
+		# 앞뒤 끝은 반구 (끝 근처에 점을 촘촘히).
+		var zs: PackedFloat32Array = PackedFloat32Array()
+		for k2: int in 7:
+			zs.append(1.33 - 0.13 * (1.0 - cos(PI * 0.5 * float(k2) / 6.0)))
+		for k3: int in range(1, 12):
+			zs.append(lerpf(1.2, -1.05, float(k3) / 12.0))
+		for k4: int in 7:
+			zs.append(-1.05 - 0.13 * sin(PI * 0.5 * float(k4) / 6.0))
+		for z2: float in zs:
+			var cap: float = 0.0
+			if z2 > 1.2:
+				cap = (z2 - 1.2) / 0.13
+			elif z2 < -1.05:
+				cap = (-1.05 - z2) / 0.13
+			var rise: float = clampf((-0.6 - z2) / 0.6, 0.0, 1.0) * 0.05
+			pp.append(Vector3(side * 0.43, 0.07 + rise, z2))
+			pr.append(0.13 * sqrt(maxf(1.0 - cap * cap, 0.0)) + 0.003)
+		VehicleShapes.sweep(st, pp, pr, yellow, 18, true)
+		# 받침 튜브와 본 튜브를 잇는 천 (앞뒤 두 자리).
+		for z3: float in [-0.7, 0.75]:
+			VehicleShapes.strip(st, PackedVector3Array([Vector3(side * 0.2, 0.08, z3 - 0.18), Vector3(side * 0.2, 0.08, z3 + 0.18)]), Vector3(side, 0.0, 0.0), 0.3, 0.02, matte_c(BANANA_DARK), 10)
+	# 자리마다 양쪽 손잡이: 검은 고무 D 고리 + 붙인 바탕 천.
 	for seat: Dictionary in banana_seats():
 		var at: Vector3 = seat["at"]
-		ClayMesh.add_torus(st, Vector3(0.0, at.y + 0.08, at.z - 0.3), 0.1, 0.025, ROPE_BLUE, 10, 4, Basis(Vector3.RIGHT, PI * 0.5))
+		for side2: float in [-1.0, 1.0]:
+			var base_p: Vector3 = Vector3(side2 * 0.16, 0.2 + 0.255, at.z - 0.24)
+			var out_dir: Vector3 = Vector3(side2 * 0.53, 0.85, 0.0).normalized()
+			ClayMesh.add_ellipsoid(st, base_p, Vector3(0.045, 0.008, 0.06), VehicleShapes.gloss(BANANA_DARK), 12, 4, Basis(Vector3.BACK, -side2 * 0.56))
+			var loop: PackedVector3Array = PackedVector3Array()
+			for k: int in 11:
+				var a2: float = PI * float(k) / 10.0
+				loop.append(base_p + out_dir * (0.008 + sin(a2) * 0.07) + Vector3(0.0, 0.0, -cos(a2) * 0.075))
+			VehicleShapes.sweep(st, loop, 0.014, matte_c(Color("#1E1E22")), 8, true)
+	# 바람 밸브 (위 · 받침 튜브) · 꼬리 이름표.
+	for v: Vector3 in [Vector3(0.0, 0.495, 1.4), Vector3(0.0, 0.495, -1.05), Vector3(0.43, 0.195, 0.0), Vector3(-0.43, 0.195, 0.0)]:
+		ClayMesh.add_lathe(st, PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.03, 0.0), Vector2(0.03, 0.025), Vector2(0.018, 0.03), Vector2(0.0, 0.03)]), 12, Transform3D(Basis(), v), matte_c(Color("#2F2F34")))
+	# 코 아래 끄는 고리 (스테인리스 D 링 + 보강 천).
+	var ring_at: Vector3 = Vector3(0.0, 0.42, -1.96)
+	ClayMesh.add_ellipsoid(st, ring_at + Vector3(0.0, 0.02, 0.02), Vector3(0.09, 0.02, 0.1), matte_c(Color("#2B2B30")), 10, 4, Basis(Vector3.RIGHT, 0.9))
+	ClayMesh.add_torus(st, ring_at + Vector3(0.0, -0.03, -0.06), 0.05, 0.011, VehicleShapes.chrome(), 16, 6, Basis(Vector3.BACK, PI * 0.5))
 	return ClayMesh.commit(st)
 
 
+static func matte_c(c: Color) -> Color:
+	return VehicleShapes.matte(c)
+
+
+## 유람선: 작은 호수 관광선처럼 — 뱃머리가 벌어지며 솟는 선체(아래는 V, 고물은 평평한 트랜섬, 물 아래는 붉은 방오 도료),
+## 갑판 둘레 낮은 뱃전벽 · 스테인리스 난간, 앞 조타실(빙 두른 창 · 처마 지붕), 양쪽 긴 의자, 구명 튜브, 고물 사다리 · 깃대.
 static func cruise_mesh() -> ArrayMesh:
 	var st: SurfaceTool = ClayMesh.begin()
-	var hull: Callable = func(p: Vector3, _n: Vector3) -> Color:
-		if p.y < 0.05:
-			return HULL_BLUE
-		return HULL_RED if p.y < 0.16 else HULL_WHITE
-	# 선체: 길쭉한 둥근 상자 + 뾰족한 뱃머리.
-	ClayMesh.add_rounded_box(st, Vector3(0.0, 0.25, 0.4), Vector3(2.7, 0.9, 6.4), 0.35, hull, Basis(), 16, 8)
-	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.28, -2.75), Vector3(1.32, 0.46, 1.6), hull, 14, 7)
-	# 갑판.
-	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y - 0.04, 0.3), Vector3(2.4, 0.08, 6.6), 0.15, DECK, Basis(), 12, 4)
-	# 앞 조타실 (창 띠).
-	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 0.62, -2.35), Vector3(1.9, 1.24, 1.3), 0.25, HULL_WHITE, Basis(), 12, 6)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 0.82, -2.35), Vector3(1.96, 0.4, 1.36), 0.2, GLASS, Basis(), 12, 4)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 1.3, -2.35), Vector3(2.1, 0.12, 1.5), 0.25, HULL_BLUE, Basis(), 12, 4)
-	# 조타실 뒤 짧은 줄무늬 차양 (손님 자리는 하늘이 트여 위에서도 보인다).
-	for x: float in [-1.0, 1.0]:
-		ClayMesh.add_rod(st, Vector3(x, DECK_Y, -1.25), Vector3(x, DECK_Y + 1.42, -1.25), 0.04, 0.04, RAIL, 6)
-	for i: int in 2:
-		var c: Color = CANOPY if i % 2 == 0 else CANOPY_STRIPE
-		ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 1.42, -1.5 + float(i) * 0.4), Vector3(2.3, 0.06, 0.42), 0.3, c, Basis(), 8, 3)
-	# 뱃전 난간.
+	var white: Color = VehicleShapes.gloss(HULL_WHITE)
+	var blue: Color = VehicleShapes.gloss(HULL_BLUE)
+	var hull_color: Callable = func(p: Vector3, _n: Vector3) -> Color:
+		if p.y < -0.02:
+			return VehicleShapes.gloss(Color("#8E2F2A"))
+		if p.y < 0.03:
+			return VehicleShapes.gloss(Color("#1E2A38"))
+		return white
+	var bow: float = -3.95
+	var stern: float = 3.65
+	var rings: Array[PackedVector3Array] = []
+	for i: int in 34:
+		var t: float = float(i) / 33.0
+		var z: float = lerpf(bow, stern, t)
+		var fwd: float = clampf(t / 0.36, 0.0, 1.0)
+		var half_w: float = 1.32 * pow(sin(fwd * PI * 0.5), 0.75) * (1.0 - 0.06 * smoothstep(0.85, 1.0, t)) + 0.015
+		var deck: float = DECK_Y + 0.12 * pow(1.0 - fwd, 2.0)
+		var keel: float = -0.34 + 0.3 * pow(1.0 - clampf(t / 0.28, 0.0, 1.0), 1.6)
+		var dead: float = lerpf(1.1, 0.28, smoothstep(0.0, 0.6, t))
+		rings.append(VehicleShapes.hull_section(z, half_w, deck, deck - 0.02, keel, 0.55, dead, 36))
+	VehicleShapes.loft(st, rings, hull_color, true, true)
+	# 갑판 둘레 뱃전벽 (갑판 위 0.26 m, 바깥으로 살짝 벌어진다) · 뱃전 띠.
 	for side: float in [-1.0, 1.0]:
-		ClayMesh.add_rod(st, Vector3(side * 1.18, DECK_Y + 0.55, -1.6), Vector3(side * 1.18, DECK_Y + 0.55, 3.25), 0.03, 0.03, RAIL, 5)
-		for z: float in [-1.6, -0.4, 0.8, 2.0, 3.2]:
-			ClayMesh.add_rod(st, Vector3(side * 1.18, DECK_Y, z), Vector3(side * 1.18, DECK_Y + 0.55, z), 0.025, 0.025, RAIL, 5)
-		# 긴 의자 (바깥을 본다): 앉는 판 + 등받이.
-		ClayMesh.add_rounded_box(st, Vector3(side * 0.42, DECK_Y + BENCH_Y - 0.05, 0.53), Vector3(0.42, 0.08, 3.9), 0.2, WOOD_LIGHT, Basis(), 8, 3)
-		ClayMesh.add_rounded_box(st, Vector3(side * 0.2, DECK_Y + BENCH_Y + 0.22, 0.53), Vector3(0.07, 0.45, 3.9), 0.2, WOOD, Basis(), 8, 3)
-		for z: float in [-1.2, 0.53, 2.25]:
-			ClayMesh.add_rounded_box(st, Vector3(side * 0.42, DECK_Y + BENCH_Y * 0.5 - 0.05, z), Vector3(0.36, BENCH_Y - 0.06, 0.08), 0.2, WOOD, Basis(), 6, 3)
-		# 구명 튜브 (조타실 옆).
-		ClayMesh.add_torus(st, Vector3(side * 0.99, DECK_Y + 0.7, -2.0), 0.2, 0.06, RING, 12, 5, Basis(Vector3.BACK, PI * 0.5))
-	# 고물 깃대 · 깃발.
-	ClayMesh.add_rod(st, Vector3(0.0, DECK_Y, 3.45), Vector3(0.0, DECK_Y + 1.35, 3.45), 0.03, 0.025, RAIL, 5)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 1.18, 3.72), Vector3(0.03, 0.3, 0.52), 0.2, HULL_RED, Basis(), 6, 3)
+		var edge: PackedVector3Array = PackedVector3Array()
+		var heights: PackedFloat32Array = PackedFloat32Array()
+		for i: int in 26:
+			var t2: float = lerpf(0.08, 0.985, float(i) / 25.0)
+			var z2: float = lerpf(bow, stern, t2)
+			var fwd2: float = clampf(t2 / 0.36, 0.0, 1.0)
+			var hw: float = 1.32 * pow(sin(fwd2 * PI * 0.5), 0.75) * (1.0 - 0.06 * smoothstep(0.85, 1.0, t2)) - 0.04
+			edge.append(Vector3(side * hw, DECK_Y + 0.12 * pow(1.0 - fwd2, 2.0) + 0.13, z2))
+			heights.append(0.26)
+		VehicleShapes.strip(st, edge, Vector3(0.0, 1.0, 0.0), heights, 0.05, white, 10)
+		var rub: PackedVector3Array = PackedVector3Array()
+		for p2: Vector3 in edge:
+			rub.append(Vector3(p2.x + side * 0.045, p2.y - 0.13, p2.z))
+		VehicleShapes.sweep(st, rub, 0.035, VehicleShapes.matte(Color("#3A3F46")), 8, true)
+		# 뱃전 아래 파란 띠 (선체 옆면에 붙인 띠).
+		var band: PackedVector3Array = PackedVector3Array()
+		for k0: int in range(2, edge.size()):
+			var t3: float = lerpf(0.08, 0.985, float(k0) / 25.0)
+			var fwd3: float = clampf(t3 / 0.36, 0.0, 1.0)
+			var hw3: float = 1.32 * pow(sin(fwd3 * PI * 0.5), 0.75) * (1.0 - 0.06 * smoothstep(0.85, 1.0, t3)) + 0.012
+			band.append(Vector3(side * hw3, edge[k0].y - 0.26, edge[k0].z))
+		VehicleShapes.strip(st, band, Vector3(0.0, 1.0, 0.0), 0.08, 0.012, blue, 8)
+		# 스테인리스 난간: 기둥 + 위 · 가운데 줄 (뱃전벽 위).
+		var rail_top: PackedVector3Array = PackedVector3Array()
+		var rail_mid: PackedVector3Array = PackedVector3Array()
+		for k: int in range(3, edge.size()):
+			rail_top.append(edge[k] + Vector3(0.0, 0.5, 0.0))
+			rail_mid.append(edge[k] + Vector3(0.0, 0.3, 0.0))
+			if k % 3 == 0:
+				VehicleShapes.rod(st, edge[k] + Vector3(0.0, 0.1, 0.0), edge[k] + Vector3(0.0, 0.5, 0.0), 0.018, VehicleShapes.chrome(), 6)
+		VehicleShapes.sweep(st, rail_top, 0.02, VehicleShapes.chrome(), 8, true)
+		VehicleShapes.sweep(st, rail_mid, 0.012, VehicleShapes.chrome(), 6, true)
+		# 긴 의자 (바깥을 본다): 나무 앉는 판 · 등받이 · 스테인리스 다리.
+		var seat_y: float = DECK_Y + BENCH_Y
+		VehicleShapes.strip(st, PackedVector3Array([Vector3(side * 0.42, seat_y - 0.03, -1.45), Vector3(side * 0.42, seat_y - 0.03, 2.5)]), Vector3(1.0, 0.0, 0.0), 0.4, 0.06, VehicleShapes.matte(WOOD_LIGHT), 12)
+		VehicleShapes.strip(st, PackedVector3Array([Vector3(side * 0.2, seat_y + 0.22, -1.45), Vector3(side * 0.2, seat_y + 0.22, 2.5)]), Vector3(0.0, 1.0, 0.0), 0.36, 0.05, VehicleShapes.matte(WOOD), 12)
+		for z3: float in [-1.3, 0.53, 2.35]:
+			VehicleShapes.rod(st, Vector3(side * 0.42, DECK_Y, z3), Vector3(side * 0.42, seat_y - 0.05, z3), 0.022, VehicleShapes.chrome(), 6)
+			VehicleShapes.rod(st, Vector3(side * 0.24, seat_y - 0.05, z3), Vector3(side * 0.2, seat_y + 0.42, z3), 0.016, VehicleShapes.chrome(), 6)
+		# 구명 튜브 (조타실 옆, 흰 띠 넷).
+		var ring_c: Vector3 = Vector3(side * 0.985, DECK_Y + 0.72, -2.05)
+		ClayMesh.add_torus(st, ring_c, 0.2, 0.055, VehicleShapes.gloss(RING), 20, 8, Basis(Vector3.BACK, PI * 0.5))
+		for q: int in 4:
+			var a: float = TAU * float(q) / 4.0 + 0.4
+			ClayMesh.add_torus(st, ring_c + Vector3(side * 0.0, cos(a) * 0.2, sin(a) * 0.2), 0.058, 0.012, VehicleShapes.gloss(HULL_WHITE), 10, 4, Basis(Vector3.RIGHT, a))
+	# 갑판 바닥 (나무 판자 결).
+	var plank: Callable = func(p: Vector3, _n: Vector3) -> Color:
+		var row: float = fposmod(p.x * 6.0, 1.0)
+		return VehicleShapes.matte(DECK.darkened(0.18) if row < 0.07 else DECK)
+	ClayMesh.add_rounded_box(st, Vector3(0.0, DECK_Y + 0.01, 0.6), Vector3(2.3, 0.03, 5.6), 0.12, plank, Basis(), 24, 3)
+	# 조타실: 아래 벽 → 빙 두른 창 → 처마 지붕 (위로 쌓은 둥근 네모 고리, 앞 창은 뒤로 눕는다).
+	var cab: Array[PackedVector3Array] = []
+	var levels: Array = [[0.0, 0.0, 0.95, 0.66], [0.5, 0.0, 0.95, 0.66], [0.56, 0.02, 0.94, 0.64], [1.0, 0.1, 0.88, 0.56], [1.08, 0.11, 0.87, 0.55]]
+	for lv: Array in levels:
+		cab.append(VehicleShapes.ring_xz(0.0, DECK_Y + float(lv[0]), -2.35 + float(lv[1]), float(lv[2]), float(lv[3]), 40, 0.82))
+	var cab_color: Callable = func(p: Vector3, _n: Vector3) -> Color:
+		var h: float = p.y - DECK_Y
+		# 네 귀퉁이 기둥은 흰 칠로 남긴다.
+		var corner: bool = absf(absf(p.x) - 0.9) < 0.08 and absf(absf(p.z + 2.3) - 0.6) < 0.1
+		if h > 0.55 and h < 1.02 and not corner:
+			return VehicleShapes.glass(Color("#30455A"))
+		return white
+	VehicleShapes.loft(st, cab, cab_color, false, true)
+	var roof: Array[PackedVector3Array] = [
+		VehicleShapes.ring_xz(0.0, DECK_Y + 1.08, -2.24, 1.08, 0.82, 40, 0.85),
+		VehicleShapes.ring_xz(0.0, DECK_Y + 1.15, -2.24, 1.08, 0.82, 40, 0.85),
+	]
+	VehicleShapes.loft(st, roof, blue, true, true)
+	# 조타실 지붕 위 등 · 경적 · 안테나.
+	VehicleShapes.rod(st, Vector3(0.0, DECK_Y + 1.15, -2.0), Vector3(0.0, DECK_Y + 1.55, -2.0), 0.018, VehicleShapes.chrome(), 6)
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, DECK_Y + 1.58, -2.0), Vector3(0.05, 0.05, 0.05), VehicleShapes.matte(Color("#FFF6D8")), 10, 6)
+	# 뱃머리 계선주 · 고물 사다리 · 깃대.
+	VehicleShapes.lathe_x(st, Vector3(-0.06, DECK_Y + 0.2, -3.45), PackedVector2Array([Vector2(0.0, 0.0), Vector2(0.04, 0.0), Vector2(0.03, 0.12), Vector2(0.0, 0.12)]), 10, VehicleShapes.chrome())
+	for x2: float in [-0.25, 0.25]:
+		VehicleShapes.sweep(st, VehicleShapes.spline(PackedVector3Array([Vector3(x2, DECK_Y + 0.25, 3.45), Vector3(x2, DECK_Y + 0.3, 3.75), Vector3(x2, 0.1, 3.85), Vector3(x2, -0.2, 3.8)]), 6), 0.016, VehicleShapes.chrome(), 6, true)
+	for k2: int in 3:
+		VehicleShapes.rod(st, Vector3(-0.25, 0.25 - float(k2) * 0.18, 3.83), Vector3(0.25, 0.25 - float(k2) * 0.18, 3.83), 0.012, VehicleShapes.chrome(), 6)
+	VehicleShapes.rod(st, Vector3(0.0, DECK_Y + 0.25, 3.35), Vector3(0.0, DECK_Y + 1.5, 3.35), 0.022, VehicleShapes.chrome(), 8, 0.016)
+	VehicleShapes.strip(st, PackedVector3Array([Vector3(0.0, DECK_Y + 1.3, 3.4), Vector3(0.0, DECK_Y + 1.3, 3.85)]), Vector3(0.0, 1.0, 0.0), 0.28, 0.01, VehicleShapes.matte(HULL_RED), 8)
 	return ClayMesh.commit(st)
 
 
