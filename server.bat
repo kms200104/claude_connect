@@ -16,8 +16,19 @@ if not defined SERVER_DIR (
 )
 
 echo === 1. Update code - git pull ===
+set "OLD_HEAD="
+for /f %%h in ('git rev-parse HEAD 2^>nul') do set "OLD_HEAD=%%h"
 git pull
 if errorlevel 1 echo [warning] git pull failed - starting with the code you already have.
+rem New .gd files need the Godot editor to register them (Project - Reload Current Project), or the game cannot load its data.
+if defined OLD_HEAD (
+  git diff --name-only --diff-filter=A !OLD_HEAD! HEAD -- "*.gd" | findstr /r "." >nul
+  if not errorlevel 1 (
+    echo.
+    echo [notice] New game scripts arrived. If the Godot editor is open, use Project ^> Reload Current Project
+    echo          before pressing F5 - otherwise the village shows only bare ground and you cannot move.
+  )
+)
 
 cd /d "%SERVER_DIR%"
 

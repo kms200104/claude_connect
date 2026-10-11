@@ -7,10 +7,10 @@ extends Node
 
 @export var village_scene: PackedScene
 @export_group("Camera")
-## 비행기 시점: 섬 가운데를 크게 돌며 조금 높이서 비스듬히 내려다본다.
+## 비행기 시점: 섬 바깥 물가를 크게 돌며 낮게 날아 섬과 하늘이 같이 보이게 비스듬히 본다.
 @export var orbit_center: Vector3 = Vector3(10.0, 0.0, 6.0)
-@export_range(4.0, 200.0, 0.5, "suffix:m") var orbit_radius: float = 82.0
-@export_range(1.0, 120.0, 0.5, "suffix:m") var orbit_height: float = 44.0
+@export_range(4.0, 200.0, 0.5, "suffix:m") var orbit_radius: float = 104.0
+@export_range(1.0, 120.0, 0.5, "suffix:m") var orbit_height: float = 24.0
 @export_range(0.0, 1.0, 0.005, "suffix:rad/s") var orbit_speed: float = 0.022
 ## 기체가 좌우로 살짝 기우는 정도 (rad).
 @export_range(0.0, 0.3, 0.005) var bank_amount: float = 0.045
@@ -88,6 +88,7 @@ func _ready() -> void:
 	test_button.pressed.connect(func() -> void: _enter(Net.play_on_test_server))
 	_start_button.get_parent().add_child(test_button)
 	_place_camera()
+	_warn_if_broken()
 	# 가로 화면 (v0.13.4): 로고는 왼쪽, 카드는 오른쪽.
 	ScreenFit.changed.connect(func(_wide: bool) -> void: _fit())
 	_fit()
@@ -210,6 +211,34 @@ func _on_start() -> void:
 		_enter(func() -> void: Net.join_room(url, saved))
 	else:
 		_enter(func() -> void: Net.create_room(url))
+
+
+## 게임 데이터(GameData)를 못 읽었으면 (git pull 로 새 스크립트가 생겼는데 Godot 에디터가 아직 등록하지 않은 경우가 대부분)
+## 들어가 봐야 땅만 있고 움직이지 못하므로, 카드에 고치는 법을 띄우고 들어가기 단추를 막는다.
+func _warn_if_broken() -> void:
+	if not scripts_broken():
+		return
+	push_error("GameData 를 불러오지 못했어요. Godot 에디터에서 프로젝트 → 현재 프로젝트 새로고침 뒤 다시 실행하세요.")
+	var warn: Label = Label.new()
+	warn.name = "ScriptsBroken"
+	warn.text = "게임 스크립트를 불러오지 못했어요.\n새로 받은 파일이 Godot 에디터에 아직 등록되지 않았어요.\n에디터 메뉴 [프로젝트 → 현재 프로젝트 새로고침] 뒤 다시 실행해 주세요."
+	warn.add_theme_font_size_override("font_size", 26)
+	warn.add_theme_color_override("font_color", Color("#D9483B"))
+	warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_start_button.get_parent().add_child(warn)
+	_start_button.get_parent().move_child(warn, 0)
+	for b: Button in [_start_button, _create_button, _join_toggle, _code_go]:
+		b.disabled = true
+	var test_button: Button = _start_button.get_parent().get_node_or_null("TestServerButton") as Button
+	if test_button != null:
+		test_button.disabled = true
+
+
+## 게임 데이터 자동 로드가 스크립트 없이 떠 있는지 (스크립트 컴파일 실패).
+func scripts_broken() -> bool:
+	var data: Node = get_node_or_null(^"/root/GameData")
+	return data == null or data.get_script() == null or not ("items" in data)
 
 
 func _refresh_start_label() -> void:
