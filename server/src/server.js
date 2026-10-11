@@ -1849,6 +1849,12 @@ export function createServer(overrides = {}) {
       tz = player.z + dz * k;
       corrected = true;
     }
+    // v20: 보트를 타는 동안은 물 위에서만 (물이 아닌 곳으로 가는 요청은 그 자리에 둔다).
+    if (!garage.moveOk(player, tx, tz)) {
+      tx = player.x;
+      tz = player.z;
+      corrected = true;
+    }
 
     player.x = tx;
     player.y = ty;

@@ -358,7 +358,17 @@ KK=[(0.0, KL, -0.12, on_deck(KL,BACK), 0.5, 0.0),
     (0.5, 0.045, -0.16, (-0.22, 0.25), 0.55, 0.09),
     (0.62, KL, -0.12, on_deck(KL,BACK), 0.5, 0.0)]
 anim('kick', 0.62, [(t, KB(lift, rx, 0.0, on_deck(lift,FRONT), rf, el=e, er=e, lr_out=out)) for t,lift,rx,rf,e,out in KK])
-RIDES=['ride_bike','ride_moto','ride_kick','ride_kick_brake']
+# ---- 보트 (v20) ----
+# ride_boat: 모터보트 운전석에 앉아 두 손은 앞의 키(핸들), 다리는 앞으로 무릎을 굽혀 바닥에. 물결에 맞춰 몸이 천천히 흔들린다.
+BO = lambda y, rz: pose((0,y,0),(-0.06,0,rz),(1,1,1),(1.18,0,AL-0.08),(1.18,0,AR+0.08),(1.45,0,0.1),(1.45,0,-0.1),kl=-0.75,kr=-0.75,el=0.55,er=0.55)
+anim('ride_boat', 2.4, [(0, BO(0,0)), (0.6, BO(0.006,0.025)), (1.2, BO(0,0)), (1.8, BO(0.006,-0.025)), (2.4, BO(0,0))], loop=True)
+# ride_kayak: 카약 바닥에 다리를 앞으로 쭉 뻗고 앉아 두 손으로 노를 잡고 왼쪽 · 오른쪽 번갈아 젓는다 (한 바퀴 = 1초 = 양쪽 한 번씩).
+#             리그가 빠르기에 맞춰 젓는 빠르기를 바꾸고(set_pedal_rate) 그 위상으로 카약의 노가 같이 돈다 (VehicleModel 카약 노).
+#             0초: 몸을 왼쪽으로 틀고 왼손이 낮게(노 왼쪽 날이 물에), 0.5초: 오른쪽.
+KY = lambda ry, rz, a_l, a_r, el, er: pose((0,0,0),(-0.08,ry,rz),(1,1,1),(a_l,0,0.34),(a_r,0,-0.34),(1.5,0,0.07),(1.5,0,-0.07),kl=-0.05,kr=-0.05,el=el,er=er)
+anim('ride_kayak', 1.0, [(0, KY(0.32,0.04,0.85,1.45,0.6,1.0)), (0.25, KY(0.0,0.0,1.15,1.15,0.8,0.8)), (0.5, KY(-0.32,-0.04,1.45,0.85,1.0,0.6)),
+                          (0.75, KY(0.0,0.0,1.15,1.15,0.8,0.8)), (1.0, KY(0.32,0.04,0.85,1.45,0.6,1.0))], loop=True)
+RIDES=['ride_bike','ride_moto','ride_kick','ride_kick_brake','ride_boat','ride_kayak']
 
 # ---- 주민의 혼잣말 같은 몸짓 (v0.16, 서버가 길목에 멈췄을 때 고른다 — npcs.json activities) ----
 # 반복 동작이라 처음과 끝 자세를 같게, 한 바퀴 안에서 쉬는 순간(머무름)을 둔다.
@@ -639,7 +649,7 @@ xfade_time = 0.0
 ''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = true\n'%(i,e,i,i,i) for i,e in enumerate(EMOTES)) + '''
 ''' + ''.join('[sub_resource type="AnimationNodeAnimation" id="AN_%s"]\nanimation = &"%s"\n\n'%(e,e) for e in COOKS+['sit','dig','rummage','phone','phone_tap']+RIDES+['kick']+ACTS+CARRIES) + '''[sub_resource type="AnimationNodeTransition" id="Transition_ride"]
 xfade_time = 0.15
-''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = %s\n'%(i,e,i,i,i,'true' if e == 'ride_bike' else 'false') for i,e in enumerate(RIDES)) + '''
+''' + ''.join('input_%d/name = "%s"\ninput_%d/auto_advance = false\ninput_%d/break_loop_at_end = false\ninput_%d/reset = %s\n'%(i,e,i,i,i,'true' if e in ('ride_bike','ride_kayak') else 'false') for i,e in enumerate(RIDES)) + '''
 [sub_resource type="AnimationNodeTimeScale" id="TimeScale_ride"]
 
 [sub_resource type="AnimationNodeBlend2" id="Blend2_ride"]

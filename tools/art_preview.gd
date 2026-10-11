@@ -352,6 +352,19 @@ func _ready() -> void:
 				for id: String in _ids:
 					entries.append(id.split("+"))
 			var gap: float = 1.9
+			# 보트(v20)가 있으면 더 넓게 놓고 수면을 깐다 (수면 = y 0).
+			if entries.any(func(e: PackedStringArray) -> bool: return GameData.garage.model(e[0]) != null and GameData.garage.is_water_kind(GameData.garage.model(e[0]).kind)):
+				gap = 3.6
+				var sea: MeshInstance3D = MeshInstance3D.new()
+				var plane: PlaneMesh = PlaneMesh.new()
+				plane.size = Vector2(60.0, 60.0)
+				plane.subdivide_width = 59
+				plane.subdivide_depth = 59
+				sea.mesh = plane
+				var mat: ShaderMaterial = (load("res://assets/materials/water.tres") as ShaderMaterial).duplicate()
+				mat.set_shader_parameter("half_extent", Vector2(1000.0, 1000.0))
+				sea.material_override = mat
+				add_child(sea)
 			for i: int in entries.size():
 				var model: VehicleCatalog.Model = GameData.garage.model(entries[i][0])
 				if model == null:
@@ -372,7 +385,7 @@ func _ready() -> void:
 					vm.add_child(rig)
 					rig.position = Vector3(0.0, 0.8 + model.lift, 0.0)
 					rig.set_look(CharacterLook.for_player(1 + i % 2))
-					rig.set_riding(model.kind)
+					rig.set_riding(model.pose)
 					rig.set_pedal_rate(0.15 / maxf(_wait, 0.1))
 			var span: float = float(entries.size()) * gap
 			if Array(args).any(func(s: String) -> bool: return s.begins_with("--cam=")):

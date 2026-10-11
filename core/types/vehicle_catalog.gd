@@ -1,6 +1,6 @@
 class_name VehicleCatalog
 extends RefCounted
-## 차고 탈것 데이터 (v19, data/vehicles/garage.json): 자전거 · 전기오토바이 모델과 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
+## 차고 탈것 데이터 (v19, data/vehicles/garage.json): 자전거 · 전기오토바이 · 보트(v20) 모델과 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
 ## 성능 계산(stats)은 서버 server/src/garage.js 의 vehicleStats 와 같아야 한다 (이동 속도 검사가 같은 값을 쓴다).
 
 ## 타는 동안의 성능 (m/s · m/s² · rad/s). wade = 여울에서의 속도 배율.
@@ -16,8 +16,10 @@ class Stats:
 
 class Model:
 	var id: String = ""
-	## "bike" | "moto"
+	## "bike" | "moto" | "boat"
 	var kind: String = "bike"
+	## 타는 자세 (CharacterRig.RIDE_ANIMS 의 열쇠: bike · moto · boat · kayak).
+	var pose: String = "bike"
 	## 몸체 모양: city · mini · mtb · road · scooter · classic · sport (VehicleModel 이 빚는다).
 	var style: String = "city"
 	var name: String = ""
@@ -104,6 +106,7 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 		var m: Model = Model.new()
 		m.id = str(raw.get("id", ""))
 		m.kind = str(raw.get("kind", "bike"))
+		m.pose = str(raw.get("pose", m.kind))
 		m.style = str(raw.get("style", "city"))
 		m.name = str(raw.get("name", m.id))
 		m.type_name = str(raw.get("type", ""))
@@ -172,6 +175,20 @@ func part(id: String) -> Part:
 
 func kind_name(kind: String) -> String:
 	return str(kinds.get(kind, {}).get("name", kind))
+
+
+## 물 위에서만 타는 종류인지 (보트).
+func is_water_kind(kind: String) -> bool:
+	return bool(kinds.get(kind, {}).get("water", false))
+
+
+## 그 종류의 올라탈 수 있는 거리 · 부른 탈것을 세울 수 있는 거리 (종류에 없으면 delivery 값).
+func ride_range(kind: String) -> float:
+	return float(kinds.get(kind, {}).get("ride_range", delivery.get("ride_range", 3.0)))
+
+
+func park_range(kind: String) -> float:
+	return float(kinds.get(kind, {}).get("park_range", delivery.get("park_range", 4.0)))
 
 
 ## 그 종류 탈것에 맞는 그 칸 부품 (데이터 순서).

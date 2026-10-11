@@ -46,7 +46,7 @@ func pad_rect(pad: Pad) -> Rect2:
 	var s: Vector2 = get_viewport_rect().size
 	var swap: bool = Prefs.stick_on_right()
 	var pedal_x: float = 70.0 if not swap else s.x - 270.0
-	# 핸들은 감정표현 단추 아래 · 상황 버튼(세우기) 위 사이에.
+	# 핸들은 감정표현 단추 아래 · 상황 버튼 위 사이에.
 	var wheel_x: float = s.x - 470.0 if not swap else 70.0
 	match pad:
 		Pad.UP:

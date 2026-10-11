@@ -6,6 +6,7 @@ extends RefCounted
 ##   모터 힘은 출발이 부드럽고(soft start) 최고 속도 가까이에서 줄며, 놓으면 회생 제동이 살짝 걸린다.
 ##   가속도 자체도 jerk 만큼씩만 바뀌어 덜컥거리지 않는다. 브레이크도 꾹 누르듯 차오른다.
 ## 몸(차체)은 도는 만큼 안쪽으로 눕고(lean), 가속하면 앞이 들리고 브레이크면 숙인다(pitch).
+## - 보트(v20): 오토바이처럼 스로틀이 천천히 열리고 닫히며, 놓으면 물 저항으로 미끄러지듯 선다. 덜 눕고, 가속하면 뱃머리가 든다.
 ## 판정이 아니라 내 화면의 움직임이다 — 서버는 그 탈것의 최고 속도까지만 받아 준다.
 
 const GRAVITY: float = 9.8
@@ -78,7 +79,7 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	yaw = wrapf(yaw + yaw_rate * delta, -PI, PI)
 	var top: float = stats.top * clampf(wade, 0.2, 1.0)
 	var a_cmd: float = 0.0
-	if kind == "moto":
+	if kind == "moto" or kind == "boat":
 		var rise: float = float(rules.get("throttle_rise", 1.6))
 		var fall: float = float(rules.get("throttle_fall", 3.5))
 		throttle = move_toward(throttle, want_throttle, (rise if want_throttle > throttle else fall) * delta)
@@ -110,10 +111,14 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	if speed == 0.0 and accel < 0.0:
 		accel = 0.0
 	# 눕기: 원운동에 필요한 기울기 atan(v·ω/g), 오토바이가 조금 더 눕는다.
-	var max_lean: float = 0.5 if kind == "moto" else 0.36
+	var max_lean: float = 0.5 if kind == "moto" else (0.12 if kind == "boat" else 0.36)
 	var want_lean: float = clampf(atan(speed * yaw_rate / GRAVITY), -max_lean, max_lean)
 	lean = lerpf(lean, want_lean, 1.0 - exp(-6.0 * delta))
-	pitch = lerpf(pitch, clampf(accel * 0.012, -0.06, 0.05), 1.0 - exp(-8.0 * delta))
+	if kind == "boat":
+		# 속도가 붙으면 뱃머리가 들린다 (물 위를 미끄러지듯 — 빠를수록 조금 더).
+		pitch = lerpf(pitch, clampf(accel * 0.02 + speed * 0.004, -0.04, 0.1), 1.0 - exp(-3.0 * delta))
+	else:
+		pitch = lerpf(pitch, clampf(accel * 0.012, -0.06, 0.05), 1.0 - exp(-8.0 * delta))
 	# 핸들: 자전거 운동학 tan(δ) = L·ω / v (느릴 때는 크게).
 	steer = clampf(atan(wheelbase * yaw_rate / maxf(speed, 0.8)), -0.5, 0.5)
 	return forward() * speed

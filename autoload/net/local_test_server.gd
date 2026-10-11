@@ -187,7 +187,12 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if not _home.is_empty():
 				_send(peer, _home_message(null))
 		"move":
-			_pos = Vector3(float(msg.get("x", _pos.x)), 0.1, float(msg.get("z", _pos.z)))
+			var to: Vector3 = Vector3(float(msg.get("x", _pos.x)), 0.1, float(msg.get("z", _pos.z)))
+			# v20: 보트를 타는 동안은 물 위에서만 (진짜 서버 garage.moveOk 와 같다).
+			if _on_boat() and not WaterRules.is_water(Vector2(to.x, to.z)) and WaterRules.water_near(Vector2(to.x, to.z), 0.6) == Vector2.INF:
+				_send(peer, {"t": "correct", "x": _pos.x, "y": WaterRules.level_at(Vector2(_pos.x, _pos.z)), "z": _pos.z})
+			else:
+				_pos = to
 			_yaw = float(msg.get("yaw", _yaw))
 		"equip":
 			var slot: int = int(msg.get("slot", -1))
@@ -967,11 +972,21 @@ func _handle_garage(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> voi
 				fail.call(NetProtocol.ERR_BAD_VEHICLE)
 				return
 			if v.is_empty():
-				_garage_dismount(peer)
+				if _on_boat():
+					# 보트에서 내리기: 곁(6m 안)의 땅으로 옮겨 선다 (진짜 서버와 같다).
+					var land: Vector2 = Vector2(float(msg.get("lx", INF)), float(msg.get("lz", INF)))
+					if not land.is_finite() or land.distance_to(Vector2(_pos.x, _pos.z)) > 6.0 or not WaterRules.is_land(land):
+						fail.call(NetProtocol.ERR_NO_LANDING)
+						return
+					_garage_dismount(peer)
+					_pos = Vector3(land.x, 0.1, land.y)
+				else:
+					_garage_dismount(peer)
 			elif str(v["id"]) != _mount:
 				# 세워 둔(도착한) 그 탈것 곁에서만 탄다.
 				var at: Variant = v.get("at")
-				var ride_range: float = float(cat.delivery.get("ride_range", 3.0)) + 0.5
+				var model_info: VehicleCatalog.Model = cat.model(str(v.get("model", "")))
+				var ride_range: float = cat.ride_range(model_info.kind if model_info != null else "bike") + 0.5
 				if not at is Dictionary or float(at.get("t", 0.0)) > _now() or Vector2(float(at["x"]) - _pos.x, float(at["z"]) - _pos.z).length() > ride_range:
 					fail.call(NetProtocol.ERR_NOT_NEAR_VEHICLE)
 					return
@@ -994,7 +1009,13 @@ func _handle_garage(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> voi
 				return
 			var x: float = float(msg.get("x", _pos.x))
 			var z: float = float(msg.get("z", _pos.z))
-			if Vector2(x - _pos.x, z - _pos.z).length() > float(cat.delivery.get("park_range", 4.0)):
+			var call_info: VehicleCatalog.Model = cat.model(str(v.get("model", "")))
+			if call_info != null and cat.is_water_kind(call_info.kind):
+				# 보트: 내 곁(park_range 안)의 물 위에만 띄워 둔다.
+				if Vector2(x - _pos.x, z - _pos.z).length() > cat.park_range(call_info.kind) or not WaterRules.is_water(Vector2(x, z)):
+					fail.call(NetProtocol.ERR_NOT_ON_WATER)
+					return
+			elif Vector2(x - _pos.x, z - _pos.z).length() > float(cat.delivery.get("park_range", 4.0)):
 				x = _pos.x
 				z = _pos.z
 			var npcs: Array = GameData.npcs.keys()
@@ -1016,6 +1037,15 @@ func _vehicle(id: String) -> Dictionary:
 		if str(x.get("id", "")) == id:
 			return x
 	return {}
+
+
+## 보트를 타고 있는지 (v20).
+func _on_boat() -> bool:
+	var v: Dictionary = _vehicle(_mount)
+	if v.is_empty():
+		return false
+	var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
+	return m != null and GameData.garage.is_water_kind(m.kind)
 
 
 ## 타던 차고 탈것을 지금 자리에 세워 둔다 (문 · 집 드나들기 전에도).

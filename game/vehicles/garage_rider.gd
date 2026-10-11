@@ -3,10 +3,12 @@ extends Node
 ## 내 캐릭터의 차고 탈것 (v19.1): 자전거 · 전기오토바이.
 ##   부르기: 휴대폰 "탈것" 앱 · HUD 탈것 단추 → 동네 주민이 타고 와서 내 곁에 세워 두고 간다 (서버 veh_call, ParkedVehicles 가 그린다).
 ##   타기: 세워 둔 내 탈것 곁에서 상황 버튼 "타기" (또는 탈것 단추) → 서버가 받아 주면(veh_ride) 그 모형에 폴짝 올라앉는다.
-##   세우기: 상황 버튼 "세우기" → 왼쪽(막히면 오른쪽)으로 내려서고 탈것은 받침대를 세워 그 자리에 남는다 (서버가 저장, 친구도 본다).
+##   세우기: HUD 탈것 단추(P) → 왼쪽(막히면 오른쪽)으로 내려서고 탈것은 받침대를 세워 그 자리에 남는다 (서버가 저장, 친구도 본다).
 ## 타는 동안은 Player 가 걷기 대신 drive 를 부르고, 움직임은 VehicleDrive, 모양은 VehicleModel.
 ## 자전거는 리그가 바퀴 속도에 맞춰 페달을 돌리고(set_pedal_rate) 그 위상으로 크랭크가 같이 돈다.
 ## 실내 · 순간이동 · 접속 끊김이면 그 자리에 바로 세운다 (서버도 같은 자리에 세워 둔다). 킥보드(KickboardRider)와는 동시에 못 탄다.
+## 보트(v20): 물가에서 부르면 주민이 물길로 몰고 와 곁의 물 위에 띄워 둔다 (WaterRules). 타는 동안은 물 위에서만 움직이고(땅 · 해안 벽과
+##   부딪치지 않고 수면 높이에 뜬다), 세우기(P)는 곁의 땅으로 폴짝 내려서기 — 서버가 그 땅을 받아 주면(veh_ride lx, lz) 내린다. 보트는 물에 남는다.
 
 signal changed(riding: bool)
 
@@ -53,6 +55,10 @@ var _button: Button = null
 var _gauge: Label = null
 var _hud_left: float = 0.0
 var _icon_state: String = ""
+## 보트: 타는 동안 꺼 두는 충돌 (땅 · 물 막이 · 해안 벽), 내릴 땅을 서버에 청한 동안의 자리, 물결 시각.
+var _saved_mask: int = -1
+var _landing: Vector2 = Vector2.INF
+var _bob_t: float = 0.0
 
 
 func _ready() -> void:
@@ -95,9 +101,27 @@ func mount_problem(id: String) -> String:
 		return "먼저 탈것을 불러요 (휴대폰 탈것 앱 · 탈것 단추)."
 	if not bool(spot.get("arrived", false)):
 		return "주민이 가져오는 중이에요."
-	if _flat(player.global_position, spot["at"]) > RIDE_RANGE:
+	if _flat(player.global_position, spot["at"]) > ride_range_of(id):
 		return "세워 둔 곳 곁에서 탈 수 있어요."
 	return ""
+
+
+## 그 탈것에 올라탈 수 있는 거리 (보트는 물가에서 닿게 더 멀다 · 서버 값보다 조금 안쪽).
+static func ride_range_of(id: String) -> float:
+	var m: VehicleCatalog.Model = GameData.garage.model(str(Net.vehicle(id).get("model", "")))
+	if m == null or not GameData.garage.is_water_kind(m.kind):
+		return RIDE_RANGE
+	return GameData.garage.ride_range(m.kind) - 0.4
+
+
+## 보트를 타고 있는지.
+func is_boat() -> bool:
+	return info != null and GameData.garage.is_water_kind(info.kind) and state != State.OFF
+
+
+## 물에 떠서 가는 중 (Player 가 중력을 쓰지 않는다).
+func is_floating() -> bool:
+	return is_boat() and (state == State.RIDING or state == State.MOUNTING)
 
 
 func _outside_problem() -> String:
@@ -146,6 +170,17 @@ func call_vehicle(id: String) -> bool:
 		return false
 	var yaw: float = player.body.global_rotation.y
 	var at: Vector3 = _call_spot(yaw)
+	var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
+	if m != null and GameData.garage.is_water_kind(m.kind):
+		# 보트: 내 곁의 트인 물 위, 물가에서 바로 올라탈 수 있는 거리 안 (뱃머리는 물 쪽으로).
+		var here: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+		var water: Vector2 = WaterRules.water_near(here, minf(GameData.garage.park_range(m.kind) - 0.8, ride_range_of(id) - 0.3))
+		if water == Vector2.INF:
+			_toast("보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가).", false)
+			return false
+		var out: Vector2 = (water - here)
+		yaw = atan2(-out.x, -out.y) if out.length() > 0.1 else yaw
+		at = Vector3(water.x, 0.0, water.y)
 	Net.request("veh_call", {"v": id, "x": at.x, "z": at.z, "yaw": yaw})
 	return true
 
@@ -180,7 +215,7 @@ func quick_action() -> void:
 	if Net.vehicles.is_empty():
 		_toast("휴대폰 탈것 앱에서 자전거 · 오토바이를 살 수 있어요.", false)
 		return
-	var near: String = parked.nearest_own(player.global_position, RIDE_RANGE) if parked != null else ""
+	var near: String = parked.nearest_own(player.global_position, RIDE_RANGE, true) if parked != null else ""
 	if not near.is_empty():
 		mount(near)
 		return
@@ -208,6 +243,10 @@ func _on_vehicle_done(result: Dictionary) -> void:
 
 
 func _on_mount_changed(mount_wire: Dictionary) -> void:
+	if mount_wire.is_empty() and _landing != Vector2.INF and state == State.RIDING:
+		# 서버가 내릴 땅을 받아 줬다: 폴짝 내려선다.
+		_hop_to_land(_landing)
+		return
 	if mount_wire.is_empty() or state != State.WAITING or str(mount_wire.get("v", "")) != vehicle_id:
 		return
 	_start(str(mount_wire.get("m", "")), mount_wire.get("f", {}) as Dictionary)
@@ -216,6 +255,15 @@ func _on_mount_changed(mount_wire: Dictionary) -> void:
 func _on_failed(kind: String, code: String) -> void:
 	if kind == "veh_call":
 		_toast("부를 수 없어요." if code != NetProtocol.ERR_CANT_RIDE else "실내 · 낚시 중에는 부를 수 없어요.", false)
+		return
+	if kind == "veh_ride" and _landing != Vector2.INF and state == State.RIDING:
+		# 내릴 땅을 서버가 받아 주지 않았다: 계속 탄다.
+		_landing = Vector2.INF
+		player.set_input_lock(&"garage_ride", false)
+		_toast("여기서는 내릴 수 없어요. 물가 가까이 가요.", false)
+		return
+	if kind == "veh_call" and code == NetProtocol.ERR_NOT_ON_WATER:
+		_toast("보트는 물가에서 불러요.", false)
 		return
 	if kind != "veh_ride" or state != State.WAITING:
 		return
@@ -253,7 +301,16 @@ func _start(model_id: String, fit: Dictionary) -> void:
 		model.get_parent().remove_child(model)
 	player.rig.add_child(model)
 	model.scale = Vector3.ONE
-	var ground: Transform3D = Transform3D(Basis(Vector3.UP, _spot_yaw), Vector3(_spot.x, player.global_position.y, _spot.z))
+	var boat: bool = GameData.garage.is_water_kind(info.kind)
+	var ground_y: float = WaterRules.level_at(Vector2(_spot.x, _spot.z)) if boat else player.global_position.y
+	var ground: Transform3D = Transform3D(Basis(Vector3.UP, _spot_yaw), Vector3(_spot.x, ground_y, _spot.z))
+	model.floating = false
+	model.position = Vector3.ZERO
+	model.rotation = Vector3.ZERO
+	if boat:
+		# 물 위로 폴짝: 땅 · 물 막이 · 해안 벽과 부딪치지 않게 충돌을 끈다 (물 밖으로는 drive 가 막는다).
+		_saved_mask = player.collision_mask
+		player.collision_mask = 0
 	var from: Vector3 = player.global_position
 	var from_yaw: float = player.body.global_rotation.y
 	Audio.play_sfx("kick_latch", -6.0)
@@ -271,7 +328,7 @@ func _start(model_id: String, fit: Dictionary) -> void:
 		if model != null:
 			model.global_transform = ground
 		if t > 0.45:
-			player.rig.set_riding(info.kind)
+			player.rig.set_riding(info.pose)
 	_seq = create_tween()
 	_seq.tween_method(hop, 0.0, 1.0, 0.42)
 	_seq.tween_callback(_on_mounted)
@@ -288,7 +345,7 @@ func _on_mounted() -> void:
 	_update_hud(true)
 
 
-## 세우기 (상황 버튼 · 탈것 단추): 옆으로 내려서고 탈것은 그 자리에 받침대를 세워 둔다.
+## 세우기 (탈것 단추 P): 옆으로 내려서고 탈것은 그 자리에 받침대를 세워 둔다.
 ## animated 가 거짓이면 바로 (순간이동 · 실내 · 접속 끊김) — 떠나기 전 자리에 세운다.
 func dismount(animated: bool = true) -> void:
 	if state == State.OFF or state == State.DISMOUNTING and animated:
@@ -299,6 +356,21 @@ func dismount(animated: bool = true) -> void:
 	Audio.set_loop("kick_roll_loop", 0.0, 10.0)
 	if not animated or model == null:
 		_park_here(Net.state == Net.State.ONLINE and not _server_parks())
+		return
+	if is_boat():
+		# 보트: 곁의 땅을 찾아 서버에 청한다 (받아 주면 _hop_to_land).
+		if _landing != Vector2.INF:
+			return
+		var here: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+		var land: Vector2 = WaterRules.landing_near(here, 5.5)
+		if land == Vector2.INF:
+			_toast("물가 가까이에서 내릴 수 있어요.", false)
+			return
+		_landing = land
+		drive_state.speed = 0.0
+		player.velocity = Vector3.ZERO
+		player.set_input_lock(&"garage_ride", true)
+		Net.request("veh_ride", {"v": "", "lx": land.x, "lz": land.y})
 		return
 	Net.request("veh_ride", {"v": ""})
 	state = State.DISMOUNTING
@@ -331,6 +403,37 @@ func dismount(animated: bool = true) -> void:
 	_seq.tween_callback(done)
 
 
+## 보트에서 곁의 땅으로 폴짝 내려선다 (보트는 물 위 그 자리에 남는다).
+func _hop_to_land(land: Vector2) -> void:
+	_landing = Vector2.INF
+	Audio.set_loop("kick_roll_loop", 0.0, 10.0)
+	state = State.DISMOUNTING
+	player.set_input_lock(&"garage_ride", true)
+	drive_state.speed = 0.0
+	player.rig.set_riding("")
+	var yaw: float = drive_state.yaw
+	var boat_at: Vector3 = player.global_position
+	var ground: Transform3D = Transform3D(Basis(Vector3.UP, yaw), boat_at)
+	var from: Vector3 = player.global_position
+	var to: Vector3 = Vector3(land.x, 0.05, land.y)
+	var face: float = atan2(-(to.x - from.x), -(to.z - from.z))
+	if _seq != null and _seq.is_valid():
+		_seq.kill()
+	var hop: Callable = func(t: float) -> void:
+		var k: float = t * t * (3.0 - 2.0 * t)
+		player.global_position = from.lerp(to, k) + Vector3(0.0, sin(k * PI) * 0.5, 0.0)
+		player.body.transform = Transform3D(Basis(Vector3.UP, lerp_angle(yaw, face, k)), Vector3(0.0, player.body_rest_height() + info.lift * (1.0 - k), 0.0))
+		if model != null:
+			model.global_transform = ground
+	var done: Callable = func() -> void:
+		Audio.play_sfx("fish_plop", -10.0, 1.3)
+		_hand_to_parked(ground.origin, yaw)
+		_finish()
+	_seq = create_tween()
+	_seq.tween_method(hop, 0.0, 1.0, 0.55)
+	_seq.tween_callback(done)
+
+
 ## 서버가 이미 세워 둔 경우 (문 · 집 드나들기 · 끊김) — 다시 알릴 필요가 없다.
 func _server_parks() -> bool:
 	return Home.is_inside() or (GameData.shop != null and GameData.shop.is_inside(player.global_position)) or Net.state != Net.State.ONLINE
@@ -358,6 +461,16 @@ func _finish() -> void:
 	if _seq != null and _seq.is_valid():
 		_seq.kill()
 	_seq = null
+	_landing = Vector2.INF
+	if _saved_mask >= 0 and player != null:
+		player.collision_mask = _saved_mask
+		_saved_mask = -1
+		# 보트에서 갑자기 내렸다 (순간이동 · 접속 끊김): 물 위에 서 있지 않게 곁의 땅으로.
+		var here: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+		if not WaterRules.is_land(here) and not Home.is_inside():
+			var land: Vector2 = WaterRules.landing_near(here, 30.0)
+			if land != Vector2.INF:
+				player.global_position = Vector3(land.x, 0.1, land.y)
 	if model != null:
 		model.queue_free()
 	model = null
@@ -415,15 +528,36 @@ func drive(delta: float, move_dir: Vector3, amount: float) -> void:
 		player.velocity.x = 0.0
 		player.velocity.z = 0.0
 		return
-	var v: Vector3 = drive_state.step(move_dir, amount, drive_state.stats.wade if player.wading else 1.0, delta)
+	var boat: bool = is_boat()
+	var v: Vector3 = drive_state.step(move_dir, amount, 1.0 if boat else (drive_state.stats.wade if player.wading else 1.0), delta)
+	if boat:
+		v = _keep_on_water(v, delta)
 	player.velocity.x = v.x
 	player.velocity.z = v.z
 	var speed: float = drive_state.speed
-	player.rig.set_pedal_rate(model.pedal_rate(speed) if info.kind == "bike" else 0.0)
+	player.rig.set_pedal_rate(model.pedal_rate(speed) if info.pose in CharacterRig.PHASED_RIDES else 0.0)
 	model.animate(speed, drive_state.steer, delta)
-	# 바퀴 구르는 소리: 빠를수록 크게 (오토바이는 조금 더 크게).
-	Audio.set_loop("kick_roll_loop", clampf(speed / maxf(drive_state.stats.top, 0.1), 0.0, 1.0) * (0.35 if info.kind == "bike" else 0.5), delta)
+	# 바퀴 구르는 소리: 빠를수록 크게 (오토바이는 조금 더 크게). 보트는 물 가르는 소리 대신 조용히.
+	Audio.set_loop("kick_roll_loop", clampf(speed / maxf(drive_state.stats.top, 0.1), 0.0, 1.0) * (0.35 if info.kind == "bike" else (0.2 if boat else 0.5)), delta)
 	_place_body()
+
+
+## 보트: 다음 자리가 물이 아니면 물가를 따라 미끄러지고(한 축씩), 그래도 막히면 선다 (쿵).
+func _keep_on_water(v: Vector3, delta: float) -> Vector3:
+	var p: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+	var step: Vector2 = Vector2(v.x, v.z) * delta
+	if WaterRules.is_water(p + step * 3.0):
+		return v
+	for along: Vector2 in [Vector2(step.x, 0.0), Vector2(0.0, step.y)]:
+		if along.length() > 0.0001 and WaterRules.is_water(p + along * 3.0):
+			var keep: Vector2 = along / delta
+			drive_state.speed *= 0.97
+			return Vector3(keep.x, 0.0, keep.y)
+	if drive_state.speed > 1.5:
+		Prefs.vibrate(40, 0.4)
+		Audio.play_sfx("fish_plop", -12.0, 0.7)
+	drive_state.speed = 0.0
+	return Vector3.ZERO
 
 
 ## 움직인 뒤: 순간이동이면 떠나기 전 자리에 세우고, 벽에 막혔으면 그만큼 느려진다.
@@ -433,6 +567,10 @@ func after_move(delta: float, before: Vector3) -> void:
 	if Vector2(before.x - _last_pos.x, before.z - _last_pos.z).length() > 4.0:
 		dismount(false)
 		return
+	if is_boat():
+		# 수면 높이에 뜬다.
+		player.global_position.y = WaterRules.level_at(Vector2(player.global_position.x, player.global_position.z))
+		player.velocity.y = 0.0
 	if delta > 0.0:
 		drive_state.after_move((player.global_position - before) / delta)
 	_last_pos = player.global_position
@@ -443,6 +581,12 @@ func after_move(delta: float, before: Vector3) -> void:
 func _place_body() -> void:
 	var basis: Basis = Basis(Vector3.UP, drive_state.yaw) * Basis(Vector3.BACK, drive_state.lean) * Basis(Vector3.RIGHT, drive_state.pitch)
 	var height: float = player.body_rest_height() + info.lift
+	if is_boat():
+		# 물결에 출렁 (멈춰 있을수록 조금 더).
+		_bob_t += get_physics_process_delta_time()
+		var calm: float = 1.0 - clampf(drive_state.speed / 4.0, 0.0, 0.7)
+		height += sin(_bob_t * 1.7) * 0.025 * calm
+		basis = basis * Basis(Vector3.BACK, sin(_bob_t * 1.3) * 0.03 * calm)
 	player.body.transform = Transform3D(basis, basis * Vector3(0.0, height, 0.0))
 	model.transform = Transform3D(Basis(), Vector3(0.0, -height, 0.0))
 
@@ -502,7 +646,7 @@ func _update_hud(force: bool) -> void:
 	var show: bool = Net.state == Net.State.ONLINE and not Net.vehicles.is_empty() and not Home.is_inside() and (phone == null or not phone.visible)
 	if _button.visible != show:
 		_button.visible = show
-	var near: bool = state == State.OFF and parked != null and not parked.nearest_own(player.global_position, RIDE_RANGE).is_empty()
+	var near: bool = state == State.OFF and parked != null and not parked.nearest_own(player.global_position, RIDE_RANGE, true).is_empty()
 	var icon: String = "ride" if state == State.RIDING else ("near" if near else "call")
 	if force or icon != _icon_state:
 		_icon_state = icon

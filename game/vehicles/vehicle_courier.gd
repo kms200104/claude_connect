@@ -4,6 +4,7 @@ extends Node3D
 ## 서버가 정한 도착 시각(arrive_ms, 서버 시계)에 딱 닿게 빠르기를 맞추고, 마지막 몇 m 는 천천히 들어와 세운다.
 ## 출발 자리는 화면 연출: 세울 자리에서 막힌 데(건물 · 호수 · 바닷가 벽) 없이 가장 멀리 트인 쪽 (최대 START_MAX m).
 ## 세우고 나면 arrived 로 탈것 모형을 넘긴다 (ParkedVehicles 가 받아 세워 둔다). 판정과 상관없는 그림이다.
+## 보트(v20): 물이 길게 트인 쪽 물 위에서 출발해 곧장 몰고 오고(그 길은 모두 물), 띄워 둔 뒤 곁의 땅으로 폴짝 내려 손을 흔들고 걸어간다.
 
 signal arrived(model: VehicleModel)
 
@@ -30,6 +31,9 @@ var _t: float = 0.0
 var _speed: float = 0.0
 var _yaw: float = 0.0
 var _leave_dir: Vector3 = Vector3.FORWARD
+var _boat: bool = false
+## 보트: 내려설 땅 (월드).
+var _land: Vector3 = Vector3.INF
 
 
 ## model 은 이미 빚은 탈것 (이 노드 아래로 옮긴다). target = 세울 자리 (바닥 높이 · 방향).
@@ -52,13 +56,30 @@ func setup(npc: String, vehicle: VehicleModel, target: Transform3D, arrive_ms: f
 		rig.set_look(info.look)
 	# 배달하는 주민은 빈손으로 핸들을 잡는다 (리그 기본은 낚싯대).
 	rig.set_held("")
-	rig.set_riding(_info.kind if _info != null else "bike")
+	rig.set_riding(_info.pose if _info != null else "bike")
 	model.lights_on = true
 	rig.position = Vector3(0.0, 0.8 + (_info.lift if _info != null else 0.15), 0.0)
-	_start = _pick_start(target.origin, exclude)
+	_boat = _info != null and GameData.garage.is_water_kind(_info.kind)
+	_start = _pick_water_start(target.origin) if _boat else _pick_start(target.origin, exclude)
 	var flat: Vector3 = (target.origin - _start) * Vector3(1, 0, 1)
 	_yaw = atan2(-flat.x, -flat.z) if flat.length() > 0.01 else target.basis.get_euler().y
 	global_transform = Transform3D(Basis(Vector3.UP, _yaw), _start)
+
+
+## 보트: 세울 자리에서 물이 가장 길게 이어지는 쪽으로 물러난 자리 (그 사이는 모두 물이라 곧장 몰고 온다).
+func _pick_water_start(at: Vector3) -> Vector3:
+	var best: Vector3 = at
+	var best_len: float = 0.0
+	for i: int in 16:
+		var a: float = TAU * float(i) / 16.0
+		var dir: Vector2 = Vector2(sin(a), cos(a))
+		var reach: float = 0.0
+		while reach < START_MAX and WaterRules.is_water(Vector2(at.x, at.z) + dir * (reach + 1.0)):
+			reach += 1.0
+		if reach > best_len:
+			best_len = reach
+			best = at + Vector3(dir.x, 0.0, dir.y) * reach
+	return Vector3(best.x, at.y, best.z)
 
 
 ## 세울 자리에서 막힌 데 없이 가장 멀리 트인 방향으로 물러난 자리 (거기서 출발한다).
@@ -92,6 +113,14 @@ func _process(delta: float) -> void:
 			_ride(delta)
 		Phase.HOP_OFF:
 			_t += delta
+			if _boat:
+				# 보트: 곁의 땅으로 폴짝 (물 위 → 물가).
+				var kb: float = clampf(_t / 0.55, 0.0, 1.0)
+				var local: Vector3 = global_transform.affine_inverse() * _land
+				rig.position = Vector3(local.x * kb, lerpf(0.8 + _info.lift, 0.8 + local.y, kb) + sin(kb * PI) * 0.5, local.z * kb)
+				if kb >= 1.0:
+					_park()
+				return
 			var k: float = clampf(_t / 0.35, 0.0, 1.0)
 			# 왼쪽으로 폴짝 내린다.
 			rig.position = Vector3(-0.55 * k, 0.8 + _info.lift * (1.0 - k) + sin(k * PI) * 0.12, 0.0)
@@ -125,6 +154,10 @@ func _ride(delta: float) -> void:
 		phase = Phase.HOP_OFF
 		_t = 0.0
 		rig.set_riding("")
+		if _boat:
+			var land: Vector2 = WaterRules.landing_near(Vector2(_target.origin.x, _target.origin.z), 8.0)
+			_land = Vector3(land.x, 0.0, land.y) if land != Vector2.INF else _start
+			rig.rotation.y = atan2(-(_land.x - _target.origin.x), -(_land.z - _target.origin.z)) - _target.basis.get_euler().y
 		model.animate(0.0, 0.0, delta)
 		global_basis = _target.basis
 		return
@@ -153,7 +186,9 @@ func _park() -> void:
 	arrived.emit(vehicle)
 	rig.play_emote("hello")
 	EmoteBubble.say(rig, "배달 왔어요!", 2.2)
-	# 왔던 쪽으로 걸어 나간다.
+	# 왔던 쪽으로 걸어 나간다 (보트는 물에서 뭍 안쪽으로).
 	_leave_dir = ((_start - global_position) * Vector3(1, 0, 1)).normalized()
+	if _boat and _land != Vector3.INF:
+		_leave_dir = ((_land - global_position) * Vector3(1, 0, 1)).normalized()
 	if _leave_dir == Vector3.ZERO:
 		_leave_dir = Vector3.BACK

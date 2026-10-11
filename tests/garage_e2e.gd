@@ -2,7 +2,7 @@ extends Node
 ## 차고 탈것 종단 테스트 (v19, 앱 안 테스트 서버 · tests/run_garage_e2e.sh).
 ##   휴대폰 "탈것" 앱: 매장에서 자전거 사기(한 번 더 눌러 확인) → 꾸미기(도색 · 전조등, 산 색은 공짜로 다시) → 성능 막대
 ##   → HUD 탈것 단추(휴대폰 단추와 안 겹침)로 부르기 → 주민이 타고 와서 곁에 세우고 떠남 → "타기"
-##   → 페달(리그 위상 = 크랭크) · 빨라짐 · 미끄러짐 · 기울기 · 브레이크 → "세우기" (그 자리에 남음)
+##   → 페달(리그 위상 = 크랭크) · 빨라짐 · 미끄러짐 · 기울기 · 브레이크 → 탈것 단추 P 로 세우기 (그 자리에 남음, 상황 버튼에는 "세우기"가 없다)
 ##   → 앱에서 오토바이 부르기 → 스로틀이 부드럽게 열리고(가속도가 덜컥이지 않음) 최고 속도 안, 놓으면 회생 제동
 ##   → 탄 채 자전거 불러 바꿔 타기 → 순간이동하면 떠나기 전 자리에 세움 → 팔기
 
@@ -74,6 +74,29 @@ func _find_courier(root: Node) -> VehicleCourier:
 
 
 ## 그 월드 방향으로 미는 조이스틱 값 (카메라 기준).
+## 성성호수(바다가 아닌 가장 큰 낚시터) 물가의 내릴 땅 가운데, 곁(올라탈 거리 안)에 트인 물이 있는 곳.
+func _lake_shore(reach: float) -> Vector2:
+	var best: SpotInfo = null
+	for spot: SpotInfo in GameData.spots.values():
+		if not spot.is_sea and (best == null or spot.half_extent.x * spot.half_extent.y > best.half_extent.x * best.half_extent.y):
+			best = spot
+	if best == null:
+		return Vector2.INF
+	for k: int in 32:
+		var dir: Vector2 = Vector2.from_angle(TAU * float(k) / 32.0)
+		var p: Vector2 = best.center
+		var wet: bool = false
+		for i: int in 240:
+			p += dir * 0.5
+			if WaterRules.is_water(p):
+				wet = true
+			elif wet and WaterRules.is_land(p):
+				if WaterRules.water_near(p + dir * 0.5, reach) != Vector2.INF:
+					return p + dir * 0.5
+				break
+	return Vector2.INF
+
+
 func _stick_toward(dir: Vector3) -> Vector2:
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	var right: Vector3 = Vector3(cam.global_basis.x.x, 0.0, cam.global_basis.x.z).normalized()
@@ -142,7 +165,7 @@ func _run() -> void:
 	for m: VehicleCatalog.Model in GameData.garage.models:
 		if app.find_child("Model_%s" % m.id, true, false) != null:
 			models += 1
-	_check(models == 7, "매장에 자전거 4 · 전기오토바이 3 (%d)" % models)
+	_check(models == 10, "매장에 자전거 4 · 전기오토바이 3 · 보트 3 (%d)" % models)
 	_check(_press(app, "Model_bike_city"), "생활 자전거 고르기")
 	await get_tree().create_timer(0.1).timeout
 	_check(app.find_child("Preview", true, false) is SubViewportContainer, "3D 미리보기가 돈다")
@@ -215,7 +238,8 @@ func _run() -> void:
 	_check(rider.model != null and rider.model.get_parent() == player.rig and str(rider.model.fit.get("paint", "")) == "paint_mint", "꾸민 자전거 모형 (민트)")
 	_check(player.rig.riding_kind() == "bike" and not player.is_input_locked(), "안장에 앉은 자세")
 	_check(parked.spot_of(bike).is_empty(), "탄 자전거는 세워 둔 목록에서 빠짐")
-	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF and interaction.action_hud.current_text() == "세우기", 2.0), "탄 동안 상황 버튼은 '세우기'")
+	await get_tree().create_timer(0.3).timeout
+	_check(interaction.target != InteractionController.Target.RIDE_OFF and interaction.action_hud.current_text() != "세우기", "탄 동안 상황 버튼에 '세우기'가 없다 (P 단추로 세움)")
 	var start: Vector3 = player.global_position
 	var top: Array[float] = [0.0]
 	var phase_ok: Array[bool] = [true]
@@ -255,9 +279,9 @@ func _run() -> void:
 	get_tree().process_frame.disconnect(watch)
 	await _button_drive(player, rider)
 	await get_tree().create_timer(0.4).timeout
-	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.RIDE_OFF, 2.0), "'세우기' 버튼 (%s · %s)" % [InteractionController.Target.keys()[interaction.target], interaction.action_hud.current_text()])
+	_check(await _wait_until(func() -> bool: return rider.is_riding() and rider._button.visible, 2.0), "탈것 단추 P (%s)" % rider._button.tooltip_text)
 	var stop_at: Vector3 = player.global_position
-	interaction.action_hud.action_pressed.emit()
+	rider._button.pressed.emit()
 	_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 3.0), "내려섬")
 	_check(player.rig.riding_kind() == "" and absf(player.body.position.y - player.body_rest_height()) < 0.01, "다시 걷는 자세 · 몸 높이 원래대로")
 	var stood: Dictionary = parked.spot_of(bike)
@@ -325,3 +349,48 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.vehicles.size() == 1, 3.0), "자전거를 팔았다")
 	var spent: int = 239000 + 39000 + 39000 + 59000 + 389000
 	_check(Net.sol - sol3 == roundi(spent * GameData.garage.resale / 100.0) * 100, "산 값의 %d%% 를 돌려받음 (+%d)" % [roundi(GameData.garage.resale * 100.0), Net.sol - sol3])
+
+	# ---- 보트 (v20): 물가에서 부르면 물 위에 띄워 두고, 타면 물 위에서만 · P 로 곁의 땅에 내려선다 ----
+	Net.request("veh_buy", {"model": "boat_kayak"})
+	_check(await _wait_until(func() -> bool: return Net.vehicles.size() == 2, 3.0), "카약을 산다")
+	var boat: String = ""
+	for v: Dictionary in Net.vehicles:
+		if str(v.get("model", "")) == "boat_kayak":
+			boat = str(v.get("id", ""))
+	var shore: Vector2 = _lake_shore(minf(GameData.garage.park_range("boat") - 0.8, GarageRider.ride_range_of(boat) - 0.3))
+	_check(shore != Vector2.INF, "호숫가 땅 찾기 (%s)" % shore)
+	player.global_position = Vector3(-44.0, 0.1, 66.0)
+	await get_tree().create_timer(0.3).timeout
+	_check(not rider.call_vehicle(boat), "물에서 먼 곳에서는 보트를 못 부른다")
+	player.global_position = Vector3(shore.x, 0.1, shore.y)
+	(_village.get_node("CameraRig") as FollowCamera).snap_to_target()
+	await get_tree().create_timer(0.5).timeout
+	_check(rider.call_vehicle(boat), "호숫가에서 보트 부르기")
+	_check(await _wait_until(func() -> bool: return bool(parked.spot_of(boat).get("arrived", false)), 30.0), "주민이 몰고 와 물 위에 띄워 둠")
+	await get_tree().create_timer(0.5).timeout
+	var float_at: Vector3 = parked.spot_of(boat)["at"] if not parked.spot_of(boat).is_empty() else Vector3.ZERO
+	_check(WaterRules.is_water(Vector2(float_at.x, float_at.z)), "띄워 둔 자리는 물 (%s)" % float_at)
+	var why: String = rider.mount_problem(boat)
+	_check(rider.mount(boat), "곁에 뜬 카약에 타기 %s" % why)
+	_check(await _wait_until(func() -> bool: return rider.is_riding() and rider.vehicle_id == boat and player.rig.riding_kind() == "kayak", 4.0), "카약에 앉아 노를 쥔 자세")
+	_check(rider.is_floating(), "물 위에 뜬다")
+	var land_dir: Vector3 = Vector3(shore.x - player.global_position.x, 0.0, shore.y - player.global_position.z).normalized()
+	var boat_start: Vector3 = player.global_position
+	player.joystick.output = _stick_toward(-land_dir)
+	await get_tree().create_timer(3.0).timeout
+	_check(_flat(player.global_position, boat_start) > 0.8, "카약이 물 위로 나아간다 (%.1fm · %.1f m/s)" % [_flat(player.global_position, boat_start), rider.drive_state.speed])
+	player.joystick.output = _stick_toward(land_dir)
+	await get_tree().create_timer(6.0).timeout
+	player.joystick.output = Vector2.ZERO
+	var p2: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+	_check(WaterRules.is_water(p2), "땅 쪽으로 저어도 물 밖으로 못 나간다 (%s)" % p2)
+	_check(absf(player.global_position.y - WaterRules.level_at(p2)) < 0.3, "수면 높이에 떠 있다 (%.2f)" % player.global_position.y)
+	await _shot("boat")
+	await _wait_until(func() -> bool: return rider.drive_state.speed < 0.2, 6.0)
+	_check(rider._button.visible, "보트 탄 동안에도 P 단추")
+	rider._button.pressed.emit()
+	_check(await _wait_until(func() -> bool: return rider.state == GarageRider.State.OFF, 4.0), "P 로 곁의 땅에 내려섬")
+	var landed: Vector2 = Vector2(player.global_position.x, player.global_position.z)
+	_check(WaterRules.is_land(landed), "내려선 자리는 땅 (%s)" % landed)
+	var left: Dictionary = parked.spot_of(boat)
+	_check(not left.is_empty() and WaterRules.is_water(Vector2((left["at"] as Vector3).x, (left["at"] as Vector3).z)), "카약은 물에 남는다")

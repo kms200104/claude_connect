@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""차고 탈것 데이터(data/vehicles/garage.json)를 만든다: 자전거 · 전기오토바이 모델과 꾸미기 부품.
+"""차고 탈것 데이터(data/vehicles/garage.json)를 만든다: 자전거 · 전기오토바이 · 보트(v20) 모델과 꾸미기 부품.
 
 - 값(솔)은 원과 같은 단위라 실제 시세에 맞춘다 (생활 자전거 20만 원대 · 로드 200만 원대 · 전기 스쿠터 200만 원대 · 125cc급 전기오토바이 600만 원대).
 - 성능(top m/s · accel m/s² · brake m/s² · coast m/s² · turn rad/s)은 서버(이동 속도 검사)와 클라이언트(주행)가 같이 쓴다.
@@ -7,6 +7,7 @@
 - 액세서리 model 은 PartMesh 도형 목록(game/props/part_mesh.gd)이고 anchor(탈것마다 정한 자리) 기준이다.
   색 자리 "$paint" · "$trim" · "$seat" 는 탈것을 빚을 때 고른 색으로 바뀐다.
 - anchors: 탈것 좌표(바닥 y = 0, 앞 = -z). 핸들(bar)은 타는 자세의 손 자리(gen_character_rig.py ride_bike · ride_moto)에 맞췄다.
+  보트는 수면이 y = 0 (배 밑은 물에 잠긴다). pose = 타는 자세 (bike · moto · boat · kayak, 없으면 종류 이름).
 사용: python3 tools/art/gen_vehicles.py
 """
 import json
@@ -42,6 +43,14 @@ SPORT_ANCHORS = dict(SCOOTER_ANCHORS, **{'bar': [0.0, 0.79, -0.3], 'front': [0.0
                                          'frame': [0.0, 0.5, -0.12], 'head': [0.0, 0.62, -0.56], 'tail': [0.0, 0.5, 0.74],
                                          'axle_f': [0.0, 0.25, -0.68], 'axle_r': [0.0, 0.25, 0.52], 'floor': [0.0, 0.22, -0.1]})
 
+# 보트 (v20): 수면 y = 0. axle_f · axle_r 는 뱃머리 · 고물 (방향 바꾸는 계산의 앞뒤 길이).
+KAYAK_ANCHORS = {'seat': [0.0, 0.1, 0.12], 'bar': [0.0, 0.5, -0.12], 'front': [0.0, 0.16, -0.75], 'rear': [0.0, 0.15, 0.75],
+                 'frame': [0.0, 0.12, 0.0], 'head': [0.0, 0.2, -1.3], 'tail': [0.0, 0.17, 1.4], 'axle_f': [0.0, 0.0, -1.4], 'axle_r': [0.0, 0.0, 1.4]}
+MOTOR_ANCHORS = {'seat': [0.0, 0.42, 0.55], 'bar': [0.0, 0.86, 0.12], 'front': [0.0, 0.62, -1.2], 'rear': [0.0, 0.5, 1.45],
+                 'frame': [0.0, 0.36, 0.0], 'head': [0.0, 0.62, -1.95], 'tail': [0.0, 0.55, 2.05], 'axle_f': [0.0, 0.0, -1.9], 'axle_r': [0.0, 0.0, 1.9]}
+JET_ANCHORS = {'seat': [0.0, 0.58, 0.22], 'bar': [0.0, 0.93, -0.42], 'front': [0.0, 0.72, -0.7], 'rear': [0.0, 0.62, 0.85],
+               'frame': [0.0, 0.42, 0.0], 'head': [0.0, 0.6, -1.12], 'tail': [0.0, 0.52, 1.2], 'axle_f': [0.0, 0.0, -1.2], 'axle_r': [0.0, 0.0, 1.2]}
+
 # ---- 모델 ----
 # style: 몸체 모양 (VehicleModel 이 빚는다) · wheel: 바퀴 반지름(m) · lift: 타는 동안 캐릭터를 올리는 높이.
 # pedal: 바퀴 한 바퀴에 페달이 도는 수의 역수 (기어비) — 페달 빠르기 = 속도 / (2πr) / gear.
@@ -74,6 +83,19 @@ MODELS = [
          spec='5kW 미드 모터 · 최고 90km/h · 72V 리튬 · ABS', desc='날렵한 카울의 125cc급 전기 오토바이. 스로틀을 감으면 쭉 밀어 준다.',
          top=15.0, accel=4.3, brake=7.2, coast=0.3, turn=2.05, wheel=0.25, lift=0.12, regen=1.5,
          paint='#2F62C8', trim='#F2EEE4', seat='#232326', anchors=SPORT_ANCHORS),
+    # ---- 보트 (v20): 성성호수 · 바다에서 탄다. 물가에서 부르면 주민이 물길로 몰고 와 띄워 두고 간다. ----
+    dict(id='boat_kayak', kind='boat', style='kayak', pose='kayak', name='씨버드 레크리에이션 카약', type='1인 카약 (3.0m)', price=690000,
+         spec='폴리에틸렌 선체 · 3.0m · 22kg · 더블 패들', desc='노를 저어 조용히 호수를 건넌다. 물가 갈대숲 사이로도 들어간다.',
+         top=2.6, accel=1.7, brake=1.6, coast=0.2, turn=1.7, wheel=0.3, gear=1.0, lift=-0.21,
+         paint='#F28A3A', trim='#2F4A7A', seat='#232326', anchors=KAYAK_ANCHORS),
+    dict(id='boat_motor', kind='boat', style='motor', pose='boat', name='솔바람 피싱보트 4.2', type='소형 모터보트 (선외기 15마력)', price=8900000,
+         spec='알루미늄 선체 · 4.2m · 15마력 선외기 · 3인승', desc='넓고 튼튼한 작은 배. 운전석에 앉아 키를 돌린다. 친구랑 낚시 가기 좋다.',
+         top=8.5, accel=2.4, brake=2.2, coast=0.3, turn=1.05, wheel=0.3, gear=1.0, lift=0.09,
+         paint='#F2EEE4', trim='#2F62C8', seat='#3A5A7A', anchors=MOTOR_ANCHORS),
+    dict(id='boat_jetski', kind='boat', style='jetski', pose='moto', name='웨이브 러너 스파크', type='수상오토바이 (90마력)', price=13900000,
+         spec='90마력 · 최고 80km/h · 2인승 · 후진 기어', desc='물보라를 일으키며 바다를 가르는 수상오토바이. 급회전하면 물이 튄다.',
+         top=16.0, accel=4.0, brake=3.2, coast=0.5, turn=1.9, wheel=0.3, gear=1.0, lift=0.16,
+         paint='#F5D547', trim='#232326', seat='#232326', anchors=JET_ANCHORS),
 ]
 
 # ---- 부품 ----
@@ -96,19 +118,19 @@ def add(**kw):
 
 
 for pid, name, color, premium in PAINTS:
-    add(id='paint_' + pid, slot='paint', name=name + (' (특수 도장)' if premium else ''), c=color,
-        price={'bike': 69000 if premium else 39000, 'moto': 390000 if premium else 180000},
+    add(id='paint_' + pid, slot='paint', name=name + (' (특수 도장)' if premium else ''), c=color, kinds=['bike', 'moto', 'boat'],
+        price={'bike': 69000 if premium else 39000, 'moto': 390000 if premium else 180000, 'boat': 590000 if premium else 290000},
         desc='프레임 전체를 다시 칠한다.' if not premium else '광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다.')
 for pid, name, color in TRIMS:
-    add(id='trim_' + pid, slot='trim', name=name + ' 포인트', c=color, price={'bike': 15000, 'moto': 60000},
+    add(id='trim_' + pid, slot='trim', name=name + ' 포인트', c=color, kinds=['bike', 'moto', 'boat'], price={'bike': 15000, 'moto': 60000, 'boat': 90000},
         desc='림 · 핸들 · 포크 같은 포인트 부분의 색.')
 
 # 조명: light = { range(m), energy, angle(°), color, lens(렌즈 반지름 배율), drl(주간주행등 고리) }. 밤에 SpotLight 로 앞을 비춘다.
-add(id='light_led', slot='light', name='LED 전조등', price={'bike': 25000, 'moto': 79000},
+add(id='light_led', slot='light', name='LED 전조등', kinds=['bike', 'moto', 'boat'], price={'bike': 25000, 'moto': 79000, 'boat': 89000},
     light={'range': 10.0, 'energy': 1.3, 'angle': 34.0, 'color': '#F4F6FF', 'lens': 1.1}, desc='밤길 10m 를 하얗게 비춘다.')
 add(id='light_warm', slot='light', name='레트로 전구 램프', price={'bike': 45000, 'moto': 129000},
     light={'range': 12.0, 'energy': 1.4, 'angle': 40.0, 'color': '#FFD08A', 'lens': 1.35}, desc='크고 둥근 전구색 램프. 따뜻한 빛이 넓게 퍼진다.')
-add(id='light_hi', slot='light', name='고휘도 LED 1200lm', price={'bike': 59000, 'moto': 189000},
+add(id='light_hi', slot='light', name='고휘도 LED 1200lm', kinds=['bike', 'moto', 'boat'], price={'bike': 59000, 'moto': 189000, 'boat': 199000},
     light={'range': 17.0, 'energy': 2.1, 'angle': 30.0, 'color': '#EEF3FF', 'lens': 1.2}, desc='멀리까지 쭉 뻗는 밝은 빛. 밤에 길이 훨씬 잘 보인다.')
 add(id='light_proj', slot='light', kinds=['moto'], name='LED 프로젝션 + 주간주행등', price={'moto': 390000},
     light={'range': 22.0, 'energy': 2.6, 'angle': 28.0, 'color': '#F2F6FF', 'lens': 1.25, 'drl': True},
@@ -135,6 +157,12 @@ add(id='drive_battery', slot='drive', kinds=['moto'], name='대용량 배터리 
     desc='전압이 높아 최고 속도까지 힘이 덜 빠진다.')
 add(id='drive_motor', slot='drive', kinds=['moto'], name='고출력 모터 (+2kW)', price={'moto': 1190000}, stats={'top': 1.12, 'accel': 1.2},
     desc='더 큰 모터로 바꾼다. 최고 속도와 가속이 모두 오른다.')
+add(id='drive_wax', slot='drive', kinds=['boat'], name='선체 코팅 (발수 왁스)', price={'boat': 99000}, stats={'top': 1.05, 'turn': 1.03},
+    desc='배 밑을 매끈하게 코팅해 물 저항이 준다.')
+add(id='drive_prop', slot='drive', kinds=['boat'], name='스테인리스 프로펠러 · 카본 패들', price={'boat': 490000}, stats={'top': 1.08, 'accel': 1.15},
+    desc='물을 더 세게 밀어낸다. 카약은 가벼운 카본 노로 바꾼다.')
+add(id='drive_outboard', slot='drive', kinds=['boat'], name='고출력 엔진 튜닝 (+30%)', price={'boat': 2900000}, stats={'top': 1.15, 'accel': 1.25},
+    desc='엔진 출력을 높인다. 카약은 전동 보조 추진기를 단다.')
 add(id='brake_disc', slot='brake', kinds=['bike'], name='유압 디스크 브레이크', price={'bike': 159000}, stats={'brake': 1.35},
     desc='살짝 잡아도 확실하게 선다.')
 add(id='brake_cbs', slot='brake', kinds=['moto'], name='CBS 연동 브레이크', price={'moto': 249000}, stats={'brake': 1.25},
@@ -152,7 +180,7 @@ add(id='tire_sport', slot='tire', kinds=['moto'], name='스포츠 타이어', pr
     tire={'c': '#2A2A2E', 'w': 1.1}, desc='접지력이 좋아 코너를 빠르게 돈다.')
 # 안장 · 시트: seat = { c: 색, shape: soft|sport|quilt }.
 for sid, name, color in SEATS_COLOR:
-    add(id='seat_' + sid, slot='seat', name=name + ' 가죽 시트', price={'bike': 49000, 'moto': 190000}, seat={'c': color, 'shape': 'soft'},
+    add(id='seat_' + sid, slot='seat', name=name + ' 가죽 시트', kinds=['bike', 'moto', 'boat'], price={'bike': 49000, 'moto': 190000, 'boat': 159000}, seat={'c': color, 'shape': 'soft'},
         desc='부드러운 가죽 안장.')
 add(id='seat_gel', slot='seat', kinds=['bike'], name='젤 컴포트 안장', price={'bike': 29000}, seat={'c': '#3A3A40', 'shape': 'wide'},
     desc='넓고 푹신한 안장.')
@@ -196,6 +224,15 @@ add(id='front_fairing', slot='front', kinds=['moto'], name='카페레이서 카�
     part('rbox', [0.3, 0.14, 0.02], [0.0, 0.17, 0.02], '#CFE8F4', rot=[-30, 0, 0], r=0.6),
     part('torus', [0.1, 0.016], [0.0, 0.0, -0.13], '$trim', rot=[90, 0, 0])], desc='전조등을 감싸는 둥근 카울.')
 
+add(id='front_rodholder', slot='front', kinds=['boat'], name='낚싯대 거치대', price={'boat': 59000}, anchor='front', model=[
+    part('cyl', [0.025, 0.22], [-0.18, 0.1, 0.0], '#3A3A40', rot=[-30, 0, 0]),
+    part('cyl', [0.025, 0.22], [0.18, 0.1, 0.0], '#3A3A40', rot=[-30, 0, 0]),
+    part('rod', [0.008, 0.004], [-0.18, 0.2, 0.06], '#C08A4A', to=[-0.22, 1.05, 0.55]),
+    part('rod', [0.008, 0.004], [0.18, 0.2, 0.06], '#C08A4A', to=[0.22, 1.05, 0.55])], desc='낚싯대 두 대를 꽂아 두는 받침.')
+add(id='front_cooler', slot='front', kinds=['boat'], name='아이스박스', price={'boat': 89000}, anchor='front', model=[
+    part('rbox', [0.42, 0.26, 0.28], [0.0, 0.13, 0.0], '#F2EEE4', r=0.15),
+    part('rbox', [0.44, 0.06, 0.3], [0.0, 0.27, 0.0], '#3D7BD8', r=0.3),
+    part('box', [0.16, 0.02, 0.03], [0.0, 0.31, 0.0], '#2A2A2E')], desc='시원한 음료와 잡은 물고기를 담는다.')
 add(id='rear_rack', slot='rear', kinds=['bike'], name='짐받이', price={'bike': 25000}, anchor='rear', model=[
     part('box', [0.16, 0.015, 0.3], [0.0, 0.0, 0.02], '$trim'),
     part('rod', [0.008, 0.008], [-0.07, 0.0, 0.16], '$trim', to=[-0.07, -0.22, 0.02]),
@@ -228,7 +265,7 @@ add(id='deco_tassel', slot='deco', kinds=['bike'], name='핸들 술 장식', pri
     part('rod', [0.012, 0.004], [-0.33, 0.0, 0.03], '#8CC8F0', to=[-0.35, -0.13, 0.1]),
     part('rod', [0.012, 0.004], [0.33, 0.0, 0.03], '#F5D547', to=[0.38, -0.12, 0.08]),
     part('rod', [0.012, 0.004], [0.33, 0.0, 0.03], '#8FD8C0', to=[0.35, -0.13, 0.1])], desc='달리면 살랑이는 리본 술.')
-add(id='deco_flag', slot='deco', name='안전 깃발', price={'bike': 15000, 'moto': 29000}, anchor='rear', model=[
+add(id='deco_flag', slot='deco', name='안전 깃발', kinds=['bike', 'moto', 'boat'], price={'bike': 15000, 'moto': 29000, 'boat': 29000}, anchor='rear', model=[
     part('rod', [0.008, 0.006], [0.1, 0.0, 0.12], '#F2EEE4', to=[0.1, 0.9, 0.16]),
     part('box', [0.01, 0.12, 0.2], [0.1, 0.82, 0.26], '#F28A3A', rot=[0, 0, 0])], desc='멀리서도 잘 보이는 주황 깃발.')
 add(id='deco_mirror', slot='deco', kinds=['moto'], name='원형 미러', price={'moto': 45000}, anchor='bar', model=[
@@ -238,7 +275,7 @@ add(id='deco_mirror', slot='deco', kinds=['moto'], name='원형 미러', price={
     part('cyl', [0.045, 0.017], [-0.3, 0.19, 0.022], '#CFE8F4', rot=[90, 0, 0]),
     part('cyl', [0.055, 0.015], [0.3, 0.19, 0.02], '$trim', rot=[90, 0, 0]),
     part('cyl', [0.045, 0.017], [0.3, 0.19, 0.022], '#CFE8F4', rot=[90, 0, 0])], desc='동글동글 클래식 거울.')
-add(id='deco_plush', slot='deco', name='곰인형 마스코트', price={'bike': 25000, 'moto': 25000}, anchor='rear', model=[
+add(id='deco_plush', slot='deco', name='곰인형 마스코트', kinds=['bike', 'moto', 'boat'], price={'bike': 25000, 'moto': 25000, 'boat': 25000}, anchor='rear', model=[
     part('sphere', [0.07, 0.075, 0.06], [0.0, 0.07, 0.05], '#C8955A'),
     part('sphere', [0.06], [0.0, 0.18, 0.05], '#C8955A'),
     part('sphere', [0.022], [-0.045, 0.23, 0.05], '#A8753A'),
@@ -246,14 +283,14 @@ add(id='deco_plush', slot='deco', name='곰인형 마스코트', price={'bike': 
     part('sphere', [0.025, 0.02, 0.015], [0.0, 0.17, -0.005], '#F2E0C8'),
     part('sphere', [0.008], [-0.02, 0.195, -0.004], '#2A2A2E'),
     part('sphere', [0.008], [0.02, 0.195, -0.004], '#2A2A2E')], desc='뒤에 앉아 같이 달리는 곰.')
-add(id='deco_stripe', slot='deco', name='레이싱 줄무늬', price={'bike': 19000, 'moto': 89000}, anchor='frame', paint2='$trim', model=[],
+add(id='deco_stripe', slot='deco', name='레이싱 줄무늬', kinds=['bike', 'moto', 'boat'], price={'bike': 19000, 'moto': 89000, 'boat': 129000}, anchor='frame', paint2='$trim', model=[],
     desc='프레임에 포인트 색 줄무늬를 두른다.')
 
 # 빛나는 장식: glow = { c: 색, where: spoke(바퀴살) | under(차체 밑) | frame(프레임 줄) }. 밤에만 빛난다.
 for gid, name, color in [('blue', '블루', '#4AA8FF'), ('pink', '핑크', '#FF6FB0'), ('green', '그린', '#5CFF9A'), ('purple', '퍼플', '#B07CFF'), ('warm', '웜 화이트', '#FFD08A')]:
     add(id='glow_spoke_' + gid, slot='glow', kinds=['bike'], name='바퀴살 LED · ' + name, price={'bike': 39000}, glow={'c': color, 'where': 'spoke'},
         desc='달리면 바퀴에 빛 고리가 그려진다.')
-    add(id='glow_under_' + gid, slot='glow', kinds=['moto'], name='언더글로우 · ' + name, price={'moto': 159000}, glow={'c': color, 'where': 'under'},
+    add(id='glow_under_' + gid, slot='glow', kinds=['moto', 'boat'], name='언더글로우 · ' + name, price={'moto': 159000, 'boat': 259000}, glow={'c': color, 'where': 'under'},
         desc='차체 아래를 은은하게 밝힌다.')
 add(id='glow_frame_rainbow', slot='glow', kinds=['bike'], name='프레임 네온 · 무지개', price={'bike': 59000}, glow={'c': '#FF9AD8', 'where': 'frame'},
     desc='프레임을 따라 빛줄이 흐른다.')
@@ -279,6 +316,9 @@ data = {
         'bike': {'name': '자전거', 'pose': 'bike', 'turn_speed': 0.55},
         'moto': {'name': '전기오토바이', 'pose': 'moto', 'turn_speed': 0.4,
                  'throttle_rise': 1.6, 'throttle_fall': 3.5, 'brake_rise': 4.0, 'jerk': 7.0},
+        # 보트 (v20): 물 위에서만 · 스로틀은 천천히 열리고 놓으면 물 저항으로 미끄러지듯 선다. ▼ 는 역추진(브레이크).
+        'boat': {'name': '보트', 'pose': 'boat', 'turn_speed': 0.55, 'water': True,
+                 'throttle_rise': 1.1, 'throttle_fall': 1.4, 'brake_rise': 2.2, 'jerk': 3.5, 'ride_range': 4.6, 'park_range': 7.0},
     },
     'slots': SLOTS,
     'models': MODELS,

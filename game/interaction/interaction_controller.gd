@@ -50,7 +50,7 @@ extends Node
 enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
 const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE]
-## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리 (그보다 멀면 "세우기").
+## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리.
 const SWAP_RANGE: float = 1.4
 
 ## 가구 줍기 거리 (서버 판정 2.5m 보다 안쪽).
@@ -92,12 +92,13 @@ func has_target() -> bool:
 func _process(_delta: float) -> void:
 	_pick_target()
 	if player.is_riding() and not target in RIDE_TARGETS:
-		target = Target.RIDE_OFF if player.is_ride_settled() and not player.is_input_locked() else Target.NONE
+		# 차고 탈것은 HUD 탈것 단추(P)로 세우므로 상황 버튼에 "세우기"를 따로 띄우지 않는다. 킥보드만 "내리기".
+		var garage: bool = player.garage_ride != null and player.garage_ride.is_active()
+		target = Target.RIDE_OFF if not garage and player.is_ride_settled() and not player.is_input_locked() else Target.NONE
 		target_id = ""
 	match target:
 		Target.RIDE_OFF:
-			# 차고 탈것은 그 자리에 세워 둔다 (킥보드는 접어 넣는다).
-			action_hud.show_action("세우기" if player.garage_ride != null and player.garage_ride.is_active() else "내리기")
+			action_hud.show_action("내리기")
 		Target.VEHICLE:
 			action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
 		Target.TALK:
@@ -208,7 +209,7 @@ func _pick_target() -> void:
 			return
 	# 세워 둔 내 탈것 곁 (킥보드를 타는 중에는 아니다).
 	if parked != null and player.garage_ride != null and not (player.vehicle != null and player.vehicle.is_active()):
-		var vehicle_id: String = parked.nearest_own(pos, SWAP_RANGE if player.is_riding() else GarageRider.RIDE_RANGE - safety_margin)
+		var vehicle_id: String = parked.nearest_own(pos, SWAP_RANGE if player.is_riding() else GarageRider.RIDE_RANGE - safety_margin, not player.is_riding())
 		if not vehicle_id.is_empty():
 			target = Target.VEHICLE
 			target_id = vehicle_id

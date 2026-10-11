@@ -7,7 +7,10 @@
 // veh_ride → 세워 둔 내 탈것 곁(ride_range)에서 올라탄다 (빈 v = 내려서 그 자리에 세워 둠, 킥보드에서는 내린다).
 // 타는 동안은 스냅샷에 모양(mount)을 싣고, 이동 속도 검사를 그 탈것의 최고 속도로 한다 (내린 뒤 speed_grace_ms 동안도).
 // 집 · 상점 안, 문을 지날 때, 낚싯대를 던질 때는 내린다.
+// 보트 (v20, kinds.boat.water): 물 위(water.js — 호수 안쪽 · 섬 둘레 바다)에서만. 부를 때 세울 자리 · 타는 동안의 자리 모두 물이어야 하고,
+//   내릴 때는 veh_ride { v: '', lx, lz } 로 내릴 땅을 알려 준다 (보트 곁 land_range 안의 땅 — 그 자리로 옮겨 서고 보트는 물에 남는다).
 import { ErrorCode } from './protocol.js';
+import { isLand, waterAt } from './water.js';
 
 /** garage.json 검사 + 찾기 Map. */
 export function loadGarage(raw) {
@@ -96,6 +99,21 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
   // 테스트는 배달을 빨리 (config.vehicleEtaMs, VEHICLE_ETA_MS).
   if (Number.isFinite(etaMs)) delivery.eta_ms = etaMs;
   const couriers = data.npcs ? [...data.npcs.keys()] : [];
+  // 서버가 물 · 땅 판정에서 봐주는 여유 (클라이언트와 몇 cm 어긋나도 되돌리지 않게).
+  const WATER_SLACK = 0.6;
+  const LAND_RANGE = 6.0;
+  const kindOf = (v) => rules?.models.get(v?.model)?.kind ?? '';
+  const isWaterKind = (kind) => !!rules?.kinds[kind]?.water;
+  const rideRange = (kind) => rules?.kinds[kind]?.ride_range ?? delivery.ride_range;
+  const parkRange = (kind) => rules?.kinds[kind]?.park_range ?? delivery.park_range;
+  const mountedVehicle = (player) => (player.mount ? player.profile.vehicles.find((x) => x.id === player.mount) : null);
+
+  /** 보트를 타는 동안 이 자리로 갈 수 있는지 (물 위여야 한다). 보트가 아니면 언제나. */
+  function moveOk(player, x, z) {
+    const v = mountedVehicle(player);
+    if (!v || !isWaterKind(kindOf(v))) return true;
+    return waterAt(data, x, z, WATER_SLACK) !== '';
+  }
 
   const broadcastParked = (room) => room?.broadcast({ t: 'veh_parked', list: parkedWire(room) });
 
@@ -178,7 +196,19 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
       }
       case 'veh_ride': {
         if (msg.v === '' || msg.v === null || msg.v === undefined) {
-          dismount(player, room);
+          // 보트에서 내린다: 곁의 땅으로 옮겨 선다 (땅이 아니면 거절 — 계속 탄다).
+          const boat = mountedVehicle(player);
+          if (boat && isWaterKind(kindOf(boat))) {
+            const lx = Number(msg.lx);
+            const lz = Number(msg.lz);
+            if (!Number.isFinite(lx) || !Number.isFinite(lz) || Math.hypot(lx - player.x, lz - player.z) > LAND_RANGE || !isLand(data, lx, lz, 0.3)) return fail(ErrorCode.noLanding);
+            dismount(player, room);
+            player.x = lx;
+            player.z = lz;
+            room.dirty = true;
+          } else {
+            dismount(player, room);
+          }
         } else {
           if (!vehicle) return fail(ErrorCode.badVehicle);
           const why = blocked(player);
@@ -186,7 +216,7 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
           if (player.mount === vehicle.id) return send(ctx.ws, { t: 'veh_ride', rid: msg.rid, id: player.id, mount: mountWire(player) });
           // 세워 둔(도착한) 그 탈것 곁에서만 탄다.
           const at = vehicle.at;
-          if (!at || (at.t ?? 0) > now() || Math.hypot(player.x - at.x, player.z - at.z) > delivery.ride_range + 0.5) return fail(ErrorCode.notNearVehicle);
+          if (!at || (at.t ?? 0) > now() || Math.hypot(player.x - at.x, player.z - at.z) > rideRange(kindOf(vehicle)) + 0.5) return fail(ErrorCode.notNearVehicle);
           if (player.mount) dismount(player, room);
           vehicle.at = null;
           broadcastParked(room);
@@ -206,7 +236,11 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
         if (why) return fail(why);
         let x = Number(msg.x);
         let z = Number(msg.z);
-        if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - player.x, z - player.z) > delivery.park_range) {
+        const kind = kindOf(vehicle);
+        if (isWaterKind(kind)) {
+          // 보트: 내 곁(park_range 안)의 물 위에만 띄워 둔다.
+          if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - player.x, z - player.z) > parkRange(kind) || waterAt(data, x, z, WATER_SLACK) === '') return fail(ErrorCode.notOnWater);
+        } else if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x - player.x, z - player.z) > delivery.park_range) {
           x = player.x;
           z = player.z;
         }
@@ -235,5 +269,5 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
     return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null })) };
   }
 
-  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked };
+  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk };
 }

@@ -8,19 +8,22 @@ import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
 import { resaleValue, sanitizeVehicles, vehicleStats, partPrice } from '../src/garage.js';
+import { isLand, waterAt } from '../src/water.js';
 import { Client, sleep, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
 const rules = data.garage;
 
 describe('v19 차고 탈것 규칙', () => {
-  it('모델: 자전거 넷 · 전기오토바이 셋, 실제 시세 근처 값, 오토바이가 더 빠르다', () => {
+  it('모델: 자전거 넷 · 전기오토바이 셋 · 보트 셋, 실제 시세 근처 값, 오토바이가 더 빠르다', () => {
     const kinds = [...rules.models.values()].map((m) => m.kind);
     assert.equal(kinds.filter((k) => k === 'bike').length, 4);
     assert.equal(kinds.filter((k) => k === 'moto').length, 3);
+    assert.equal(kinds.filter((k) => k === 'boat').length, 3);
     for (const m of rules.models.values()) {
       if (m.kind === 'bike') assert.ok(m.price >= 150000 && m.price <= 3000000, `${m.id} ${m.price}`);
-      else assert.ok(m.price >= 1500000 && m.price <= 9000000, `${m.id} ${m.price}`);
+      else if (m.kind === 'moto') assert.ok(m.price >= 1500000 && m.price <= 9000000, `${m.id} ${m.price}`);
+      else assert.ok(m.price >= 400000 && m.price <= 20000000, `${m.id} ${m.price}`);
     }
     const fastestBike = Math.max(...[...rules.models.values()].filter((m) => m.kind === 'bike').map((m) => m.top));
     const slowestMoto = Math.min(...[...rules.models.values()].filter((m) => m.kind === 'moto').map((m) => m.top));
@@ -58,6 +61,102 @@ describe('v19 차고 탈것 규칙', () => {
     assert.deepEqual(out, [{ id: 'V1', model: 'bike_city', owned: ['paint_mint'], fit: { paint: 'paint_mint' }, at: null }]);
     const parked = sanitizeVehicles([{ id: 'V2', model: 'moto_sport', owned: [], fit: {}, at: { x: 3, z: 4, yaw: 1, t: 999999, npc: 'rara' } }], rules);
     assert.deepEqual(parked[0].at, { x: 3, z: 4, yaw: 1, t: 0, npc: '' }, '세워 둔 자리는 남고, 다시 켜면 이미 도착한 것으로');
+  });
+});
+
+describe('v20 보트가 다니는 물 · 내릴 땅', () => {
+  it('성성호수 가운데 · 섬 둘레 바다는 물, 해안선 바로 앞 · 바다 건너 먼 곳 · 마을 땅은 아니다', () => {
+    assert.equal(waterAt(data, 0, 0), 'seongseong');
+    assert.equal(waterAt(data, 0, 0, 0), 'seongseong');
+    assert.equal(waterAt(data, 115, 0), 'sea', '섬 둘레 바다 (섬 모양 1.15)');
+    assert.equal(waterAt(data, 101, 0), '', '해안선 바로 앞은 너무 얕다');
+    assert.equal(waterAt(data, 0, 190), '', '바다 건너 실내 쪽으로는 못 간다');
+    assert.equal(waterAt(data, 26, 64), '', '식당 앞 땅');
+    assert.equal(isLand(data, 26, 64), true);
+    assert.equal(isLand(data, 0, 0), false, '호수 가운데는 땅이 아니다');
+    assert.equal(isLand(data, 99.5, 0), false, '해안 벽 너머 젖은 모래는 내릴 땅이 아니다');
+  });
+});
+
+/** 호수 가운데서 (dx, dz) 쪽으로 나가며 마지막 물 자리와 처음 땅 자리. */
+function shoreAlong(dx, dz) {
+  const len = Math.hypot(dx, dz);
+  let water = null;
+  for (let t = 0; t < 80; t += 0.25) {
+    const x = (dx / len) * t;
+    const z = (dz / len) * t;
+    if (waterAt(data, x, z)) water = { x, z };
+    else if (water && isLand(data, x, z)) return { water, land: { x, z } };
+  }
+  return null;
+}
+
+describe('v20 보트 사기 · 물 위에 부르기 · 타기 · 내리기', () => {
+  let saveDir;
+  let server;
+  const clients = [];
+  let n = 0;
+  const ask = async (c, msg) => {
+    const r = `boat-${++n}`;
+    c.send({ ...msg, rid: r });
+    return c.next((m) => m.rid === r, 3000);
+  };
+  before(() => {
+    saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-boat-'));
+    server = createServer({ port: 0, saveDir, saveIntervalMs: 60000, weatherForce: 'clear', startSol: 20000000, vehicleEtaMs: 300, moveSlackMeters: 1000 });
+  });
+  after(async () => {
+    for (const c of clients) c.kill();
+    await server.close();
+    rmSync(saveDir, { recursive: true, force: true });
+  });
+
+  it('땅에는 못 부르고 물가 곁 물 위에 띄운다 · 타는 동안 물 밖으로 못 간다 · 곁의 땅에 내린다', async () => {
+    const a = new Client(server.port);
+    clients.push(a);
+    await a.opened;
+    a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
+    const w = await a.type('welcome');
+    const me = w.players.find((p) => p.id === w.id);
+    const shore = shoreAlong(17.8, 35);
+    assert.ok(shore, '선착장 쪽 물가');
+    const { water, land } = shore;
+    const bought = await ask(a, { t: 'veh_buy', model: 'boat_kayak' });
+    assert.equal(bought.cost, 690000);
+    const v = bought.v;
+    a.send({ t: 'move', x: land.x, y: me.y, z: land.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    assert.equal((await ask(a, { t: 'veh_call', v, x: land.x, z: land.z })).code, 'not_on_water', '땅에는 보트를 못 띄운다');
+    const far = shoreAlong(-1, 0);
+    assert.equal((await ask(a, { t: 'veh_call', v, x: far.water.x, z: far.water.z })).code, 'not_on_water', '멀리 떨어진 물에는 못 부른다');
+    const called = await ask(a, { t: 'veh_call', v, x: water.x, z: water.z, yaw: 0 });
+    assert.equal(called.kind, 'call');
+    await sleep(350);
+    const rode = await ask(a, { t: 'veh_ride', v });
+    assert.equal(rode.mount?.m, 'boat_kayak', '물가에서 보트에 올라탄다 (보트 ride_range)');
+    // 물 위로는 나아간다.
+    const inner = { x: water.x * 0.85, z: water.z * 0.85 };
+    a.send({ t: 'move', x: inner.x, y: 0.03, z: inner.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    assert.equal(a.inbox.filter((m) => m.t === 'correct').length, 0, '물 위로는 간다');
+    // 땅으로는 못 간다 (그 자리에 둔다).
+    a.send({ t: 'move', x: land.x, y: 0.03, z: land.z, yaw: 0, vx: 0, vz: 0 });
+    const fix = await a.next((m) => m.t === 'correct', 1500);
+    assert.ok(Math.hypot(fix.x - inner.x, fix.z - inner.z) < 0.01, '땅으로 가려 하면 보트 자리로 되돌린다');
+    // 내리기: 땅이 아닌 곳 · 너무 먼 곳은 거절, 곁의 땅이면 그 자리로 옮겨 선다.
+    assert.equal((await ask(a, { t: 'veh_ride', v: '' })).code, 'no_landing');
+    assert.equal((await ask(a, { t: 'veh_ride', v: '', lx: inner.x, lz: inner.z })).code, 'no_landing', '물 위에는 못 내린다');
+    a.send({ t: 'move', x: water.x, y: 0.03, z: water.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    a.inbox = a.inbox.filter((m) => m.t !== 'snap');
+    const off = await ask(a, { t: 'veh_ride', v: '', lx: land.x, lz: land.z });
+    assert.equal(off.mount, null, '곁의 땅에 내린다');
+    const parked = await a.next((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === v && x.t === 0), 2000);
+    const at = parked.list.find((x) => x.v === v);
+    assert.ok(waterAt(data, at.x, at.z, 0.6), '보트는 물 위에 남는다');
+    const snap = await a.next((m) => m.t === 'snap' && m.p.some((p) => p.id === w.id && !p.mount), 3000);
+    const p = snap.p.find((x) => x.id === w.id);
+    assert.ok(Math.hypot(p.x - land.x, p.z - land.z) < 0.01, '사람은 땅으로 옮겨 섰다');
   });
 });
 

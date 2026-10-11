@@ -1,6 +1,6 @@
 class_name VehicleApp
 extends PhoneApp
-## 탈것 · 차고 (v19): 자전거 · 전기오토바이 매장(실제 시세에 가까운 값)과 내 차고(어디 있는지 · 부르기), 꾸미기.
+## 탈것 · 차고 (v19): 자전거 · 전기오토바이 · 보트(v20) 매장(실제 시세에 가까운 값)과 내 차고(어디 있는지 · 부르기), 꾸미기.
 ## 부르면 동네 주민이 타고 와서 내 곁에 세워 두고 간다 (GarageRider.call_vehicle).
 ## 꾸미기는 칸(도색 · 포인트 색 · 전조등 · 미등 · 빛 장식 · 구동 · 브레이크 · 타이어 · 시트 · 앞/뒤 장착 · 장식)마다 부품을 골라
 ## 처음이면 사서 끼우고, 산 부품은 공짜로 다시 끼운다. 위에서 3D 미리보기가 돌며 끼운 모양을 바로 보여 준다 (밤이면 전조등 · 빛 장식도).
@@ -107,6 +107,8 @@ func _on_failed(kind: String, code: String) -> void:
 			_note = "차고가 가득 찼어요 (%d대). 한 대를 팔아야 해요." % GameData.garage.max_owned
 		NetProtocol.ERR_CANT_RIDE:
 			_note = "지금은 탈 수 없어요 (실내 · 낚시 중)."
+		NetProtocol.ERR_NOT_ON_WATER:
+			_note = "보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가)."
 		_:
 			_note = "할 수 없어요 (%s)." % code
 	_rebuild()
@@ -143,9 +145,9 @@ func _build() -> void:
 func _build_shop() -> void:
 	var head: VBoxContainer = card()
 	head.add_child(label("솔바람 모빌리티", 34, INK))
-	head.add_child(label("자전거 · 전기오토바이를 실제 시세에 가깝게 팔아요. 사면 차고에 들어가고, HUD 의 탈것 단추로 바로 탈 수 있어요.", 24, SOFT))
+	head.add_child(label("자전거 · 전기오토바이 · 보트를 실제 시세에 가깝게 팔아요. 사면 차고에 들어가고, HUD 의 탈것 단추로 부를 수 있어요. 보트는 물가에서 부르면 물 위에 띄워 줘요.", 24, SOFT))
 	head.add_child(label("가진 솔 %s · 차고 %d / %d" % [Money.short(Net.sol), Net.vehicles.size(), GameData.garage.max_owned], 26, INK))
-	for kind: String in ["bike", "moto"]:
+	for kind: String in ["bike", "moto", "boat"]:
 		add_child(label(GameData.garage.kind_name(kind), 30, INK))
 		for m: VehicleCatalog.Model in GameData.garage.models:
 			if m.kind != kind:
@@ -210,7 +212,7 @@ func _build_garage() -> void:
 	if Net.vehicles.is_empty():
 		var c: VBoxContainer = card()
 		c.add_child(label("아직 탈것이 없어요.", 30, INK))
-		c.add_child(label("매장에서 자전거나 전기오토바이를 사 보세요.", 24, SOFT))
+		c.add_child(label("매장에서 자전거 · 전기오토바이 · 보트를 사 보세요.", 24, SOFT))
 		return
 	var rider: GarageRider = _rider()
 	for v: Dictionary in Net.vehicles:
@@ -244,7 +246,7 @@ func _build_garage() -> void:
 			where = "%s님이 가져오는 중" % GameData.npc_name(str(spot.get("npc", "")))
 		elif not spot.is_empty() and phone != null and phone.player != null:
 			var d: float = Vector2(float(spot.get("x", 0.0)) - phone.player.global_position.x, float(spot.get("z", 0.0)) - phone.player.global_position.z).length()
-			where = "세워 둠 · %dm 떨어져 있어요" % roundi(d)
+			where = "%s · %dm 떨어져 있어요" % ["물에 띄워 둠" if GameData.garage.is_water_kind(m.kind) else "세워 둠", roundi(d)]
 		c.add_child(label(where, 24, GOOD if riding or coming else SOFT))
 		var call: Button = button("타는 중" if riding else ("오는 중" if coming else "부르기"), 28, INK, riding or coming)
 		call.name = "Call_%s" % id
@@ -254,7 +256,11 @@ func _build_garage() -> void:
 			Audio.play_ui(Audio.SFX_CLICK)
 			var r: GarageRider = _rider()
 			if r != null and r.call_vehicle(id) and phone != null:
-				phone.close())
+				phone.close()
+			elif GameData.garage.is_water_kind(m.kind):
+				_note = "보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가)."
+				_note_good = false
+				_build())
 		row.add_child(call)
 		var custom: Button = button("꾸미기", 28)
 		custom.name = "Custom_%s" % id

@@ -41,6 +41,14 @@ var _wheel_angle: float = 0.0
 var _steer_angle: float = 0.0
 var _key: String = ""
 var _clay: Material = null
+## 보트 (v20): 카약 노 · 모터보트 선외기, 물 위에 세워 두면 출렁인다(floating), 달리면 뒤로 물보라.
+var floating: bool = false
+var _paddle: Node3D = null
+var _motor: Node3D = null
+## 뱃머리 등 자리.
+var _steer_head: Vector3 = Vector3.ZERO
+var _bob_t: float = 0.0
+var _wake_left: float = 0.0
 
 static var _glow_materials: Dictionary[String, Material] = {}
 static var _clay_material: Material = null
@@ -62,6 +70,11 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 	_crank = null
 	_head_light = null
 	_under_light = null
+	_paddle = null
+	_motor = null
+	_steer = null
+	_front_spin = null
+	_rear_spin = null
 	if info == null:
 		return
 	if _clay_material == null:
@@ -69,6 +82,8 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 	_clay = _clay_material
 	if info.kind == "bike":
 		_build_bike()
+	elif info.kind == "boat":
+		_build_boat()
 	else:
 		_build_moto()
 
@@ -76,6 +91,9 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 ## 바퀴(속도 m/s)를 굴리고 핸들을 조향 각도(rad, + = 왼쪽)로 돌린다. 크랭크는 set_pedal (리그 위상).
 func animate(speed: float, steer: float, delta: float) -> void:
 	if info == null:
+		return
+	if info.kind == "boat":
+		_animate_boat(speed, steer, delta)
 		return
 	var turn: float = speed * delta / maxf(info.wheel, 0.05)
 	_wheel_angle = fmod(_wheel_angle + turn, TAU)
@@ -90,8 +108,12 @@ func animate(speed: float, steer: float, delta: float) -> void:
 
 
 ## 크랭크 위상 (0~1, 0 = 왼발 페달이 맨 위, 앞으로 밟는 쪽으로 는다). 타는 캐릭터 리그의 pedal_phase 를 넣는다.
+## 카약은 노 젓기 위상 (0 = 몸을 왼쪽으로 틀고 왼쪽 날이 물에, 0.5 = 오른쪽) — 리그 ride_kayak 과 같다.
 func set_pedal(phase: float) -> void:
 	pedal_phase = fposmod(phase, 1.0)
+	if _paddle != null:
+		var c: float = cos(pedal_phase * TAU)
+		_paddle.rotation = Vector3(0.0, 0.32 * c, 0.5 * c)
 	if _crank == null:
 		return
 	var a: float = pedal_phase * TAU
@@ -105,7 +127,13 @@ func pedal_rate(speed: float) -> float:
 	return speed / (TAU * maxf(info.wheel, 0.05)) / maxf(info.gear, 0.5) if info != null else 0.0
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if floating and info != null and info.kind == "boat":
+		# 물 위에 세워 둔 보트: 물결에 천천히 출렁인다.
+		_bob_t += delta
+		position.y = sin(_bob_t * 1.6) * 0.025
+		rotation.x = sin(_bob_t * 1.1) * 0.02
+		rotation.z = sin(_bob_t * 1.3 + 1.0) * 0.03
 	var night: float = SkyController.night_light
 	if _head_light != null:
 		_head_light.visible = night > 0.04 and lights_on
@@ -432,6 +460,157 @@ func _moto_seat(st: SurfaceTool, at: Vector3) -> void:
 	elif shape == "sport":
 		var c2: Color = _trim()
 		ClayMesh.add_rounded_box(st, at + Vector3(0.0, 0.0, 0.0), Vector3(0.04, 0.07, length * 0.96), 0.4, c2, Basis(), _seg(6), 3)
+
+
+# ---- 보트 (v20) ----
+# 수면이 y = 0 이다 (배 밑은 물에 잠긴다). 뱃머리 = -z.
+
+func _build_boat() -> void:
+	var paint: Color = _paint()
+	var trim: Color = _trim()
+	var seat_c: Color = _seat_color()
+	var st: SurfaceTool = ClayMesh.begin()
+	var bottom: Color = paint.darkened(0.35)
+	var hull: Callable = ClayMesh.vertical_gradient(bottom, paint, 0.25)
+	_steer = Node3D.new()
+	_steer.name = "Steer"
+	add_child(_steer)
+	var lens_r: float = 0.05 * float(_light().get("lens", 1.0))
+	match info.style:
+		"kayak":
+			# 길쭉한 선체 · 등줄 · 타원 조종석 테 · 등받이 · 앞뒤 해치 · 갑판 고무줄.
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.03, 0.0), Vector3(0.32, 0.2, 1.5), hull, _seg(16), 8)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.2, 0.0), Vector3(0.05, 0.035, 1.32), trim, _seg(8), 3)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.17, 0.12), Vector3(0.21, 0.05, 0.34), DARK, _seg(12), 4)
+			ClayMesh.add_torus(st, Vector3(0.0, 0.2, 0.12), 0.22, 0.03, trim, _seg(16), 4, Basis.from_scale(Vector3(1.0, 1.0, 1.55)))
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.28, 0.4), Vector3(0.3, 0.2, 0.05), 0.5, seat_c, Basis(Vector3.RIGHT, deg_to_rad(12.0)), _seg(8), 3)
+			for z: float in [-0.85, 0.85]:
+				ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.2, z), Vector3(0.13, 0.025, 0.13), trim.darkened(0.2), _seg(10), 3)
+			for z2: float in [-0.55, -0.4, 0.62]:
+				ClayMesh.add_rod(st, Vector3(-0.2, 0.16, z2), Vector3(0.2, 0.16, z2 + 0.05), 0.008, 0.008, DARK, _seg(4))
+			# 노 (리그의 노 젓기에 맞춰 돈다 · set_pedal).
+			_paddle = Node3D.new()
+			_paddle.name = "Paddle"
+			_paddle.position = info.anchor("bar")
+			add_child(_paddle)
+			var ps: SurfaceTool = ClayMesh.begin()
+			ClayMesh.add_rod(ps, Vector3(-0.98, 0.0, 0.0), Vector3(0.98, 0.0, 0.0), 0.017, 0.017, DARK, _seg(6))
+			for side: float in [-1.0, 1.0]:
+				ClayMesh.add_rounded_box(ps, Vector3(1.04 * side, 0.0, 0.0), Vector3(0.24, 0.035, 0.15), 0.5, trim, Basis(Vector3.BACK, 0.35 * side), _seg(8), 3)
+			_add_mesh("PaddleMesh", ClayMesh.commit(ps), _paddle)
+			_steer.position = info.anchor("head")
+		"motor":
+			# 넓은 선체 (뱃머리는 둥글게 좁아진다) · 뱃전 테 · 옆 줄무늬 · 바닥 · 의자 둘 · 운전대 · 앞 유리.
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.1, 0.3), Vector3(1.62, 0.58, 3.3), 0.35, hull, Basis(), _seg(14), 6)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.17, -1.35), Vector3(0.8, 0.32, 0.95), hull, _seg(16), 7)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.34, -1.35), Vector3(0.66, 0.06, 0.78), Color("#E8E4DC"), _seg(14), 3)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.33, 0.35), Vector3(1.4, 0.06, 3.0), 0.2, Color("#9AA0A8"), Basis(), _seg(10), 3)
+			for side: float in [-1.0, 1.0]:
+				ClayMesh.add_rounded_box(st, Vector3(0.79 * side, 0.4, 0.3), Vector3(0.09, 0.08, 3.25), 0.5, trim, Basis(), _seg(8), 3)
+				ClayMesh.add_rounded_box(st, Vector3(0.812 * side, 0.16, 0.3), Vector3(0.012, 0.07, 3.0), 0.3, trim, Basis(), _seg(6), 2)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.43, 0.55), Vector3(1.3, 0.12, 0.42), 0.45, seat_c, Basis(), _seg(10), 4)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.43, 1.4), Vector3(1.3, 0.12, 0.42), 0.45, seat_c, Basis(), _seg(10), 4)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.6, -0.05), Vector3(0.5, 0.5, 0.36), 0.35, Color("#F2EEE4"), Basis(), _seg(10), 4)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 1.0, -0.15), Vector3(0.62, 0.32, 0.03), 0.6, Color("#CFE8F4"), Basis(Vector3.RIGHT, deg_to_rad(-25.0)), _seg(8), 3)
+			# 운전대 (키를 돌리는 만큼 돈다 · _steer).
+			_steer.position = info.anchor("bar")
+			_steer_axis = Basis(Vector3.RIGHT, deg_to_rad(-55.0)).y
+			var ws: SurfaceTool = ClayMesh.begin()
+			ClayMesh.add_torus(ws, Vector3.ZERO, 0.13, 0.018, DARK, _seg(16), 4, Basis(Vector3.RIGHT, deg_to_rad(35.0)))
+			ClayMesh.add_rod(ws, Vector3(-0.12, 0.0, 0.0), Vector3(0.12, 0.0, 0.0), 0.012, 0.012, DARK, _seg(4))
+			_add_mesh("Wheel", ClayMesh.commit(ws), _steer)
+			# 선외기 (고물, 키 반대로 돈다).
+			_motor = Node3D.new()
+			_motor.name = "Outboard"
+			_motor.position = Vector3(0.0, 0.42, 1.98)
+			add_child(_motor)
+			var ms: SurfaceTool = ClayMesh.begin()
+			ClayMesh.add_rounded_box(ms, Vector3(0.0, 0.28, 0.08), Vector3(0.32, 0.42, 0.42), 0.45, DARK, Basis(), _seg(10), 4)
+			ClayMesh.add_rounded_box(ms, Vector3(0.0, 0.42, 0.08), Vector3(0.33, 0.1, 0.43), 0.45, trim, Basis(), _seg(10), 3)
+			ClayMesh.add_rod(ms, Vector3(0.0, 0.08, 0.1), Vector3(0.0, -0.55, 0.1), 0.05, 0.04, Color("#3A3A40"), _seg(6))
+			ClayMesh.add_ellipsoid(ms, Vector3(0.0, -0.58, 0.12), Vector3(0.06, 0.06, 0.16), Color("#3A3A40"), _seg(8), 4)
+			ClayMesh.add_rod(ms, Vector3(0.0, 0.3, -0.12), Vector3(0.0, 0.3, -0.45), 0.02, 0.02, DARK, _seg(4))
+			_add_mesh("OutboardMesh", ClayMesh.commit(ms), _motor)
+			var head_at: Vector3 = info.anchor("head")
+			_steer_head = head_at
+		_:
+			# 수상오토바이: 둥근 선체 · 뾰족한 코 · 길쭉한 안장 · 발 받침 홈 · 핸들(조향 마디).
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.12, 0.15), Vector3(0.92, 0.48, 2.25), 0.45, hull, Basis(), _seg(14), 6)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.3, -0.9), Vector3(0.46, 0.32, 0.62), paint, _seg(14), 7)
+			ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.45, -0.55), Vector3(0.3, 0.14, 0.42), trim, _seg(12), 5)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, info.anchor("seat").y - 0.06, 0.32), Vector3(0.38, 0.17, 1.05), 0.55, seat_c, Basis(), _seg(12), 5)
+			for side: float in [-1.0, 1.0]:
+				ClayMesh.add_rounded_box(st, Vector3(0.33 * side, 0.36, 0.2), Vector3(0.22, 0.04, 1.2), 0.3, DARK, Basis(), _seg(8), 3)
+				ClayMesh.add_rounded_box(st, Vector3(0.462 * side, 0.2, 0.15), Vector3(0.012, 0.08, 1.9), 0.3, trim, Basis(), _seg(6), 2)
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.12, 1.28), Vector3(0.36, 0.2, 0.12), 0.4, DARK, Basis(), _seg(8), 3)
+			var bar: Vector3 = info.anchor("bar")
+			var column: Vector3 = Vector3(0.0, 0.62, -0.62)
+			_steer.position = column
+			_steer_axis = (bar - column).normalized()
+			var hs: SurfaceTool = ClayMesh.begin()
+			ClayMesh.add_rod(hs, Vector3.ZERO, bar - column, 0.035, 0.03, DARK, _seg(6))
+			for side2: float in [-1.0, 1.0]:
+				ClayMesh.add_capsule(hs, bar - column, bar - column + Vector3(0.24 * side2, 0.0, 0.02), 0.016, METAL, _seg(6), 2)
+				ClayMesh.add_capsule(hs, bar - column + Vector3(0.24 * side2, 0.0, 0.02), bar - column + Vector3(0.34 * side2, 0.0, 0.04), 0.022, RUBBER, _seg(6), 2)
+			ClayMesh.add_rounded_box(hs, bar - column + Vector3(0.0, 0.03, -0.02), Vector3(0.2, 0.06, 0.12), 0.5, paint, Basis(), _seg(8), 3)
+			_add_mesh("Bars", ClayMesh.commit(hs), _steer)
+			_steer_head = info.anchor("head")
+	_add_body_parts(st)
+	var front: VehicleCatalog.Part = part_in("front")
+	if front != null and not front.model.is_empty():
+		_append_part(st, front, info.anchor(front.anchor), Vector3.ZERO)
+	_frame = _add_mesh("Frame", ClayMesh.commit(st), self)
+	# 앞 등 (조향 마디가 아니라 뱃머리에 고정).
+	var light_holder: Node3D = _steer
+	if info.style != "kayak":
+		light_holder = Node3D.new()
+		light_holder.name = "Bow"
+		light_holder.position = _steer_head
+		add_child(light_holder)
+	var keep: Node3D = _steer
+	_steer = light_holder
+	_add_head_glow(Vector3.ZERO, lens_r)
+	_steer = keep if info.style != "kayak" else null
+	_add_tail(info.anchor("tail"), 0.04)
+	var glow: Dictionary = _glow()
+	if str(glow.get("where", "")) == "under":
+		var color: Color = Color.html(str(glow.get("c", "#FFFFFF")))
+		var gs: SurfaceTool = ClayMesh.begin()
+		var half_len: float = absf(info.anchor("axle_r").z - info.anchor("axle_f").z) * 0.4
+		for side3: float in [-1.0, 1.0]:
+			ClayMesh.add_rounded_box(gs, Vector3(side3 * (0.3 if info.style == "kayak" else (0.8 if info.style == "motor" else 0.46)), 0.06, 0.1), Vector3(0.02, 0.02, half_len * 2.0), 0.3, LENS, Basis(), _seg(6), 2)
+		_add_glow_mesh("UnderGlow", ClayMesh.commit(gs), self, color, 1.4)
+		_under_light = OmniLight3D.new()
+		_under_light.name = "UnderLight"
+		_under_light.light_color = color
+		_under_light.omni_range = 2.2
+		_under_light.position = Vector3(0.0, 0.02, 0.1)
+		_under_light.shadow_enabled = false
+		_under_energy = 2.4
+		add_child(_under_light)
+	# 타는 사람(모형 원점)이 앉는 자리가 의자 위에 오게 배 전체를 앞뒤로 민다 (자전거처럼 안장 ≈ 원점).
+	var hull_node: Node3D = Node3D.new()
+	hull_node.name = "Hull"
+	hull_node.position = Vector3(0.0, 0.0, -info.anchor("seat").z)
+	for c: Node in get_children():
+		remove_child(c)
+		hull_node.add_child(c)
+	add_child(hull_node)
+
+
+## 보트: 키를 돌리는 만큼 운전대 · 핸들이 돌고 선외기가 반대로, 달리면 고물 뒤로 물보라.
+func _animate_boat(speed: float, steer: float, delta: float) -> void:
+	_steer_angle = lerpf(_steer_angle, clampf(steer, -0.5, 0.5), 1.0 - exp(-8.0 * delta))
+	if _steer != null:
+		_steer.basis = Basis(_steer_axis, _steer_angle * (3.0 if info.style == "motor" else 1.0))
+	if _motor != null:
+		_motor.rotation.y = -_steer_angle * 1.2
+	if speed > 0.7 and is_inside_tree():
+		_wake_left -= delta
+		if _wake_left <= 0.0:
+			_wake_left = clampf(0.3 - speed * 0.015, 0.08, 0.3)
+			var stern: Vector3 = global_transform * Vector3(0.0, 0.05, info.anchor("axle_r").z - info.anchor("seat").z + 0.1)
+			Puff.burst(get_tree().current_scene, stern, Color(0.92, 0.97, 1.0, 0.85), 2 + int(speed / 4.0), 0.35 + speed * 0.03, 0.18 + speed * 0.02, 0.08 + speed * 0.006, 0.6)
 
 
 # ---- 공용 ----

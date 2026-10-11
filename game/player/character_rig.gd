@@ -69,7 +69,9 @@ const COOK_ANIMS: PackedStringArray = ["cook_chop", "cook_stir", "cook_flip", "c
 ## fish 는 애니메이션 대신 낚싯대를 들고 낚시 자세 (set_fishing).
 const ACT_ANIMS: Dictionary[String, String] = {"stretch": "act_stretch", "warmup": "act_warmup", "sun": "act_sun", "sit": "act_sit"}
 ## 몸짓 · 기분 동안의 얼굴은 face_parts.json expressions 의 emotes 에 "act:<몸짓>" · "mood:<기분>" 으로 적는다.
-const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto", "kick": "ride_kick", "kick_brake": "ride_kick_brake"}
+const RIDE_ANIMS: Dictionary[String, String] = {"bike": "ride_bike", "moto": "ride_moto", "kick": "ride_kick", "kick_brake": "ride_kick_brake", "boat": "ride_boat", "kayak": "ride_kayak"}
+## 빠르기에 맞춰 리그가 위상을 세는 타기 자세 (자전거 페달 · 카약 노 젓기).
+const PHASED_RIDES: PackedStringArray = ["bike", "kayak"]
 ## 배달 알바 복장 (v0.15): 시스템이 잠깐 씌우는 파란 헬멧(쓰던 모자 자리를 대신한다)과 "배달의 솔" 가방.
 ## 머리 · 몸통 좌표는 옷 모형(items.json 의 model)과 같다 (머리 가운데 y 0.4, 앞 = -Z).
 const UNIFORM_TEXT: String = "배달의 솔"
@@ -392,8 +394,8 @@ func set_riding(kind: String) -> void:
 	_ride_target = 1.0 if active else 0.0
 	if active and tree != null:
 		tree.set("parameters/RideSwitch/transition_request", RIDE_ANIMS[kind])
-	if kind == "bike":
-		# ride_bike 는 탈 때마다 0초부터 (gen_character_rig.py reset).
+	if kind in PHASED_RIDES:
+		# ride_bike · ride_kayak 는 탈 때마다 0초부터 (gen_character_rig.py reset).
 		_pedal_phase = 0.0
 	if active:
 		for n: Node3D in [rod, axe, tool]:
@@ -700,8 +702,8 @@ func _process(delta: float) -> void:
 	tree.set("parameters/BrakeBlend/blend_amount", _brake_value)
 	_ride_value = move_toward(_ride_value, _ride_target, 5.0 * delta)
 	tree.set("parameters/RideBlend/blend_amount", _ride_value)
-	tree.set("parameters/RideScale/scale", _pedal_rate if _ride_kind == "bike" else 1.0)
-	if _ride_kind == "bike":
+	tree.set("parameters/RideScale/scale", _pedal_rate if _ride_kind in PHASED_RIDES else 1.0)
+	if _ride_kind in PHASED_RIDES:
 		# AnimationTree(자식)가 이 프레임에 delta × 빠르기만큼 나아가므로 같은 값을 센다.
 		_pedal_phase = fposmod(_pedal_phase + _pedal_rate * delta, 1.0)
 	_show_value = lerpf(_show_value, _show_target, 1.0 - exp(-10.0 * delta))

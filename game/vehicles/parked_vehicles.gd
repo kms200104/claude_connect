@@ -81,7 +81,7 @@ func _sync() -> void:
 		elif e.shape != shape:
 			e.shape = shape
 			e.model.build(model_id, fit)
-		elif e.model != null and e.courier == null and e.model.get_parent() == self:
+		elif e.model != null and e.courier == null and _is_parked(e):
 			_place(e)
 	for key: String in _entries.keys():
 		if not seen.has(key) and _entries[key].pending <= 0.0:
@@ -119,9 +119,33 @@ func _park_transform(e: Entry) -> Transform3D:
 func _place(e: Entry) -> void:
 	if e.model == null:
 		return
+	if e.model.info != null and GameData.garage.is_water_kind(e.model.info.kind):
+		# 보트: 물 위에 띄워 둔다 (출렁인다 · VehicleModel.floating).
+		var holder: Node3D = _float_holder(e)
+		holder.global_transform = Transform3D(Basis(Vector3.UP, e.yaw), Vector3(e.at.x, WaterRules.level_at(Vector2(e.at.x, e.at.z)), e.at.z))
+		if e.model.get_parent() != holder:
+			if e.model.get_parent() != null:
+				e.model.get_parent().remove_child(e.model)
+			holder.add_child(e.model)
+		e.model.transform = Transform3D()
+		e.model.floating = true
+		e.model.animate(0.0, 0.0, 1.0)
+		e.model.lights_on = false
+		return
 	e.model.global_transform = Transform3D(Basis(Vector3.UP, e.yaw) * Basis(Vector3.BACK, PARK_LEAN), Vector3(e.at.x, _ground_y(e.at), e.at.z))
 	e.model.animate(0.0, PARK_STEER, 1.0)
 	e.model.lights_on = false
+
+
+## 보트를 띄워 두는 받침 노드 (보트 모형이 그 안에서 출렁인다).
+func _float_holder(e: Entry) -> Node3D:
+	var holder_name: String = "Float_%s" % e.key.replace(":", "_")
+	var holder: Node3D = get_node_or_null(holder_name) as Node3D
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = holder_name
+		add_child(holder)
+	return holder
 
 
 func _ground_y(at: Vector3) -> float:
@@ -136,23 +160,35 @@ func _ground_y(at: Vector3) -> float:
 func _remove(e: Entry) -> void:
 	if e.courier != null and is_instance_valid(e.courier):
 		e.courier.queue_free()
-	if e.model != null and is_instance_valid(e.model) and (e.model.get_parent() == self or e.model.get_parent() == null):
+	if e.model != null and is_instance_valid(e.model) and (e.model.get_parent() == null or _is_parked(e)):
 		e.model.queue_free()
+	var holder: Node = get_node_or_null("Float_%s" % e.key.replace(":", "_"))
+	if holder != null:
+		holder.queue_free()
 	_entries.erase(e.key)
 
 
 ## 내 것 가운데 다 와서 세워 둔 탈것 (range m 안에서 가장 가까운 것, 없으면 빈 문자열).
-func nearest_own(position: Vector3, max_range: float) -> String:
+## kind_range 면 보트는 그 종류의 올라탈 거리(GarageRider.ride_range_of)로 잰다 (물가에서 닿게).
+func nearest_own(position: Vector3, max_range: float, kind_range: bool = false) -> String:
 	var best: String = ""
-	var best_d: float = max_range
+	var best_d: float = INF
 	for e: Entry in _entries.values():
-		if e.owner != Net.my_id or e.courier != null or e.model == null or e.model.get_parent() != self:
+		if e.owner != Net.my_id or e.courier != null or e.model == null or not _is_parked(e):
 			continue
+		var reach: float = max_range
+		if kind_range and e.model.info != null and GameData.garage.is_water_kind(e.model.info.kind):
+			reach = maxf(max_range, GarageRider.ride_range_of(e.vehicle_id))
 		var d: float = Vector2(e.at.x - position.x, e.at.z - position.z).length()
-		if d <= best_d:
+		if d <= reach and d < best_d:
 			best_d = d
 			best = e.vehicle_id
 	return best
+
+
+## 다 와서 세워(띄워) 둔 모형인지.
+func _is_parked(e: Entry) -> bool:
+	return e.model.get_parent() == self or (e.model.get_parent() != null and e.model.get_parent().get_parent() == self and str(e.model.get_parent().name).begins_with("Float_"))
 
 
 ## 내 그 탈것이 세워진(오는 중 포함) 자리 · 방향 · 도착했는지.
@@ -173,6 +209,10 @@ func take(vehicle_id: String) -> VehicleModel:
 	_entries.erase(e.key)
 	if model.get_parent() != null:
 		model.get_parent().remove_child(model)
+	var holder: Node = get_node_or_null("Float_%s" % e.key.replace(":", "_"))
+	if holder != null:
+		holder.queue_free()
+	model.floating = false
 	return model
 
 

@@ -158,7 +158,7 @@ func set_mount(mount: Dictionary) -> void:
 	if fresh:
 		_mount_speed = 0.0
 		_mount_yaw = body.rotation.y
-	rig.set_riding(info.kind)
+	rig.set_riding(info.pose)
 	max_display_speed = maxf(_walk_display_speed, GameData.garage.stats(info.id, mount.get("f", {}) as Dictionary).top * 1.25)
 
 
@@ -170,11 +170,11 @@ func _update_mount(delta: float, before: Vector3) -> void:
 	_mount_speed = lerpf(_mount_speed, step.length() / delta, 1.0 - exp(-6.0 * delta))
 	var rate: float = wrapf(body.rotation.y - _mount_yaw, -PI, PI) / delta
 	_mount_yaw = body.rotation.y
-	var max_lean: float = 0.5 if _mount_info.kind == "moto" else 0.36
+	var max_lean: float = 0.5 if _mount_info.kind == "moto" else (0.12 if _mount_info.kind == "boat" else 0.36)
 	_mount_lean = lerpf(_mount_lean, clampf(atan(_mount_speed * rate / VehicleDrive.GRAVITY), -max_lean, max_lean), 1.0 - exp(-6.0 * delta))
 	var base: float = absf(_mount_info.anchor("axle_r").z - _mount_info.anchor("axle_f").z)
 	_mount_steer = clampf(atan(base * rate / maxf(_mount_speed, 0.8)), -0.5, 0.5)
-	rig.set_pedal_rate(_mount.pedal_rate(_mount_speed) if _mount_info.kind == "bike" else 0.0)
+	rig.set_pedal_rate(_mount.pedal_rate(_mount_speed) if _mount_info.pose in CharacterRig.PHASED_RIDES else 0.0)
 	_mount.set_pedal(rig.pedal_phase())
 	_mount.animate(_mount_speed, _mount_steer, delta)
 	var rest: float = (_body_rest_y if not is_nan(_body_rest_y) else 0.8) + _mount_info.lift

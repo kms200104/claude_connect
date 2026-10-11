@@ -171,7 +171,7 @@ func _physics_ride(delta: float) -> void:
 		vehicle.drive(delta, move_dir, amount)
 	else:
 		garage_ride.drive(delta, move_dir, amount)
-	if is_on_floor():
+	if is_on_floor() or (not kick and garage_ride.is_floating()):
 		velocity.y = 0.0
 	else:
 		velocity.y -= gravity * delta
