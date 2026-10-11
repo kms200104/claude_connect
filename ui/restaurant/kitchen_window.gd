@@ -50,11 +50,18 @@ var _pouring: bool = false
 var _step_scores: Dictionary[int, float] = {}
 var _finish_ms: float = 0.0
 var _beat_ticked: int = 0
+## 결과 화면의 손님 반응 (v20) · 서버가 알려 온 반응(단골 됨/풀림) 주문별.
+var _reaction: GuestReaction = null
+var _reaction_order: String = ""
+var _served_info: Dictionary[String, Dictionary] = {}
+var _result_seq: int = 0
 
 const ORDER_HEIGHT: float = 820.0
 const COOK_HEIGHT: float = 1260.0
 ## 동작을 마치고 솜씨 한마디를 보여 주는 시간 (ms).
 const FINISH_SHOW_MS: float = 800.0
+## 결과 화면(별점 · 손님 반응)을 띄워 두는 시간 — 그 전에 "다음 손님 받기"로 넘길 수 있다.
+const RESULT_HOLD_S: float = 6.0
 
 
 func _ready() -> void:
@@ -90,6 +97,7 @@ func _ready() -> void:
 	Economy.cook_judged.connect(_on_judged)
 	Economy.step_claimed.connect(_on_step_claimed)
 	Economy.step_done.connect(_on_step_done)
+	Economy.served.connect(_on_served_info)
 	Economy.served.connect(func(info: Dictionary) -> void:
 		# 친구가 마지막 동작을 냈다 (내가 거든 요리면 내 결과는 cook_judged 로 따로 온다).
 		if str(info.get("order", "")) == _order_id and _mode == Mode.WAITING:
@@ -404,6 +412,8 @@ func _back_to_orders() -> void:
 	_mode = Mode.ORDERS
 	_order_id = ""
 	_stage = null
+	_reaction = null
+	_reaction_order = ""
 	_set_panel_height(ORDER_HEIGHT)
 	_rebuild()
 
@@ -751,26 +761,44 @@ func _on_judged(result: Dictionary) -> void:
 	if order_id != _order_id:
 		return
 	_stop_cooking_pose()
+	# 손님 반응에 쓸 것 (주문은 곧 목록에서 사라진다): 누구인지 · 단골인지 · 기다림이 얼마나 남았었는지.
+	var o: Dictionary = Economy.orders.get(order_id, {})
+	var customer: EconData.Customer = GameData.econ.customers.get(str(o.get("customer", "")))
+	var time_left: float = clampf(Economy.order_left_ms(o) / maxf(float(o.get("patience", 1.0)), 1.0), 0.0, 1.0) if not o.is_empty() else 0.5
+	var regular: bool = bool(o.get("regular", false))
 	if _stage != null:
 		await _finish_pause()
 		if order_id != _order_id:
 			return
 	_stage = null
+	_result_seq += 1
+	var seq: int = _result_seq
 	var stars: int = int(result.get("stars", 0))
 	for c: Node in _list.get_children():
 		c.queue_free()
+	var top: HBoxContainer = HBoxContainer.new()
+	top.add_theme_constant_override("separation", 16)
+	_list.add_child(top)
 	var icon: TextureRect = TextureRect.new()
 	icon.texture = DishArt.icon(_recipe.id) if _recipe != null else null
-	icon.custom_minimum_size = Vector2(0, 300)
+	icon.custom_minimum_size = Vector2(220, 220)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_list.add_child(icon)
-	var title: Label = _label("%s 완성!" % (_recipe.display_name if _recipe != null else "요리"), 40, INK)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_list.add_child(title)
-	var star_label: Label = _label("★".repeat(stars) + "☆".repeat(5 - stars), 72, Color("#E8A820"))
-	star_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_list.add_child(star_label)
+	top.add_child(icon)
+	var heading: VBoxContainer = VBoxContainer.new()
+	heading.alignment = BoxContainer.ALIGNMENT_CENTER
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(heading)
+	heading.add_child(_label("%s 완성!" % (_recipe.display_name if _recipe != null else "요리"), 40, INK))
+	heading.add_child(_label("★".repeat(stars) + "☆".repeat(5 - stars), 68, Color("#E8A820")))
+	var reaction: GuestReaction = GuestReaction.new()
+	_list.add_child(reaction)
+	reaction.setup(customer, {"stars": stars, "quality": float(result.get("quality", 0.0)), "time_left": time_left, "regular": regular, "recipe": _recipe, "order": order_id})
+	_reaction = reaction
+	_reaction_order = order_id
+	var served: Dictionary = _served_info.get(order_id, {})
+	if not served.is_empty():
+		reaction.regular_changed(bool(served.get("became", false)), bool(served.get("lost", false)))
 	if _recipe != null and not _step_scores.is_empty():
 		var parts: PackedStringArray = []
 		for i: int in _recipe.steps.size():
@@ -780,17 +808,33 @@ func _on_judged(result: Dictionary) -> void:
 		steps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_list.add_child(steps_label)
 	var team: bool = bool(result.get("team", false))
-	var money: Label = _label("솜씨 %d%% · 입맛 %d%% · 받은 돈 %s%s" % [roundi(float(result.get("quality", 0.0)) * 100.0), roundi(float(result.get("taste", 0.0)) * 100.0),
-		Money.delta(int(result.get("share", result.get("pay", 0)))), " (같이 만들어 팀 보너스, 나눠 받음)" if team else ""], 30, INK)
+	var money: Label = _label("받은 돈 %s%s" % [Money.delta(int(result.get("share", result.get("pay", 0)))), " (같이 만들어 팀 보너스, 나눠 받음)" if team else ""], 32, INK)
 	money.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_list.add_child(money)
+	var next: Button = _button("다음 손님 받기", 30)
+	next.pressed.connect(func() -> void:
+		if seq == _result_seq and _order_id.is_empty():
+			_back_to_orders())
+	_list.add_child(next)
 	Audio.play_sfx("cash_in", -2.0)
 	if stars >= 5:
 		Audio.play_sfx("fanfare_small", -6.0)
+	elif stars <= 2:
+		Audio.play_sfx("emote_down", -6.0)
 	_order_id = ""
-	await get_tree().create_timer(2.2).timeout
-	if visible and _mode in [Mode.RESULT, Mode.WAITING] and _order_id.is_empty():
+	await get_tree().create_timer(RESULT_HOLD_S).timeout
+	if seq == _result_seq and visible and _mode in [Mode.RESULT, Mode.WAITING] and _order_id.is_empty():
 		_back_to_orders()
+
+
+## 요리를 낸 뒤 서버가 알려 온 손님 반응 (단골이 되었다 / 풀렸다). 결과 화면이 떠 있으면 손님이 한마디 더 한다.
+func _on_served_info(info: Dictionary) -> void:
+	var id: String = str(info.get("order", ""))
+	_served_info[id] = info
+	if _served_info.size() > 8:
+		_served_info.erase(_served_info.keys()[0])
+	if id == _reaction_order and _reaction != null and is_instance_valid(_reaction):
+		_reaction.regular_changed(bool(info.get("became", false)), bool(info.get("lost", false)))
 
 
 func _on_failed(kind: String, code: String) -> void:

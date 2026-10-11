@@ -35,6 +35,11 @@ func _ready() -> void:
 		if not _only.is_empty() and not scene in _only:
 			continue
 		await _run(kitchen, str(c[0]), str(c[1]))
+	if _only.is_empty() or "result" in _only:
+		_check_reaction_lines()
+		await _result(kitchen, "beef_steak", "v_gourmet", 5, 0.97, 0.8, false, false)
+		await _result(kitchen, "samgyeopsal", "v_hiker", 2, 0.48, 0.1, false, false)
+		await _result(kitchen, "rice_ball", "morak", 5, 0.95, 0.5, false, true)
 	print("KITCHEN %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
 
@@ -94,6 +99,50 @@ func _run(kitchen: KitchenWindow, dish: String, step_id: String) -> void:
 		"steam":
 			var n: int = int(step["items"])
 			_check(taps.size() == n + 3, "찌기: 재료 %d개 + 물 붓기 시작·끝 + 뚜껑 열기" % n)
+
+
+## 손님 반응 글 (v20): 별점 첫마디 + 까닭 — 좋아하는 맛, T 손님의 깐깐한 솜씨 평, 늦은 요리.
+func _check_reaction_lines() -> void:
+	var r: Dictionary = GameData.econ.restaurant.get("reactions", {})
+	var gourmet: EconData.Customer = GameData.econ.customers.get("v_gourmet")
+	var hiker: EconData.Customer = GameData.econ.customers.get("v_hiker")
+	var steak: RecipeInfo = GameData.econ.recipes.get("beef_steak")
+	var good: PackedStringArray = GuestReaction.lines(gourmet, steak, 5, 0.97, 0.8, false, 1)
+	print("[kitchen] 쉐린 5★: %s" % " / ".join(good))
+	_check(good.size() >= 2 and good[1] == str(r["like"]).replace("{tag}", str(r["tag"]["fancy"])), "좋아하는 맛(고급)을 말한다")
+	_check(not str(r["dislike"]).replace("{tag}", str(r["tag"]["hearty"])) in good, "5★ 에는 싫은 맛(든든) 투정이 없다")
+	var bad: PackedStringArray = GuestReaction.lines(hiker, GameData.econ.recipes.get("samgyeopsal"), 2, 0.48, 0.1, false, 2)
+	print("[kitchen] 하늘 2★: %s" % " / ".join(bad))
+	_check(str(r["skill_bad_t"]) in bad and str(r["late_t"]) in bad, "T 손님: 서툰 솜씨 · 오래 기다림을 말한다")
+	_check(GuestReaction.emote_for(1, false) == "angry" and GuestReaction.emote_for(5, false) == "clap" and GuestReaction.emote_for(3, true) == "love", "별점 → 감정표현")
+
+
+## 결과 화면을 서버 없이 띄운다 (주문 · 판정을 흉내 내고 손님 반응을 찍는다).
+func _result(kitchen: KitchenWindow, dish: String, customer: String, stars: int, quality: float, time_left: float, regular: bool, became: bool) -> void:
+	var order_id: String = "check_%s" % dish
+	var patience: float = 100000.0
+	Economy.orders[order_id] = {"id": order_id, "customer": customer, "dish": dish, "patience": patience, "deadline_ms": float(Time.get_ticks_msec()) + patience * time_left, "regular": regular, "steps": [], "used": {}}
+	var recipe: RecipeInfo = GameData.econ.recipes.get(dish)
+	kitchen.set("_recipe", recipe)
+	kitchen.call("_set_panel_height", KitchenWindow.COOK_HEIGHT)
+	kitchen.set("_order_id", order_id)
+	kitchen.set("_mode", KitchenWindow.Mode.RESULT)
+	kitchen.set("_stage", null)
+	var scores: Dictionary[int, float] = {}
+	for i: int in recipe.steps.size():
+		scores[i] = quality
+	kitchen.set("_step_scores", scores)
+	kitchen.call("_on_judged", {"order": order_id, "stars": stars, "quality": quality, "taste": 0.7, "pay": recipe.price, "share": recipe.price})
+	if became:
+		kitchen.call("_on_served_info", {"order": order_id, "became": true, "lost": false})
+	await get_tree().create_timer(1.1).timeout
+	var reaction: GuestReaction = kitchen.get("_reaction")
+	_check(reaction != null and is_instance_valid(reaction), "%s ★%d: 결과 화면에 손님 반응" % [dish, stars])
+	if not _shots.is_empty():
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(_shots.path_join("kitchen_result_%s_%d.png" % [customer, stars]))
+	Economy.orders.erase(order_id)
+	kitchen.call("_back_to_orders")
 
 
 func _check(ok: bool, what: String) -> void:
