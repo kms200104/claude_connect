@@ -11,6 +11,7 @@ import { loadSavings } from './savings.js';
 import { loadJobs } from './jobs.js';
 import { loadAchievements, parseMonthDay } from './progress.js';
 import { loadGarage } from './garage.js';
+import { loadAqua } from './aqua.js';
 
 /** data/ 아래 JSON 을 읽는다 (클라이언트와 같은 파일). 서로 참조하는 id 가 맞는지도 검사한다. */
 export function loadGameData(dataDir, cfg) {
@@ -138,6 +139,8 @@ export function loadGameData(dataDir, cfg) {
   const plans = loadPlans(floorplans);
   // 차고 (v19): 자전거 · 전기오토바이 모델과 꾸미기 부품.
   const garage = loadGarage(read('vehicles/garage.json'));
+  // 물놀이 체험 (v21): 성성호수 선착장의 바나나 보트 · 유람선.
+  const aqua = loadAqua(read('aqua/aqua.json'));
   for (const u of units) if (!plans.has(planIdOf(realestate, u))) throw new Error(`apartment ${u.id}: unknown plan ${planIdOf(realestate, u)}`);
   for (const p of plans.values()) {
     for (const d of p.defaults) if (items.get(d.item)?.kind !== 'furniture') throw new Error(`plan ${p.id}: ${d.item} is not furniture`);
@@ -228,6 +231,7 @@ export function loadGameData(dataDir, cfg) {
     savings,
     jobs,
     garage,
+    aqua,
     recipes,
     recipeById: new Map(recipes.map((r) => [r.id, r])),
     recipeSeasonWeight: recipesFile.season_weight ?? 1,

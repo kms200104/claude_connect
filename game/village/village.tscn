@@ -1,4 +1,4 @@
-[gd_scene load_steps=80 format=3]
+[gd_scene load_steps=81 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -73,6 +73,7 @@
 [ext_resource type="Material" path="res://assets/materials/building_window.tres" id="91_bwindow"]
 [ext_resource type="Script" path="res://game/vehicles/kickboard_rider.gd" id="92_ride"]
 [ext_resource type="Script" path="res://game/vehicles/garage_rider.gd" id="93_garage"]
+[ext_resource type="Script" path="res://game/aqua/aqua_marina.gd" id="94_aqua"]
 [ext_resource type="Script" path="res://game/vehicles/parked_vehicles.gd" id="94_parked"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
@@ -430,9 +431,10 @@ bobber = NodePath("../Bobber")
 hud = NodePath("../HUD/FishingHud")
 interaction = NodePath("../InteractionController")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs", "parked")]
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs", "parked", "aqua")]
 script = ExtResource("34_interaction")
 parked = NodePath("../ParkedVehicles")
+aqua = NodePath("../AquaMarina")
 jobs = NodePath("../Jobs")
 economy = NodePath("../EconomyController")
 field = NodePath("../Field")
@@ -474,6 +476,13 @@ player = NodePath("../Player")
 toast_hud = NodePath("../HUD/FishingHud")
 hud = NodePath("../HUD")
 parked = NodePath("../ParkedVehicles")
+
+[node name="AquaMarina" type="Node3D" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud", "replicator")]
+script = ExtResource("94_aqua")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
+toast_hud = NodePath("../HUD/FishingHud")
+replicator = NodePath("../PlayerReplicator")
 
 [node name="JournalNotices" type="Node" parent="." node_paths=PackedStringArray("hud")]
 script = ExtResource("72_journal")

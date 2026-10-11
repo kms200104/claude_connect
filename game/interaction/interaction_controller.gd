@@ -31,6 +31,8 @@ extends Node
 @export var jobs: JobController
 ## 세워 둔 차고 탈것 (v19.1, 없어도 된다): 내 것 곁이면 "타기".
 @export var parked: ParkedVehicles
+## 물놀이 선착장 (v21): 매표소 곁에서 상황 버튼 "물놀이".
+@export var aqua: AquaMarina
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -47,9 +49,9 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
-const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE]
+const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE, Target.AQUA]
 ## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리.
 const SWAP_RANGE: float = 1.4
 
@@ -101,6 +103,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action("내리기")
 		Target.VEHICLE:
 			action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
+		Target.AQUA:
+			action_hud.show_action("물놀이")
 		Target.TALK:
 			action_hud.show_action("대화")
 		Target.CHOP:
@@ -181,6 +185,9 @@ func _pick_target() -> void:
 			target = Target.TALK
 			target_id = site.npc_id()
 			return
+	if aqua != null and aqua.is_near(pos):
+		target = Target.AQUA
+		return
 	if home != null:
 		var home_target: String = home.pick_target(pos)
 		if not home_target.is_empty():
@@ -296,6 +303,8 @@ func _on_action_pressed() -> void:
 			jobs.activate(target_id)
 		Target.RIDE_OFF:
 			player.dismount_ride()
+		Target.AQUA:
+			aqua.open_window()
 		Target.VEHICLE:
 			if player.garage_ride != null:
 				player.garage_ride.mount(target_id)

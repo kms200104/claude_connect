@@ -25,6 +25,12 @@ signal vehicle_done(result: Dictionary)
 signal mount_changed(mount: Dictionary)
 ## v19.1 세워 둔 · 주민이 가져오는 중인 차고 탈것 목록이 바뀜 (Net.parked).
 signal parked_changed
+## v21 물놀이: 놀이배 목록(Net.aqua_trips)이 바뀜 · 타기/내리기 결과 (aqua_result: kind, trip, ride, seat, depart, cost, sol) ·
+## 누군가 급회전에서 버팀/빠짐 · 내가 탄 놀이배가 한 바퀴 돌고 선착장에 닿음 (aqua_end: trip, ride, held, turns).
+signal aqua_changed
+signal aqua_done(result: Dictionary)
+signal aqua_fx(trip: String, player_id: int, turn: int, fell: bool)
+signal aqua_ended(result: Dictionary)
 signal weather_changed(weather: String)
 ## 번개 (뇌우일 때 서버가 방 전체에 같은 순간 보낸다). power 0.6~1.
 signal lightning_struck(power: float)
@@ -209,6 +215,8 @@ var names: Dictionary[int, String] = {}
 var vehicles: Array[Dictionary] = []
 ## v19.1 방에 세워 둔(또는 오는 중인) 차고 탈것: [{ v, o(주인 자리), m, f, x, z, yaw, t(도착 서버 시각, 0 = 이미 있음), npc }].
 var parked: Array[Dictionary] = []
+## v21 물놀이 배 [{ id, ride, depart(서버 시각 ms), riders: [{ id, seat }] }].
+var aqua_trips: Array[Dictionary] = []
 
 var _ws: WebSocketPeer = null
 ## 앱 안 테스트 서버 (TEST_SERVER_URL 로 접속할 때만 만든다).
@@ -853,6 +861,15 @@ func _handle_text(text: String) -> void:
 			vehicle_done.emit(msg)
 		"veh_parked":
 			_apply_parked(msg.get("list", []))
+		"aqua_trips":
+			_apply_aqua(msg.get("list", []))
+		"aqua_result":
+			sol = int(msg.get("sol", sol))
+			aqua_done.emit(msg)
+		"aqua_fx":
+			aqua_fx.emit(str(msg.get("trip", "")), int(msg.get("id", 0)), int(msg.get("turn", 0)), bool(msg.get("fell", false)))
+		"aqua_end":
+			aqua_ended.emit(msg)
 		"veh_ride":
 			var mount: Variant = msg.get("mount", null)
 			mount_changed.emit(mount if mount is Dictionary else {})
@@ -1106,6 +1123,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	drops.clear()
 	_apply_couriers(msg.get("couriers", []))
 	_apply_parked(msg.get("parked", []))
+	_apply_aqua(msg.get("aqua", []))
 	my_deliveries.clear()
 	for entry: Variant in msg.get("deliv", []):
 		if entry is Dictionary:
@@ -1412,6 +1430,29 @@ func vehicle(id: String) -> Dictionary:
 	for v: Dictionary in vehicles:
 		if str(v.get("id", "")) == id:
 			return v
+	return {}
+
+
+func _apply_aqua(list: Variant) -> void:
+	aqua_trips.clear()
+	if list is Array:
+		for e: Variant in list:
+			if e is Dictionary:
+				aqua_trips.append(e)
+	aqua_changed.emit()
+
+
+## 내가 탄 물놀이 배 (없으면 빈 사전).
+func my_aqua_trip() -> Dictionary:
+	return aqua_trip_of(my_id)
+
+
+## 그 사람이 탄 물놀이 배 (없으면 빈 사전).
+func aqua_trip_of(player_id: int) -> Dictionary:
+	for trip: Dictionary in aqua_trips:
+		for r: Variant in trip.get("riders", []):
+			if r is Dictionary and int(r.get("id", -1)) == player_id:
+				return trip
 	return {}
 
 

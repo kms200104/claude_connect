@@ -73,7 +73,6 @@ func _find_courier(root: Node) -> VehicleCourier:
 	return null
 
 
-## 그 월드 방향으로 미는 조이스틱 값 (카메라 기준).
 ## 성성호수(바다가 아닌 가장 큰 낚시터) 물가의 내릴 땅 가운데, 곁(올라탈 거리 안)에 트인 물이 있는 곳.
 func _lake_shore(reach: float) -> Vector2:
 	var best: SpotInfo = null
@@ -97,6 +96,7 @@ func _lake_shore(reach: float) -> Vector2:
 	return Vector2.INF
 
 
+## 그 월드 방향으로 미는 조이스틱 값 (카메라 기준).
 func _stick_toward(dir: Vector3) -> Vector2:
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	var right: Vector3 = Vector3(cam.global_basis.x.x, 0.0, cam.global_basis.x.z).normalized()

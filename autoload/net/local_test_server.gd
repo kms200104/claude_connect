@@ -45,6 +45,9 @@ var _vehicles: Array = []
 var _veh_seq: int = 0
 ## v19.1 타고 있는 차고 탈것 (접속 동안만) · 마지막 방향.
 var _mount: String = ""
+## v21 물놀이: 탄 배 { id, ride, depart, seat, held: { 급회전: 버팀 } } (안 타면 빈 사전).
+var _aqua: Dictionary = {}
+var _aqua_seq: int = 0
 var _yaw: float = 0.0
 ## 닉네임 (v14).
 var _name: String = ""
@@ -187,6 +190,10 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			if not _home.is_empty():
 				_send(peer, _home_message(null))
 		"move":
+			if not _aqua.is_empty():
+				# v21: 물놀이 배를 타는 동안 자리는 노선에서 (진짜 서버 aqua.seatPos 와 같다).
+				_yaw = float(msg.get("yaw", _yaw))
+				return
 			var to: Vector3 = Vector3(float(msg.get("x", _pos.x)), 0.1, float(msg.get("z", _pos.z)))
 			# v20: 보트를 타는 동안은 물 위에서만 (진짜 서버 garage.moveOk 와 같다).
 			if _on_boat() and not WaterRules.is_water(Vector2(to.x, to.z)) and WaterRules.water_near(Vector2(to.x, to.z), 0.6) == Vector2.INF:
@@ -296,6 +303,8 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_talk_topic(peer, msg)
 		"chop":
 			_chop(peer, msg, fail)
+		"fish_cast" when not _aqua.is_empty():
+			fail.call(NetProtocol.ERR_AQUA_BUSY)
 		"fish_cast":
 			_fish_cast(peer, msg, fail)
 		"fish_hook":
@@ -318,7 +327,12 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send(peer, {"t": "face", "rid": rid, "id": 1, "face": _face})
 			_save()
 		"veh_buy", "veh_part", "veh_unfit", "veh_sell", "veh_ride", "veh_call":
+			if not _aqua.is_empty() and t in ["veh_ride", "veh_call"]:
+				fail.call(NetProtocol.ERR_CANT_RIDE)
+				return
 			_handle_garage(peer, msg, fail)
+		"aqua_join", "aqua_leave", "aqua_hold":
+			_handle_aqua(peer, msg, fail)
 		"phone", "phone_tap", "ride":
 			# 혼자 노는 테스트 서버: 다른 사람이 없으니 알릴 곳이 없다.
 			pass
@@ -1058,6 +1072,90 @@ func _garage_dismount(peer: WebSocketPeer) -> void:
 	_send(peer, {"t": "veh_parked", "list": _parked_list()})
 
 
+# ---- 물놀이 (v21, 진짜 서버 aqua.js 와 같은 규칙 · 혼자라 배마다 손님은 나 하나) ----
+
+func _handle_aqua(peer: WebSocketPeer, msg: Dictionary, fail: Callable) -> void:
+	var rid: Variant = msg.get("rid")
+	var rules: AquaRules = GameData.aqua
+	match str(msg.get("t", "")):
+		"aqua_join":
+			var ride: AquaRules.Ride = rules.ride(str(msg.get("ride", "")))
+			if ride == null:
+				fail.call(NetProtocol.ERR_BAD_MESSAGE)
+				return
+			if not _aqua.is_empty():
+				fail.call(NetProtocol.ERR_AQUA_BUSY)
+				return
+			if not _home.is_empty() or not _fishing.is_empty() or not _mount.is_empty():
+				fail.call(NetProtocol.ERR_CANT_RIDE)
+				return
+			if Vector2(_pos.x, _pos.z).distance_to(rules.dock) > rules.board_range:
+				fail.call(NetProtocol.ERR_NOT_NEAR_DOCK)
+				return
+			if _sol < ride.fee:
+				fail.call(NetProtocol.ERR_NOT_ENOUGH_SOL)
+				return
+			_sol -= ride.fee
+			_aqua_seq += 1
+			var depart: float = _now() + float(rules.board_ms)
+			_aqua = {"id": "A%d" % _aqua_seq, "ride": ride.id, "depart": depart, "seat": 0, "held": {}}
+			var at: Vector2 = AquaRules.point_at(ride, 0.0)
+			_pos = Vector3(at.x, 0.1, at.y)
+			var trip_id: String = str(_aqua["id"])
+			_timers.append([depart + AquaRules.duration(ride) * 1000.0, func() -> void: _aqua_finish(peer, trip_id)])
+			_send(peer, {"t": "aqua_result", "rid": rid, "kind": "join", "trip": trip_id, "ride": ride.id, "seat": 0, "depart": depart, "cost": ride.fee, "sol": _sol})
+			_send(peer, {"t": "aqua_trips", "list": _aqua_list()})
+			_save()
+		"aqua_leave":
+			if _aqua.is_empty() or _now() >= float(_aqua["depart"]):
+				fail.call(NetProtocol.ERR_AQUA_BUSY if not _aqua.is_empty() else NetProtocol.ERR_BAD_MESSAGE)
+				return
+			var ride2: AquaRules.Ride = rules.ride(str(_aqua["ride"]))
+			_sol += ride2.fee
+			var trip2: String = str(_aqua["id"])
+			_aqua = {}
+			_pos = Vector3(rules.land.x, 0.1, rules.land.y)
+			_send(peer, {"t": "aqua_result", "rid": rid, "kind": "leave", "trip": trip2, "ride": ride2.id, "cost": -ride2.fee, "sol": _sol})
+			_send(peer, {"t": "correct", "x": _pos.x, "y": _pos.y, "z": _pos.z})
+			_send(peer, {"t": "aqua_trips", "list": _aqua_list()})
+			_save()
+		"aqua_hold":
+			if _aqua.is_empty() or str(msg.get("trip", "")) != str(_aqua["id"]):
+				fail.call(NetProtocol.ERR_BAD_MESSAGE)
+				return
+			var ride3: AquaRules.Ride = rules.ride(str(_aqua["ride"]))
+			var k: int = int(msg.get("turn", -1))
+			var held: Dictionary = _aqua["held"]
+			if k < 0 or k >= ride3.turns.size() or held.has(k):
+				return
+			var ms: float = float(msg.get("ms", -1.0))
+			var ok: bool = ms >= 0.0 and ms <= float(ride3.window_ms)
+			held[k] = ok
+			_send(peer, {"t": "aqua_fx", "trip": _aqua["id"], "id": 1, "turn": k, "fell": not ok})
+
+
+func _aqua_finish(peer: WebSocketPeer, trip_id: String) -> void:
+	if _aqua.is_empty() or str(_aqua["id"]) != trip_id:
+		return
+	var ride: AquaRules.Ride = GameData.aqua.ride(str(_aqua["ride"]))
+	var held: int = 0
+	for v: Variant in (_aqua["held"] as Dictionary).values():
+		if bool(v):
+			held += 1
+	_aqua = {}
+	var land: Vector2 = GameData.aqua.land
+	_pos = Vector3(land.x, 0.1, land.y)
+	_send(peer, {"t": "aqua_end", "trip": trip_id, "ride": ride.id, "held": held, "turns": ride.turns.size()})
+	_send(peer, {"t": "correct", "x": _pos.x, "y": _pos.y, "z": _pos.z})
+	_send(peer, {"t": "aqua_trips", "list": _aqua_list()})
+
+
+func _aqua_list() -> Array:
+	if _aqua.is_empty():
+		return []
+	return [{"id": _aqua["id"], "ride": _aqua["ride"], "depart": _aqua["depart"], "riders": [{"id": 1, "seat": _aqua["seat"]}]}]
+
+
 func _parked_list() -> Array:
 	var out: Array = []
 	for v: Dictionary in _vehicles:
@@ -1085,6 +1183,7 @@ func _welcome(resumed: bool) -> Dictionary:
 	prof["vehicles"] = _vehicles.duplicate(true)
 	w["prof"] = prof
 	w["parked"] = _parked_list()
+	w["aqua"] = _aqua_list()
 	var players: Array = w.get("players", [])
 	if not players.is_empty():
 		players[0]["x"] = _pos.x

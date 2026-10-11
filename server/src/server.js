@@ -39,6 +39,7 @@ import { GUESTBOOK, addEntry, cleanEntryText, guestbookWire } from './guestbook.
 import { PHOTO_RULES, createPhotoStore } from './photos.js';
 import { DAY_MS, DAY_START_HOUR } from './clock.js';
 import { createGarage, mountWire } from './garage.js';
+import { createAqua } from './aqua.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -139,7 +140,10 @@ export function createServer(overrides = {}) {
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
-  const rideBlocked = (player) => (player.home || inShop(player) || player.fishing !== null ? ErrorCode.cantRide : null);
+  const rideBlocked = (player) => (player.home || inShop(player) || player.fishing !== null || player.aqua ? ErrorCode.cantRide : null);
+  const aqua = createAqua({ data, send, sendProfile, now, boardMs: cfg.aquaBoardMs, speedScale: cfg.aquaSpeedScale });
+  // v21: 물놀이 배를 타는 동안은 못 하는 일.
+  const AQUA_BLOCKED = new Set(['fish_cast', 'chop', 'talk', 'shop_enter', 'place', 'pickup', 'collect', 'plant', 'pick', 'ride', 'job_take', 'job_pick', 'dig', 'home_enter', 'park_move', 'rest_open', 'rest_join']);
   /** 상점에서 사는 값 (장바구니 물가가 오른 주에는 비싸다). */
   const buyPrice = (room, item, n) => Math.round(data.items.get(item).buy * n * buyMultiplier(activeOf(room), item, data.kindOf));
   const delivery = createDelivery({
@@ -440,6 +444,7 @@ export function createServer(overrides = {}) {
       room.dirty = true;
     }
     garage.dismount(player, room);
+    aqua.leave(player, room);
     fishing.drop(player);
     closeTalk(room, player, false);
     room.broadcast({ t: 'peer_status', id: player.id, online: false });
@@ -504,6 +509,8 @@ export function createServer(overrides = {}) {
       deliv: delivery.mine(room, player.uid),
       // v19.1: 세워 둔 · 오는 중인 차고 탈것 (방 전체).
       parked: garage.parkedWire(room),
+      // v21: 물놀이 배 (손님 받는 중 · 도는 중).
+      aqua: aqua.tripsWire(room),
       // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
       dev: cfg.devTools,
     });
@@ -1677,6 +1684,10 @@ export function createServer(overrides = {}) {
     const { player } = ctx;
     if (!player) return sendError(ctx.ws, ErrorCode.notInRoom);
     const fail = (code) => send(ctx.ws, { t: 'error', code, rid: msg.rid ?? null });
+    if (player.aqua && AQUA_BLOCKED.has(msg.t)) {
+      player.acceptRid(msg.rid);
+      return fail(ErrorCode.aquaBusy);
+    }
     switch (msg.t) {
       case 'fish_cast': {
         if (!player.acceptRid(msg.rid)) return; // 중복 요청 무시
@@ -1816,6 +1827,10 @@ export function createServer(overrides = {}) {
       case 'veh_ride':
       case 'veh_call':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
+      case 'aqua_join':
+      case 'aqua_leave':
+      case 'aqua_hold':
+        return aqua.handle(ctx, msg, fail, { blocked: (p) => (p.home || inShop(p) || p.fishing !== null ? ErrorCode.cantRide : null) });
       default:
         return handleTalk(ctx, msg, fail);
     }
@@ -1837,6 +1852,17 @@ export function createServer(overrides = {}) {
     const dx = tx - player.x;
     const dz = tz - player.z;
     const dist = Math.hypot(dx, dz);
+    // v21: 물놀이 배를 타는 동안은 서버가 노선에서 계산한 자리 (이동 요청은 방향만 받는다).
+    const seat = aqua.seatPos(player, room);
+    if (seat) {
+      player.x = seat.x;
+      player.z = seat.z;
+      player.yaw = msg.yaw;
+      player.vx = 0;
+      player.vz = 0;
+      room.dirty = true;
+      return;
+    }
     // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
     if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
     // v19: 차고 탈것을 타는 동안은 그 탈것의 최고 속도까지.
@@ -1999,6 +2025,9 @@ export function createServer(overrides = {}) {
       case 'veh_sell':
       case 'veh_ride':
       case 'veh_call':
+      case 'aqua_join':
+      case 'aqua_leave':
+      case 'aqua_hold':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -2046,6 +2075,7 @@ export function createServer(overrides = {}) {
   // 위치 스냅샷: 바뀐 방만 방송한다.
   const tick = setInterval(() => {
     for (const room of rooms.rooms.values()) {
+      aqua.tick(room);
       if (!room.dirty) continue;
       room.dirty = false;
       room.broadcast({

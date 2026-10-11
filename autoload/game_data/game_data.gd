@@ -69,6 +69,8 @@ var econ: EconData = null
 var jobs: JobRules = JobRules.new()
 ## 차고 탈것 (v19): 자전거 · 전기오토바이와 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
 var garage: VehicleCatalog = VehicleCatalog.new()
+## 물놀이 체험 (v21): 성성호수 선착장의 바나나 보트 · 유람선.
+var aqua: AquaRules = AquaRules.new()
 ## v16 업적 (데이터 순서 그대로) · id → 업적 · 판정 값 이름 → 설명.
 var achievements: Array[AchievementInfo] = []
 var achievement_by_id: Dictionary[String, AchievementInfo] = {}
@@ -141,6 +143,7 @@ func _ready() -> void:
 	econ = EconData.load_all()
 	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
 	garage = VehicleCatalog.from_dict(_read_json("res://data/vehicles/garage.json"))
+	aqua = AquaRules.from_dict(_read_json("res://data/aqua/aqua.json"))
 	econ.build_customers(npcs)
 	var ach_file: Dictionary = _read_json(ACHIEVEMENTS_PATH)
 	for key: Variant in ach_file.get("stats", {}):

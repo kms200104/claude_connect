@@ -26,6 +26,9 @@ export const defaultConfig = {
   moveSlackMeters: num('MOVE_SLACK_M', 0.6),
   // v19.1 탈것 호출: 주민이 가져다주는 데 걸리는 시간(ms). 비우면 data/vehicles/garage.json 의 delivery.eta_ms.
   vehicleEtaMs: num('VEHICLE_ETA_MS', NaN),
+  // v21: 테스트는 물놀이 배를 빨리 (손님 기다리는 시간 ms · 빠르기 배율).
+  aquaBoardMs: num('AQUA_BOARD_MS', NaN),
+  aquaSpeedScale: num('AQUA_SPEED_SCALE', 1),
   // 이동 가능 경계 (원점 중심 정사각형 반경)와 높이 범위. 섬(±100m)과 바다 너머 상점 실내(z≈190), 아파트 집 안(z 215~570)을 모두 담는다.
   // 설치·심기는 섬 경계(village_layout.json 의 island)로 따로 막는다.
   worldHalfExtent: num('WORLD_HALF_EXTENT', 600),

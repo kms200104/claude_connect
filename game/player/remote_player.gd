@@ -46,6 +46,8 @@ const CAST_FLIGHT_S: float = 0.55
 const SHOW_OFF_S: float = 2.6
 
 var _samples: Array[Sample] = []
+## 물놀이 배에 앉아 있는 동안 (v21): AquaMarina 가 매 프레임 자리를 정하고, 스냅샷으로 움직이지 않는다.
+var _pinned: bool = false
 var _bobber: Bobber = null
 ## 낚시 장면 번호 — 기다리는 동안 다음 장면이 오면 이전 것은 멈춘다.
 var _fish_seq: int = 0
@@ -457,7 +459,31 @@ func _apply_held(item_id: String) -> void:
 var _body_rest_y: float = NAN
 
 
+## 물놀이 배 자리에 붙인다 (at = 리그 뿌리 자리, yaw = 바라보는 쪽, lift = 몸을 올리는 높이).
+func pin(at: Vector3, yaw: float, lift: float) -> void:
+	_pinned = true
+	global_position = at
+	if body != null:
+		if is_nan(_body_rest_y):
+			_body_rest_y = body.position.y
+		body.transform = Transform3D(Basis(Vector3.UP, yaw), Vector3(0.0, _body_rest_y + lift, 0.0))
+	if rig != null:
+		rig.set_move_speed(0.0)
+
+
+func unpin() -> void:
+	_pinned = false
+	if body != null and not is_nan(_body_rest_y):
+		body.transform = Transform3D(Basis(Vector3.UP, body.rotation.y), Vector3(0.0, _body_rest_y, 0.0))
+
+
+func is_pinned() -> bool:
+	return _pinned
+
+
 func _process(delta: float) -> void:
+	if _pinned:
+		return
 	# 여울에 들어간 친구도 물에 잠겨 보인다 (Player.WADE_SINK).
 	if body != null:
 		if is_nan(_body_rest_y):

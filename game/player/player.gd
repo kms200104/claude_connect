@@ -75,6 +75,8 @@ var vehicle: KickboardRider = null
 var garage_ride: GarageRider = null
 ## 탈것 버튼 조작 (설정 "탈것 조작: 버튼"): 타는 동안 조이스틱 대신 ▲▼ · ◀▶ (처음 탈 때 HUD 에 만든다).
 var ride_buttons: RideButtons = null
+## 물놀이 배 (v21). 타는 동안은 배의 자리에 앉아 있고(AquaMarina 가 자리를 정한다) 걷지 않는다.
+var aqua: AquaMarina = null
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
@@ -89,6 +91,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_ride_buttons()
+	if aqua != null and aqua.is_riding():
+		aqua.drive_player(delta)
+		return
 	if vehicle != null and vehicle.is_active():
 		_physics_ride(delta)
 		return
@@ -205,7 +210,8 @@ func _update_ride_buttons() -> void:
 	if ride_buttons != null:
 		ride_buttons.set_shown(want)
 	if joystick != null:
-		joystick.suspended = want
+		# 물놀이 배에 앉아 있는 동안도 조이스틱은 쉰다 (배가 알아서 간다).
+		joystick.suspended = want or (aqua != null and aqua.is_riding())
 
 
 ## 탔을 때 몸(Body)을 바닥에서 띄우는 높이 (씬에 놓인 자리).

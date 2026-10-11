@@ -43,6 +43,8 @@ export function blockedAreas(data) {
     const d = layout.dock;
     rects.push({ x0: d.x - d.length / 2 - 0.3, x1: d.x + d.length / 2 + 0.3, z0: d.z - d.width / 2 - 0.3, z1: d.z + d.width / 2 + 0.3 });
   }
+  // v21: 물놀이 선착장 매표소.
+  if (data.aqua?.dock?.booth) circles.push({ x: data.aqua.dock.booth[0], z: data.aqua.dock.booth[1], r: 1.8 });
   for (const line of layout?.fences ?? []) {
     for (let i = 0; i + 1 < line.length; i++) segments.push({ ax: line[i][0], az: line[i][1], bx: line[i + 1][0], bz: line[i + 1][1], r: 0.6 });
   }

@@ -188,6 +188,7 @@ export class Player {
     this.phone = false; // 휴대폰을 꺼내 보는 중 (v15, 연출용)
     this.ride = ''; // v18: 타고 있는 탈것 (아이템 id, 예: kickboard). 가방에 그 아이템이 있을 때만 보인다
     this.mount = null; // v19: 타고 있는 차고 탈것 id (자전거 · 전기오토바이, 접속 동안만)
+    this.aqua = null; // v21: 타고 있는 물놀이 배 (trip id, 접속 동안만)
     this.talkingTo = null; // 대화 중인 NPC id
     this.offer = null; // 대화 중 받은(아직 수락 안 한) 부탁
     this.job = null; // v0.12: 하던 배달 알바 (jobs.js, 접속 동안만)
