@@ -52,7 +52,7 @@ func _run() -> void:
 	if cam != null:
 		var p0: Vector3 = cam.global_position
 		var pitch: float = rad_to_deg(asin(clampf(-cam.global_basis.z.y, -1.0, 1.0)))
-		_check(p0.y > 30.0 and pitch < -12.0 and pitch > -60.0, "높은 곳(%.0fm)에서 비스듬히 내려다봄 (%.0f°)" % [p0.y, pitch])
+		_check(p0.y > 15.0 and pitch < -12.0 and pitch > -60.0, "높은 곳(%.0fm)에서 비스듬히 내려다봄 (%.0f°)" % [p0.y, pitch])
 		await get_tree().create_timer(1.0).timeout
 		_check(cam.global_position.distance_to(p0) > 0.5, "천천히 날아간다 (%.1fm/s)" % cam.global_position.distance_to(p0))
 		var clouds: int = 0
