@@ -36,6 +36,10 @@ func _ready() -> void:
 			continue
 		await _run(kitchen, str(c[0]), str(c[1]))
 	if _only.is_empty() or "result" in _only:
+		# 마을에서처럼 땅 휘기 기준점(내 캐릭터)이 원점에서 멀다 — 손님 얼굴 무대가 땅 밑으로 가라앉으면 안 된다.
+		var far: Vector3 = Vector3(26.0, 0.0, 64.0)
+		RenderingServer.global_shader_parameter_set("world_curve_origin", far)
+		WorldStyle.curve_origin = far
 		_check_reaction_lines()
 		await _result(kitchen, "beef_steak", "v_gourmet", 5, 0.97, 0.8, false, false)
 		await _result(kitchen, "samgyeopsal", "v_hiker", 2, 0.48, 0.1, false, false)
@@ -138,6 +142,11 @@ func _result(kitchen: KitchenWindow, dish: String, customer: String, stars: int,
 	await get_tree().create_timer(1.1).timeout
 	var reaction: GuestReaction = kitchen.get("_reaction")
 	_check(reaction != null and is_instance_valid(reaction), "%s ★%d: 결과 화면에 손님 반응" % [dish, stars])
+	if reaction != null and is_instance_valid(reaction):
+		var stages: Array[Node] = reaction.find_children("*", "CurveAnchor", true, false)
+		var at: Vector3 = (stages[0] as Node3D).global_position if not stages.is_empty() else Vector3.INF
+		_check(Vector2(at.x - WorldStyle.curve_origin.x, at.z - WorldStyle.curve_origin.z).length() < 0.01,
+			"손님 얼굴 무대가 땅 휘기 기준점을 따라감 (가라앉지 않음) %s" % str(at))
 	if not _shots.is_empty():
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shots.path_join("kitchen_result_%s_%d.png" % [customer, stars]))

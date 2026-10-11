@@ -164,18 +164,21 @@ func _portrait(customer: EconData.Customer) -> Control:
 	var we: WorldEnvironment = WorldEnvironment.new()
 	we.environment = env
 	_view.add_child(we)
+	# 무대 뿌리: 땅 휘기 기준점을 따라간다 (CurveAnchor — 원점에 두면 마을에서 멀어 손님이 땅 밑으로 가라앉는다).
+	var stage: CurveAnchor = CurveAnchor.new()
+	_view.add_child(stage)
 	var sun: DirectionalLight3D = DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-35.0), deg_to_rad(150.0), 0.0)
-	_view.add_child(sun)
+	stage.add_child(sun)
 	_rig = RIG_SCENE.instantiate()
-	_view.add_child(_rig)
+	stage.add_child(_rig)
 	if customer != null and customer.look != null:
 		_rig.set_look(customer.look)
 	_rig.set_held("")
 	var cam: Camera3D = Camera3D.new()
 	cam.fov = 26.0
-	_view.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 0.48, -3.2), Vector3(0.0, 0.3, 0.0))
+	stage.add_child(cam)
+	CurveAnchor.aim(cam, Vector3(0.0, 0.48, -3.2), Vector3(0.0, 0.3, 0.0))
 	cam.current = true
 	return holder
 

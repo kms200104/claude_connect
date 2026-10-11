@@ -422,24 +422,27 @@ func _add_preview(model_id: String, fit: Dictionary) -> void:
 	var we: WorldEnvironment = WorldEnvironment.new()
 	we.environment = env
 	_preview.add_child(we)
+	# 무대 뿌리: 땅 휘기 기준점(내 캐릭터 자리)을 따라간다 — 원점에 두면 무대가 땅 밑으로 가라앉아 안 보인다.
+	var stage: CurveAnchor = CurveAnchor.new()
+	_preview.add_child(stage)
 	var sun: DirectionalLight3D = DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-50.0), deg_to_rad(-30.0), 0.0)
 	sun.light_energy = 0.1 if night else 1.0
-	_preview.add_child(sun)
+	stage.add_child(sun)
 	# 받침 (점토 머티리얼 하나로 — 셰이더를 늘리지 않는다).
 	var floor_mesh: MeshInstance3D = MeshInstance3D.new()
 	var st: SurfaceTool = ClayMesh.begin()
 	ClayMesh.add_lathe(st, ClayMesh.rounded_cylinder_profile(1.3, 1.3, -0.04, 0.0, 0.02, 1), 32, Transform3D(), Color(0.82, 0.78, 0.72))
 	floor_mesh.mesh = ClayMesh.commit(st)
 	floor_mesh.material_override = load("res://assets/materials/foliage.tres")
-	_preview.add_child(floor_mesh)
+	stage.add_child(floor_mesh)
 	_preview_pivot = Node3D.new()
 	_preview_pivot.rotation.y = deg_to_rad(-60.0)
-	_preview.add_child(_preview_pivot)
+	stage.add_child(_preview_pivot)
 	_preview_model = VehicleModel.new()
 	_preview_pivot.add_child(_preview_model)
 	_preview_model.build(model_id, fit)
 	var cam: Camera3D = Camera3D.new()
 	cam.fov = 36.0
-	_preview.add_child(cam)
-	cam.look_at_from_position(Vector3(0.0, 1.3, 2.9), Vector3(0.0, 0.4, 0.0))
+	stage.add_child(cam)
+	CurveAnchor.aim(cam, Vector3(0.0, 1.3, 2.9), Vector3(0.0, 0.4, 0.0))
