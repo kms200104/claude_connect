@@ -55,6 +55,8 @@ var _button: Button = null
 var _gauge: Label = null
 var _hud_left: float = 0.0
 var _icon_state: String = ""
+## 보트 위에서 낚시하는 중 (v21): 보트는 서고, 캐릭터는 갑판에 서서 낚싯대를 쥔다 (서버도 내리지 않는다).
+var fishing: bool = false
 ## 보트: 타는 동안 꺼 두는 충돌 (땅 · 물 막이 · 해안 벽), 내릴 땅을 서버에 청한 동안의 자리, 물결 시각.
 var _saved_mask: int = -1
 var _landing: Vector2 = Vector2.INF
@@ -462,6 +464,7 @@ func _finish() -> void:
 		_seq.kill()
 	_seq = null
 	_landing = Vector2.INF
+	fishing = false
 	if _saved_mask >= 0 and player != null:
 		player.collision_mask = _saved_mask
 		_saved_mask = -1
@@ -582,7 +585,8 @@ func after_move(delta: float, before: Vector3) -> void:
 ## 몸 · 탈것: 바닥을 축으로 안쪽으로 눕고(lean) 가속 · 브레이크에 앞뒤로 숙인다(pitch). 몸은 안장 높이(lift)만큼 올라 앉는다.
 func _place_body() -> void:
 	var basis: Basis = Basis(Vector3.UP, drive_state.yaw) * Basis(Vector3.BACK, drive_state.lean) * Basis(Vector3.RIGHT, drive_state.pitch)
-	var height: float = player.body_rest_height() + info.lift
+	# 낚시하는 동안은 갑판에 선다 (카약처럼 낮게 앉는 배도 발이 물에 잠기지 않게).
+	var height: float = player.body_rest_height() + (maxf(info.lift, 0.12) if fishing else info.lift)
 	if is_boat():
 		# 물결에 출렁 (멈춰 있을수록 조금 더).
 		_bob_t += get_physics_process_delta_time()
@@ -591,6 +595,22 @@ func _place_body() -> void:
 		basis = basis * Basis(Vector3.BACK, sin(_bob_t * 1.3) * 0.03 * calm)
 	player.body.transform = Transform3D(basis, basis * Vector3(0.0, height, 0.0))
 	model.transform = Transform3D(Basis(), Vector3(0.0, -height, 0.0))
+
+
+## 보트 위 낚시 시작 · 끝 (FishingController). 보트가 아니면 아무것도 하지 않는다.
+func set_fishing(on: bool) -> void:
+	if fishing == on or (on and (state != State.RIDING or not is_boat())):
+		return
+	fishing = on
+	if on:
+		drive_state.speed = 0.0
+		drive_state.throttle = 0.0
+		drive_state.yaw_rate = 0.0
+		player.velocity = Vector3.ZERO
+		# 타는 자세를 풀어야 낚싯대가 손에 보이고 던지는 동작이 나온다.
+		player.rig.set_riding("")
+	elif state == State.RIDING and info != null:
+		player.rig.set_riding(info.pose)
 
 
 ## 속도 (km/h, HUD · 테스트용).

@@ -143,6 +143,17 @@ describe('v20 보트 사기 · 물 위에 부르기 · 타기 · 내리기', () 
     a.send({ t: 'move', x: land.x, y: 0.03, z: land.z, yaw: 0, vx: 0, vz: 0 });
     const fix = await a.next((m) => m.t === 'correct', 1500);
     assert.ok(Math.hypot(fix.x - inner.x, fix.z - inner.z) < 0.01, '땅으로 가려 하면 보트 자리로 되돌린다');
+    // v21: 보트 위에서 낚싯대를 던져도 내리지 않는다 (예전엔 서버만 세워 두어 보트가 둘로 보였다).
+    a.inbox = a.inbox.filter((m) => m.t !== 'veh_parked' && m.t !== 'snap');
+    const fr = `boat-${++n}`;
+    a.send({ t: 'fish_cast', rid: fr, spot: waterAt(data, inner.x, inner.z) });
+    const started = await a.next((m) => m.rid === fr, 2000);
+    assert.equal(started.t, 'fish_started', `보트 위에서 던진다 (${started.code ?? ''})`);
+    const snapFish = await a.next((m) => m.t === 'snap' && m.p.some((p) => p.id === w.id && p.fishing), 1500);
+    assert.equal(snapFish.p.find((p) => p.id === w.id).mount?.m, 'boat_kayak', '낚시하는 동안에도 보트에 타 있다');
+    assert.ok(!a.inbox.some((m) => m.t === 'veh_parked' && m.list.some((x) => x.v === v)), '보트를 따로 세워 두지 않는다');
+    a.send({ t: 'fish_cancel', rid: `boat-${++n}` });
+    await sleep(150);
     // 내리기: 땅이 아닌 곳 · 너무 먼 곳은 거절, 곁의 땅이면 그 자리로 옮겨 선다.
     assert.equal((await ask(a, { t: 'veh_ride', v: '' })).code, 'no_landing');
     assert.equal((await ask(a, { t: 'veh_ride', v: '', lx: inner.x, lz: inner.z })).code, 'no_landing', '물 위에는 못 내린다');

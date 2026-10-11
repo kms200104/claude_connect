@@ -179,6 +179,9 @@ func _update_mount(delta: float, before: Vector3) -> void:
 	_mount_lean = lerpf(_mount_lean, clampf(atan(_mount_speed * rate / VehicleDrive.GRAVITY), -max_lean, max_lean), 1.0 - exp(-6.0 * delta))
 	var base: float = absf(_mount_info.anchor("axle_r").z - _mount_info.anchor("axle_f").z)
 	_mount_steer = clampf(atan(base * rate / maxf(_mount_speed, 0.8)), -0.5, 0.5)
+	# 보트 위에서 낚시하는 친구 (v21): 타는 자세를 풀고 서서 낚싯대를 쥔다.
+	var fishing_now: bool = not _samples.is_empty() and _samples[-1].fishing and _mount_info.kind == "boat"
+	rig.set_riding("" if fishing_now else _mount_info.pose)
 	var pedal_speed: float = absf(_mount_speed) if _mount_info.kind == "boat" else maxf(_mount_speed, 0.0)
 	rig.set_pedal_rate(_mount.pedal_rate(pedal_speed) if _mount_info.pose in CharacterRig.PHASED_RIDES else 0.0)
 	_mount.set_pedal(rig.pedal_phase())

@@ -108,6 +108,11 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
   const parkRange = (kind) => rules?.kinds[kind]?.park_range ?? delivery.park_range;
   const mountedVehicle = (player) => (player.mount ? player.profile.vehicles.find((x) => x.id === player.mount) : null);
 
+  /** 보트를 타고 있는지 (v21: 보트 위에서는 내리지 않고 낚시한다). */
+  function onBoat(player) {
+    return isWaterKind(kindOf(mountedVehicle(player)));
+  }
+
   /** 보트를 타는 동안 이 자리로 갈 수 있는지 (물 위여야 한다). 보트가 아니면 언제나. */
   function moveOk(player, x, z) {
     const v = mountedVehicle(player);
@@ -269,5 +274,5 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
     return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null })) };
   }
 
-  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk };
+  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat };
 }

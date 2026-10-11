@@ -1697,7 +1697,8 @@ export function createServer(overrides = {}) {
         const target = Number.isFinite(msg.x) && Number.isFinite(msg.z) ? { x: msg.x, z: msg.z } : null;
         const err = fishing.cast(player, msg.rid, msg.spot, target);
         if (err) fail(err);
-        else garage.dismount(player, ctx.room);
+        // 자전거 · 오토바이는 세워 두고 낚시하고, 보트(v21)는 탄 채로 낚시한다.
+        else if (!garage.onBoat(player)) garage.dismount(player, ctx.room);
         return;
       }
       case 'fish_hook': {

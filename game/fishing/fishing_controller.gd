@@ -121,6 +121,15 @@ func _nearest_spot(position: Vector3) -> FishingSpot:
 func _on_action_pressed() -> void:
 	match phase:
 		Phase.IDLE:
+			var ride: GarageRider = player.garage_ride
+			if ride != null and ride.is_active() and not ride.is_boat():
+				# 자전거 · 오토바이: 먼저 내려 세워 두고 던진다 (서버도 낚싯대를 던지면 세워 둔다).
+				# 탄 채로 던지면 서버만 세워 두어 탈것이 둘로 보였다.
+				player.dismount_ride()
+				return
+			if ride != null:
+				# 보트 위: 내리지 않고 보트를 세운 채 서서 던진다.
+				ride.set_fishing(true)
 			phase = Phase.CASTING
 			hud.show_casting()
 			# 낚싯대를 머리 뒤로 젖혔다가 휙 던진다. 휙 소리는 앞으로 내던지는 순간에 맞춘다.
@@ -402,6 +411,8 @@ func _on_rejected(code: String) -> void:
 	phase = Phase.IDLE
 	hud.reset()
 	hud.show_toast(_describe_error(code), false)
+	if player.garage_ride != null:
+		player.garage_ride.set_fishing(false)
 
 
 func _on_net_state_changed(new_state: int) -> void:
@@ -435,6 +446,8 @@ func _reset() -> void:
 	player.set_fishing_pose(false)
 	player.clear_look_direction()
 	player.set_input_lock(&"fishing", false)
+	if player.garage_ride != null:
+		player.garage_ride.set_fishing(false)
 	hud.reset()
 
 
