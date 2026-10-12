@@ -41,6 +41,8 @@ var _finish_at: float = 0.0
 var _tutorial: Control = null
 var _tutorial_at: float = 0.0
 var _hits: PackedFloat32Array = []
+## 처음 하는 동작 설명 카드를 띄울 곳 (주방 창 전체 — 스크롤 밖이라 화면이 낮아도 다 보이고 눌린다). 없으면 무대 위.
+var tutorial_host: Control = null
 var _verbs: PackedStringArray = []
 
 
@@ -193,17 +195,22 @@ func show_tutorial(step_def: Dictionary) -> void:
 	_tutorial_at = float(Time.get_ticks_msec())
 	var card: PanelContainer = PanelContainer.new()
 	card.name = "Tutorial"
-	card.add_theme_stylebox_override("panel", EventHud._box(Color(1.0, 0.98, 0.92, 0.96), Color(0.45, 0.32, 0.22), 30, 5, 22))
-	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	card.offset_left = 40.0
-	card.offset_right = -40.0
-	card.offset_top = 26.0
-	card.offset_bottom = -150.0
+	card.add_theme_stylebox_override("panel", EventHud._box(Color(1.0, 0.98, 0.92, 0.97), Color(0.45, 0.32, 0.22), 30, 5, 22))
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(card)
+	var host: Control = tutorial_host if tutorial_host != null and is_instance_valid(tutorial_host) else self
+	if not host is Container:
+		card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		card.offset_left = 40.0
+		card.offset_right = -40.0
+		card.offset_top = 26.0
+		card.offset_bottom = -26.0
+	host.add_child(card)
 	var col: VBoxContainer = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 12)
 	card.add_child(col)
+	var top_gap: Control = Control.new()
+	top_gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(top_gap)
 	col.add_child(_label("처음 하는 동작 · %s" % str(step_def.get("label", "")), 38, INK))
 	var text: Label = _label(str(step_def.get("tutorial", step_def.get("hint", ""))), 27, Color(0.36, 0.26, 0.18))
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -216,24 +223,45 @@ func show_tutorial(step_def: Dictionary) -> void:
 	demo.custom_minimum_size = Vector2(0, 170)
 	demo.draw.connect(_draw_tutorial_demo.bind(demo, step_def))
 	col.add_child(demo)
-	var gap: Control = Control.new()
-	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(gap)
 	var go: Button = Button.new()
 	go.text = "알겠어요, 시작!"
 	go.add_theme_font_size_override("font_size", 34)
 	go.custom_minimum_size = Vector2(0, 92)
-	go.pressed.connect(func() -> void:
-		hide_tutorial()
-		tutorial_closed.emit())
+	# 누르는 순간 닫는다: 떼는 순간(pressed)이면 휴대폰에서 손가락이 조금만 움직여도 주방 창 스크롤이 누름을 취소해 닫히지 않았다.
+	go.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	go.pressed.connect(close_tutorial)
 	col.add_child(go)
+	var gap: Control = Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(gap)
+	# 카드 아무 데나 눌러도 시작.
+	card.gui_input.connect(func(event: InputEvent) -> void:
+		var down: bool = (event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) \
+			or (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed)
+		if down and float(Time.get_ticks_msec()) - _tutorial_at > 400.0:
+			card.accept_event()
+			close_tutorial())
 	_tutorial = card
+
+
+## 설명을 닫고 동작을 시작한다 (시작 단추 · 카드 · 큰 단추 어느 것으로든). 이미 닫혔으면 아무것도 안 한다.
+func close_tutorial() -> void:
+	if _tutorial == null:
+		return
+	hide_tutorial()
+	tutorial_closed.emit()
 
 
 func hide_tutorial() -> void:
 	if _tutorial != null:
-		_tutorial.queue_free()
+		if is_instance_valid(_tutorial):
+			_tutorial.queue_free()
 		_tutorial = null
+
+
+func _exit_tree() -> void:
+	# 무대가 사라지면(주문 목록으로 · 손님이 떠남) 창에 띄운 설명 카드도 함께 치운다.
+	hide_tutorial()
 
 
 func is_tutorial_open() -> bool:

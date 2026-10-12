@@ -19,6 +19,8 @@ var home: Vector3 = Vector3.ZERO
 var look: CharacterLook = null
 ## 말소리 높이 (1 = 보통). 없으면 성격으로 정한다.
 var voice: float = 1.0
+## 말소리 바탕 (v0.19): "f" = 여성 바탕(기본), "m" = 남성 바탕. 데이터 gender 가 없으면 머리 모양으로 정한다.
+var gender: String = "f"
 ## 말버릇 (기분이 좋을 때 말끝에 붙는다).
 var catchphrase: String = ""
 var hobby: String = ""
@@ -36,6 +38,17 @@ var mbti: String = ""
 var mbti_self: String = ""
 
 
+## 남성 바탕 말소리를 쓰는 머리 모양 (짧은 머리 · 까까머리 · 삐죽머리).
+const MALE_STYLES: PackedStringArray = ["short", "buzz", "spiky"]
+
+
+## 말소리 바탕: 적어 둔 gender("f"/"m")가 있으면 그대로, 없으면 머리 모양으로 (기본은 여성 바탕).
+static func gender_of(written: String, look: CharacterLook) -> String:
+	if written == "f" or written == "m":
+		return written
+	return "m" if look != null and look.hair_style in MALE_STYLES else "f"
+
+
 static func from_dict(data: Dictionary) -> NpcInfo:
 	var info: NpcInfo = NpcInfo.new()
 	var bday: PackedStringArray = str(data.get("birthday", "")).split("-")
@@ -50,6 +63,7 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 	var by_personality: Dictionary = {"kind": 0.9, "lively": 1.3, "lazy": 0.95, "gruff": 0.72, "shopkeeper": 1.1, "snooty": 1.18, "dreamy": 1.08}
 	# 성격이 같아도 사람마다 목소리 높이가 살짝 다르다 (id 로 정해져 늘 같은 목소리, ±7%). voice 를 적었으면 그 값 그대로.
 	info.voice = float(data.get("voice", float(by_personality.get(info.personality, 1.0)) * voice_offset(info.id)))
+	info.gender = gender_of(str(data.get("gender", "")), info.look)
 	info.catchphrase = str(data.get("catchphrase", ""))
 	info.mbti = str(data.get("mbti", ""))
 	info.mbti_self = str(data.get("mbti_self", ""))

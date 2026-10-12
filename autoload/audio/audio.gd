@@ -234,15 +234,18 @@ func set_loop(id: String, amount: float, delta: float = 1.0) -> void:
 
 
 ## 주민 말소리: 글자 하나에 '웅/앵' 한 음절. voice 는 주민마다 다른 음높이 (1 = 보통).
-func babble(character: String, voice: float, position: Vector3 = Vector3.INF) -> void:
+## 바탕 목소리는 여성(voice_f_*)이 기본, male 이면 남성(voice_m_*). 바탕이 이미 높낮이를 정하므로 주민마다 차이는 조금만 (재생 속도를 많이 바꾸면 모음이 뭉개진다).
+func babble(character: String, voice: float, position: Vector3 = Vector3.INF, male: bool = false) -> void:
 	if character.strip_edges().is_empty() or character in [".", ",", "!", "?", "…", "~"]:
 		return
 	var vowel: String = VOWELS[character.unicode_at(0) % VOWELS.size()]
-	var pitch: float = voice * (1.0 + 0.08 * sin(float(character.unicode_at(0))))
+	var spread: float = 0.5 if male else 0.6
+	var pitch: float = (1.0 + (voice - 1.0) * spread) * (1.0 + 0.05 * sin(float(character.unicode_at(0))))
+	var id: String = "voice_%s_%s" % ["m" if male else "f", vowel]
 	if position == Vector3.INF:
-		play_sfx("voice_%s" % vowel, -6.0, pitch, 0.04)
+		play_sfx(id, -6.0, pitch, 0.03)
 	else:
-		play_at("voice_%s" % vowel, position, -2.0, pitch, 0.04)
+		play_at(id, position, -2.0, pitch, 0.03)
 
 
 func _sfx(id: String) -> AudioStream:

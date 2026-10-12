@@ -18,6 +18,8 @@ signal chosen(index: int)
 
 ## 말하는 사람의 목소리 높이 (1 = 보통, 0 = 말소리 없음). 글자가 나올 때마다 '웅앵' 음절을 낸다.
 var voice: float = 0.0
+## 남성 바탕 말소리인지 (기본은 여성 바탕).
+var male: bool = false
 
 var _typing_tween: Tween = null
 var _waiting_choice: bool = false
@@ -96,7 +98,7 @@ func _process(_delta: float) -> void:
 	var shown: int = int(_text.visible_ratio * _text.text.length())
 	while _spoken < shown:
 		if _spoken % 2 == 0:
-			Audio.babble(_text.text[_spoken], voice)
+			Audio.babble(_text.text[_spoken], voice, Vector3.INF, male)
 		_spoken += 1
 
 

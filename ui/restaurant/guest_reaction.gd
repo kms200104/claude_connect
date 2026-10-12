@@ -46,7 +46,10 @@ func setup(customer: EconData.Customer, info: Dictionary) -> void:
 	col.add_child(_chips(customer, recipe, float(info.get("quality", 0.0)), float(info.get("time_left", 0.5))))
 	if _rig != null:
 		var emote: String = emote_for(stars, false)
-		get_tree().create_timer(0.35).timeout.connect(func() -> void:
+		# 이 창에 묶인 타이머 (결과 화면을 빨리 닫아도 지운 창을 붙잡지 않게).
+		var later: Tween = create_tween()
+		later.tween_interval(0.35)
+		later.tween_callback(func() -> void:
 			if is_instance_valid(_rig):
 				_rig.play_emote(emote))
 

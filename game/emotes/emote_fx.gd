@@ -52,9 +52,10 @@ static func play(holder: Node3D, emote_id: String, length: float) -> void:
 			for i: int in count:
 				var a: float = TAU * float(i) / float(count) + 0.4
 				_rise(root, _shape(root, "star", STAR, 0.05), Vector3(cos(a) * 0.5, 0.45 + sin(a * 1.7) * 0.25, -0.05), 0.1 + float(i) * 0.12, 0.6)
-	root.get_tree().create_timer(length + 0.3).timeout.connect(func() -> void:
-		if is_instance_valid(root):
-			root.queue_free())
+	# 정리 타이머는 효과 노드에 묶는다 (트리 타이머 + 람다면, 캐릭터가 먼저 사라졌을 때 "Lambda capture was freed" 오류).
+	var cleanup: Tween = root.create_tween()
+	cleanup.tween_interval(length + 0.3)
+	cleanup.tween_callback(root.queue_free)
 
 
 ## 볼에서 떨어지는 눈물 방울 (아래로 가며 작아진다).

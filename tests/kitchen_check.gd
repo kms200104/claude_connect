@@ -108,11 +108,54 @@ func _check_tutorial(kitchen: KitchenWindow) -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shots.path_join("kitchen_tutorial.png"))
 	var go: Button = null
-	for b: Node in stage.find_children("*", "Button", true, false):
+	var card: Control = stage.get("_tutorial")
+	for b: Node in card.find_children("*", "Button", true, false):
 		go = b as Button
 	if go != null:
-		go.pressed.emit()
+		# 실제 손가락처럼 단추 가운데를 눌렀다 뗀다 (신호를 직접 쏘면 입력이 막혀도 모른다).
+		var at: Vector2 = go.get_global_rect().get_center()
+		for down: bool in [true, false]:
+			if not down:
+				# 손가락은 누르는 동안 몇 px 흔들린다.
+				var drag: InputEventScreenDrag = InputEventScreenDrag.new()
+				drag.position = at + Vector2(0.0, -4.0)
+				drag.relative = Vector2(0.0, -4.0)
+				get_viewport().push_input(drag, true)
+				var move: InputEventMouseMotion = InputEventMouseMotion.new()
+				move.position = at + Vector2(0.0, -4.0)
+				move.global_position = move.position
+				move.relative = Vector2(0.0, -4.0)
+				move.button_mask = MOUSE_BUTTON_MASK_LEFT
+				get_viewport().push_input(move, true)
+				await get_tree().process_frame
+				at += Vector2(0.0, -4.0)
+			var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+			touch.position = at
+			touch.pressed = down
+			get_viewport().push_input(touch, true)
+			var click: InputEventMouseButton = InputEventMouseButton.new()
+			click.position = at
+			click.global_position = at
+			click.button_index = MOUSE_BUTTON_LEFT
+			click.pressed = down
+			get_viewport().push_input(click, true)
+			await get_tree().process_frame
+		await get_tree().process_frame
 	_check(closed[0] and not stage.is_tutorial_open(), "\"시작!\" 을 누르면 설명이 닫히고 동작을 시작한다")
+	# 큰 단추(탁!)를 눌러도 설명이 닫힌다.
+	closed[0] = false
+	stage.show_tutorial(step)
+	kitchen.call("_on_tap")
+	_check(closed[0] and not stage.is_tutorial_open(), "큰 단추를 눌러도 설명이 닫힌다")
+	# 낮은 창(가로 화면 · 접는 폰)에서도 요리 화면이 스크롤 없이 들어온다 — 스크롤되면 설명 카드 아래 단추가 가려진다.
+	kitchen.call("_set_panel_height", 1300.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var scroll: ScrollContainer = kitchen.get("_scroll")
+	var list: Control = kitchen.get("_list")
+	_check(list.get_combined_minimum_size().y <= scroll.size.y + 1.0, "낮은 창에서 조리 무대가 줄어 스크롤이 없다 (내용 %.0f / 창 %.0f, 무대 %.0f)" % [list.get_combined_minimum_size().y, scroll.size.y, stage.custom_minimum_size.y])
+	kitchen.call("_set_panel_height", KitchenWindow.COOK_HEIGHT)
+	await get_tree().process_frame
 
 
 ## 손님 반응 글 (v20): 별점 첫마디 + 까닭 — 좋아하는 맛, T 손님의 깐깐한 솜씨 평, 늦은 요리.

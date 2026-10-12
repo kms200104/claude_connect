@@ -579,6 +579,7 @@ func _say(token: int, info: NpcInfo, line: String) -> bool:
 		shown = MoodSpeech.apply(line, mood, info)
 		title = "%s · %s" % [info.display_name, MoodSpeech.label(mood)] if info.mbti.is_empty() else "%s (%s) · %s" % [info.display_name, info.mbti, MoodSpeech.label(mood)]
 	box.voice = info.voice
+	box.male = info.gender == "m"
 	box.show_line(title, shown, info.color.lightened(0.2))
 	# 둘레 사람에게는 이 주민 머리 위 말풍선으로 들린다.
 	Net.send_say(info.id, shown)

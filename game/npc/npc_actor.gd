@@ -104,7 +104,7 @@ func play_emote(emote_id: String, line: String = "") -> void:
 	var voice: float = info.voice if info != null else 1.0
 	var sample: String = line if not line.is_empty() else "웅"
 	for i: int in mini(sample.length(), 3):
-		Audio.babble(sample[i], voice, global_position + Vector3(0.0, 1.5, 0.0))
+		Audio.babble(sample[i], voice, global_position + Vector3(0.0, 1.5, 0.0), info != null and info.gender == "m")
 	if not line.is_empty():
 		EmoteBubble.say(self, line)
 

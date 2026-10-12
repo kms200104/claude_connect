@@ -29,6 +29,7 @@ var _panel: PanelContainer = null
 var _col: VBoxContainer = null
 var _header: Label = null
 var _list: VBoxContainer = null
+var _scroll: ScrollContainer = null
 var _dirty: bool = false
 ## 요리 중인 주문과 동작 진행.
 var _order_id: String = ""
@@ -59,6 +60,9 @@ var _result_seq: int = 0
 
 const ORDER_HEIGHT: float = 820.0
 const COOK_HEIGHT: float = 2080.0
+## 조리 무대 높이 (창이 낮으면 STAGE_MIN_HEIGHT 까지 줄인다).
+const STAGE_HEIGHT: float = 1180.0
+const STAGE_MIN_HEIGHT: float = 420.0
 ## 동작을 마치고 솜씨 한마디를 보여 주는 시간 (ms).
 const FINISH_SHOW_MS: float = 800.0
 ## 결과 화면(별점 · 손님 반응)을 띄워 두는 시간 — 그 전에 "다음 손님 받기"로 넘길 수 있다.
@@ -94,6 +98,10 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 10)
 	scroll.add_child(_list)
+	# 휴대폰에서 누르는 동안 손가락이 조금 움직여도 스크롤로 보고 단추 누름을 취소하지 않게.
+	scroll.scroll_deadzone = 28
+	_scroll = scroll
+	scroll.resized.connect(_fit_stage)
 	Economy.restaurant_changed.connect(func() -> void: _dirty = true)
 	Economy.cook_judged.connect(_on_judged)
 	Economy.step_claimed.connect(_on_step_claimed)
@@ -329,7 +337,8 @@ func _start_cooking_view() -> void:
 	_steps_label = _label("", 24, SOFT)
 	names.add_child(_steps_label)
 	var stage: CookStage = CookStage.new()
-	stage.custom_minimum_size = Vector2(0, 1180)
+	stage.custom_minimum_size = Vector2(0, STAGE_HEIGHT)
+	stage.tutorial_host = _panel
 	stage.pressed.connect(func(down: bool) -> void:
 		if down:
 			_on_tap()
@@ -345,6 +354,17 @@ func _start_cooking_view() -> void:
 	_tap_button.button_down.connect(_on_tap)
 	_tap_button.button_up.connect(_on_release)
 	_list.add_child(_tap_button)
+	_fit_stage.call_deferred()
+
+
+## 요리 화면이 창보다 길면 조리 무대를 줄여 한 화면에 들어오게 한다 (스크롤되면 무대 · 설명 카드 아래가 가려진다).
+func _fit_stage() -> void:
+	if _stage == null or not is_instance_valid(_stage) or not _stage.is_inside_tree() or _scroll == null:
+		return
+	_stage.custom_minimum_size.y = STAGE_HEIGHT
+	var over: float = _list.get_combined_minimum_size().y - _scroll.size.y
+	if over > 0.0:
+		_stage.custom_minimum_size.y = maxf(STAGE_MIN_HEIGHT, STAGE_HEIGHT - over)
 
 
 ## 동작 순서 글: 끝낸 것 ✓(솜씨), 지금 하는 것 [ ].
@@ -557,6 +577,10 @@ func _next_verb() -> String:
 
 ## 누름: 아직 안 맞춘 박자 중 가장 가까운 것(판정 창 두 배 안)에 짝짓고 판정한다. 박자 밖이면 헛누름 (서버가 깎는다).
 func _on_tap() -> void:
+	# 처음 하는 동작 설명이 떠 있으면 큰 단추로도 닫고 시작한다.
+	if _stage != null and _stage.is_tutorial_open():
+		_stage.close_tutorial()
+		return
 	if _mode != Mode.COOKING:
 		return
 	var t: float = float(Time.get_ticks_msec()) - _step_start_ms

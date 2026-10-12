@@ -124,7 +124,8 @@ func _run() -> void:
 	_check((box.get_node("%NameTag") as Label).text.contains("·"), "이름 옆에 기분이 보인다: %s" % (box.get_node("%NameTag") as Label).text)
 	_check("love" in Net.emotes_known and "love" in Net.emotes_quick, "모락에게 '좋아해'를 배움: %s" % str(Net.emotes_known))
 	await _choose(box, 0)
-	_check(await _wait_until(func() -> bool: return not topics.is_empty(), 2.0) and topics[0][2] == 1, "주제 수다로 친밀도 +1: %s" % str(topics))
+	# 고민(worry) 주제가 먼저 나오는 날은 공감형(F) 주민이 친밀도를 1 더 준다 (data/npcs/mbti.json worry_friend_bonus) — 날짜에 따라 +1 또는 +2.
+	_check(await _wait_until(func() -> bool: return not topics.is_empty(), 2.0) and (topics[0][2] == 1 or (topics[0][1] == "worry" and topics[0][2] == 2)), "주제 수다로 친밀도 +1 (고민 들어 주기는 +2): %s" % str(topics))
 	await _advance_until_closed(box, dialogue)
 	_check(not dialogue.is_active() and not player.is_input_locked(), "대화가 끝나면 다시 움직임")
 

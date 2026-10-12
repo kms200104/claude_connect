@@ -14,7 +14,7 @@
 | 3D 모형 전부 | `game/**` 코드 (`ClayMesh`, `CharacterModel`, `PartMesh` 데이터) | 프로젝트 자체 제작 (참고 이미지를 보고 새로 빚음, 트레이싱 없음) | 프로젝트 | 캐릭터·나무·집·가구 |
 | 바닥 텍스처 (리소스팩) | `assets/packs/low/`, `assets/packs/high/` | `tools/art/gen_ground.py` 로 생성 | 프로젝트 | 마을 바닥 (화질별 해상도) |
 | 효과음 · 환경음 49개 (낚시 · 나무 · 요리 · 킥보드 · UI · 새 · 비 · 천둥 …) | `assets/audio/sfx/` (발소리 · `voice_*` 제외) | CC0 실제 녹음 — lavenderdotpet/CC0-Public-Domain-Sounds (rubberduck · Kenney · Ben Burnes) · mateusfg7/noisekun, `tools/audio/import_cc0_sfx.py` 로 가공, 자세한 출처는 `assets/audio/CREDITS.md` | CC0 | 소리 |
-| 주민 말소리 · 첫 화면 음악 | `assets/audio/sfx/voice_*.wav`, `assets/audio/music/title_theme.ogg` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |
+| 주민 말소리 · 첫 화면 음악 | `assets/audio/sfx/voice_{f,m}_*.wav`, `assets/audio/music/title_theme.ogg` | `tools/audio/gen_audio.py` 로 합성 (외부 샘플 없음) | 프로젝트 | 소리 |
 | 식당 음악 2곡 (개업 · 요리) | `assets/audio/music/{restaurant,cooking}_theme.ogg` | 프로젝트 작곡, `tools/audio/gen_kitchen_music.py` 로 CC0 실제 악기 샘플(Ben Burnes Novice Cello · BB 2HTC 드럼, Kenney Music Jingles — lavenderdotpet/CC0-Public-Domain-Sounds)을 배치해 만듦 | CC0 샘플 + 프로젝트 | 배경음악 |
 | 발소리 18개 (풀·흙·달리기·나무·돌·금속·물) | `assets/audio/sfx/step_*.wav` | Freesound (swuing · Ali_6868 · Eelke · EminYILDIRIM), 자세한 출처는 `assets/audio/CREDITS.md` | CC BY 3.0 (일부 CC0) — **출처 표시 필요** | 발소리 |
 | 마을 음악 4곡 (낮·밤·비·이벤트) | `assets/audio/music/{village,night,rain,event}_theme.ogg` | 받은 파일 (`game_audio.zip`) | **미기재 — 공개 전 확인 필요** | 배경음악 |

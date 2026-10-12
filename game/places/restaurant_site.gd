@@ -256,6 +256,7 @@ func _npc_info(c: EconData.Customer) -> NpcInfo:
 	info.mbti = c.mbti
 	info.about = c.about
 	info.voice = 0.9 + float(absi(c.id.hash()) % 30) / 100.0
+	info.gender = NpcInfo.gender_of("", c.look)
 	return info
 
 

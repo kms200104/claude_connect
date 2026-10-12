@@ -16,6 +16,17 @@ func _ready() -> void:
 		var music: String = "res://assets/audio/music/%s.ogg" % track
 		_check(ResourceLoader.exists(music) and load(music) is AudioStreamOggVorbis, "음악 %s" % music.get_file())
 
+	# 주민 말소리 (v0.19): 여성 바탕이 기본, 남성 주민은 남성 바탕.
+	for g: String in ["f", "m"]:
+		for v: String in Audio.VOWELS:
+			_check(ResourceLoader.exists("res://assets/audio/sfx/voice_%s_%s.wav" % [g, v]), "말소리 파일 voice_%s_%s" % [g, v])
+	var genders: Dictionary = {}
+	for id: String in GameData.npcs:
+		genders[id] = (GameData.npcs[id] as NpcInfo).gender
+	_check(genders.get("morak") == "f" and genders.get("rara") == "f" and genders.get("haerang") == "f", "모락 · 라라 · 해랑은 여성 바탕 (%s)" % str(genders))
+	_check(genders.get("mujin") == "m" and genders.get("tongtong") == "m", "무진 · 통통은 남성 바탕")
+	_check(NpcInfo.gender_of("f", CharacterLook.for_player(2)) == "f" and NpcInfo.gender_of("", null) == "f", "적어 둔 gender 가 먼저, 모르면 여성 바탕")
+
 	# 발밑 재질
 	Net.weather = NetProtocol.WEATHER_CLEAR
 	var dock: Vector2 = GameData.layout.dock_center

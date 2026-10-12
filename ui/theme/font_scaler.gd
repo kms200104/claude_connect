@@ -9,6 +9,8 @@ const META: StringName = &"font_base"
 const KEYS: Dictionary[String, StringName] = {"RichTextLabel": &"normal_font_size"}
 
 var _scale: float = 1.0
+## 다음 프레임에 맞출 새 컨트롤 (instance id — 그 사이에 지워졌으면 instance_from_id 가 null 이라 건너뛴다).
+var _pending: PackedInt64Array = []
 
 
 func _ready() -> void:
@@ -22,7 +24,19 @@ func _ready() -> void:
 
 func _on_node_added(node: Node) -> void:
 	if node is Label or node is Button or node is LineEdit or node is TextEdit or node is RichTextLabel:
-		_apply.call_deferred(node)
+		# 노드를 그대로 미뤄 넘기면, 같은 프레임에 지워진 컨트롤에서 "Cannot convert argument" 오류가 난다.
+		if _pending.is_empty():
+			_flush.call_deferred()
+		_pending.append(node.get_instance_id())
+
+
+func _flush() -> void:
+	var ids: PackedInt64Array = _pending
+	_pending = PackedInt64Array()
+	for id: int in ids:
+		var node: Node = instance_from_id(id) as Node
+		if node != null:
+			_apply(node)
 
 
 func _apply_all(node: Node) -> void:

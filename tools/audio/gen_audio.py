@@ -2,7 +2,7 @@
 """솔바람 마을의 효과음과 배경음악을 합성한다.
 발소리(step_*) · 마을 음악(village/night/rain/event_theme)은 받은 파일, 나머지 효과음 · 환경음은 CC0 실제 녹음
 (tools/audio/import_cc0_sfx.py)으로 바꿨으므로 덮어쓰지 않는다 (EXTERNAL, 출처는 assets/audio/CREDITS.md).
-지금 합성으로 남은 것은 주민 말소리(voice_*)와 title_theme. 합성본으로 되돌리려면 --force.
+지금 합성으로 남은 것은 주민 말소리(voice_f_* 여성 바탕 · voice_m_* 남성 바탕)와 title_theme. 합성본으로 되돌리려면 --force.
 
   assets/audio/sfx/*.wav     22.05kHz 모노 16bit — 발소리, 달리기, 낚시, 도끼질, 주민 말소리, 비·천둥, 새·풀벌레, UI
   assets/audio/music/*.ogg   32kHz 스테레오 Vorbis — title_theme(오르골 왈츠), village_theme(느긋한 칼림바 로파이)
@@ -296,22 +296,50 @@ def event_sounds() -> None:
     save_wav("twinkle", fade(x, fout=0.1), 0.5)
 
 
+## 주민 말소리 (v0.19): 여성 바탕(voice_f_*)이 기본, 남성 주민은 남성 바탕(voice_m_*). 모음마다 포먼트 셋 (Hz, 대역폭).
+VOICE_SETS = {
+    "f": {"f0": 285.0, "dur": 0.11, "breath": 0.05, "bw": (90, 120, 170), "tilt": 1.15,
+          "formants": {"a": (900, 1500, 2950), "e": (560, 2200, 2950), "i": (330, 2700, 3300), "o": (520, 950, 2900), "u": (380, 950, 2800)}},
+    "m": {"f0": 140.0, "dur": 0.12, "breath": 0.015, "bw": (70, 95, 140), "tilt": 1.0,
+          "formants": {"a": (740, 1220, 2500), "e": (470, 1850, 2500), "i": (290, 2250, 2900), "o": (460, 820, 2450), "u": (330, 780, 2300)}},
+}
+
+
+def _formant_gain(f: np.ndarray, formants: tuple, bws: tuple) -> np.ndarray:
+    """포먼트(공명) 봉우리 셋을 더한 주파수 응답. 높은 포먼트일수록 작게."""
+    g = np.zeros_like(f)
+    for k, (fc, bw) in enumerate(zip(formants, bws)):
+        g += (0.8 ** k) / (1.0 + ((f - fc) / (bw * 0.5)) ** 2)
+    return g
+
+
 def voices() -> None:
-    """주민 말소리 '웅앵': 성대 펄스(톱니)를 모음 포먼트 두 개로 거른 짧은 음절. 재생할 때 주민마다 음높이를 바꾼다."""
-    formants = {"a": (800, 1250), "e": (480, 2000), "i": (320, 2500), "o": (520, 900), "u": (370, 780)}
-    for vowel, (f1, f2) in formants.items():
-        dur = 0.12
-        n = int(dur * SR)
+    """주민 말소리 '웅앵': 배음을 하나하나 더해(가산 합성) 모음 포먼트로 빚은 짧은 음절.
+    올라갔다 내려오는 억양 · 아주 작은 떨림, 여성 바탕엔 숨소리를 살짝. 재생할 때 주민마다 음높이를 조금씩 바꾼다."""
+    for gender, v in VOICE_SETS.items():
+        dur = v["dur"]
         t = t_axis(dur)
-        f0 = 240 * (1 + 0.12 * np.sin(np.pi * t / dur)) * (1 - 0.1 * t / dur)
-        phase = np.cumsum(f0) / SR
-        saw = 2 * (phase % 1.0) - 1
-        x = biquad_bp(saw, f1, 5.0) + 0.6 * biquad_bp(saw, f2, 7.0)
-        # 앞쪽은 콧소리(ㅇ/ㅁ)처럼 뭉툭하게.
-        nasal = onepole_lp(saw, 500) * np.exp(-t / 0.02)
-        x = x + 0.6 * nasal
-        x *= np.sin(np.clip(t / dur, 0, 1) * np.pi) ** 0.6
-        save_wav(f"voice_{vowel}", fade(x, 0.004, 0.02), 0.6)
+        u = t / dur
+        # 억양: 살짝 올라갔다가 끝에서 내려온다 (산뜻하게).
+        f0 = v["f0"] * (1 + 0.10 * np.sin(np.pi * np.clip(u * 1.3, 0, 1)) - 0.08 * u) * (1 + 0.006 * np.sin(2 * np.pi * 6.0 * t))
+        phase = 2 * np.pi * np.cumsum(f0) / SR
+        amp = np.sin(np.clip(u, 0, 1) * np.pi) ** 0.5 * (1 - 0.25 * u)
+        for vowel, formants in v["formants"].items():
+            x = np.zeros_like(t)
+            for k in range(1, 60):
+                fk = f0 * k
+                if np.min(fk) > SR * 0.45:
+                    break
+                g = _formant_gain(fk, formants, v["bw"]) / (k ** v["tilt"])
+                x += g * np.sin(k * phase) * (fk < SR * 0.45)
+            # 숨소리: 둘째 · 셋째 포먼트 근처의 부드러운 바람 소리.
+            noise = rng.standard_normal(len(t))
+            breath = biquad_bp(noise, formants[1], 3.0) + 0.7 * biquad_bp(noise, formants[2], 4.0)
+            x = x / (np.max(np.abs(x)) + 1e-9) + v["breath"] * breath / (np.max(np.abs(breath)) + 1e-9)
+            # 앞쪽은 콧소리(ㅇ/ㅁ)처럼 부드럽게 시작.
+            nasal = np.sin(phase) * np.exp(-t / 0.018) * 0.35
+            x = (x + nasal) * amp
+            save_wav(f"voice_{gender}_{vowel}", fade(x, 0.004, 0.02), 0.6)
 
 
 def weather() -> None:

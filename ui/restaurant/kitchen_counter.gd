@@ -51,6 +51,8 @@ var _cooking: Array[Dictionary] = []
 var _liquid_y: float = 0.0
 var _boil: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
+## 지금 동작의 움직임들 — 다음 동작으로 장면을 새로 차릴 때 멈춘다 (지운 재료를 붙잡은 채 돌지 않게).
+var _tweens: Array[Tween] = []
 
 
 func _ready() -> void:
@@ -149,6 +151,10 @@ func begin(step_def: Dictionary, recipe_info: RecipeInfo, subjects: Dictionary) 
 	total = CookRules.hits(step).size()
 	done = 0
 	_rng.seed = hash(recipe.id if recipe != null else "") + total
+	for tw: Tween in _tweens:
+		if tw.is_valid():
+			tw.kill()
+	_tweens.clear()
 	for c: Node in _set.get_children():
 		c.queue_free()
 	_n.clear()
@@ -486,14 +492,14 @@ func _whiff() -> void:
 func _act_chop(i: int) -> void:
 	var knife: Node3D = _n["knife"]
 	var x: float = _cut_x()
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(knife, "position:y", 0.026, 0.05).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func() -> void:
 		# 한 토막이 떨어져 나와 오른쪽으로 쌓인다.
 		var slice: Node3D = _piece_node(chop_id)
 		slice.position = Vector3(x + 0.004, 0.024, 0.0)
 		slice.rotation.y = _rng.randf_range(-0.3, 0.3)
-		var t2: Tween = create_tween()
+		var t2: Tween = _tween()
 		t2.tween_property(slice, "position", Vector3(0.11 + 0.012 * float(i % 3), 0.024 + 0.005 * float(i / 3), -0.07 + 0.045 * float(i % 4)), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		# 왼쪽 끝은 그대로, 오른쪽이 줄어든다.
 		var body: Node3D = _n["body"]
@@ -507,7 +513,7 @@ func _act_chop(i: int) -> void:
 
 func _act_season() -> void:
 	var shaker: Node3D = _n["shaker"]
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(shaker, "rotation:z", deg_to_rad(165.0), 0.06)
 	tw.tween_property(shaker, "rotation:z", deg_to_rad(140.0), 0.1)
 	var body: Node3D = _n["body"]
@@ -524,7 +530,7 @@ func _act_skewer(i: int) -> void:
 	if p == null:
 		return
 	var to: Vector3 = Vector3(_slot_x(i), 0.03, -0.03)
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(p, "position", (p.position + to) * 0.5 + Vector3(0.0, 0.06, 0.0), 0.08)
 	tw.tween_property(p, "position", to, 0.08)
 	tw.parallel().tween_property(p, "rotation:y", 0.0, 0.16)
@@ -532,7 +538,7 @@ func _act_skewer(i: int) -> void:
 
 func _act_knead() -> void:
 	var dough: Node3D = _n["body"]
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(dough, "scale", Vector3(1.3, 0.6, 1.25), 0.07).set_ease(Tween.EASE_OUT)
 	tw.tween_property(dough, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(dough, "rotation:y", dough.rotation.y + PI * 0.5, 0.22)
@@ -543,13 +549,13 @@ func _act_knead() -> void:
 func _act_mix() -> void:
 	var holder: Node3D = _n["holder"]
 	var spoon: Node3D = _n["spoon"]
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(holder, "rotation:y", holder.rotation.y + PI * 0.45, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(spoon, "rotation:y", spoon.rotation.y + PI * 0.6, 0.2)
 	for c: Node in holder.get_children():
 		var p: Node3D = c as Node3D
 		if p != null and _rng.randf() < 0.5:
-			var hop: Tween = create_tween()
+			var hop: Tween = _tween()
 			hop.tween_property(p, "position:y", p.position.y + _rng.randf_range(0.015, 0.035), 0.08)
 			hop.tween_property(p, "position:y", p.position.y, 0.1)
 
@@ -567,18 +573,18 @@ func _act_pan(i: int) -> void:
 		"붓기":
 			body.visible = true
 			_track_cook(body, 0.0)
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(body, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		"뒤집기":
 			# 공중에서 한 바퀴 반 뒤집는다 — 아랫면(노릇)이 위로.
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(body, "position:y", 0.13, 0.12).set_ease(Tween.EASE_OUT)
 			tw.parallel().tween_property(body, "rotation:x", body.rotation.x + PI, 0.24)
 			tw.tween_property(body, "position:y", 0.04, 0.1).set_ease(Tween.EASE_IN)
 			tw.tween_callback(func() -> void: _puff(_set.position + Vector3(0.0, 0.06, 0.0), Color(1, 1, 1, 0.6), 0.05, 0.6))
 			_flip_cook(body)
 			if turner != null:
-				var t2: Tween = create_tween()
+				var t2: Tween = _tween()
 				t2.tween_property(turner, "position", Vector3(0.04, 0.05, 0.0), 0.06)
 				t2.tween_property(turner, "position", Vector3(0.16, 0.12, -0.12), 0.2)
 		"꺼내기":
@@ -591,7 +597,7 @@ func _act_pan(i: int) -> void:
 
 func _act_wok(good: bool) -> void:
 	var wok: Node3D = _n["wok"]
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(wok, "position", Vector3(-0.025, 0.045, 0.0), 0.06)
 	tw.parallel().tween_property(wok, "rotation:z", -0.18, 0.06)
 	tw.tween_property(wok, "position", Vector3(0.0, 0.03, 0.0), 0.14)
@@ -613,7 +619,7 @@ func _act_boil(i: int) -> void:
 		return
 	var a: float = _rng.randf() * TAU
 	var to: Vector3 = Vector3(cos(a) * 0.05, _liquid_y - 0.004, sin(a) * 0.05)
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(p, "position", (p.position + to) * 0.5 + Vector3(0.0, 0.12, 0.0), 0.1).set_ease(Tween.EASE_OUT)
 	tw.tween_property(p, "position", to, 0.08).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func() -> void:
@@ -629,7 +635,7 @@ func _act_simmer(i: int) -> void:
 		_flame_want = 0.0
 		_boil = 0.15
 		return
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(ladle, "rotation:y", ladle.rotation.y - TAU, 0.42).set_trans(Tween.TRANS_SINE)
 	tw.parallel().tween_property(liquid, "rotation:y", liquid.rotation.y - PI * 0.6, 0.6).set_ease(Tween.EASE_OUT)
 	# 졸아든다.
@@ -651,7 +657,7 @@ func _act_steam(i: int) -> void:
 		0:
 			# 물 붓기: 주전자를 기울인다.
 			var pitcher: Node3D = _n["pitcher"]
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(pitcher, "position", Vector3(-0.15, 0.12, -0.02), 0.12)
 			tw.parallel().tween_property(pitcher, "rotation:z", -0.9, 0.12)
 			tw.tween_callback(func() -> void: _splash(_set.position + Vector3(-0.08, 0.15, 0.0)))
@@ -678,19 +684,19 @@ func _act_fry(i: int) -> void:
 	var verb: String = str(verbs[i]) if i < verbs.size() else ""
 	match verb:
 		"넣기":
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(basket, "position:y", 0.04 - 0.0, 0.14).set_ease(Tween.EASE_IN)
 			_boil = 1.6
 			for c: Dictionary in _cooking:
 				c["rate"] = 0.32
 		"흔들기":
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(basket, "position:x", 0.012, 0.04)
 			tw.tween_property(basket, "position:x", -0.012, 0.06)
 			tw.tween_property(basket, "position:x", 0.0, 0.05)
 			_boil = 1.4
 		"건지기":
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(basket, "position:y", 0.21, 0.18).set_ease(Tween.EASE_OUT)
 			_boil = 0.35
 			for c: Dictionary in _cooking:
@@ -704,11 +710,11 @@ func _act_plate(i: int) -> void:
 	var verb: String = str(verbs[i]) if i < verbs.size() else ""
 	match verb:
 		"접시 놓기":
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(plate, "position", Vector3.ZERO, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		"담기":
 			dish.visible = true
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(dish, "scale", Vector3.ONE * 0.6, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		"고명", "소스":
 			for k: int in 5:
@@ -720,7 +726,7 @@ func _act_plate(i: int) -> void:
 		_:
 			for k: int in 5:
 				_puff(_set.position + Vector3(_rng.randf_range(-0.08, 0.08), 0.06, _rng.randf_range(-0.08, 0.08)), Color(1.0, 0.95, 0.6, 0.9), 0.025, 0.6)
-			var tw: Tween = create_tween()
+			var tw: Tween = _tween()
 			tw.tween_property(plate, "scale", Vector3.ONE * 1.08, 0.08)
 			tw.tween_property(plate, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
@@ -906,17 +912,25 @@ func _disc(r: float, color: Color, node_name: String) -> MeshInstance3D:
 	return mi
 
 
+func _tween() -> Tween:
+	var tw: Tween = create_tween()
+	_tweens.append(tw)
+	if _tweens.size() > 64:
+		_tweens = _tweens.filter(func(t: Tween) -> bool: return t.is_valid())
+	return tw
+
+
 ## 포물선으로 옮기기 (집어서 놓기).
 func _arc(node: Node3D, to: Vector3, height: float, t: float) -> void:
 	var from: Vector3 = node.position
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_method(func(k: float) -> void:
 		node.position = from.lerp(to, k) + Vector3(0.0, sin(k * PI) * height, 0.0), 0.0, 1.0, t * 2.0).set_trans(Tween.TRANS_SINE)
 
 
 func _shake(node: Node3D, amount: float) -> void:
 	var base: Vector3 = node.position
-	var tw: Tween = create_tween()
+	var tw: Tween = _tween()
 	tw.tween_property(node, "position", base + Vector3(amount, 0.0, 0.0), 0.04)
 	tw.tween_property(node, "position", base - Vector3(amount, 0.0, 0.0), 0.06)
 	tw.tween_property(node, "position", base, 0.04)

@@ -837,13 +837,17 @@ func _build_homes() -> void:
 		_build_unit_detail(u)
 	if _building.is_empty() and not econ.buildings().is_empty():
 		_building = str((econ.buildings()[0] as Dictionary).get("id", ""))
-	var row: HBoxContainer = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	# 동 단추는 여러 줄로 (한 줄이면 동이 13개라 휴대폰 화면보다 넓어져 화면 전체가 커지고 잘린다).
+	var row: GridContainer = GridContainer.new()
+	row.columns = 5
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 8)
 	_body.add_child(row)
 	for b: Variant in econ.buildings():
 		var bid: String = str((b as Dictionary).get("id", ""))
-		var bb: Button = _button("%s동" % bid, 30, INK, bid == _building)
+		var bb: Button = _button("%s동" % bid, 26, INK, bid == _building)
 		bb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bb.clip_text = true
 		bb.pressed.connect(func() -> void:
 			_building = bid
 			_rebuild())
@@ -938,7 +942,7 @@ func _build_unit_detail(u: EconData.Unit) -> void:
 	var ratio_row: HBoxContainer = HBoxContainer.new()
 	ratio_row.add_theme_constant_override("separation", 8)
 	card.add_child(ratio_row)
-	ratio_row.add_child(_label("대출", 28, INK))
+	ratio_row.add_child(_label("대출", 28, INK, false))
 	for r: float in [0.0, 0.3, 0.5, 0.7]:
 		var b: Button = _button("없음" if r == 0.0 else "LTV %d%%" % roundi(r * 100.0), 26, INK, is_equal_approx(_loan_ratio, r / maxf(float(econ.apartments.get("ltv", 0.7)), 0.01)) or (r == 0.0 and _loan_ratio == 0.0))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL

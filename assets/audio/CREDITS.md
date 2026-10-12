@@ -4,7 +4,7 @@
 
 ## 합성 (프로젝트 자체 제작)
 
-`tools/audio/gen_audio.py` 로 만든 오리지널 (외부 샘플 없음): 주민 말소리 `voice_a/e/i/o/u.wav` 와 `assets/audio/music/title_theme.ogg`.
+`tools/audio/gen_audio.py` 로 만든 오리지널 (외부 샘플 없음): 주민 말소리 `voice_f_*.wav`(여성 바탕) · `voice_m_*.wav`(남성 바탕) 와 `assets/audio/music/title_theme.ogg`.
 나머지 효과음 · 환경음은 아래 "받은 파일" (발소리 · 실제 녹음 CC0).
 
 ## 받은 파일
