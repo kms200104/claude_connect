@@ -156,6 +156,11 @@ export function loadGameData(dataDir, cfg) {
   const restaurant = read('restaurant/restaurant.json');
   const recipes = recipesFile.recipes;
   const cookSteps = recipesFile.steps;
+  for (const [id, s] of Object.entries(cookSteps)) {
+    if (s.kind !== 'beats' || s.hits === undefined) continue;
+    const ok = Array.isArray(s.hits) && s.hits.length > 0 && s.hits.every((h, i) => Number.isFinite(h) && h > 0 && (i === 0 || h > s.hits[i - 1]));
+    if (!ok) throw new Error(`cook step ${id}: hits must be increasing positive beats`);
+  }
   for (const r of recipes) {
     for (const s of r.steps) if (!cookSteps[s]) throw new Error(`recipe ${r.id}: unknown step ${s}`);
     for (const s of r.seasons ?? []) if (!SEASONS.includes(s)) throw new Error(`recipe ${r.id}: unknown season ${s}`);

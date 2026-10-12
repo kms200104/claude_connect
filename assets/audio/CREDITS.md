@@ -40,6 +40,15 @@ CC BY 3.0 은 출처 표시가 필요하다 — 게임을 공개할 때 이 표�
 
 받은 묶음(`game_audio.zip`)에 음악의 출처·라이선스는 적혀 있지 않았다. **공개 전에 출처와 라이선스를 확인해 이 칸을 채운다.**
 
+### 식당 음악 (v0.18) — `tools/audio/gen_kitchen_music.py`
+
+`restaurant_theme.ogg`(식당 개업 · 120 BPM C장조) · `cooking_theme.ogg`(통통 주방 · 약 112 BPM F장조, 리듬 요리의 박자 격자 536 ms) — 이 프로젝트에서 작곡.
+악기 소리는 모두 **CC0** 실제 녹음 샘플이다 (lavenderdotpet/CC0-Public-Domain-Sounds 묶음):
+
+- 베이스: bb - Novice Cello (C2 · G2 · D3 · A3 피치카토) — Ben Burnes
+- 멜로디 · 화음: Kenney Music Jingles (스틸팬 STEEL00/02 · 피치카토 PIZZI00/02 의 끝음) — Kenney
+- 드럼: BB 2HTC 드럼 (킥 · 스네어 · 박수 · 하이햇 · 트라이앵글 · 딱딱이) — Ben Burnes
+
 ### 실제 녹음 효과음 · 환경음 (CC0) — `tools/audio/import_cc0_sfx.py`
 
 합성 파형이던 효과음 49개를 실제 녹음으로 바꿨다 (주민 말소리 `voice_*` 만 합성으로 남음). 모두 **CC0** 이라 출처 표시는 필요 없지만 고마움을 담아 적는다.

@@ -27,6 +27,8 @@ func _ready() -> void:
 	layer.add_child(kitchen)
 	await get_tree().process_frame
 	kitchen.visible = true
+	if _only.is_empty() or "tutorial" in _only:
+		await _check_tutorial(kitchen)
 	for c: Array in CASES:
 		if not GameData.econ.recipes.has(str(c[0])):
 			_check(false, "요리 %s 가 있다" % c[0])
@@ -62,25 +64,14 @@ func _run(kitchen: KitchenWindow, dish: String, step_id: String) -> void:
 	var step: Dictionary = kitchen.get("_step")
 	var scene: String = CookStage.scene_of(step)
 	var span: float = float(kitchen.get("_step_end_ms")) - float(kitchen.get("_step_start_ms"))
-	match str(step.get("kind", "")):
-		"grill":
-			span = float(step["side_ms"]) * float(step["sides"]) + 700.0
-		"timing":
-			span = float(step["ideal_ms"]) + 600.0
-		"steam":
-			span = 300.0 + float(step["fill_ms"]) + float(step["steam_ms"]) + 700.0
-		"mash":
-			span = float(step["duration_ms"]) * 0.7
-	var shot_at: Array[float] = [0.3, 0.62, 0.9]
-	if str(step.get("kind", "")) == "timing":
-		shot_at = [0.45, float(step["ideal_ms"]) / span - 0.02, 0.95]
+	var shot_at: Array[float] = [0.2, 0.5, 0.8]
 	var shot_n: int = 0
 	var t0: float = float(kitchen.get("_step_start_ms"))
 	while kitchen.get("_mode") == KitchenWindow.Mode.COOKING and Time.get_ticks_msec() - t0 < 16000.0:
 		var t: float = float(Time.get_ticks_msec()) - t0
 		var ideal: Dictionary = kitchen.next_ideal_input()
 		if t >= float(ideal["at"]):
-			kitchen.call("_on_release" if bool(ideal["release"]) else "_on_tap")
+			kitchen.call("_on_tap")
 		if not _shots.is_empty() and not shot_at.is_empty() and t / span >= shot_at[0]:
 			shot_at.pop_front()
 			shot_n += 1
@@ -94,15 +85,34 @@ func _run(kitchen: KitchenWindow, dish: String, step_id: String) -> void:
 	var taps: Array = (kitchen.get("_taps") as Array).back()
 	var q: float = CookRules.step_quality(step, taps)
 	print("[kitchen] %s (%s) taps=%s 솜씨 %.2f" % [step_id, scene, str(taps), q])
-	_check(q >= 0.9, "%s · %s: 딱 좋은 때 누르면 솜씨 %.2f ≥ 0.9" % [dish, scene, q])
-	match str(step.get("kind", "")):
-		"grill":
-			var side: float = float(step["side_ms"])
-			_check(taps.size() == int(step["sides"]) and absf(float(taps[0]) - side) < 80.0 and absf(float(taps[1]) - float(taps[0]) - side) < 80.0,
-				"굽기: 면마다 노릇할 때 뒤집고 꺼냄")
-		"steam":
-			var n: int = int(step["items"])
-			_check(taps.size() == n + 3, "찌기: 재료 %d개 + 물 붓기 시작·끝 + 뚜껑 열기" % n)
+	_check(q >= 0.9, "%s · %s: 박자에 딱 맞춰 누르면 솜씨 %.2f ≥ 0.9" % [dish, scene, q])
+	_check(taps.size() == CookRules.hits(step).size(), "%s: 박자마다 한 번씩 (%d)" % [scene, taps.size()])
+	var stage: CookStage = kitchen.get("_stage")
+	_check(stage != null and stage.counter != null and stage.counter.done == stage.counter.total, "%s: 조리대에서 동작을 다 했다 (%d/%d)" % [scene, stage.counter.done if stage != null else -1, stage.counter.total if stage != null else -1])
+
+
+## 처음 하는 동작 설명 (v0.18): 카드가 뜨고, "시작!" 을 누르면 닫히며 알린다.
+func _check_tutorial(kitchen: KitchenWindow) -> void:
+	kitchen.set("_recipe", GameData.econ.recipes.get("samgyeopsal"))
+	kitchen.call("_set_panel_height", KitchenWindow.COOK_HEIGHT)
+	kitchen.call("_start_cooking_view")
+	var stage: CookStage = kitchen.get("_stage")
+	var step: Dictionary = GameData.econ.step("grill")
+	stage.preview(step, kitchen.get("_recipe"), {"main": "pork_belly", "chop": "pork_belly", "pot": ["pork_belly"]})
+	stage.show_tutorial(step)
+	_check(stage.is_tutorial_open(), "처음 하는 동작: 설명 카드가 뜬다")
+	var closed: Array[bool] = [false]
+	stage.tutorial_closed.connect(func() -> void: closed[0] = true)
+	await get_tree().create_timer(0.6).timeout
+	if not _shots.is_empty():
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(_shots.path_join("kitchen_tutorial.png"))
+	var go: Button = null
+	for b: Node in stage.find_children("*", "Button", true, false):
+		go = b as Button
+	if go != null:
+		go.pressed.emit()
+	_check(closed[0] and not stage.is_tutorial_open(), "\"시작!\" 을 누르면 설명이 닫히고 동작을 시작한다")
 
 
 ## 손님 반응 글 (v20): 별점 첫마디 + 까닭 — 좋아하는 맛, T 손님의 깐깐한 솜씨 평, 늦은 요리.

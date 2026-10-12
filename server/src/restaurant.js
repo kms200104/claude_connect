@@ -130,8 +130,14 @@ export function chooseOrder({ menu, avail, data, taste, regularDish, random, sea
 
 /** 요리에 걸리는 가장 짧은 시간 (ms) — 이보다 빨리 낸 요리는 받지 않는다. */
 /** 동작 하나를 하는 데 걸리는 가장 짧은 시간 (ms). 이보다 빨리 낸 동작은 받지 않는다. */
+/** 박자 동작에서 누를 박자들 (v0.18 hits: 1 = 첫 박자, 0.5 = 반 박자). 없으면 1 … beats. */
+export function beatHits(step) {
+  if (Array.isArray(step.hits) && step.hits.length) return step.hits;
+  return Array.from({ length: step.beats }, (_, i) => i + 1);
+}
+
 export function stepMinMs(step) {
-  if (step.kind === 'beats') return step.beats * step.interval_ms - step.window_ms;
+  if (step.kind === 'beats') return Math.max(...beatHits(step)) * step.interval_ms - step.window_ms;
   if (step.kind === 'timing') return step.ideal_ms - step.window_ms * 2;
   if (step.kind === 'grill') return step.sides * (step.side_ms - step.window_ms * 2);
   if (step.kind === 'steam') return step.fill_ms * 0.5 + step.steam_ms - step.window_ms * 2;
@@ -146,7 +152,7 @@ export function minCookMs(recipe, steps) {
 
 /**
  * 동작 하나의 솜씨 (0~1). taps = 그 동작을 시작하고 누른 시각들 (ms).
- *  beats: 박자마다 가장 가까운 누름과의 차이 / timing: 한 번 누른 시각과 딱 좋은 때의 차이 / mash: 시간 안에 누른 횟수.
+ *  beats: 박자마다 가장 가까운 누름과의 차이 (v0.18 hits = 누를 박자들, 반 박자 포함) / timing: 한 번 누른 시각과 딱 좋은 때의 차이 / mash: 시간 안에 누른 횟수.
  *  grill (v0.11): 면마다 노릇해졌을 때 뒤집기·꺼내기 — 누름 간격(한 면을 구운 시간)과 side_ms 의 차이.
  *  steam (v0.11): 재료 items 번 넣기 → 물 붓기 시작·멈춤(물 높이 = 부은 시간 / fill_ms, 선에 맞추기) → 뚜껑 열기(찐 시간과 steam_ms 의 차이).
  */
@@ -158,14 +164,29 @@ export function timingScore(off, window) {
 export function stepQuality(step, taps) {
   const t = Array.isArray(taps) ? taps.filter((x) => Number.isFinite(x) && x >= 0 && x < 20000).sort((a, b) => a - b) : [];
   if (step.kind === 'beats') {
+    // 누를 박자마다 가장 가까운 누름과의 차이 (v0.18: hits 의 박자들, 반 박자도 된다).
+    // 누름 하나는 박자 하나에만 (차례대로 짝짓기 — 반 박자씩 늦게 누르면 옆 박자의 누름을 빌려 쓰지 못한다).
+    const hits = beatHits(step);
     let total = 0;
-    for (let i = 1; i <= step.beats; i++) {
-      const ideal = i * step.interval_ms;
-      const off = t.length ? Math.min(...t.map((x) => Math.abs(x - ideal))) : Infinity;
-      total += Math.max(0, 1 - off / (step.window_ms * 2));
+    let j = 0;
+    for (const h of hits) {
+      const ideal = h * step.interval_ms;
+      let best = Infinity;
+      let at = -1;
+      for (let k = j; k < t.length; k++) {
+        const off = Math.abs(t[k] - ideal);
+        if (off < best) {
+          best = off;
+          at = k;
+        } else if (t[k] > ideal) break;
+      }
+      // 판정 창 두 배보다 먼 누름은 이 박자 것이 아니다 (놓친 박자 하나가 뒤 박자들을 밀지 않게 남겨 둔다).
+      if (at < 0 || best >= step.window_ms * 2) continue;
+      total += 1 - best / (step.window_ms * 2);
+      j = at + 1;
     }
-    const extra = Math.max(0, t.length - step.beats) * 0.05;
-    return Math.max(0, total / step.beats - extra);
+    const extra = Math.max(0, t.length - hits.length) * 0.05;
+    return Math.max(0, total / hits.length - extra);
   }
   if (step.kind === 'timing') {
     if (t.length === 0) return 0;

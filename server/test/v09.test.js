@@ -113,7 +113,7 @@ describe('v0.9 계산', () => {
   });
 
   it('요리 분담: 동작마다 최소 시간, 둘이 만들면 판정 창이 넓다', () => {
-    assert.equal(stepMinMs(data.cookSteps.mix), 1300);
+    assert.equal(stepMinMs(data.cookSteps.mix), 4.5 * 536 - 150, '무치기: 마지막 반 박자(4.5)까지');
     assert.equal(lenientSteps(data.cookSteps, 1.15).grill.window_ms, data.cookSteps.grill.window_ms * 1.15);
   });
 });
@@ -294,10 +294,11 @@ describe('v0.9 서버 연동 (같이 하기 · 동사무소 · 여울 · 삽)', 
     await b.type('rest_claim');
     a.send({ t: 'rest_cook', rid: newRid(), order: o1.order, step: 1 });
     assert.equal((await a.type('error')).code, 'step_taken');
-    await sleep(1300);
-    b.send({ t: 'rest_step', rid: newRid(), order: o1.order, step: 1, taps: [1300] });
+    await sleep(2150);
+    const beatTaps = (id) => data.cookSteps[id].hits.map((h) => h * data.cookSteps[id].interval_ms);
+    b.send({ t: 'rest_step', rid: newRid(), order: o1.order, step: 1, taps: beatTaps('plate') });
     await b.type('rest_stepped');
-    a.send({ t: 'rest_step', rid: newRid(), order: o1.order, step: 0, taps: Array.from({ length: 12 }, (_, i) => i * 150) });
+    a.send({ t: 'rest_step', rid: newRid(), order: o1.order, step: 0, taps: beatTaps('mix') });
     const ra = await a.type('rest_result');
     const rb = await b.type('rest_result');
     assert.equal(ra.team, true);

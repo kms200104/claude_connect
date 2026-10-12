@@ -2,7 +2,7 @@ class_name SoundDirector
 extends Node
 ## 마을의 사건 소리: 도끼질·아이템 얻기·선물·별 조각 줍기·상점 문 종·사고팔기·상점 성장·부탁 완료·천둥,
 ## 그리고 날씨와 시각에 맞춘 환경음(비·새·풀벌레)과 마을 배경음악. 발소리·낚시·대사 소리는 각자 낸다.
-## 배경음악은 1초마다 고른다 — 이벤트가 열려 있으면 이벤트 곡 > 비·뇌우면 비 곡 > 밤이면 밤 곡 > 낮 곡.
+## 배경음악은 1초마다 고른다 — 요리 중 리듬 노래 > (음악 앱에서 고른 곡) > 문 연 식당 곁이면 개업 노래 > 이벤트 곡 > 비·뇌우면 비 곡 > 밤이면 밤 곡 > 낮 곡.
 ## 낮·밤이 바뀔 때는 천천히(time_fade), 비·이벤트는 조금 빠르게(weather_fade) 엇갈린다.
 
 @export var sky: SkyController
@@ -10,6 +10,8 @@ extends Node
 @export var shop: ShopController
 @export var player: Player
 
+## 식당 개업 노래가 들리는 거리 (식당 카운터에서 m).
+@export_range(4.0, 60.0, 1.0) var restaurant_range: float = 22.0
 ## 밤 곡이 흐르는 시각 (마을 시각, 시). night_start 부터 다음 날 night_end 전까지.
 @export_range(0.0, 24.0, 0.25) var night_start: float = 19.0
 @export_range(0.0, 24.0, 0.25) var night_end: float = 5.5
@@ -62,10 +64,16 @@ func _update_music(entering: bool) -> void:
 	if Net.state != Net.State.ONLINE:
 		return
 	var track: String = pick_music(Net.game_hour(), Net.weather, not Net.events.is_empty(), night_start, night_end)
+	# v0.18 식당이 문을 열었고 그 곁(restaurant_range m)에 있으면 개업 노래.
+	if bool(Economy.rest.get("open", false)) and _near_restaurant():
+		track = Audio.MUSIC_RESTAURANT
 	# v16 음악 앱에서 곡을 골랐으면 그 곡 (끄기 = 조용히).
 	var chosen: String = Prefs.music()
 	if not chosen.is_empty():
 		track = "" if chosen == Prefs.MUSIC_OFF else chosen
+	# 요리 중 리듬 노래는 무엇보다 먼저 (그 박자에 맞춰 누른다).
+	if not Audio.scene_music.is_empty():
+		track = Audio.scene_music
 	var current: String = Audio.current_music()
 	if track == current:
 		return
@@ -109,3 +117,11 @@ func _on_lightning(power: float) -> void:
 	var volume: float = linear_to_db(clampf(power, 0.2, 1.0)) + 1.5 + (-8.0 if sky != null and sky.indoor else 0.0)
 	var pitch: float = randf_range(0.85, 1.02)
 	Audio.play_sfx("thunder_%d" % (_thunder_index + 1), volume, pitch, 0.05)
+
+
+func _near_restaurant() -> bool:
+	var site: Node = get_tree().get_first_node_in_group(&"restaurant_site") if is_inside_tree() else null
+	if site == null or player == null:
+		return false
+	var c: Vector3 = (site as RestaurantSite).counter_position()
+	return Vector2(player.global_position.x - c.x, player.global_position.z - c.z).length() <= restaurant_range

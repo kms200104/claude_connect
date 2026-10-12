@@ -13,6 +13,9 @@ const MUSIC_VILLAGE: String = "village_theme"
 const MUSIC_NIGHT: String = "night_theme"
 const MUSIC_RAIN: String = "rain_theme"
 const MUSIC_EVENT: String = "event_theme"
+## 식당 (v0.18): 문을 열었을 때 · 요리할 때 (요리 노래의 박자 = 리듬 요리의 박자, recipes.json interval_ms).
+const MUSIC_RESTAURANT: String = "restaurant_theme"
+const MUSIC_COOKING: String = "cooking_theme"
 
 const SFX_CONFIRM: String = "ui_confirm"
 const SFX_CANCEL: String = "ui_cancel"
@@ -51,6 +54,8 @@ var _next_voice_3d: int = 0
 var _loops: Dictionary[String, AudioStreamPlayer] = {}
 ## 볼륨 (0 ~ 1). 키 = VOLUME_KINDS.
 var _volume: Dictionary[String, float] = {"master": 1.0, "music": 1.0, "sfx": 1.0, "ambient": 1.0}
+## 장면이 정한 곡 (요리 중 리듬 노래): 비어 있지 않으면 마을 음악 · 음악 앱에서 고른 곡보다 먼저 흐른다 (SoundDirector).
+var scene_music: String = ""
 
 const VOLUME_KINDS: PackedStringArray = ["master", "music", "sfx", "ambient"]
 const VOLUME_NAMES: Dictionary[String, String] = {"master": "전체", "music": "배경음악", "sfx": "효과음", "ambient": "환경음"}
@@ -125,6 +130,14 @@ func current_music() -> String:
 ## 음악 앱 (v16): 지금 곡이 흐른 시간 · 길이 (초, 곡이 없으면 0).
 func music_position() -> float:
 	return _music_active.get_playback_position() if _music_active != null and _music_active.playing else 0.0
+
+
+## 박자 맞추기용 지금 곡 위치 (초): 마지막 믹스 뒤 흐른 시간을 더하고 출력 지연을 뺀다 — 귀에 들리는 그 순간.
+## track 이 지금 흐르는 곡이 아니면 -1.
+func music_clock(track: String) -> float:
+	if track != _music_current or _music_active == null or not _music_active.playing:
+		return -1.0
+	return _music_active.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
 
 
 func music_length() -> float:

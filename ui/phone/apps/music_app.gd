@@ -10,6 +10,8 @@ const TRACKS: Array[Array] = [
 	["rain_theme", "빗방울 산책", "비 오는 날 창가에서", Color("#4C8FE0")],
 	["event_theme", "마을 축제", "이벤트 날의 들뜬 노래", Color("#E8594A")],
 	["title_theme", "처음 만난 섬", "첫 화면의 노래", Color("#3DAA6D")],
+	["restaurant_theme", "솔바람 식당 개업", "식당 문을 연 날의 신나는 노래", Color("#E8604A")],
+	["cooking_theme", "통통 주방", "박자에 맞춰 요리하는 노래", Color("#2EC4BF")],
 	["off", "끄기", "배경음악 없이 마을 소리만", Color("#B8B2A8")],
 ]
 

@@ -44,12 +44,13 @@ var _steps_label: Label = null
 var _prompt: Label = null
 var _tap_button: Button = null
 var _result: Dictionary = {}
-## 찌기: 물을 붓는 중 (단추를 누르고 있음).
-var _pouring: bool = false
+## 동작의 박자마다 맞췄는지 (1 = 그 박자에 짝지은 누름이 있다).
+var _hit_taken: PackedByteArray = PackedByteArray()
+## 처음 하는 동작 설명을 건너뛴다 (자동 시험).
+var skip_tutorials: bool = false
 ## 동작 번호 → 내가 한 솜씨 (0~1, 화면용).
 var _step_scores: Dictionary[int, float] = {}
 var _finish_ms: float = 0.0
-var _beat_ticked: int = 0
 ## 결과 화면의 손님 반응 (v20) · 서버가 알려 온 반응(단골 됨/풀림) 주문별.
 var _reaction: GuestReaction = null
 var _reaction_order: String = ""
@@ -57,7 +58,7 @@ var _served_info: Dictionary[String, Dictionary] = {}
 var _result_seq: int = 0
 
 const ORDER_HEIGHT: float = 820.0
-const COOK_HEIGHT: float = 1260.0
+const COOK_HEIGHT: float = 2080.0
 ## 동작을 마치고 솜씨 한마디를 보여 주는 시간 (ms).
 const FINISH_SHOW_MS: float = 800.0
 ## 결과 화면(별점 · 손님 반응)을 띄워 두는 시간 — 그 전에 "다음 손님 받기"로 넘길 수 있다.
@@ -129,6 +130,7 @@ func close() -> void:
 	if not visible:
 		return
 	_stop_cooking_pose()
+	Audio.scene_music = ""
 	visible = false
 	_order_id = ""
 	_stage = null
@@ -295,6 +297,9 @@ func _start_cooking(order_id: String) -> void:
 		player.look_toward(site.counter_facing() if site != null else Vector3.BACK)
 	if site != null:
 		site.set_steaming(true)
+	# 요리 노래 (리듬 요리의 박자) — 요리하는 동안은 이 노래가 흐른다.
+	Audio.scene_music = Audio.MUSIC_COOKING
+	Audio.play_music(Audio.MUSIC_COOKING, 0.6)
 	_set_panel_height(COOK_HEIGHT)
 	_start_cooking_view()
 	_next_step()
@@ -324,7 +329,7 @@ func _start_cooking_view() -> void:
 	_steps_label = _label("", 24, SOFT)
 	names.add_child(_steps_label)
 	var stage: CookStage = CookStage.new()
-	stage.custom_minimum_size = Vector2(0, 640)
+	stage.custom_minimum_size = Vector2(0, 1180)
 	stage.pressed.connect(func(down: bool) -> void:
 		if down:
 			_on_tap()
@@ -336,7 +341,7 @@ func _start_cooking_view() -> void:
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_list.add_child(_prompt)
 	_tap_button = _button("탁!", 48)
-	_tap_button.custom_minimum_size = Vector2(0, 170)
+	_tap_button.custom_minimum_size = Vector2(0, 150)
 	_tap_button.button_down.connect(_on_tap)
 	_tap_button.button_up.connect(_on_release)
 	_list.add_child(_tap_button)
@@ -372,7 +377,19 @@ func _next_step() -> void:
 		return
 	_mode = Mode.RESULT
 	_step = {}
-	_prompt.text = "다음 동작 준비 중…"
+	# v0.18 처음 하는 동작이면 맡기 전에 멈춰서 무엇을 · 언제 누르는지 보여 준다.
+	var def: Dictionary = GameData.econ.step(_recipe.steps[free])
+	var scene: String = CookStage.scene_of(def)
+	if not skip_tutorials and _stage != null and not Prefs.cook_seen(scene):
+		_prompt.text = "처음 하는 동작이에요 — 설명을 보고 시작해요"
+		_stage.preview(def, _recipe, _subjects(free))
+		_stage.show_tutorial(def)
+		var order: String = _order_id
+		await _stage.tutorial_closed
+		Prefs.mark_cook_seen(scene)
+		if order != _order_id or _mode != Mode.RESULT:
+			return
+	_prompt.text = "다음 동작 준비 중… 노래 박자에 맞춰요"
 	Economy.claim_step(_order_id, free)
 
 
@@ -409,6 +426,7 @@ func _wait_for_partner() -> void:
 
 
 func _back_to_orders() -> void:
+	Audio.scene_music = ""
 	_mode = Mode.ORDERS
 	_order_id = ""
 	_stage = null
@@ -480,20 +498,11 @@ func _begin_step(i: int) -> void:
 	_step_index = i
 	_step = GameData.econ.step(_recipe.steps[i])
 	_step_taps = []
-	_pouring = false
-	_beat_ticked = 0
-	_step_start_ms = float(Time.get_ticks_msec()) + 600.0
-	match str(_step.get("kind", "")):
-		"beats":
-			_step_end_ms = _step_start_ms + float(int(_step.get("beats", 4)) + 1) * float(_step.get("interval_ms", 480))
-		"timing":
-			_step_end_ms = _step_start_ms + float(_step.get("ideal_ms", 2000)) + float(_step.get("window_ms", 300)) * 3.0
-		"grill":
-			_step_end_ms = _step_start_ms + float(_step.get("sides", 2)) * float(_step.get("side_ms", 2000)) * 1.9
-		"steam":
-			_step_end_ms = _step_start_ms + 3000.0 + float(_step.get("fill_ms", 1600)) * 2.5 + float(_step.get("steam_ms", 2600)) * 2.0
-		_:
-			_step_end_ms = _step_start_ms + float(_step.get("duration_ms", 2600))
+	_hit_taken = PackedByteArray()
+	_hit_taken.resize(CookRules.hits(_step).size())
+	var interval: float = float(_step.get("interval_ms", 536))
+	_step_start_ms = _beat_start(interval)
+	_step_end_ms = _step_start_ms + CookRules.last_hit_ms(_step) + maxf(float(_step.get("window_ms", 160)) * 2.0, 380.0)
 	if _stage != null:
 		_stage.begin(_step, _recipe, _subjects(i), _step_taps, _step_start_ms)
 	var tool_id: String = str(_step.get("tool", ""))
@@ -501,44 +510,21 @@ func _begin_step(i: int) -> void:
 		player.rig.set_cooking(str(_step.get("anim", "")), tool_id)
 	_tap_button.text = _button_text()
 	_update_steps_label()
-	match str(_step.get("anim", "")):
-		"cook_stir", "cook_flip":
-			Audio.play_sfx("cook_sizzle" if tool_id == "pan" else "cook_bubble", -6.0)
 	Audio.play_sfx("ui_click", -10.0)
 
 
-## 장면별 안내 (지금 무엇을 보고 언제 누르는지).
-func _guide(t: float) -> String:
-	var n: int = _step_taps.size()
-	match _scene():
-		"chop":
-			return "동그라미가 과녁에 닿을 때 탁! 칼이 박자에 맞춰 내려와요"
-		"season":
-			return "박자에 맞춰 톡톡! 소금을 골고루 뿌려요"
-		"skewer":
-			return "박자에 맞춰 쏙! 꼬치에 하나씩 꿰어요"
-		"wok":
-			return "박자에 맞춰 웍을 휙! 잘 맞으면 불맛이 올라요"
-		"grill":
-			var sides: int = int(_step.get("sides", 2))
-			if n >= sides:
-				return "다 구웠어요!"
-			return "아랫면 테두리가 노릇해지고 고소한 김이 오르면 %s" % ("꺼내요" if n == sides - 1 else "뒤집어요")
-		"flip":
-			return "거품이 송송, 가장자리가 노릇해지면 휙 뒤집어요" if n == 0 else "휙!"
-		"boil":
-			return "물이 팔팔 끓어오르면 재료를 넣어요 (늦으면 넘쳐요)" if n == 0 else "풍덩!"
-		"simmer":
-			return "국물이 졸임 선까지 내려오면 불을 꺼요" if n == 0 else "불을 껐어요"
-		"fry":
-			return "기포가 잦아들고 튀김옷이 황금빛이 되면 건져요" if n == 0 else "바삭!"
-		"plate":
-			return "쟁반이 한가운데 오면 접시를 내려놓아요" if n == 0 else "짠!"
-		"knead":
-			return "마구 눌러 매끈하게 반죽해요! (%d/%d)" % [n, int(_step.get("taps", 10))]
-		"steam":
-			return _steam_hint()
-	return "마구 눌러 골고루 버무려요! (%d/%d)" % [n, int(_step.get("taps", 10))] if t >= 0.0 else ""
+## 동작의 시작 시각 (ticks ms): 요리 노래의 박자 격자에 맞춘다 — 첫 박자(start + interval)가 노래의 두 박 마디 머리에 온다.
+## 노래가 안 흐르면(소리 꺼짐 · 헤드리스) 지금부터 한 박 반 뒤를 첫 박자로.
+func _beat_start(interval: float) -> float:
+	var now: float = float(Time.get_ticks_msec())
+	var clock: float = Audio.music_clock(Audio.MUSIC_COOKING)
+	var lead: float = interval * 1.5
+	if clock < 0.0:
+		return now + lead - interval
+	var music_ms: float = clock * 1000.0
+	var unit: float = interval * 2.0
+	var first: float = ceil((music_ms + lead) / unit) * unit
+	return now + (first - music_ms) - interval
 
 
 func _scene() -> String:
@@ -548,183 +534,132 @@ func _scene() -> String:
 func _tick_step() -> void:
 	var now: float = float(Time.get_ticks_msec())
 	var t: float = now - _step_start_ms
-	var kind: String = str(_step.get("kind", ""))
 	var label: String = str(_step.get("label", ""))
-	_prompt.text = "준비… %s" % label if t < 0.0 else "%s — %s" % [label, _guide(t)]
-	# 박자 동작: 박자마다 똑딱 (칼 · 소금통이 내려오는 때).
-	if kind == "beats" and t >= 0.0:
-		var b: int = int(floor(t / float(_step.get("interval_ms", 480))))
-		if b > _beat_ticked and b <= int(_step.get("beats", 4)):
-			_beat_ticked = b
-			Audio.play_sfx("ui_click", -18.0, 1.7, 0.0)
-	# 타이밍 동작은 누른 뒤 조금 있다가 넘어간다 (너무 빨리 낸 요리는 서버가 받지 않는다).
-	var done: bool = now >= _step_end_ms
-	if kind == "grill" and _step_taps.size() >= int(_step.get("sides", 2)):
-		done = now >= _step_start_ms + _step_taps[-1] + 700.0
-	elif kind == "steam" and _step_taps.size() >= int(_step.get("items", 3)) + 3:
-		done = now >= _step_start_ms + _step_taps[-1] + 600.0
-	elif kind == "mash" and _step_taps.size() >= int(_step.get("taps", 10)) and t >= float(_step.get("duration_ms", 2600)) * 0.5:
-		done = done or now >= _step_start_ms + _step_taps[-1] + 300.0
-	if done and _pouring:
-		_on_release()
-	if kind == "timing" and not _step_taps.is_empty():
-		var earliest: float = _step_start_ms + float(_step.get("ideal_ms", 2000)) - float(_step.get("window_ms", 300)) * 1.5
-		done = done or now >= maxf(_step_start_ms + _step_taps[0] + 550.0, earliest)
-	if done:
+	var verb: String = _next_verb()
+	_prompt.text = "준비… %s — %s" % [label, str(_step.get("hint", ""))] if t < 0.0 else ("%s — %s" % [label, verb if not verb.is_empty() else "좋아요!"])
+	_tap_button.text = _button_text()
+	if now >= _step_end_ms:
 		_finish_step()
 
 
+## 다음에 맞출 박자의 일 (썰기 · 뒤집기 · 넣기 …).
+func _next_verb() -> String:
+	var hits: PackedFloat32Array = CookRules.hits(_step)
+	var verbs: Array = _step.get("verbs", [])
+	var t: float = float(Time.get_ticks_msec()) - _step_start_ms
+	var window: float = float(_step.get("window_ms", 160))
+	var interval: float = float(_step.get("interval_ms", 536))
+	for i: int in hits.size():
+		if i < _hit_taken.size() and _hit_taken[i] == 0 and hits[i] * interval - t > -window * 2.0:
+			return str(verbs[i]) if i < verbs.size() else ""
+	return ""
+
+
+## 누름: 아직 안 맞춘 박자 중 가장 가까운 것(판정 창 두 배 안)에 짝짓고 판정한다. 박자 밖이면 헛누름 (서버가 깎는다).
 func _on_tap() -> void:
 	if _mode != Mode.COOKING:
 		return
 	var t: float = float(Time.get_ticks_msec()) - _step_start_ms
-	if t < 0.0:
+	if t < -float(_step.get("window_ms", 160)) * 2.0:
 		return
-	var kind: String = str(_step.get("kind", ""))
-	if kind == "timing" and not _step_taps.is_empty():
-		return
-	if kind == "grill":
-		if _step_taps.size() >= int(_step.get("sides", 2)):
-			return
-		var prev: float = _step_taps[-1] if not _step_taps.is_empty() else 0.0
-		_step_taps.append(roundf(t))
-		Audio.play_sfx("cook_sizzle", -4.0, 1.15, 0.1)
-		_judged(CookRules.grade(absf(t - prev - float(_step.get("side_ms", 2000))), float(_step.get("window_ms", 300))))
-		_tap_button.text = _button_text()
-		return
-	if kind == "steam":
-		var n: int = int(_step.get("items", 3))
-		if _pouring or _step_taps.size() == n + 1 or _step_taps.size() >= n + 3:
-			return
-		_step_taps.append(roundf(t))
-		if _step_taps.size() == n + 1:
-			_pouring = true
-			if _stage != null:
-				_stage.pouring = true
-			Audio.play_sfx("cook_bubble", -8.0, 1.4)
-		elif _step_taps.size() == n + 3:
-			Audio.play_sfx("cook_bubble", -2.0, 0.8)
-			_judged(CookRules.grade(absf(t - _step_taps[n + 1] - float(_step.get("steam_ms", 2600))), float(_step.get("window_ms", 300))))
-		else:
-			Audio.play_sfx("fish_plop", -8.0, 1.3, 0.1)
-		_tap_button.text = _button_text()
-		return
-	var grade: int = -1
-	if kind == "beats":
-		var b: int = CookRules.nearest_beat(_step, t)
-		var again: bool = _step_taps.any(func(x: float) -> bool: return CookRules.nearest_beat(_step, x) == b)
-		grade = CookRules.Grade.MISS if again or _step_taps.size() >= int(_step.get("beats", 4)) else CookRules.beat_grade(_step, t)
-	elif kind == "timing":
-		grade = CookRules.grade(absf(t - float(_step.get("ideal_ms", 2000))), float(_step.get("window_ms", 300)))
-	_step_taps.append(roundf(t))
+	var hits: PackedFloat32Array = CookRules.hits(_step)
+	var interval: float = float(_step.get("interval_ms", 536))
+	var window: float = float(_step.get("window_ms", 160))
+	var best: int = -1
+	for k: int in hits.size():
+		if k >= _hit_taken.size() or _hit_taken[k] != 0:
+			continue
+		var off: float = absf(t - hits[k] * interval)
+		if off < window * 2.0 and (best < 0 or off < absf(t - hits[best] * interval)):
+			best = k
+	_step_taps.append(roundf(maxf(t, 0.0)))
+	var grade: int = CookRules.Grade.MISS
+	if best >= 0:
+		_hit_taken[best] = 1
+		grade = CookRules.grade(absf(t - hits[best] * interval), window)
+	_play_action_sound(best)
+	_judged(grade, best)
+
+
+## 누를 때 나는 소리: 그 박자의 일(verb)에 맞춘 실제 소리 (헛누름은 작게).
+func _play_action_sound(hit: int) -> void:
+	var verbs: Array = _step.get("verbs", [])
+	var verb: String = str(verbs[hit]) if hit >= 0 and hit < verbs.size() else ""
+	var quiet: float = 0.0 if hit >= 0 else -8.0
 	match _scene():
 		"chop":
-			Audio.play_sfx("cook_chop", -2.0, 1.0, 0.12)
+			Audio.play_sfx("cook_chop", -2.0 + quiet, 1.0, 0.12)
 		"season":
-			Audio.play_sfx("cook_plate", -12.0, 1.8, 0.15)
+			Audio.play_sfx("cook_plate", -14.0 + quiet, 1.9, 0.15)
 		"skewer":
-			Audio.play_sfx("emote_pop", -8.0, 1.2, 0.15)
-		"wok":
-			Audio.play_sfx("cook_sizzle", -4.0, 1.3, 0.1)
-		"flip":
-			Audio.play_sfx("line_zip", -8.0, 1.6)
-			Audio.play_sfx("cook_sizzle", -6.0, 1.2)
-		"boil":
-			Audio.play_sfx("fish_plop", -2.0, 0.8)
-		"simmer":
-			Audio.play_sfx("ui_confirm", -6.0, 0.8)
-		"fry":
-			Audio.play_sfx("cook_plate", -6.0, 0.8)
-		"plate":
-			Audio.play_sfx("cook_plate", -4.0)
+			Audio.play_sfx("emote_pop", -9.0 + quiet, 1.3, 0.15)
 		"knead":
-			Audio.play_sfx("emote_pop", -12.0, 0.6, 0.2)
+			Audio.play_sfx("emote_pop", -12.0 + quiet, 0.6, 0.2)
+		"mix":
+			Audio.play_sfx("dig", -12.0 + quiet, 1.6, 0.2)
+		"wok":
+			Audio.play_sfx("cook_sizzle", -4.0 + quiet, 1.3, 0.1)
+		"plate":
+			match verb:
+				"접시 놓기":
+					Audio.play_sfx("cook_plate", -4.0)
+				"담기":
+					Audio.play_sfx("pickup", -6.0)
+				"완성":
+					Audio.play_sfx("twinkle", -6.0)
+				_:
+					Audio.play_sfx("ui_click", -8.0 + quiet, 1.3)
 		_:
-			Audio.play_sfx("dig", -12.0, 1.6, 0.2)
-	_judged(grade)
+			match verb:
+				"올리기", "붓기", "넣기":
+					if _scene() == "boil":
+						Audio.play_sfx("fish_plop", -2.0, 0.8)
+					else:
+						Audio.play_sfx("cook_sizzle", -2.0, 1.0, 0.1)
+				"뒤집기":
+					Audio.play_sfx("line_zip", -8.0, 1.6)
+					Audio.play_sfx("cook_sizzle", -6.0, 1.2)
+				"꺼내기", "건지기":
+					Audio.play_sfx("cook_plate", -5.0, 0.9)
+				"젓기", "흔들기":
+					Audio.play_sfx("cook_bubble", -8.0, 1.1, 0.1)
+				"불 끄기", "뚜껑 덮기":
+					Audio.play_sfx("kick_latch", -6.0, 0.9)
+				"뚜껑 열기":
+					Audio.play_sfx("cook_bubble", -2.0, 0.8)
+				"담기":
+					Audio.play_sfx("fish_plop", -8.0, 1.3, 0.1)
+				"물 붓기":
+					Audio.play_sfx("cook_bubble", -6.0, 1.4)
+				_:
+					Audio.play_sfx("ui_click", -10.0 + quiet, 1.2)
 
 
 ## 누름 판정을 무대에 띄우고, 완벽하면 반짝 소리.
-func _judged(grade: int) -> void:
+func _judged(grade: int, hit: int = -1) -> void:
 	if _stage != null:
-		_stage.on_input(grade)
+		_stage.on_input(grade, hit)
 	if grade == CookRules.Grade.PERFECT:
-		Audio.play_sfx("twinkle", -10.0, 1.2, 0.05)
+		Audio.play_sfx("twinkle", -12.0, 1.2, 0.05)
 
 
-## 단추를 뗐다: 찌기에서 물 붓기를 멈추면 뚜껑이 닫히고 김이 오르기 시작한다.
+## 단추를 뗐다 (v0.18 리듬 요리에서는 쓰지 않는다 — 누름만 센다).
 func _on_release() -> void:
-	if not _pouring or _mode != Mode.COOKING:
-		return
-	_pouring = false
-	if _stage != null:
-		_stage.pouring = false
-	var n: int = int(_step.get("items", 3))
-	_step_taps.append(roundf(maxf(float(Time.get_ticks_msec()) - _step_start_ms, _step_taps[-1] + 1.0)))
-	Audio.play_sfx("cook_plate", -6.0, 0.7)
-	_judged(CookRules.grade(absf((_step_taps[n + 1] - _step_taps[n]) / float(_step.get("fill_ms", 1600)) - 1.0), float(_step.get("water_window", 0.16))))
-	_tap_button.text = _button_text()
-
-
-const SCENE_BUTTON: Dictionary[String, String] = {"chop": "탁!", "season": "톡톡!", "skewer": "꿰기!", "wok": "휙!", "flip": "뒤집기!", "boil": "재료 넣기!",
-	"simmer": "불 끄기!", "fry": "건지기!", "plate": "내려놓기!", "mix": "버무리기!", "knead": "주무르기!"}
+	pass
 
 
 func _button_text() -> String:
-	match str(_step.get("kind", "")):
-		"grill":
-			return "꺼내기!" if _step_taps.size() >= int(_step.get("sides", 2)) - 1 else "뒤집기!"
-		"steam":
-			var n: int = int(_step.get("items", 3))
-			if _step_taps.size() < n:
-				return "재료 넣기 (%d/%d)" % [_step_taps.size() + 1, n]
-			if _step_taps.size() == n + 1:
-				return "붓는 중… 선에서 떼요"
-			if _step_taps.size() == n:
-				return "물 붓기 (꾹 눌러요)"
-			return "뚜껑 열기!"
-	return SCENE_BUTTON.get(_scene(), "탁!")
+	var verb: String = _next_verb()
+	return "%s!" % verb if not verb.is_empty() else "탁!"
 
 
-func _steam_hint() -> String:
-	var n: int = int(_step.get("items", 3))
-	if _step_taps.size() < n:
-		return "재료를 냄비에 하나씩 담아요"
-	if _step_taps.size() == n:
-		return "단추를 꾹 눌러 물을 붓고, 선에 닿으면 떼요"
-	if _pouring:
-		return "조금만 더… 선에서 떼요!"
-	if _step_taps.size() == n + 2:
-		return "뚜껑을 덮고 찌는 중 — 김이 폴폴 오르면 열어요"
-	return "다 쪘어요!"
-
-
-## 지금 하면 딱 좋은 입력 (시연·테스트용): {"at": 동작 시작부터 ms, "release": 뗄 차례인가}. 할 게 없으면 at = INF.
+## 지금 하면 딱 좋은 입력 (시연·테스트용): {"at": 동작 시작부터 ms, "release": false}. 할 게 없으면 at = INF.
 func next_ideal_input() -> Dictionary:
-	var taps: Array[float] = _step_taps
-	match str(_step.get("kind", "")):
-		"beats":
-			if taps.size() < int(_step.get("beats", 4)):
-				return {"at": float(_step.get("interval_ms", 480)) * (taps.size() + 1), "release": false}
-		"timing":
-			if taps.is_empty():
-				return {"at": float(_step.get("ideal_ms", 2000)), "release": false}
-		"mash":
-			if taps.size() < int(_step.get("taps", 10)):
-				return {"at": 60.0 + 120.0 * taps.size(), "release": false}
-		"grill":
-			if taps.size() < int(_step.get("sides", 2)):
-				return {"at": (taps[-1] if not taps.is_empty() else 0.0) + float(_step.get("side_ms", 2000)), "release": false}
-		"steam":
-			var n: int = int(_step.get("items", 3))
-			if taps.size() < n:
-				return {"at": 150.0 * (taps.size() + 1), "release": false}
-			if taps.size() == n:
-				return {"at": taps[-1] + 200.0, "release": false}
-			if taps.size() == n + 1:
-				return {"at": taps[-1] + float(_step.get("fill_ms", 1600)), "release": true}
-			if taps.size() == n + 2:
-				return {"at": taps[-1] + float(_step.get("steam_ms", 2600)), "release": false}
+	var hits: PackedFloat32Array = CookRules.hits(_step)
+	var interval: float = float(_step.get("interval_ms", 536))
+	for i: int in hits.size():
+		if i < _hit_taken.size() and _hit_taken[i] == 0:
+			return {"at": hits[i] * interval, "release": false}
 	return {"at": INF, "release": false}
 
 

@@ -36,6 +36,8 @@ var _white: ImageTexture = null
 
 
 func _ready() -> void:
+	# 개업 노래 (SoundDirector) · 요리 화면이 찾는다.
+	add_to_group(&"restaurant_site")
 	var econ: EconData = GameData.econ
 	if econ == null:
 		return

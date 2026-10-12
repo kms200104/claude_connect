@@ -256,9 +256,11 @@ func _kitchen() -> void:
 		await _wait_file("b.cooking", 5.0)
 	else:
 		order_id = await _wait_file("order", 5.0)
+		econ.kitchen.set("skip_tutorials", true)
 		econ.kitchen.call("_start_cooking", order_id)
 		_write("b.cooking", "1")
 	if _role == "a":
+		econ.kitchen.set("skip_tutorials", true)
 		econ.kitchen.call("_start_cooking", order_id)
 	await _play_minigame(econ.kitchen)
 	_check(await _wait_until(func() -> bool: return judged.any(func(r: Dictionary) -> bool: return str(r.get("order", "")) == order_id), 8.0), "한 그릇을 둘이 나눠 만들어 별점을 받음")
@@ -290,7 +292,9 @@ func _play_minigame(kitchen: KitchenWindow) -> void:
 			print("[%s] 동작 %d (%s) 맡음" % [_role, index, str(step.get("label", ""))])
 		match str(step.get("kind", "")):
 			"beats":
-				if beat < int(step.get("beats", 4)) and t >= float(step.get("interval_ms", 480)) * float(beat + 1):
+				# v0.18 리듬 요리: 누를 박자(hits)마다 — 반 박자 · 쉬는 박자도 있으니 다음 박자 때를 묻는다.
+				var ideal_beat: Dictionary = kitchen.call("next_ideal_input")
+				if t >= float(ideal_beat["at"]):
 					kitchen.call("_on_tap")
 					beat += 1
 			"grill", "steam":

@@ -10,7 +10,7 @@ import { defaultConfig } from '../src/config.js';
 import { buyCost, clampToLimit, createMarket, marketOpen, roundToTick, sellProceeds, tickSize } from '../src/market.js';
 import { listUnits, purchaseCost, unitPrice, weeklyRent } from '../src/realestate.js';
 import { chargeWeek, creditLimit, creditScore, dsrOk, gradeOf, rateFor, stepBaseRate, weeklyInterest } from '../src/bank.js';
-import { capacity, chooseOrder, cookQuality, menuOf, minCookMs, pickIngredients, ratingOf, starsFor, stepQuality, tierOf, updateRegular } from '../src/restaurant.js';
+import { beatHits, capacity, chooseOrder, cookQuality, menuOf, minCookMs, pickIngredients, ratingOf, starsFor, stepMinMs, stepQuality, tierOf, updateRegular } from '../src/restaurant.js';
 import { Client, sleep, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
@@ -157,39 +157,61 @@ describe('식당 계산', () => {
     assert.ok(recipe('sturgeon_steak').steps.length > recipe('grilled_fish').steps.length, '높은 단계일수록 까다롭다');
   });
 
-  it('박자·타이밍·연타 판정', () => {
-    const steps = data.cookSteps;
-    assert.equal(stepQuality(steps.chop, [480, 960, 1440, 1920]), 1);
-    assert.ok(stepQuality(steps.chop, [100, 200]) < 0.4);
-    assert.ok(stepQuality(steps.boil, [3000]) === 1);
-    assert.ok(stepQuality(steps.boil, [4500]) < 0.3);
+  it('박자·타이밍·연타 판정 (판정 종류)', () => {
+    // 지금 데이터는 모두 박자(beats)지만, 서버는 예전 판정 종류도 그대로 매긴다.
+    const timing = { kind: 'timing', ideal_ms: 3000, window_ms: 470 };
+    assert.ok(stepQuality(timing, [3000]) === 1);
+    assert.ok(stepQuality(timing, [4500]) < 0.3);
     // 굽기 (v0.11): 한 면 2초씩 — 2초에 뒤집고 4초에 꺼내면 완벽, 한쪽을 태우면 깎인다, 안 뒤집으면 반만.
-    assert.equal(stepQuality(steps.grill, [2000, 4000]), 1);
-    assert.ok(stepQuality(steps.grill, [3200, 5200]) < 0.75, '첫 면을 태움');
-    assert.ok(stepQuality(steps.grill, [2000]) <= 0.5, '한 면만 구움');
+    const grill = { kind: 'grill', sides: 2, side_ms: 2000, window_ms: 380 };
+    assert.equal(stepQuality(grill, [2000, 4000]), 1);
+    assert.ok(stepQuality(grill, [3200, 5200]) < 0.75, '첫 면을 태움');
+    assert.ok(stepQuality(grill, [2000]) <= 0.5, '한 면만 구움');
     // 찌기: 재료 3개 → 물 1.6초 붓기(선에 딱) → 2.6초 찌고 뚜껑 열기.
-    assert.equal(stepQuality(steps.steam, [100, 300, 500, 800, 2400, 5000]), 1);
-    assert.ok(stepQuality(steps.steam, [100, 300, 500, 800, 3600, 6200]) < 0.8, '물을 너무 많이 부음');
-    assert.ok(stepQuality(steps.steam, [100, 300]) < 0.25, '재료만 넣다 맒');
-    assert.equal(stepQuality(steps.mix, Array.from({ length: 12 }, (_, i) => i * 150)), 1);
-    assert.ok(stepQuality(steps.mix, Array.from({ length: 30 }, (_, i) => i * 10)) <= 0.6, '50ms 보다 촘촘한 자동 연타는 세지 않는다');
+    const steam = { kind: 'steam', items: 3, fill_ms: 1600, water_window: 0.16, steam_ms: 2600, window_ms: 420 };
+    assert.equal(stepQuality(steam, [100, 300, 500, 800, 2400, 5000]), 1);
+    assert.ok(stepQuality(steam, [100, 300, 500, 800, 3600, 6200]) < 0.8, '물을 너무 많이 부음');
+    assert.ok(stepQuality(steam, [100, 300]) < 0.25, '재료만 넣다 맒');
+    const mash = { kind: 'mash', taps: 10, duration_ms: 2600 };
+    assert.equal(stepQuality(mash, Array.from({ length: 12 }, (_, i) => i * 150)), 1);
+    assert.ok(stepQuality(mash, Array.from({ length: 30 }, (_, i) => i * 10)) <= 0.6, '50ms 보다 촘촘한 자동 연타는 세지 않는다');
+    // hits 가 없는 박자 동작은 1 … beats 박자.
+    const old = { kind: 'beats', beats: 4, interval_ms: 480, window_ms: 170 };
+    assert.equal(stepQuality(old, [480, 960, 1440, 1920]), 1);
+    assert.ok(stepQuality(old, [100, 200]) < 0.4);
+  });
+
+  it('리듬 요리 (v0.18): 모든 동작이 요리 노래 박자 hits 에 맞춰 누르기', () => {
+    const steps = data.cookSteps;
+    const perfect = (s) => beatHits(s).map((h) => h * s.interval_ms);
+    for (const [id, s] of Object.entries(steps)) {
+      assert.equal(s.kind, 'beats', `${id}: 박자 동작`);
+      assert.equal(s.interval_ms, 536, `${id}: 요리 노래 한 박자`);
+      assert.equal(s.hits.length, s.beats, `${id}: beats = hits 수`);
+      assert.equal(s.verbs.length, s.hits.length, `${id}: 누를 때마다 하는 일`);
+      assert.ok(typeof s.tutorial === 'string' && s.tutorial.length > 10, `${id}: 처음 할 때 설명`);
+      assert.equal(stepQuality(s, perfect(s)), 1, `${id}: 박자에 딱 맞으면 완벽`);
+      assert.ok(stepQuality(s, perfect(s).map((x) => x + s.window_ms * 1.5)) < 0.5, `${id}: 늦으면 깎인다`);
+      assert.ok(stepQuality(s, [...perfect(s), ...perfect(s).map((x) => x + 260)]) < 0.95, `${id}: 마구 누르면 깎인다`);
+      assert.equal(stepMinMs(s), Math.max(...s.hits) * s.interval_ms - s.window_ms);
+    }
+    // 하나를 놓쳐도 나머지 박자는 그대로 맞은 것으로 (뒤로 밀리지 않는다).
+    const chop = perfect(steps.chop);
+    assert.ok(Math.abs(stepQuality(steps.chop, chop.slice(1)) - (chop.length - 1) / chop.length) < 1e-9);
+    // 반 박자: 곱게 다지기는 '통'과 '통' 사이에도 누른다.
+    assert.ok(steps.chop_fine.hits.some((h) => h % 1 === 0.5));
+    // 굽기 = 올리기 · 뒤집기 · 꺼내기 (사이 박자는 굽는 시간).
+    assert.deepEqual(steps.grill.verbs, ['올리기', '뒤집기', '꺼내기']);
+    assert.ok(steps.grill.hits[1] - steps.grill.hits[0] >= 2);
     const r = recipe('grilled_fish');
-    assert.equal(cookQuality(r, steps, [[2000, 4000], [1300]]), 1);
+    assert.equal(cookQuality(r, steps, r.steps.map((id) => perfect(steps[id]))), 1);
     assert.ok(minCookMs(r, steps) > 2000);
   });
 
-  it('요리 장면 (v20): 동작마다 scene, 새 동작도 기존 판정 종류로 매긴다', () => {
+  it('요리 장면 (v20): 동작마다 scene', () => {
     const steps = data.cookSteps;
     const scenes = ['chop', 'season', 'skewer', 'wok', 'grill', 'flip', 'boil', 'simmer', 'fry', 'plate', 'mix', 'knead', 'steam'];
-    for (const [id, s] of Object.entries(steps)) {
-      assert.ok(scenes.includes(s.scene), `${id}: scene ${s.scene}`);
-      assert.ok(['beats', 'timing', 'grill', 'steam', 'mash'].includes(s.kind), `${id}: kind ${s.kind}`);
-    }
-    assert.equal(stepQuality(steps.season, [420, 840, 1260, 1680]), 1);
-    assert.equal(stepQuality(steps.stir_fry, [440, 880, 1320, 1760, 2200]), 1);
-    assert.equal(stepQuality(steps.deep_fry, [2600]), 1);
-    assert.ok(stepQuality(steps.deep_fry, [4000]) < 0.4, '너무 오래 튀김');
-    assert.equal(stepQuality(steps.knead, Array.from({ length: 12 }, (_, i) => i * 150)), 1);
+    for (const [id, s] of Object.entries(steps)) assert.ok(scenes.includes(s.scene), `${id}: scene ${s.scene}`);
     // 고기 요리: 상점 재료로 만든다.
     const avail = { pork_belly: 1, garlic: 1 };
     assert.deepEqual(pickIngredients(recipe('samgyeopsal'), avail, data), { pork_belly: 1, garlic: 1 });
@@ -383,14 +405,16 @@ describe('경제 (서버 연동)', () => {
     assert.equal((await a.type('rest_claim')).step, 0);
     a.send({ t: 'rest_step', rid: newRid(), order: o.order, step: 0, taps: [0] });
     assert.equal((await a.type('error')).code, 'cook_too_fast');
-    await sleep(1300);
-    a.send({ t: 'rest_step', rid: newRid(), order: o.order, step: 0, taps: Array.from({ length: 12 }, (_, i) => i * 150) });
+    // 리듬 요리 (v0.18): 무치기는 반 박자 8번, 담기는 박자 4번 — 노래 박자에 딱 맞게 누른 시각.
+    const beatTaps = (id) => data.cookSteps[id].hits.map((h) => h * data.cookSteps[id].interval_ms);
+    await sleep(2150);
+    a.send({ t: 'rest_step', rid: newRid(), order: o.order, step: 0, taps: beatTaps('mix') });
     await a.type('rest_stepped');
     a.send({ t: 'rest_cook', rid: newRid(), order: o.order, step: 1 });
     await a.type('rest_claim');
-    await sleep(900);
+    await sleep(1900);
     const r = newRid();
-    a.send({ t: 'rest_step', rid: r, order: o.order, step: 1, taps: [1300] });
+    a.send({ t: 'rest_step', rid: r, order: o.order, step: 1, taps: beatTaps('plate') });
     const res = await a.type('rest_result');
     assert.equal(res.rid, r);
     assert.ok(res.stars >= 4, `별점 ${res.stars}`);

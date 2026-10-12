@@ -305,6 +305,7 @@ func _run() -> void:
 	var judged: Array = []
 	Economy.cook_judged.connect(func(r: Dictionary) -> void: judged.append(r))
 	var order_id: String = str(arrived[0].get("order", ""))
+	econ.kitchen.set("skip_tutorials", true)
 	econ.kitchen.call("_start_cooking", order_id)
 	# v9: 서버가 동작을 맡겨 주면(rest_claim) 요리 자세를 잡는다.
 	_check(await _wait_until(func() -> bool: return player.rig.is_cooking() and player.is_input_locked(), 2.0), "요리 동작을 하며 멈춰 선다")
@@ -382,8 +383,9 @@ func _play_minigame(kitchen: KitchenWindow) -> void:
 			beat = 0
 		match str(step.get("kind", "")):
 			"beats":
-				var next: float = float(step.get("interval_ms", 480)) * float(beat + 1)
-				if beat < int(step.get("beats", 4)) and t >= next:
+				# v0.18 리듬 요리: 누를 박자(hits)마다 — 반 박자 · 쉬는 박자도 있으니 다음 박자 때를 묻는다.
+				var ideal_beat: Dictionary = kitchen.call("next_ideal_input")
+				if t >= float(ideal_beat["at"]):
 					kitchen.call("_on_tap")
 					beat += 1
 			"grill", "steam":

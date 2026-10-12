@@ -1,207 +1,528 @@
 {
- "version": 1,
- "_comment": "식당 요리. tier = 문을 연 식당의 별점으로 열리는 단계 (restaurant.json 의 tier_stars). ingredients: item(그 아이템), item_any(이 중 하나), fish(그 희귀도 이하 아무 물고기: common < uncommon < rare). steps = restaurant.json 의 요리 동작. price 는 손님이 내는 값 (별점에 따라 더하고 뺀다). v0.11: grill = 면마다 노릇할 때 뒤집기(sides 면, side_ms), steam = 재료 담기(items) → 물 붓기(fill_ms 동안 꾹, water_window 비율 오차) → 김이 steam_ms 오르면 뚜껑 열기. v20 요리 장면: steps 마다 scene(chop · season · skewer · wok · grill · flip · boil · simmer · fry · plate · mix · knead · steam)이 주방에서 그리는 조리 장면이다 (판정은 kind 그대로 — 서버 restaurant.js stepQuality).",
+ "version": 2,
+ "_comment": "식당 요리. tier = 문을 연 식당의 별점으로 열리는 단계 (restaurant.json 의 tier_stars). ingredients: item(그 아이템), item_any(이 중 하나), fish(그 희귀도 이하 아무 물고기: common < uncommon < rare). steps = restaurant.json 의 요리 동작. price 는 손님이 내는 값 (별점에 따라 더하고 뺀다). v0.11: grill = 면마다 노릇할 때 뒤집기(sides 면, side_ms), steam = 재료 담기(items) → 물 붓기(fill_ms 동안 꾹, water_window 비율 오차) → 김이 steam_ms 오르면 뚜껑 열기. v20 요리 장면: steps 마다 scene(chop · season · skewer · wok · grill · flip · boil · simmer · fry · plate · mix · knead · steam)이 주방에서 그리는 조리 장면이다 (판정은 kind 그대로 — 서버 restaurant.js stepQuality). v0.18 리듬 요리: 모든 동작이 kind=beats — 요리 노래(cooking_theme, 한 박자 interval_ms=536 ≈ 112 BPM)의 박자 hits(1 = 동작을 시작하고 첫 박자, 0.5 = 반 박자)에 맞춰 누른다. verbs = 그 누름에 하는 일 (칼질 · 뒤집기 · 넣기 …), tutorial = 처음 하는 동작이면 멈춰서 보여 주는 설명.",
  "_seasons_comment": "v0.12: seasons = 그 계절에만 손님이 시키는 제철 메뉴 (서버 clock.js seasonOf), hours = [시작, 끝) 그 시간에만 파는 메뉴 (아침상 · 야식). 제철 메뉴는 손님이 더 자주 시킨다 (season_weight).",
  "season_weight": 1.6,
  "steps": {
   "chop": {
    "label": "썰기",
    "kind": "beats",
-   "beats": 4,
-   "interval_ms": 480,
-   "window_ms": 170,
+   "beats": 6,
+   "hits": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "interval_ms": 536,
+   "window_ms": 165,
    "anim": "cook_chop",
    "tool": "knife",
    "scene": "chop",
-   "hint": "동그라미가 과녁에 닿을 때 탁! 칼이 박자에 맞춰 내려와요"
+   "verbs": [
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁"
+   ],
+   "hint": "통! 하는 박자마다 칼을 내려 썰어요",
+   "tutorial": "도마 위 재료를 박자마다 한 번씩 썰어요. 칼 아래 과녁에 바깥 고리가 줄어들어 딱 겹치는 순간(노래의 '통!')에 누르면 완벽! 아래 박자 줄의 동그라미가 노란 판정선에 닿는 때와 같아요. 6번 썰어요."
   },
   "chop_fine": {
    "label": "곱게 다지기",
    "kind": "beats",
-   "beats": 6,
-   "interval_ms": 340,
+   "beats": 8,
+   "hits": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5
+   ],
+   "interval_ms": 536,
    "window_ms": 110,
    "anim": "cook_chop",
    "tool": "knife",
-   "scene": "chop"
+   "scene": "chop",
+   "verbs": [
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁",
+    "탁"
+   ],
+   "hint": "반 박자마다 빠르게 탁탁 다져요",
+   "tutorial": "썰기보다 두 배 빨라요. '통'과 '통' 사이 반 박자에도 한 번씩, 탁탁탁탁 8번 다져요. 고리가 과녁에 겹칠 때마다 눌러요."
   },
   "grill": {
    "label": "굽기",
-   "kind": "grill",
-   "sides": 2,
-   "side_ms": 2000,
-   "window_ms": 380,
+   "kind": "beats",
+   "beats": 3,
+   "hits": [
+    1,
+    4,
+    7
+   ],
+   "interval_ms": 536,
+   "window_ms": 170,
    "anim": "cook_flip",
    "tool": "pan",
-   "hint": "한 면이 노릇해지면 뒤집고, 다른 면도 노릇해지면 꺼내요",
-   "scene": "grill"
+   "scene": "grill",
+   "verbs": [
+    "올리기",
+    "뒤집기",
+    "꺼내기"
+   ],
+   "hint": "올리고 · 뒤집고 · 꺼내요",
+   "tutorial": "첫 박자에 팬에 올리고(치익), 넷째 박자에 뒤집고, 일곱째 박자에 꺼내요. 사이 박자는 굽는 시간이라 기다려요. 음표가 닿는 '통!'에 맞춰 누르면 노릇노릇 완벽!"
   },
   "grill_hard": {
    "label": "센 불 굽기",
-   "kind": "grill",
-   "sides": 2,
-   "side_ms": 1500,
-   "window_ms": 210,
+   "kind": "beats",
+   "beats": 4,
+   "hits": [
+    1,
+    3,
+    5,
+    7
+   ],
+   "interval_ms": 536,
+   "window_ms": 120,
    "anim": "cook_flip",
    "tool": "pan",
-   "hint": "센 불이라 금방 타요! 노릇한 순간을 놓치지 마세요",
-   "scene": "grill"
+   "scene": "grill",
+   "verbs": [
+    "올리기",
+    "뒤집기",
+    "뒤집기",
+    "꺼내기"
+   ],
+   "hint": "센 불! 두 박자마다 뒤집어요",
+   "tutorial": "센 불이라 금방 타요. 올리고, 두 박자마다 뒤집고, 꺼내요 (4번). 판정이 좁으니 '통!'에 딱 맞춰요."
   },
   "fry_flip": {
-   "label": "뒤집기",
-   "kind": "timing",
-   "ideal_ms": 1700,
-   "window_ms": 300,
+   "label": "부치기",
+   "kind": "beats",
+   "beats": 3,
+   "hits": [
+    1,
+    4,
+    6
+   ],
+   "interval_ms": 536,
+   "window_ms": 150,
    "anim": "cook_flip",
    "tool": "pan",
    "scene": "flip",
-   "hint": "거품이 송송, 가장자리가 노릇해지면 뒤집어요"
+   "verbs": [
+    "붓기",
+    "뒤집기",
+    "꺼내기"
+   ],
+   "hint": "붓고 · 휙 뒤집고 · 꺼내요",
+   "tutorial": "첫 박자에 반죽을 팬에 붓고, 넷째 박자에 휙 뒤집고, 여섯째 박자에 접시로 꺼내요."
   },
   "boil": {
    "label": "끓이기",
-   "kind": "timing",
-   "ideal_ms": 3000,
-   "window_ms": 470,
+   "kind": "beats",
+   "beats": 4,
+   "hits": [
+    1,
+    3,
+    5,
+    7
+   ],
+   "interval_ms": 536,
+   "window_ms": 170,
    "anim": "cook_stir",
    "tool": "ladle",
    "scene": "boil",
-   "hint": "물이 팔팔 끓어오르면 재료를 넣어요"
+   "verbs": [
+    "넣기",
+    "넣기",
+    "넣기",
+    "넣기"
+   ],
+   "hint": "두 박자마다 재료를 풍덩",
+   "tutorial": "팔팔 끓는 냄비에 재료를 두 박자마다 하나씩 넣어요 (4번). 냄비 위 과녁에 고리가 겹칠 때 누르면 풍덩, 완벽!"
   },
   "simmer": {
    "label": "졸이기",
-   "kind": "timing",
-   "ideal_ms": 3400,
-   "window_ms": 380,
+   "kind": "beats",
+   "beats": 4,
+   "hits": [
+    1,
+    3,
+    5,
+    8
+   ],
+   "interval_ms": 536,
+   "window_ms": 160,
    "anim": "cook_stir",
    "tool": "ladle",
    "scene": "simmer",
-   "hint": "국물이 졸임 선까지 내려오면 불을 꺼요"
+   "verbs": [
+    "젓기",
+    "젓기",
+    "젓기",
+    "불 끄기"
+   ],
+   "hint": "저어 주고, 마지막에 불 끄기",
+   "tutorial": "국자로 두 박자마다 저어 주고(3번), 여덟째 박자에 불을 꺼요. 마지막 음표는 조금 늦게 와요 — 끝까지 기다렸다 '통!'"
   },
   "simmer_hard": {
    "label": "딱 맞게 졸이기",
-   "kind": "timing",
-   "ideal_ms": 3800,
-   "window_ms": 240,
+   "kind": "beats",
+   "beats": 7,
+   "hits": [
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ],
+   "interval_ms": 536,
+   "window_ms": 120,
    "anim": "cook_stir",
    "tool": "ladle",
-   "scene": "simmer"
+   "scene": "simmer",
+   "verbs": [
+    "젓기",
+    "젓기",
+    "젓기",
+    "젓기",
+    "젓기",
+    "젓기",
+    "불 끄기"
+   ],
+   "hint": "박자마다 젓고, 끝에 불 끄기",
+   "tutorial": "넷째 박자 한 번만 쉬고 박자마다 저어요. 여덟째 박자에 불을 꺼요. 판정이 좁아요!"
   },
   "mix": {
    "label": "무치기",
-   "kind": "mash",
-   "taps": 10,
-   "duration_ms": 2600,
+   "kind": "beats",
+   "beats": 8,
+   "hits": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5
+   ],
+   "interval_ms": 536,
+   "window_ms": 150,
    "anim": "cook_mix",
    "tool": "",
    "scene": "mix",
-   "hint": "마구 눌러 골고루 버무려요"
+   "verbs": [
+    "버무리기",
+    "버무리기",
+    "버무리기",
+    "버무리기",
+    "버무리기",
+    "버무리기",
+    "버무리기",
+    "버무리기"
+   ],
+   "hint": "반 박자마다 조물조물",
+   "tutorial": "그릇의 재료를 반 박자마다 한 번씩 버무려요 (8번). '통'과 그 사이 '짝'에 맞춰 리듬 타듯 눌러요."
   },
   "mix_hard": {
    "label": "힘껏 비비기",
-   "kind": "mash",
-   "taps": 16,
-   "duration_ms": 2600,
+   "kind": "beats",
+   "beats": 12,
+   "hits": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5,
+    5.0,
+    5.5,
+    6.0,
+    6.5
+   ],
+   "interval_ms": 536,
+   "window_ms": 120,
    "anim": "cook_mix",
    "tool": "",
-   "scene": "mix"
+   "scene": "mix",
+   "verbs": [
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기",
+    "비비기"
+   ],
+   "hint": "반 박자마다 쓱쓱 12번",
+   "tutorial": "반 박자마다 12번 힘껏 비벼요. 박자를 놓치지 말고 끝까지!"
   },
   "plate": {
    "label": "담기",
-   "kind": "timing",
-   "ideal_ms": 1300,
-   "window_ms": 280,
+   "kind": "beats",
+   "beats": 4,
+   "hits": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "interval_ms": 536,
+   "window_ms": 170,
    "anim": "cook_plate",
    "tool": "",
    "scene": "plate",
-   "hint": "쟁반이 한가운데 오면 접시를 내려놓아요"
+   "verbs": [
+    "접시 놓기",
+    "담기",
+    "고명",
+    "완성"
+   ],
+   "hint": "접시 놓고 · 담고 · 고명 · 짠!",
+   "tutorial": "박자마다 하나씩: 접시를 놓고, 음식을 담고, 고명을 올리고, 짠! 하고 완성해요."
   },
   "plate_hard": {
    "label": "예쁘게 담기",
-   "kind": "timing",
-   "ideal_ms": 950,
-   "window_ms": 150,
+   "kind": "beats",
+   "beats": 6,
+   "hits": [
+    1,
+    2,
+    2.5,
+    3,
+    3.5,
+    4
+   ],
+   "interval_ms": 536,
+   "window_ms": 120,
    "anim": "cook_plate",
    "tool": "",
-   "scene": "plate"
+   "scene": "plate",
+   "verbs": [
+    "접시 놓기",
+    "담기",
+    "소스",
+    "고명",
+    "고명",
+    "완성"
+   ],
+   "hint": "반 박자 고명까지 예쁘게",
+   "tutorial": "접시를 놓고 담은 뒤, 반 박자마다 소스와 고명을 톡톡, 넷째 박자에 짠!"
   },
   "steam": {
    "label": "찌기",
-   "kind": "steam",
-   "items": 3,
-   "fill_ms": 1600,
-   "water_window": 0.16,
-   "steam_ms": 2600,
-   "window_ms": 420,
+   "kind": "beats",
+   "beats": 6,
+   "hits": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    8
+   ],
+   "interval_ms": 536,
+   "window_ms": 160,
    "anim": "cook_stir",
    "tool": "ladle",
-   "hint": "재료를 냄비에 담고, 물을 선까지 붓고, 김이 알맞게 오르면 뚜껑을 열어요",
-   "scene": "steam"
+   "scene": "steam",
+   "verbs": [
+    "담기",
+    "담기",
+    "담기",
+    "물 붓기",
+    "뚜껑 덮기",
+    "뚜껑 열기"
+   ],
+   "hint": "담고 · 물 붓고 · 덮고 · 열어요",
+   "tutorial": "박자마다 재료 셋을 찜기에 담고, 넷째 박자에 물을 붓고, 다섯째 박자에 뚜껑을 덮어요. 김이 오르는 동안 기다렸다 여덟째 박자에 뚜껑을 열어요."
   },
   "steam_hard": {
    "label": "정성껏 찌기",
-   "kind": "steam",
-   "items": 4,
-   "fill_ms": 1400,
-   "water_window": 0.1,
-   "steam_ms": 3200,
-   "window_ms": 260,
+   "kind": "beats",
+   "beats": 7,
+   "hits": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    9
+   ],
+   "interval_ms": 536,
+   "window_ms": 120,
    "anim": "cook_stir",
    "tool": "ladle",
-   "hint": "물이 넘치거나 모자라면 비린내가 나요. 딱 선까지!",
-   "scene": "steam"
+   "scene": "steam",
+   "verbs": [
+    "담기",
+    "담기",
+    "담기",
+    "담기",
+    "물 붓기",
+    "뚜껑 덮기",
+    "뚜껑 열기"
+   ],
+   "hint": "넷 담고 · 붓고 · 덮고 · 오래 쪄요",
+   "tutorial": "재료 넷을 박자마다 담고, 물 붓고, 뚜껑 덮고, 오래 기다렸다 아홉째 박자에 열어요."
   },
   "season": {
    "label": "간하기",
    "kind": "beats",
    "beats": 4,
-   "interval_ms": 420,
+   "hits": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "interval_ms": 536,
    "window_ms": 150,
    "anim": "cook_plate",
    "tool": "",
    "scene": "season",
-   "hint": "박자에 맞춰 톡톡! 소금을 골고루 뿌려요"
+   "verbs": [
+    "톡",
+    "톡",
+    "톡",
+    "톡"
+   ],
+   "hint": "박자마다 소금 톡톡",
+   "tutorial": "소금통을 박자마다 한 번씩 톡톡 흔들어 골고루 뿌려요 (4번)."
   },
   "skewer": {
    "label": "꼬치 꿰기",
    "kind": "beats",
    "beats": 4,
-   "interval_ms": 520,
-   "window_ms": 170,
+   "hits": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "interval_ms": 536,
+   "window_ms": 165,
    "anim": "cook_plate",
    "tool": "",
    "scene": "skewer",
-   "hint": "박자에 맞춰 하나씩 쏙쏙 꿰어요"
+   "verbs": [
+    "꿰기",
+    "꿰기",
+    "꿰기",
+    "꿰기"
+   ],
+   "hint": "박자마다 하나씩 쏙",
+   "tutorial": "박자마다 재료를 하나씩 꼬치에 꿰어요 (4번)."
   },
   "stir_fry": {
    "label": "볶기",
    "kind": "beats",
-   "beats": 5,
-   "interval_ms": 440,
-   "window_ms": 150,
+   "beats": 8,
+   "hits": [
+    1,
+    2,
+    3,
+    3.5,
+    4,
+    5,
+    6,
+    6.5
+   ],
+   "interval_ms": 536,
+   "window_ms": 140,
    "anim": "cook_flip",
    "tool": "pan",
    "scene": "wok",
-   "hint": "박자에 맞춰 웍을 휙! 잘 맞으면 불맛이 올라요"
+   "verbs": [
+    "휙",
+    "휙",
+    "휙",
+    "휙",
+    "휙",
+    "휙",
+    "휙",
+    "휙"
+   ],
+   "hint": "웍을 박자마다 휙! (셋째 · 여섯째엔 반 박자 더)",
+   "tutorial": "웍을 박자마다 휙 들어 올려 볶아요. 셋째와 여섯째 박자 뒤에는 반 박자에 한 번 더! 잘 맞으면 불맛이 올라요."
   },
   "deep_fry": {
    "label": "튀기기",
-   "kind": "timing",
-   "ideal_ms": 2600,
-   "window_ms": 340,
+   "kind": "beats",
+   "beats": 4,
+   "hits": [
+    1,
+    3,
+    5,
+    8
+   ],
+   "interval_ms": 536,
+   "window_ms": 160,
    "anim": "cook_stir",
    "tool": "ladle",
    "scene": "fry",
-   "hint": "기포가 잦아들고 튀김옷이 황금빛이 되면 건져요"
+   "verbs": [
+    "넣기",
+    "흔들기",
+    "흔들기",
+    "건지기"
+   ],
+   "hint": "넣고 · 흔들고 · 건져요",
+   "tutorial": "첫 박자에 바구니를 기름에 넣고(치이익), 두 번 흔들고, 여덟째 박자에 건져요. 너무 일찍 건지면 덜 익어요!"
   },
   "knead": {
    "label": "반죽하기",
-   "kind": "mash",
-   "taps": 12,
-   "duration_ms": 2800,
+   "kind": "beats",
+   "beats": 6,
+   "hits": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "interval_ms": 536,
+   "window_ms": 160,
    "anim": "cook_mix",
    "tool": "",
    "scene": "knead",
-   "hint": "꾹꾹 눌러 매끈하게 반죽해요"
+   "verbs": [
+    "꾹",
+    "꾹",
+    "꾹",
+    "꾹",
+    "꾹",
+    "꾹"
+   ],
+   "hint": "박자마다 꾹꾹 눌러요",
+   "tutorial": "반죽을 박자마다 한 번씩 꾹 눌러 접어요 (6번)."
   }
  },
  "recipes": [

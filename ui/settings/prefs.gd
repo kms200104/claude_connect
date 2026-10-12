@@ -17,6 +17,8 @@ const MUSIC_OFF: String = "off"
 const MINIMAP: String = "minimap"
 ## 탈것 조작: "stick" = 조이스틱 방향으로, "buttons" = 왼쪽 ▲▼(가속 · 브레이크) · 오른쪽 ◀▶(핸들) (RideButtons).
 const RIDE_CONTROL: String = "ride_control"
+## v0.18 리듬 요리: 설명을 본 요리 동작(장면)들 (쉼표로 이은 글).
+const COOK_SEEN: String = "cook_seen"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
@@ -33,6 +35,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"music": "",
 	"minimap": false,
 	"ride_control": "stick",
+	"cook_seen": "",
 }
 
 
@@ -61,6 +64,19 @@ static func set_value(key: String, value: Variant) -> void:
 	cfg.set_value(SECTION, key, value)
 	cfg.save(PATH)
 	events.changed.emit(key)
+
+
+## 이 요리 동작(장면)의 설명을 본 적이 있는지.
+static func cook_seen(scene: String) -> bool:
+	return scene in str(get_value(COOK_SEEN)).split(",", false)
+
+
+static func mark_cook_seen(scene: String) -> void:
+	if cook_seen(scene):
+		return
+	var seen: PackedStringArray = str(get_value(COOK_SEEN)).split(",", false)
+	seen.append(scene)
+	set_value(COOK_SEEN, ",".join(seen))
 
 
 static func vibration() -> bool:

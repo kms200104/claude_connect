@@ -27,15 +27,49 @@ static func grade(off: float, window: float) -> Grade:
 	return Grade.MISS
 
 
-## 박자 동작에서 t 에 누른 것이 몇 번째 박자에 가장 가까운지 (1부터, 박자 밖이면 가장 가까운 끝).
+## 박자 동작에서 누를 박자들 (v0.18 hits: 1 = 첫 박자, 0.5 = 반 박자). 없으면 1 … beats (서버 beatHits 와 같다).
+static func hits(step: Dictionary) -> PackedFloat32Array:
+	var out: PackedFloat32Array = PackedFloat32Array()
+	var raw: Variant = step.get("hits", null)
+	if raw is Array and not (raw as Array).is_empty():
+		for h: Variant in raw:
+			out.append(float(h))
+		return out
+	for i: int in int(step.get("beats", 4)):
+		out.append(float(i + 1))
+	return out
+
+
+## i 번째(0부터) 누를 때 (동작 시작부터 ms).
+static func hit_ms(step: Dictionary, i: int) -> float:
+	var h: PackedFloat32Array = hits(step)
+	return h[clampi(i, 0, h.size() - 1)] * float(step.get("interval_ms", 536))
+
+
+## 동작이 끝나는 때: 마지막 박자 (ms).
+static func last_hit_ms(step: Dictionary) -> float:
+	var h: PackedFloat32Array = hits(step)
+	return h[h.size() - 1] * float(step.get("interval_ms", 536)) if not h.is_empty() else 0.0
+
+
+## t 에 누른 것이 몇 번째 박자에 가장 가까운지 (0부터).
+static func nearest_hit(step: Dictionary, t: float) -> int:
+	var h: PackedFloat32Array = hits(step)
+	var interval: float = float(step.get("interval_ms", 536))
+	var best: int = 0
+	for i: int in h.size():
+		if absf(t - h[i] * interval) < absf(t - h[best] * interval):
+			best = i
+	return best
+
+
+## 예전 이름 (1부터).
 static func nearest_beat(step: Dictionary, t: float) -> int:
-	var interval: float = float(step.get("interval_ms", 480))
-	return clampi(roundi(t / interval), 1, int(step.get("beats", 4)))
+	return nearest_hit(step, t) + 1
 
 
 static func beat_grade(step: Dictionary, t: float) -> Grade:
-	var interval: float = float(step.get("interval_ms", 480))
-	return grade(absf(t - float(nearest_beat(step, t)) * interval), float(step.get("window_ms", 170)))
+	return grade(absf(t - hit_ms(step, nearest_hit(step, t))), float(step.get("window_ms", 170)))
 
 
 ## 동작 하나의 솜씨 0~1 (서버 stepQuality 와 같다).
@@ -48,16 +82,28 @@ static func step_quality(step: Dictionary, raw_taps: Array) -> float:
 	t.sort()
 	match str(step.get("kind", "")):
 		"beats":
-			var beats: int = int(step.get("beats", 4))
-			var interval: float = float(step.get("interval_ms", 480))
+			# 누름 하나는 박자 하나에만, 차례대로 짝짓는다 (서버 stepQuality 와 같다).
+			var h: PackedFloat32Array = hits(step)
+			var interval: float = float(step.get("interval_ms", 536))
 			var window: float = float(step.get("window_ms", 170))
 			var total: float = 0.0
-			for i: int in range(1, beats + 1):
-				var off: float = INF
-				for x: float in t:
-					off = minf(off, absf(x - interval * i))
-				total += maxf(0.0, 1.0 - off / (window * 2.0))
-			return maxf(0.0, total / beats - maxf(0, t.size() - beats) * 0.05)
+			var j: int = 0
+			for hit: float in h:
+				var ideal: float = hit * interval
+				var best: float = INF
+				var at: int = -1
+				for k: int in range(j, t.size()):
+					var off: float = absf(t[k] - ideal)
+					if off < best:
+						best = off
+						at = k
+					elif t[k] > ideal:
+						break
+				if at < 0 or best >= window * 2.0:
+					continue
+				total += 1.0 - best / (window * 2.0)
+				j = at + 1
+			return maxf(0.0, total / float(h.size()) - maxf(0, t.size() - h.size()) * 0.05)
 		"timing":
 			if t.is_empty():
 				return 0.0
