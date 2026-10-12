@@ -36,6 +36,7 @@ func _ready() -> void:
 	Net.furniture_placed.connect(func(info: PlacedInfo, _by: int) -> void: Audio.play_at("chop", info.position, -8.0, 0.8))
 	Net.furniture_removed.connect(func(_id: String) -> void: Audio.play_sfx("pickup", -4.0))
 	Net.lightning_struck.connect(_on_lightning)
+	Net.thunder_rumbled.connect(_on_far_thunder)
 	Net.collected.connect(func(kind: String, _item: String) -> void:
 		Audio.play_sfx("twinkle" if kind == DropInfo.KIND_STAR else "pickup", -2.0)
 		if kind == DropInfo.KIND_GIFT:
@@ -113,10 +114,20 @@ func _on_peer_action(_id: int, kind: String, target: String) -> void:
 ## 번개: 번쩍인 뒤 조금 있다가 우르릉 (거리감). 실내에서는 작게.
 func _on_lightning(power: float) -> void:
 	await get_tree().create_timer(randf_range(0.3, 1.2)).timeout
-	_thunder_index = (_thunder_index + 1) % 2
 	var volume: float = linear_to_db(clampf(power, 0.2, 1.0)) + 1.5 + (-8.0 if sky != null and sky.indoor else 0.0)
 	var pitch: float = randf_range(0.85, 1.02)
+	if Net.lightning_roll:
+		# 우르르 쾅쾅: 길게 굴러오다 연달아 터진다.
+		Audio.play_sfx("thunder_roll", volume, pitch, 0.03)
+		return
+	_thunder_index = (_thunder_index + 1) % 2
 	Audio.play_sfx("thunder_%d" % (_thunder_index + 1), volume, pitch, 0.05)
+
+
+## 멀리서 우르릉 (번쩍임 없음): 작고 낮게.
+func _on_far_thunder() -> void:
+	var volume: float = -4.0 + (-8.0 if sky != null and sky.indoor else 0.0)
+	Audio.play_sfx("thunder_far", volume, randf_range(0.85, 1.0), 0.04)
 
 
 func _near_restaurant() -> bool:

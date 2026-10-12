@@ -8,6 +8,7 @@ const CASES: Array = [
 	["braised_fish", "chop"], ["trout_butter", "grill_hard"], ["samgyeopsal", "grill"], ["beef_steak", "season"], ["chicken_skewer", "skewer"],
 	["bulgogi", "stir_fry"], ["mushroom_jeon", "fry_flip"], ["loach_soup", "boil"], ["braised_fish", "simmer"], ["fried_chicken", "deep_fry"],
 	["herb_bibimbap", "mix_hard"], ["dumplings", "knead"], ["steamed_egg", "steam"], ["rice_ball", "plate"],
+	["grilled_fish", "plate"], ["mushroom_skewer", "plate"], ["loach_soup", "plate"], ["fried_chicken", "plate"], ["bulgogi", "plate"], ["dumplings", "plate"],
 ]
 
 var _failures: int = 0
@@ -147,15 +148,12 @@ func _check_tutorial(kitchen: KitchenWindow) -> void:
 	stage.show_tutorial(step)
 	kitchen.call("_on_tap")
 	_check(closed[0] and not stage.is_tutorial_open(), "큰 단추를 눌러도 설명이 닫힌다")
-	# 낮은 창(가로 화면 · 접는 폰)에서도 요리 화면이 스크롤 없이 들어온다 — 스크롤되면 설명 카드 아래 단추가 가려진다.
-	kitchen.call("_set_panel_height", 1300.0)
+	# 요리 중에는 주방 창이 화면 전체를 덮는다 (게임 HUD 위, 조리대가 대부분).
 	await get_tree().process_frame
-	await get_tree().process_frame
-	var scroll: ScrollContainer = kitchen.get("_scroll")
-	var list: Control = kitchen.get("_list")
-	_check(list.get_combined_minimum_size().y <= scroll.size.y + 1.0, "낮은 창에서 조리 무대가 줄어 스크롤이 없다 (내용 %.0f / 창 %.0f, 무대 %.0f)" % [list.get_combined_minimum_size().y, scroll.size.y, stage.custom_minimum_size.y])
-	kitchen.call("_set_panel_height", KitchenWindow.COOK_HEIGHT)
-	await get_tree().process_frame
+	var panel: Control = kitchen.get("_panel")
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	_check(bool(kitchen.get("_full")) and panel.size.distance_to(view) < 2.0, "요리는 온 화면 (창 %s / 화면 %s)" % [str(panel.size), str(view)])
+	_check(stage.size.y > view.y * 0.7, "조리대가 화면 대부분 (%.0f / %.0f)" % [stage.size.y, view.y])
 
 
 ## 손님 반응 글 (v20): 별점 첫마디 + 까닭 — 좋아하는 맛, T 손님의 깐깐한 솜씨 평, 늦은 요리.

@@ -78,4 +78,4 @@ CC BY 3.0 은 출처 표시가 필요하다 — 게임을 공개할 때 이 표�
 | 반짝 | `twinkle` | Kenney Impact Sounds (유리) — Kenney | CC0 |
 | 화면 단추 | `ui_click`, `ui_confirm`, `ui_cancel` | Kenney UI Audio — Kenney | CC0 |
 | 새소리 · 풀벌레 · 비 · 비행기 | `birds_loop`, `crickets_loop`, `rain_loop`, `plane_loop` | Birds · Night · Rain · Airplane — SFX Producer (YouTube, Noisekun) | CC0 |
-| 천둥 | `thunder_1`, `thunder_2` | Thunder Storm — Borys Kozielski (Freesound, Noisekun) | CC0 |
+| 천둥 · 우르르 쾅쾅 · 먼 우르릉 | `thunder_1`, `thunder_2`, `thunder_roll`, `thunder_far` | Thunder Storm — Borys Kozielski (Freesound, Noisekun) | CC0 |

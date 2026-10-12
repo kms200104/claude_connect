@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
+import { defaultConfig } from '../src/config.js';
 import { Client, sleep, uid } from './helpers.js';
 
 /** 테스트가 마음대로 돌리는 시계. */
@@ -251,8 +252,17 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.equal(w.w, 'thunder');
     const bolt = await a.type('lightning', 3500);
     assert.ok(bolt.power >= 0.6 && bolt.power <= 1);
+    assert.equal(typeof bolt.roll, 'boolean', '우르르 쾅쾅(길게 구르는 천둥)인지 함께 알린다');
     s.config.weatherForce = 'clear';
     assert.ok(await a.next((m) => m.t === 'weather' && m.w === 'clear', 2500));
+  }));
+
+  it('번개는 평균 3분에 한 번, 사이사이 번쩍임 없는 먼 천둥', () => withServer({ weatherForce: 'thunder', lightningMinMs: 60000, lightningMaxMs: 60000, rumbleMinMs: 10, rumbleMaxMs: 20 }, async (s) => {
+    const a = await open(s);
+    await enter(a);
+    const far = await a.type('thunder', 3500);
+    assert.ok(far.st > 0);
+    assert.equal((defaultConfig.lightningMinMs + defaultConfig.lightningMaxMs) / 2, 180000, '기본 번개 간격 평균 3분');
   }));
 
   it('옛 저장 파일(schema 1)은 칸 인벤토리로 옮기고 도구를 챙겨 준다', async () => {

@@ -29,6 +29,16 @@ var _note_good: bool = true
 var _preview: SubViewport = null
 var _preview_model: VehicleModel = null
 var _preview_pivot: Node3D = null
+var _preview_cam: Camera3D = null
+## 미리보기 카메라가 따라가는 자리 · 보는 곳 (부품 칸을 고르면 그 부품 쪽으로 다가간다).
+var _cam_pos: Vector3 = Vector3(0.0, 1.3, 2.9)
+var _cam_look: Vector3 = Vector3(0.0, 0.4, 0.0)
+## 방금 바뀐 칸 (미리보기에서 그 자리를 반짝이며 보여 준다) · 반짝임.
+var _flash_slot: String = ""
+var _flash: MeshInstance3D = null
+var _flash_t: float = 0.0
+var _changed_label: Label = null
+var _build_queued: bool = false
 
 
 func _ready() -> void:
@@ -43,9 +53,54 @@ func _ready() -> void:
 			_rebuild())
 
 
+## 칸마다 미리보기에서 볼 자리 (모델 anchors 이름) · 탈것을 돌려 보일 쪽 (rotation.y — 앞 = -Z).
+const SLOT_FOCUS: Dictionary[String, Array] = {
+	"paint": ["frame", 0.0], "trim": ["frame", 0.0], "light": ["head", 2.55], "tail": ["tail", -0.6],
+	"glow": ["frame", 0.0], "drive": ["axle_r", -1.57], "brake": ["axle_f", 1.57], "tire": ["axle_f", 1.57],
+	"seat": ["seat", -1.2], "front": ["front", 2.55], "rear": ["rear", -0.6], "deco": ["frame", 1.57],
+}
+
+
 func _process(delta: float) -> void:
-	if _preview_pivot != null and is_instance_valid(_preview_pivot):
+	if _preview_pivot == null or not is_instance_valid(_preview_pivot):
+		return
+	var focus: Array = SLOT_FOCUS.get(_slot, []) if _mode == Mode.CUSTOM else []
+	var whole: bool = focus.is_empty() or str(focus[0]) == "frame" and _slot != "deco"
+	if whole:
+		# 전체(도색 · 포인트 색 · 빛 장식): 천천히 돌며 온몸을.
 		_preview_pivot.rotation.y += delta * 0.6
+	else:
+		_preview_pivot.rotation.y = lerp_angle(_preview_pivot.rotation.y, float(focus[1]), 1.0 - exp(-4.0 * delta))
+	if _preview_cam != null and _preview_model != null and _preview_model.info != null:
+		var size: float = _model_size()
+		var want_look: Vector3 = Vector3(0.0, 0.4 * size, 0.0)
+		var want_pos: Vector3 = Vector3(0.0, 1.3, 2.9) * size
+		if not whole:
+			# 그 부품 쪽으로 다가가 크게 (휴대폰 화면을 확대해 보듯).
+			want_look = _preview_pivot.transform * _preview_model.info.anchor(str(focus[0]))
+			want_pos = want_look + Vector3(0.0, 0.55, 1.35) * size
+		var k: float = 1.0 - exp(-5.0 * delta)
+		_cam_look = _cam_look.lerp(want_look, k)
+		_cam_pos = _cam_pos.lerp(want_pos, k)
+		CurveAnchor.aim(_preview_cam, _cam_pos, _cam_look)
+	if _flash != null and is_instance_valid(_flash):
+		_flash_t += delta
+		var u: float = _flash_t / 1.8
+		if u >= 1.0:
+			_flash.queue_free()
+			_flash = null
+		else:
+			var pulse: float = 0.5 + 0.5 * sin(_flash_t * TAU * 2.2)
+			_flash.scale = Vector3.ONE * (0.85 + 0.35 * pulse)
+			(_flash.material_override as StandardMaterial3D).albedo_color.a = 0.55 * (1.0 - u) * (0.5 + 0.5 * pulse)
+
+
+## 탈것 크기 배율 (보트는 길어서 카메라를 더 멀리).
+func _model_size() -> float:
+	if _preview_model == null or _preview_model.info == null:
+		return 1.0
+	var length: float = absf(_preview_model.info.anchor("tail").z - _preview_model.info.anchor("head").z)
+	return clampf(length / 1.1, 1.0, 3.6)
 
 
 func go_back() -> bool:
@@ -62,7 +117,9 @@ func go_back() -> bool:
 
 
 func _rebuild() -> void:
-	if is_inside_tree():
+	# 같은 프레임에 여러 번(탈것 바뀜 + 결과) 불려도 한 번만 다시 그린다 (두 번째가 바뀐 곳 반짝임을 지우지 않게).
+	if is_inside_tree() and not _build_queued:
+		_build_queued = true
 		_build.call_deferred()
 
 
@@ -86,8 +143,10 @@ func _on_done(result: Dictionary) -> void:
 		"part":
 			var p: VehicleCatalog.Part = GameData.garage.part(str(result.get("part", "")))
 			_note = ("%s 끼웠어요 (%s)." % [p.name, Money.short(cost)]) if cost > 0 else "%s 다시 끼웠어요." % (p.name if p != null else "")
+			_flash_slot = p.slot if p != null else _slot
 		"unfit":
 			_note = "기본 부품으로 돌렸어요."
+			_flash_slot = _slot
 		"sell":
 			_note = "중고로 팔았어요 (+%s)." % Money.short(-cost)
 			_mode = Mode.GARAGE
@@ -115,10 +174,14 @@ func _on_failed(kind: String, code: String) -> void:
 
 
 func _build() -> void:
+	_build_queued = false
 	clear()
 	_preview = null
 	_preview_model = null
 	_preview_pivot = null
+	_preview_cam = null
+	_flash = null
+	_changed_label = null
 	if _mode == Mode.SHOP or _mode == Mode.GARAGE:
 		tabs(PackedStringArray(["매장", "내 차고 (%d)" % Net.vehicles.size()]), 0 if _mode == Mode.SHOP else 1, func(i: int) -> void:
 			_mode = Mode.SHOP if i == 0 else Mode.GARAGE
@@ -179,7 +242,7 @@ func _build_model() -> void:
 		_mode = Mode.SHOP
 		_build()
 		return
-	_add_preview(m.id, {})
+	_add_preview(m.id, {}, 360.0)
 	var c: VBoxContainer = card()
 	c.add_child(label(m.name, 34, INK))
 	c.add_child(label("%s · %s" % [m.type_name, m.spec], 24, SOFT))
@@ -300,7 +363,10 @@ func _build_custom() -> void:
 	var fit: Dictionary = v.get("fit", {}) as Dictionary
 	var owned: Array = v.get("owned", [])
 	add_child(label("%s 꾸미기 · 가진 솔 %s" % [m.name, Money.short(Net.sol)], 28, INK))
-	_add_preview(m.id, fit)
+	_add_preview(m.id, fit, 330.0)
+	if not _flash_slot.is_empty():
+		_start_flash(_flash_slot)
+		_flash_slot = ""
 	var head: VBoxContainer = card()
 	_add_stats(head, GameData.garage.stats(m.id, fit), GameData.garage.stats(m.id, {}))
 	# 칸 고르기 (네 줄).
@@ -323,6 +389,7 @@ func _build_custom() -> void:
 			_slot = sid
 			_build())
 		grid.add_child(b)
+	add_child(label("고른 칸: %s — 위 미리보기가 그 부품 쪽으로 다가가요. 끼우면 바뀐 곳이 반짝여요." % _slot_name(_slot), 22, SOFT))
 	# 기본 부품 (빼기).
 	var stock: Button = row_button(90.0)
 	stock.name = "Stock"
@@ -405,13 +472,22 @@ func _add_stats(parent: VBoxContainer, s: VehicleCatalog.Stats, base: VehicleCat
 
 
 ## 돌아가는 3D 미리보기 (휴대폰 화면 안 작은 무대).
-func _add_preview(model_id: String, fit: Dictionary) -> void:
+## 휴대폰 맨 위에 고정해 아래 부품 목록을 굴려도 늘 보인다 (pin).
+func _add_preview(model_id: String, fit: Dictionary, height: float = 380.0) -> void:
 	var holder: SubViewportContainer = SubViewportContainer.new()
 	holder.name = "Preview"
 	holder.stretch = true
-	holder.custom_minimum_size = Vector2(0, 380)
+	holder.custom_minimum_size = Vector2(0, height)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(holder)
+	pin(holder)
+	_changed_label = label("", 24, GOOD)
+	_changed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_changed_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_changed_label.offset_top = 8.0
+	_changed_label.offset_bottom = 44.0
+	_changed_label.add_theme_color_override("font_outline_color", Color.WHITE)
+	_changed_label.add_theme_constant_override("outline_size", 8)
+	holder.add_child(_changed_label)
 	_preview = SubViewport.new()
 	_preview.own_world_3d = true
 	_preview.transparent_bg = false
@@ -451,4 +527,51 @@ func _add_preview(model_id: String, fit: Dictionary) -> void:
 	var cam: Camera3D = Camera3D.new()
 	cam.fov = 36.0
 	stage.add_child(cam)
-	CurveAnchor.aim(cam, Vector3(0.0, 1.3, 2.9), Vector3(0.0, 0.4, 0.0))
+	_preview_cam = cam
+	var size: float = _model_size()
+	if _cam_look == Vector3(0.0, 0.4, 0.0) or _mode != Mode.CUSTOM:
+		_cam_pos = Vector3(0.0, 1.3, 2.9) * size
+		_cam_look = Vector3(0.0, 0.4 * size, 0.0)
+	CurveAnchor.aim(cam, _cam_pos, _cam_look)
+	if _mode == Mode.CUSTOM:
+		var focus: Array = SLOT_FOCUS.get(_slot, [])
+		if not focus.is_empty() and (str(focus[0]) != "frame" or _slot == "deco"):
+			_preview_pivot.rotation.y = float(focus[1])
+
+
+## 바뀐 곳 반짝임: 그 부품 자리에 노란 빛 공이 두근거리고, 미리보기 위에 "바뀐 곳: 전조등".
+func _start_flash(slot: String) -> void:
+	if _preview_model == null or _preview_model.info == null or _preview_pivot == null:
+		return
+	var focus: Array = SLOT_FOCUS.get(slot, ["frame", 0.0])
+	var at: Vector3 = _preview_model.info.anchor(str(focus[0]))
+	var whole: bool = str(focus[0]) == "frame"
+	var ball: MeshInstance3D = MeshInstance3D.new()
+	var sphere: SphereMesh = SphereMesh.new()
+	var r: float = (0.55 if whole else 0.16) * _model_size()
+	sphere.radius = r
+	sphere.height = r * 2.0
+	sphere.radial_segments = 24
+	sphere.rings = 12
+	ball.mesh = sphere
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.no_depth_test = true
+	mat.albedo_color = Color(1.0, 0.85, 0.3, 0.55)
+	ball.material_override = mat
+	ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ball.position = at
+	_preview_pivot.add_child(ball)
+	_flash = ball
+	_flash_t = 0.0
+	if _changed_label != null:
+		_changed_label.text = "✨ 바뀐 곳: %s" % _slot_name(slot)
+
+
+func _slot_name(slot: String) -> String:
+	for sd: Dictionary in GameData.garage.slots:
+		if str(sd.get("id", "")) == slot:
+			return str(sd.get("name", slot))
+	return slot

@@ -39,7 +39,7 @@ TARGET = {
     "fish_reel": -22.0, "grow": -19.4, "kick_brake": -19.5, "kick_latch": -16.0, "kick_push": -19.0,
     "kick_roll_loop": -21.0, "level_up": -14.0, "line_zip": -19.5, "order_bell": -14.5, "pickup": -16.0,
     "plane_loop": -26.0, "quest_done": -13.5, "rain_loop": -22.5, "skid": -16.0, "thunder_1": -18.0,
-    "thunder_2": -18.5, "tree_creak": -18.0, "tree_land": -15.5, "twinkle": -18.0, "ui_cancel": -19.1,
+    "thunder_2": -18.5, "thunder_roll": -17.0, "thunder_far": -22.0, "tree_creak": -18.0, "tree_land": -15.5, "twinkle": -18.0, "ui_cancel": -19.1,
     "ui_click": -18.0, "ui_close": -20.9, "ui_confirm": -17.0, "ui_open": -19.8,
 }
 
@@ -163,6 +163,10 @@ RECIPES: dict[str, dict] = {
     # 천둥: 폭풍우 녹음에서 우르릉 두 대목.
     "thunder_1": dict(layers=[L(f"{NK}storm.ogg", 9.8, 15.3, fin=0.05)], fout=1.2),
     "thunder_2": dict(layers=[L(f"{NK}storm.ogg", 48.3, 54.0, fin=0.05)], fout=1.2),
+    # 우르르 쾅쾅: 멀리서 굴러오다 연달아 터지는 긴 천둥 (가끔).
+    "thunder_roll": dict(layers=[L(f"{NK}storm.ogg", 43.6, 57.8, fin=0.4)], fout=1.8),
+    # 번쩍임 없이 멀리서 낮게 우르릉 (번개 사이사이).
+    "thunder_far": dict(layers=[L(f"{NK}storm.ogg", 26.0, 36.5, lp=900.0, fin=0.8)], fout=2.0),
 }
 
 

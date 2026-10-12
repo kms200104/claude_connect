@@ -68,6 +68,8 @@ var _home: Control = null
 var _app: VBoxContainer = null
 var _app_title: Label = null
 var _app_bar: PanelContainer = null
+## 앱 화면 위에 고정되는 칸 (pin).
+var _pinned: VBoxContainer = null
 var _icons: Array[PhoneAppIcon] = []
 var _widget_time: Label = null
 var _widget_info: Label = null
@@ -334,10 +336,18 @@ func _build_app() -> void:
 	app_bg.add_theme_stylebox_override("panel", EventHud._box(BG, BG, 0, 0, 0))
 	_app.add_child(app_bg)
 	app_bg.add_child(inner)
+	var app_col: VBoxContainer = VBoxContainer.new()
+	app_col.add_theme_constant_override("separation", 10)
+	inner.add_child(app_col)
+	# 앱이 고정해 두는 칸 (굴려도 늘 보이는 미리보기 — 탈것 꾸미기 등). 비어 있으면 자리를 차지하지 않는다.
+	_pinned = VBoxContainer.new()
+	_pinned.name = "Pinned"
+	_pinned.add_theme_constant_override("separation", 8)
+	app_col.add_child(_pinned)
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	inner.add_child(_scroll)
+	app_col.add_child(_scroll)
 	_body = VBoxContainer.new()
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body.add_theme_constant_override("separation", 12)
@@ -693,6 +703,20 @@ func _close_app_view() -> void:
 	if _app_view != null and is_instance_valid(_app_view):
 		_app_view.on_close()
 	_app_view = null
+	clear_pinned()
+
+
+## 앱 화면 맨 위(굴리는 칸 밖)에 고정해 둔다: 아래를 굴려도 늘 보인다.
+func pin(c: Control) -> void:
+	_pinned.add_child(c)
+
+
+func clear_pinned() -> void:
+	if _pinned == null:
+		return
+	for c: Node in _pinned.get_children():
+		_pinned.remove_child(c)
+		c.queue_free()
 
 
 ## 지금 열린 v16 앱 화면 (테스트용, 없으면 null).

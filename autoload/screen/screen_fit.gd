@@ -32,6 +32,10 @@ func _ready() -> void:
 	var scaler: FontScaler = FontScaler.new()
 	scaler.name = "FontScaler"
 	add_child(scaler)
+	# 단추 위에서 끌어도 목록이 굴러간다 (모든 창 · 앱).
+	var touch_scroll: TouchScroll = TouchScroll.new()
+	touch_scroll.name = "TouchScroll"
+	add_child(touch_scroll)
 
 
 ## 화면 방향 고르기: 기억해 두고 바로 적용한다.

@@ -2229,8 +2229,14 @@ export function createServer(overrides = {}) {
       kitchen.tickRestaurant(room);
       tickDigSpots(room, t);
       if (weather === 'thunder' && t >= room.nextLightningAt) {
-        if (room.nextLightningAt > 0) room.broadcast({ t: 'lightning', st: t, power: Math.round((0.6 + random() * 0.4) * 100) / 100 });
+        // 뇌우가 시작되면 첫 번개는 조금 기다렸다가 (간격 안 아무 때나).
+        if (room.nextLightningAt > 0) room.broadcast({ t: 'lightning', st: t, power: Math.round((0.6 + random() * 0.4) * 100) / 100, roll: random() < cfg.thunderRollChance });
         room.nextLightningAt = t + cfg.lightningMinMs + random() * (cfg.lightningMaxMs - cfg.lightningMinMs);
+        room.nextRumbleAt = t + cfg.rumbleMinMs + random() * (cfg.rumbleMaxMs - cfg.rumbleMinMs);
+      } else if (weather === 'thunder' && room.nextRumbleAt > 0 && t >= room.nextRumbleAt) {
+        // 번쩍임 없는 먼 천둥 (다음 번개와 너무 붙지 않게).
+        if (room.nextLightningAt - t > 20000) room.broadcast({ t: 'thunder', st: t });
+        room.nextRumbleAt = t + cfg.rumbleMinMs + random() * (cfg.rumbleMaxMs - cfg.rumbleMinMs);
       }
     }
   }, 1000);

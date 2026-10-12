@@ -168,6 +168,12 @@ func _popup(text: String, color: Color, at: Vector2, big: bool) -> void:
 	_popups.append({"text": text, "color": color, "at": at, "big": big, "ms": float(Time.get_ticks_msec())})
 
 
+func _notification(what: int) -> void:
+	# 가로로 넓은 무대(가로 화면)는 높이를, 세로로 긴 무대는 폭을 맞춰 조리대가 늘 알맞은 크기로 보이게.
+	if what == NOTIFICATION_RESIZED and counter != null and size.y > 0.0:
+		counter.fit_aspect(size.x / size.y)
+
+
 func _process(_delta: float) -> void:
 	if is_visible_in_tree():
 		queue_redraw()

@@ -34,6 +34,10 @@ signal aqua_ended(result: Dictionary)
 signal weather_changed(weather: String)
 ## 번개 (뇌우일 때 서버가 방 전체에 같은 순간 보낸다). power 0.6~1.
 signal lightning_struck(power: float)
+## 번쩍임 없이 멀리서 우르릉 (번개 사이사이).
+signal thunder_rumbled
+## 방금 친 번개가 '우르르 쾅쾅' 길게 구르는 천둥인지 (lightning_struck 직전에 정해진다).
+var lightning_roll: bool = false
 signal tree_changed(tree_id: String, stage: String, chops: int)
 signal npcs_received(server_time_ms: float, states: Array[NetNpcState])
 ## 내 도끼질 결과 (서버가 확정). 나무에서 얻은 아이템과 나무가 쓰러졌는지.
@@ -891,7 +895,10 @@ func _handle_text(text: String) -> void:
 			weather = str(msg.get("w", weather))
 			weather_changed.emit(weather)
 		"lightning":
+			lightning_roll = bool(msg.get("roll", false))
 			lightning_struck.emit(float(msg.get("power", 1.0)))
+		"thunder":
+			thunder_rumbled.emit()
 		"tree":
 			var tree_id: String = str(msg.get("id", ""))
 			if msg.has("k") and not planted_trees.has(tree_id):

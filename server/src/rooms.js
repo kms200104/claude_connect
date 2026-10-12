@@ -284,6 +284,7 @@ export class Room {
     this.weather = null; // 마지막으로 알린 날씨
     this.day = null; // 마지막으로 처리한 날짜
     this.nextLightningAt = 0;
+    this.nextRumbleAt = 0;
     // 이벤트 (events.js): 오늘의 계획, 마지막으로 알린 목록, 바닥에 떨어진 선물·별 조각 (저장하지 않음).
     this.plan = null;
     this.eventSig = '';

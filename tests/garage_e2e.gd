@@ -215,7 +215,7 @@ func _run() -> void:
 	_check(models == 10, "매장에 자전거 4 · 전기오토바이 3 · 보트 3 (%d)" % models)
 	_check(_press(app, "Model_bike_city"), "생활 자전거 고르기")
 	await get_tree().create_timer(0.1).timeout
-	_check(app.find_child("Preview", true, false) is SubViewportContainer, "3D 미리보기가 돈다")
+	_check(phone.find_child("Preview", true, false) is SubViewportContainer, "3D 미리보기가 돈다")
 	var sol0: int = Net.sol
 	_press(app, "BuyButton")
 	await get_tree().create_timer(0.1).timeout
@@ -251,8 +251,21 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return str((Net.vehicle(bike).get("fit", {}) as Dictionary).get("drive", "")) == "drive_gear11", 3.0), "11단 구동계 (성능 업그레이드)")
 	var stats: VehicleCatalog.Stats = GameData.garage.stats("bike_city", Net.vehicle(bike).get("fit", {}) as Dictionary)
 	_check(absf(stats.top - 6.2 * 1.13) < 0.001, "최고 속도가 13%% 올랐다 (%.2f m/s)" % stats.top)
-	var preview_model: VehicleModel = _find_model(app.find_child("Preview", true, false))
+	var preview: Node = phone.find_child("Preview", true, false)
+	var preview_model: VehicleModel = _find_model(preview)
 	_check(preview_model != null and preview_model.get_child_count() > 0, "미리보기에 탈것 모형이 있다")
+	# 미리보기는 굴리는 칸 밖(휴대폰 맨 위)에 고정 — 부품 목록을 굴려도 늘 보인다.
+	_check(preview != null and not app.is_ancestor_of(preview) and phone.get_node("%s" % phone.get_path_to(preview)).get_parent().name == "Pinned", "미리보기가 휴대폰 위에 고정 (굴려도 보임)")
+	var changed_text: Array[String] = [""]
+	var got: bool = await _wait_until(func() -> bool:
+		var pv: Node = phone.find_child("Preview", true, false)
+		if pv == null:
+			return false
+		for l: Node in pv.find_children("*", "Label", true, false):
+			changed_text[0] = (l as Label).text
+		return changed_text[0].contains("구동"), 2.0)
+	_check(got, "바뀐 곳을 알려 준다: %s" % changed_text[0])
+	await get_tree().create_timer(1.0).timeout
 	await _shot("0_preview")
 	phone.close()
 	await get_tree().create_timer(0.4).timeout

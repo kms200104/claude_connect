@@ -48,6 +48,16 @@ func clear() -> void:
 	for c: Node in get_children():
 		remove_child(c)
 		c.queue_free()
+	if phone != null:
+		phone.clear_pinned()
+
+
+## 굴리는 칸 밖, 앱 화면 맨 위에 고정한다 (휴대폰이 없으면 그냥 앱 안에).
+func pin(c: Control) -> void:
+	if phone != null:
+		phone.pin(c)
+	else:
+		add_child(c)
 
 
 # ---- 모양 (PhoneWindow 와 같은 모양) ----

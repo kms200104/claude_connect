@@ -20,6 +20,10 @@ const SCENE_STATION: Dictionary[String, String] = {
 const RAW_TINT: Color = Color(1.0, 1.0, 1.0)
 const GOLD_TINT: Color = Color(0.93, 0.7, 0.42)
 const BURNT_TINT: Color = Color(0.36, 0.25, 0.17)
+## 재료가 놓이는 면의 높이 (조리대 기준 m): 도마 윗면 · 팬 바닥 · 접시 안쪽.
+const BOARD_Y: float = 0.024
+const PAN_Y: float = 0.04
+const PLATE_Y: float = 0.008
 
 var scene: String = ""
 var step: Dictionary = {}
@@ -49,6 +53,8 @@ var _n: Dictionary[String, Node3D] = {}
 ## 익는 재료 (머티리얼 · 익힘 0~2 · 익는 빠르기).
 var _cooking: Array[Dictionary] = []
 var _liquid_y: float = 0.0
+## 접시에 담은 음식 윗면 높이 (고명 · 소스를 얹는 곳).
+var _plate_top: float = 0.03
 var _boil: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 ## 지금 동작의 움직임들 — 다음 동작으로 장면을 새로 차릴 때 멈춘다 (지운 재료를 붙잡은 채 돌지 않게).
@@ -122,6 +128,18 @@ func _build_room() -> void:
 
 func camera() -> Camera3D:
 	return _camera
+
+
+## 무대 비율(폭 / 높이)에 맞춘 카메라: 세로로 길면 폭 약 0.46 m, 가로로 넓으면 높이 약 0.43 m 가 화면에 들도록 (재료가 크게 보이게).
+func fit_aspect(aspect: float) -> void:
+	if _camera == null:
+		return
+	if aspect >= 1.0:
+		_camera.keep_aspect = Camera3D.KEEP_HEIGHT
+		_camera.fov = 38.0
+	else:
+		_camera.keep_aspect = Camera3D.KEEP_WIDTH
+		_camera.fov = 41.0
 
 
 ## 자리 위 카메라: 거의 위에서 (앞으로 조금 기울여) 내려다본다.
@@ -216,7 +234,7 @@ func _build_scene() -> void:
 ## 썰기: 도마 위 재료 하나, 칼이 오른쪽 끝부터 박자마다 한 토막씩.
 func _scene_chop() -> void:
 	var body: Node3D = _food_node(chop_id, true)
-	body.position = Vector3(-0.06, 0.024, 0.0)
+	body.position = Vector3(-0.06, _on(body, BOARD_Y), 0.0)
 	_n["body"] = body
 	var knife: Node3D = Node3D.new()
 	_set.add_child(knife)
@@ -249,7 +267,7 @@ func _place_knife(lift: float) -> void:
 ## 간하기: 도마 위 고기 · 생선, 위에서 소금통을 흔든다.
 func _scene_season() -> void:
 	var body: Node3D = _food_node(main_id, false)
-	body.position = Vector3(0.0, 0.024, 0.0)
+	body.position = Vector3(0.0, _on(body, BOARD_Y), 0.0)
 	_n["body"] = body
 	var shaker: Node3D = Node3D.new()
 	_set.add_child(shaker)
@@ -280,7 +298,7 @@ func _scene_knead() -> void:
 		var dust: MeshInstance3D = _add(_set, "Flour%d" % k, KitchenProps.piece("garlic"), Vector3(_rng.randf_range(-0.14, 0.14), 0.024, _rng.randf_range(-0.09, 0.09)))
 		dust.scale = Vector3(1.6, 0.25, 1.6) * _rng.randf_range(0.5, 1.2)
 	var dough: Node3D = _food_node("flour", false)
-	dough.position = Vector3(0.0, 0.024, 0.0)
+	dough.position = Vector3(0.0, _on(dough, BOARD_Y), 0.0)
 	_n["body"] = dough
 
 
@@ -313,10 +331,10 @@ func _scene_pan() -> void:
 	var tray: Vector3 = Vector3(0.24, 0.0, 0.08)
 	_add(_set, "Tray", KitchenProps.mesh("plate"), tray)
 	var body: Node3D = _food_node(main_id if scene == "grill" else ("egg" if main_id == "egg" else "jeon"), scene == "grill")
-	body.position = tray + Vector3(0.0, 0.016, 0.0)
+	body.position = tray + Vector3(0.0, _on(body, PLATE_Y), 0.0)
 	if scene == "flip":
+		body.position = Vector3(0.0, _on(body, PAN_Y), 0.0)
 		body.scale = Vector3.ONE * 0.001
-		body.position = Vector3(0.0, 0.04, 0.0)
 		body.visible = false
 	_n["body"] = body
 	var turner: Node3D = Node3D.new()
@@ -423,21 +441,111 @@ func _scene_fry() -> void:
 		_tint(p, Color(1.0, 0.97, 0.88))
 
 
-## 담기: 빈 접시가 옆에서 미끄러져 들어오고, 요리 · 고명이 올라간다.
+## 담기: 빈 접시가 옆에서 미끄러져 들어오고, 앞 동작에서 만든 바로 그 음식(구운 생선 · 꼬치 · 국 …)이 담기고, 고명이 올라간다.
 func _scene_plate() -> void:
 	var plate: Node3D = Node3D.new()
 	plate.position = Vector3(0.45, 0.0, 0.0)
 	_set.add_child(plate)
 	_add(plate, "Mesh", KitchenProps.mesh("plate"), Vector3.ZERO)
 	_n["plate"] = plate
-	var dish: MeshInstance3D = MeshInstance3D.new()
-	dish.mesh = DishArt.mesh(recipe.id) if recipe != null else null
-	dish.material_override = CLAY
-	# 요리 모형의 접시(지름 40cm)를 실제 접시(24cm)에 맞춘다.
+	var dish: Node3D = Node3D.new()
+	dish.name = "Dish"
+	plate.add_child(dish)
+	_plate_top = _build_plated(dish)
 	dish.scale = Vector3.ONE * 0.001
 	dish.visible = false
-	plate.add_child(dish)
 	_n["dish"] = dish
+
+
+## 이 요리의 앞 동작들(장면)로 접시에 오를 모양을 정한다. 돌려주는 값 = 음식 윗면 높이 (고명을 얹을 곳).
+func _build_plated(dish: Node3D) -> float:
+	var scenes: PackedStringArray = []
+	if recipe != null:
+		for id: String in recipe.steps:
+			scenes.append(CookStage.scene_of(GameData.econ.step(id)))
+	var cooked: Color = GOLD_TINT.lerp(RAW_TINT, 0.35)
+	if "skewer" in scenes:
+		# 꼬치: 꼬챙이에 꿴 조각들 (노릇하게).
+		var stick: MeshInstance3D = _add(dish, "Skewer", KitchenProps.mesh("skewer"), Vector3(0.0, PLATE_Y + 0.012, 0.0))
+		stick.rotation.y = 0.35
+		for i: int in 4:
+			var id: String = main_id if i % 2 == 0 else ("scallion" if main_id != "scallion" else "shiitake")
+			var p: Node3D = _piece_node(id, dish)
+			p.position = Vector3(cos(0.35) * (-0.09 + 0.06 * float(i)), PLATE_Y + 0.004, -sin(0.35) * (-0.09 + 0.06 * float(i)))
+			_tint(p, cooked)
+		return PLATE_Y + 0.04
+	if "fry" in scenes:
+		for i: int in 5:
+			var p2: Node3D = _piece_node(main_id, dish)
+			p2.scale = Vector3.ONE * 1.3
+			var a: float = TAU * float(i) / 5.0
+			p2.position = Vector3(cos(a) * 0.045, PLATE_Y + 0.004 * float(i % 2), sin(a) * 0.045)
+			p2.rotation.y = a
+			_tint(p2, GOLD_TINT)
+		return PLATE_Y + 0.04
+	if "knead" in scenes:
+		# 빚은 만두 여섯 개.
+		for i: int in 6:
+			var dumpling: Node3D = _food_node("flour", false)
+			dumpling.reparent(dish, false)
+			dumpling.scale = Vector3(0.42, 0.42, 0.42)
+			var a4: float = TAU * float(i) / 6.0
+			dumpling.position = Vector3(cos(a4) * 0.055, _on(dumpling, PLATE_Y), sin(a4) * 0.055)
+			dumpling.rotation.y = a4
+		return PLATE_Y + 0.03
+	if "wok" in scenes:
+		for i: int in 12:
+			var p4: Node3D = _piece_node(pot_ids[i % pot_ids.size()], dish)
+			var a3: float = _rng.randf() * TAU
+			var d2: float = _rng.randf_range(0.0, 0.055)
+			p4.position = Vector3(cos(a3) * d2, PLATE_Y + 0.004 + (0.055 - d2) * 0.25, sin(a3) * d2)
+			p4.rotation.y = _rng.randf() * TAU
+			_tint(p4, cooked)
+		return PLATE_Y + 0.03
+	if "grill" in scenes or "flip" in scenes or "season" in scenes:
+		var whole: bool = "grill" in scenes or "season" in scenes
+		var id2: String = main_id if whole else ("egg" if main_id == "egg" else "jeon")
+		var body: Node3D = _food_node(id2, whole)
+		body.reparent(dish, false)
+		body.position = Vector3(0.0, _on(body, PLATE_Y), 0.0)
+		body.rotation.y = 0.2
+		_tint(body, cooked)
+		if "grill" in scenes:
+			_grill_marks_top(body)
+		return PLATE_Y + float(body.get_meta(&"half_h", 0.02)) * 2.0
+	if "boil" in scenes or "simmer" in scenes or "steam" in scenes or "mix" in scenes:
+		# 국 · 찜 · 무침: 그릇에 담는다 (국물은 끓인 색 그대로).
+		var bowl: MeshInstance3D = _add(dish, "Bowl", KitchenProps.mesh("bowl"), Vector3(0.0, PLATE_Y, 0.0))
+		bowl.scale = Vector3(0.8, 0.8, 0.8)
+		var liquid_y: float = PLATE_Y + 0.045
+		if not "mix" in scenes:
+			var soup: MeshInstance3D = _disc(0.08, Color("#BFD6DC") if "boil" in scenes and not "simmer" in scenes else _broth_color(), "Soup")
+			soup.position = Vector3(0.0, liquid_y, 0.0)
+			dish.add_child(soup)
+		for i: int in 8:
+			var p3: Node3D = _piece_node(pot_ids[i % pot_ids.size()], dish)
+			var a2: float = TAU * float(i) / 8.0 + 0.3
+			var d: float = 0.02 + 0.035 * float(i % 2)
+			p3.position = Vector3(cos(a2) * d, liquid_y - 0.004 if not "mix" in scenes else PLATE_Y + 0.02 + 0.006 * float(i % 3), sin(a2) * d)
+			p3.rotation.y = a2
+		return liquid_y + 0.02
+	# 썰어 담기만: 썬 토막을 가지런히.
+	for i: int in 7:
+		var p5: Node3D = _piece_node(chop_id if not chop_id.is_empty() else main_id, dish)
+		p5.position = Vector3(-0.06 + 0.02 * float(i), PLATE_Y + 0.002, 0.012 * float(i % 2))
+	return PLATE_Y + 0.025
+
+
+## 접시에 오른 구운 재료: 석쇠 자국을 윗면에.
+func _grill_marks_top(node: Node3D) -> void:
+	var marks: Node3D = Node3D.new()
+	marks.name = "Marks"
+	node.add_child(marks)
+	for k: int in 3:
+		var m: MeshInstance3D = _add(marks, "Mark%d" % k, KitchenProps.piece("razor_clam"), Vector3(-0.03 + 0.03 * float(k), float(node.get_meta(&"half_h", 0.0)) + 0.0005, 0.0))
+		m.scale = Vector3(0.5, 0.2, 0.08)
+		m.rotation.y = 0.6
+		_tint(m, Color(0.25, 0.15, 0.1))
 
 
 # ---- 누름 → 동작 ----
@@ -567,7 +675,7 @@ func _act_pan(i: int) -> void:
 	var turner: Node3D = _n.get("turner")
 	match verb:
 		"올리기":
-			_arc(body, Vector3(0.0, 0.04, 0.0), 0.16, 0.08)
+			_arc(body, Vector3(0.0, _on(body, PAN_Y), 0.0), 0.16, 0.08)
 			_track_cook(body, 0.0)
 			_puff(_set.position + Vector3(0.0, 0.06, 0.0), Color(1, 1, 1, 0.6), 0.05, 0.8)
 		"붓기":
@@ -578,9 +686,10 @@ func _act_pan(i: int) -> void:
 		"뒤집기":
 			# 공중에서 한 바퀴 반 뒤집는다 — 아랫면(노릇)이 위로.
 			var tw: Tween = _tween()
-			tw.tween_property(body, "position:y", 0.13, 0.12).set_ease(Tween.EASE_OUT)
+			var rest: float = PAN_Y + float(body.get_meta(&"half_h", 0.0))
+			tw.tween_property(body, "position:y", rest + 0.09, 0.12).set_ease(Tween.EASE_OUT)
 			tw.parallel().tween_property(body, "rotation:x", body.rotation.x + PI, 0.24)
-			tw.tween_property(body, "position:y", 0.04, 0.1).set_ease(Tween.EASE_IN)
+			tw.tween_property(body, "position:y", rest, 0.1).set_ease(Tween.EASE_IN)
 			tw.tween_callback(func() -> void: _puff(_set.position + Vector3(0.0, 0.06, 0.0), Color(1, 1, 1, 0.6), 0.05, 0.6))
 			_flip_cook(body)
 			if turner != null:
@@ -589,7 +698,7 @@ func _act_pan(i: int) -> void:
 				t2.tween_property(turner, "position", Vector3(0.16, 0.12, -0.12), 0.2)
 		"꺼내기":
 			_stop_cook(body)
-			_arc(body, Vector3(0.24, 0.016, 0.08), 0.16, 0.1)
+			_arc(body, Vector3(0.24, PLATE_Y + float(body.get_meta(&"half_h", 0.0)), 0.08), 0.16, 0.1)
 			_flame_want = 0.4
 	if verb == "꺼내기" or i == total - 1:
 		_flame_want = 0.4
@@ -715,12 +824,12 @@ func _act_plate(i: int) -> void:
 		"담기":
 			dish.visible = true
 			var tw: Tween = _tween()
-			tw.tween_property(dish, "scale", Vector3.ONE * 0.6, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(dish, "scale", Vector3.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		"고명", "소스":
 			for k: int in 5:
 				var bit: Node3D = _piece_node("scallion" if verb == "고명" else "garlic", plate)
 				bit.scale = Vector3.ONE * (0.5 if verb == "고명" else 0.4)
-				bit.position = Vector3(_rng.randf_range(-0.05, 0.05), 0.07, _rng.randf_range(-0.05, 0.05))
+				bit.position = Vector3(_rng.randf_range(-0.04, 0.04), _plate_top + 0.002, _rng.randf_range(-0.04, 0.04))
 				if verb == "소스":
 					_tint(bit, Color(0.55, 0.32, 0.18))
 		_:
@@ -836,7 +945,9 @@ func _grill_marks(node: Node3D) -> void:
 	marks.name = "Marks"
 	node.add_child(marks)
 	for k: int in 3:
-		var m: MeshInstance3D = _add(marks, "Mark%d" % k, KitchenProps.piece("razor_clam"), Vector3(-0.03 + 0.03 * float(k), -0.003, 0.0))
+		# 아랫면(팬에 닿은 면)에 — 뒤집으면 위로 온다.
+		var bottom: float = -float(node.get_meta(&"half_h", 0.0)) - 0.001
+		var m: MeshInstance3D = _add(marks, "Mark%d" % k, KitchenProps.piece("razor_clam"), Vector3(-0.03 + 0.03 * float(k), bottom, 0.0))
 		m.scale = Vector3(0.5, 0.2, 0.08)
 		m.rotation.y = 0.6
 		_tint(m, Color(0.25, 0.15, 0.1))
@@ -869,12 +980,21 @@ func _food_node(id: String, whole: bool) -> Node3D:
 		var size: float = {"S": 0.32, "M": 0.4, "L": 0.48, "XL": 0.55}.get(fish.size, 0.4)
 		mi.scale = Vector3.ONE * size
 		mi.rotation = Vector3(PI * 0.5, 0.0, 0.0)
-		mi.position.y = 0.035 * size / 0.4
 	else:
 		mi.mesh = KitchenProps.food(id)
 		mi.material_override = CLAY.duplicate()
 	root.add_child(mi)
+	# 재료의 위아래 가운데를 뿌리에 맞춘다: 뒤집어도(뿌리를 x 축으로 반 바퀴) 재료가 바닥을 뚫고 내려가지 않고,
+	# 놓을 때는 늘 '면 높이 + 반 높이' (_on).
+	var box: AABB = mi.transform * mi.get_aabb()
+	mi.position.y -= box.position.y + box.size.y * 0.5
+	root.set_meta(&"half_h", box.size.y * 0.5)
 	return root
+
+
+## 재료(뿌리)를 높이 surface 인 면 위에 놓을 때의 뿌리 높이.
+func _on(body: Node3D, surface: float) -> float:
+	return surface + float(body.get_meta(&"half_h", 0.0)) * body.scale.y
 
 
 func _piece_node(id: String, parent: Node3D = null) -> Node3D:

@@ -20,6 +20,8 @@ func _ready() -> void:
 	for g: String in ["f", "m"]:
 		for v: String in Audio.VOWELS:
 			_check(ResourceLoader.exists("res://assets/audio/sfx/voice_%s_%s.wav" % [g, v]), "말소리 파일 voice_%s_%s" % [g, v])
+	for id: String in ["thunder_1", "thunder_2", "thunder_roll", "thunder_far"]:
+		_check(ResourceLoader.exists("res://assets/audio/sfx/%s.wav" % id), "천둥 소리 %s (번개 · 우르르 쾅쾅 · 먼 우르릉)" % id)
 	var genders: Dictionary = {}
 	for id: String in GameData.npcs:
 		genders[id] = (GameData.npcs[id] as NpcInfo).gender

@@ -88,9 +88,14 @@ export const defaultConfig = {
   weatherForce: process.env.WEATHER_FORCE || '',
   // 계절 고정 (v0.12, 테스트·시연용): spring | summer | autumn | winter. 비우면 마을 날짜의 달로 정한다.
   seasonForce: process.env.SEASON_FORCE || '',
-  // 뇌우일 때 번개 간격(ms).
-  lightningMinMs: num('LIGHTNING_MIN_MS', 6000),
-  lightningMaxMs: num('LIGHTNING_MAX_MS', 18000),
+  // 뇌우일 때 번개 간격(ms) — 평균 3분에 한 번 (너무 잦으면 정신없다).
+  lightningMinMs: num('LIGHTNING_MIN_MS', 150000),
+  lightningMaxMs: num('LIGHTNING_MAX_MS', 210000),
+  // 번개 사이사이 번쩍임 없이 멀리서 우르릉 (ms).
+  rumbleMinMs: num('RUMBLE_MIN_MS', 45000),
+  rumbleMaxMs: num('RUMBLE_MAX_MS', 90000),
+  // 번개가 '우르르 쾅쾅' 길게 구르는 천둥일 확률.
+  thunderRollChance: num('THUNDER_ROLL_CHANCE', 0.35),
 
   // 나무 베기: 한 번 찍은 뒤 다음 도끼질까지 최소 간격(도끼 휘두르는 시간).
   chopCooldownMs: num('CHOP_COOLDOWN_MS', 400),
