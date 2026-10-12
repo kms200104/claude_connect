@@ -32,8 +32,10 @@ var _list: VBoxContainer = null
 var _scroll: ScrollContainer = null
 ## 맨 위 줄 (식당 이름 · 닫기) — 요리 중 온 화면 모드에서는 숨긴다.
 var _top_row: HBoxContainer = null
-## 요리 중: 주방 창이 화면 전체를 덮고(게임 HUD 위) 조리대만 크게 보인다.
+## 식당 일(주문 · 요리 · 결과)은 온 화면: 주방 창이 화면 전체를 덮고(게임 HUD 위), 위에는 '중단하기' · '손님 그만 받기' 만.
 var _full: bool = false
+var _full_bar: HBoxContainer = null
+var _quit_button: Button = null
 var _dirty: bool = false
 ## 요리 중인 주문과 동작 진행.
 var _order_id: String = ""
@@ -87,6 +89,26 @@ func _ready() -> void:
 	_col = VBoxContainer.new()
 	_col.add_theme_constant_override("separation", 12)
 	_panel.add_child(_col)
+	_full_bar = HBoxContainer.new()
+	_full_bar.add_theme_constant_override("separation", 12)
+	_full_bar.visible = false
+	_col.add_child(_full_bar)
+	var stop: Button = _button("중단하기", 28)
+	stop.name = "StopButton"
+	stop.custom_minimum_size = Vector2(200, 76)
+	stop.pressed.connect(_on_stop)
+	_full_bar.add_child(stop)
+	var gap: Control = Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_full_bar.add_child(gap)
+	_quit_button = _button("손님 그만 받기", 28)
+	_quit_button.name = "QuitCustomersButton"
+	_quit_button.custom_minimum_size = Vector2(240, 76)
+	_quit_button.pressed.connect(func() -> void:
+		_stop_cooking_pose()
+		Economy.close_restaurant()
+		close())
+	_full_bar.add_child(_quit_button)
 	var top: HBoxContainer = HBoxContainer.new()
 	_top_row = top
 	_col.add_child(top)
@@ -136,6 +158,7 @@ func is_open() -> bool:
 func open() -> void:
 	visible = true
 	_mode = Mode.ORDERS
+	_set_fullscreen(true)
 	_rebuild()
 	Audio.play_sfx("ui_open", -6.0)
 
@@ -148,6 +171,7 @@ func close() -> void:
 	visible = false
 	_order_id = ""
 	_stage = null
+	_mode = Mode.ORDERS
 	_set_fullscreen(false)
 	_set_panel_height(ORDER_HEIGHT)
 	closed.emit()
@@ -326,6 +350,37 @@ func _set_panel_height(h: float) -> void:
 	HudLayout.center_bottom(_panel, 1032.0, h, 24.0)
 
 
+## 온 화면 바탕: 요리 중에는 조리대가 화면 끝까지, 주문 · 결과는 가운데 읽기 좋은 폭으로.
+func _full_box() -> StyleBoxFlat:
+	var box: StyleBoxFlat = StyleBoxFlat.new()
+	box.bg_color = Color(BG, 1.0)
+	var side: float = 12.0
+	if (_stage == null or not is_instance_valid(_stage)) and _panel != null:
+		side = maxf(24.0, (_panel.size.x - 1000.0) * 0.5)
+	box.content_margin_left = side
+	box.content_margin_right = side
+	box.content_margin_top = 14.0
+	box.content_margin_bottom = 12.0
+	return box
+
+
+func _fit_full() -> void:
+	if _full:
+		_panel.add_theme_stylebox_override("panel", _full_box())
+
+
+## 중단하기: 요리 중이면 이 요리를 내려놓고 주문 목록으로 (맡은 동작은 다시 고르면 처음부터), 아니면 주방에서 나간다.
+func _on_stop() -> void:
+	if _mode in [Mode.COOKING, Mode.WAITING] or (_mode == Mode.RESULT and _stage != null):
+		_stop_cooking_pose()
+		_back_to_orders()
+		return
+	if _mode == Mode.MENU or _mode == Mode.RESULT:
+		_back_to_orders()
+		return
+	close()
+
+
 ## 요리 미니게임은 온 화면으로: 주방 창이 게임 화면 · HUD 를 다 덮고(맨 앞으로), 위 얇은 줄과 조리대만 남는다.
 func _set_fullscreen(on: bool) -> void:
 	if on == _full:
@@ -333,14 +388,10 @@ func _set_fullscreen(on: bool) -> void:
 	_full = on
 	if _top_row != null:
 		_top_row.visible = not on
+	if _full_bar != null:
+		_full_bar.visible = on
 	if on:
-		var box: StyleBoxFlat = StyleBoxFlat.new()
-		box.bg_color = FULL_BG
-		box.content_margin_left = 12.0
-		box.content_margin_right = 12.0
-		box.content_margin_top = 14.0
-		box.content_margin_bottom = 12.0
-		_panel.add_theme_stylebox_override("panel", box)
+		_panel.add_theme_stylebox_override("panel", _full_box())
 		# 화면 돌림(ScreenFit)에도 앵커만으로 맞으니 HudLayout 기억은 비운다.
 		_panel.set_meta("hud_layout", [])
 		_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -350,6 +401,8 @@ func _set_fullscreen(on: bool) -> void:
 		_panel.offset_bottom = 0.0
 		# HUD 의 다른 단추(지도 · 휴대폰 · 감정표현 …)보다 앞에 그리고 먼저 눌리게.
 		move_to_front()
+		if not _panel.resized.is_connected(_fit_full):
+			_panel.resized.connect(_fit_full)
 	else:
 		_panel.add_theme_stylebox_override("panel", EventHud._box(BG, EDGE, 40, 6, 24))
 		HudLayout.center_bottom(_panel, 1032.0, COOK_HEIGHT if _mode != Mode.ORDERS else ORDER_HEIGHT, 24.0)
@@ -360,26 +413,6 @@ func _start_cooking_view() -> void:
 	for c: Node in _list.get_children():
 		c.queue_free()
 	_set_fullscreen(true)
-	var top: HBoxContainer = HBoxContainer.new()
-	top.add_theme_constant_override("separation", 12)
-	_list.add_child(top)
-	var icon: TextureRect = TextureRect.new()
-	icon.texture = DishArt.icon(_recipe.id)
-	icon.custom_minimum_size = Vector2(64, 64)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	top.add_child(icon)
-	var names: VBoxContainer = VBoxContainer.new()
-	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	names.add_theme_constant_override("separation", 0)
-	top.add_child(names)
-	names.add_child(_label("%s 만들기" % _recipe.display_name, 28, FULL_INK))
-	_steps_label = _label("", 20, FULL_SOFT)
-	names.add_child(_steps_label)
-	var quit: Button = _button("✕", 30)
-	quit.custom_minimum_size = Vector2(72, 64)
-	quit.pressed.connect(close)
-	top.add_child(quit)
 	var stage: CookStage = CookStage.new()
 	stage.custom_minimum_size = Vector2(0, 320)
 	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -391,15 +424,25 @@ func _start_cooking_view() -> void:
 			_on_release())
 	_stage = stage
 	_list.add_child(_stage)
+	_fit_full()
 	# 안내 한 줄은 조리대 위에 겹쳐 (따로 줄을 차지하지 않게).
 	_prompt = _label("", 26, FULL_INK)
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt.add_theme_color_override("font_outline_color", Color(0.12, 0.08, 0.05))
 	_prompt.add_theme_constant_override("outline_size", 8)
 	_prompt.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_prompt.offset_top = 10.0
-	_prompt.offset_bottom = 50.0
+	_prompt.offset_top = 52.0
+	_prompt.offset_bottom = 92.0
 	_stage.add_child(_prompt)
+	# 요리 이름 · 동작 순서도 조리대 위 한 줄로 (따로 띠를 두지 않는다).
+	_steps_label = _label("", 24, FULL_INK)
+	_steps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_steps_label.add_theme_color_override("font_outline_color", Color(0.12, 0.08, 0.05))
+	_steps_label.add_theme_constant_override("outline_size", 8)
+	_steps_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_steps_label.offset_top = 10.0
+	_steps_label.offset_bottom = 46.0
+	_stage.add_child(_steps_label)
 	# 큰 단추는 쓰지 않는다 (조리대 어디든 누르면 된다) — 글자만 맞추는 데 쓰므로 숨겨 둔다.
 	_tap_button = _button("탁!", 48)
 	_tap_button.visible = false
@@ -423,7 +466,7 @@ func _update_steps_label() -> void:
 			parts.append("✓%s" % label)
 		else:
 			parts.append(label)
-	_steps_label.text = " → ".join(parts)
+	_steps_label.text = "%s · %s" % [_recipe.display_name, " → ".join(parts)] if _full else " → ".join(parts)
 
 
 ## 아직 아무도 안 맡은 다음 동작을 맡는다. 없으면 친구가 마무리하기를 기다린다.
@@ -482,7 +525,7 @@ func _wait_for_partner() -> void:
 		c.queue_free()
 	_list.add_child(_label("내 몫은 끝! 동료가 남은 동작을 마무리하는 중…", 30, INK))
 	_stage = null
-	_set_fullscreen(false)
+	_fit_full()
 
 
 func _back_to_orders() -> void:
@@ -492,8 +535,8 @@ func _back_to_orders() -> void:
 	_stage = null
 	_reaction = null
 	_reaction_order = ""
-	_set_fullscreen(false)
 	_set_panel_height(ORDER_HEIGHT)
+	_fit_full()
 	_rebuild()
 
 
@@ -771,7 +814,7 @@ func _on_judged(result: Dictionary) -> void:
 		if order_id != _order_id:
 			return
 	_stage = null
-	_set_fullscreen(false)
+	_fit_full()
 	_result_seq += 1
 	var seq: int = _result_seq
 	var stars: int = int(result.get("stars", 0))

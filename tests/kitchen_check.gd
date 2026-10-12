@@ -28,6 +28,15 @@ func _ready() -> void:
 	layer.add_child(kitchen)
 	await get_tree().process_frame
 	kitchen.visible = true
+	# 식당 일은 처음(주문 목록)부터 온 화면, 위에는 '중단하기' · '손님 그만 받기' 만.
+	kitchen.open()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var bar_panel: Control = kitchen.get("_panel")
+	_check(bool(kitchen.get("_full")) and bar_panel.size.distance_to(get_viewport().get_visible_rect().size) < 2.0, "주문 목록부터 온 화면")
+	var stop: Button = kitchen.find_child("StopButton", true, false) as Button
+	var quit: Button = kitchen.find_child("QuitCustomersButton", true, false) as Button
+	_check(stop != null and stop.is_visible_in_tree() and quit != null and quit.is_visible_in_tree(), "위에는 '중단하기' · '손님 그만 받기'")
 	if _only.is_empty() or "tutorial" in _only:
 		await _check_tutorial(kitchen)
 	for c: Array in CASES:
