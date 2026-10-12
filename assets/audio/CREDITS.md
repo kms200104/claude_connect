@@ -4,8 +4,8 @@
 
 ## 합성 (프로젝트 자체 제작)
 
-`tools/audio/gen_audio.py` 로 만든 오리지널 (외부 샘플 없음). 아래 "받은 파일"을 뺀 `assets/audio/sfx/*.wav` 전부와 `assets/audio/music/title_theme.ogg`.
-낚시·도끼질·주민 말소리·비·천둥·새·풀벌레·UI·이벤트·감정표현·브레이크·비행기 등.
+`tools/audio/gen_audio.py` 로 만든 오리지널 (외부 샘플 없음): 주민 말소리 `voice_a/e/i/o/u.wav` 와 `assets/audio/music/title_theme.ogg`.
+나머지 효과음 · 환경음은 아래 "받은 파일" (발소리 · 실제 녹음 CC0).
 
 ## 받은 파일
 
@@ -40,11 +40,33 @@ CC BY 3.0 은 출처 표시가 필요하다 — 게임을 공개할 때 이 표�
 
 받은 묶음(`game_audio.zip`)에 음악의 출처·라이선스는 적혀 있지 않았다. **공개 전에 출처와 라이선스를 확인해 이 칸을 채운다.**
 
-### 고품질 리얼 Foley 효과음 (v0.14+ 개선)
+### 실제 녹음 효과음 · 환경음 (CC0) — `tools/audio/import_cc0_sfx.py`
 
-| 용도 | 파일 | 만든 사람 / 출처 | 링크 | 라이선스 |
-|---|---|---|---|---|
-| 도끼질 · 나무 쓰러짐 · 줍기 · 코인 · 상점 벨 · 퀘스트 · 레벨업 | `chop.wav`, `tree_creak.wav`, `tree_land.wav`, `pickup.wav`, `coin.wav`, `door_bell.wav`, `quest_done.wav`, `level_up.wav` | Bramble & Byte (Roberto Mellado) | https://opengameart.org/content/cozy-farm-sfx-50-farming-game-sound-effects-tools-harvest-shop-ui-jingles | CC-BY 4.0 |
-| 창가/지면 실제 빗소리 루프 | `rain_loop.wav` | Ylmir | https://opengameart.org/content/rain-loopable | CC0 (Public Domain) |
-| 실제 천둥소리 | `thunder_1.wav`, `thunder_2.wav` | DoKashiteru | https://opengameart.org/content/rain-and-thunder-loop | CC-BY 3.0 |
+합성 파형이던 효과음 49개를 실제 녹음으로 바꿨다 (주민 말소리 `voice_*` 만 합성으로 남음). 모두 **CC0** 이라 출처 표시는 필요 없지만 고마움을 담아 적는다.
+원본은 아래 두 저장소에서 받아, 스크립트가 자르고 · 겹치고 · 음높이와 크기를 맞춰 만든다 (어느 파일의 몇 초를 썼는지는 스크립트의 `RECIPES`).
+앞서 넣었던 Cozy Farm SFX · Ylmir 빗소리 · DoKashiteru 천둥 (`tools/audio/import_real_sfx.py`)은 이것으로 대체했다.
 
+- 묶음 저장소: https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds (CC0 1.0)
+- 환경음 저장소: https://github.com/mateusfg7/noisekun (`.github/assets/sounds`, README 의 크레딧 표 기준 CC0 인 것만)
+
+| 소리 | 파일 | 원본 묶음 · 만든 사람 | 라이선스 |
+|---|---|---|---|
+| 찌 착수 · 입질 · 끌어올림 · 놓침 | `fish_plop`, `fish_nibble`, `fish_bite`, `fish_catch`, `fish_escape` | 40 CC0 water / splash / slime SFX · 100 CC0 SFX — rubberduck (OpenGameArt) | CC0 |
+| 낚싯대 휘두르기 | `fish_cast` | Micro Pack - Organic Wooshes — Ben Burnes | CC0 |
+| 줄 풀림 · 릴 감기 · 카메라 셔터 | `line_zip`, `fish_reel`, `camera_shutter` | bb - Smol Mechanisms — Ben Burnes | CC0 |
+| 도끼질 · 나무 삐걱 · 쓰러짐 | `chop`, `tree_creak`, `tree_land` | Kenney RPG Audio · Kenney Impact Sounds — Kenney · 100 CC0 wood and metal SFX · 75 CC0 breaking/falling/hit SFX — rubberduck · Leaves — Stek59 (Freesound, Noisekun) | CC0 |
+| 자람 | `grow` | Leaves — Stek59 (Freesound, Noisekun) | CC0 |
+| 땅 파기 · 미끄러짐 | `dig`, `skid` | 25 CC0 mud SFX — rubberduck · BB Retail Therapy — Ben Burnes · Kenney Impact Sounds | CC0 |
+| 줍기 · 킥보드 걸쇠 · 화면 열기/닫기 | `pickup`, `kick_latch`, `ui_open`, `ui_close` | Kenney RPG Audio — Kenney | CC0 |
+| 칼질 | `cook_chop` | Micro Pack - Kitchen Knives — Ben Burnes · 100 CC0 wood and metal SFX — rubberduck | CC0 |
+| 지글지글 | `cook_sizzle` | Fire Wood — SFX Producer (Noisekun) · BB Retail Therapy — Ben Burnes | CC0 |
+| 보글보글 | `cook_bubble` | 30 CC0 SFX loops · 40 CC0 water SFX — rubberduck | CC0 |
+| 접시 · 주문 종 · 가게 문 종 | `cook_plate`, `order_bell`, `door_bell` | 100 CC0 SFX — rubberduck | CC0 |
+| 동전 · 계산 | `coin`, `cash_in` | 80 CC0 RPG SFX · 100 CC0 SFX — rubberduck | CC0 |
+| 킥보드 차기 · 브레이크 · 구름 | `kick_push`, `kick_brake`, `kick_roll_loop` | Kenney Impact Sounds · BB Retail Therapy — Ben Burnes · 30 CC0 SFX loops — rubberduck | CC0 |
+| 감정표현 · 팡파르 · 퀘스트 · 레벨 업 · 이벤트 | `emote_up`, `emote_down`, `emote_hey`, `fanfare_small`, `fanfare_big`, `quest_done`, `level_up`, `event_start` | Kenney Music Jingles (피치카토 · 스틸팬) — Kenney | CC0 |
+| 펑 (감정표현) | `emote_pop` | BB Retail Therapy (코르크 뚜껑) — Ben Burnes | CC0 |
+| 반짝 | `twinkle` | Kenney Impact Sounds (유리) — Kenney | CC0 |
+| 화면 단추 | `ui_click`, `ui_confirm`, `ui_cancel` | Kenney UI Audio — Kenney | CC0 |
+| 새소리 · 풀벌레 · 비 · 비행기 | `birds_loop`, `crickets_loop`, `rain_loop`, `plane_loop` | Birds · Night · Rain · Airplane — SFX Producer (YouTube, Noisekun) | CC0 |
+| 천둥 | `thunder_1`, `thunder_2` | Thunder Storm — Borys Kozielski (Freesound, Noisekun) | CC0 |

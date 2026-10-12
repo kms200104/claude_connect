@@ -1,7 +1,7 @@
 extends Node
 ## 소리 담당 (전역): 배경음악 두 곡을 엇갈려 바꾸고, 효과음은 미리 만든 플레이어 묶음에서 돌려 쓴다.
 ## 버스: Music / Sfx / Ambient (Master 아래). 소리 파일 출처는 assets/audio/CREDITS.md
-## (대부분 tools/audio/gen_audio.py 로 합성, 발소리와 마을 음악 4곡은 받은 파일).
+## (효과음 · 환경음은 CC0 실제 녹음 — tools/audio/import_cc0_sfx.py, 발소리 · 마을 음악 4곡은 받은 파일, 주민 말소리만 합성).
 ## 게임 코드는 play_sfx / play_at / play_ui / play_music / set_loop / babble 만 부른다.
 ## 볼륨 (v0.14.2): 전체 · 음악 · 효과음 · 환경음을 0~100% 로 고르면(설정 앱) 버스 기본 크기에 곱해 적용하고 기억한다.
 
@@ -72,7 +72,7 @@ func _ready() -> void:
 	_music_active = _music_a
 	for i: int in voice_count:
 		_voices.append(_make_player("Sfx"))
-	# 효과음은 처음 날 때 읽느라 프레임이 끊기지 않게 미리 읽어 둔다 (모두 합쳐 1MB 남짓).
+	# 효과음은 처음 날 때 읽느라 프레임이 끊기지 않게 미리 읽어 둔다 (QOA 압축이라 모두 합쳐 1~2MB).
 	for file: String in ResourceLoader.list_directory(SFX_DIR):
 		if file.ends_with(".wav"):
 			_sfx(file.get_basename())

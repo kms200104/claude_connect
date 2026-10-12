@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """솔바람 마을의 효과음과 배경음악을 합성한다.
-발소리(step_*)와 마을 음악(village/night/rain/event_theme)은 받은 파일로 바꿨으므로 덮어쓰지 않는다
-(EXTERNAL, 출처는 assets/audio/CREDITS.md). 합성본으로 되돌리려면 --force.
+발소리(step_*) · 마을 음악(village/night/rain/event_theme)은 받은 파일, 나머지 효과음 · 환경음은 CC0 실제 녹음
+(tools/audio/import_cc0_sfx.py)으로 바꿨으므로 덮어쓰지 않는다 (EXTERNAL, 출처는 assets/audio/CREDITS.md).
+지금 합성으로 남은 것은 주민 말소리(voice_*)와 title_theme. 합성본으로 되돌리려면 --force.
 
   assets/audio/sfx/*.wav     22.05kHz 모노 16bit — 발소리, 달리기, 낚시, 도끼질, 주민 말소리, 비·천둥, 새·풀벌레, UI
   assets/audio/music/*.ogg   32kHz 스테레오 Vorbis — title_theme(오르골 왈츠), village_theme(느긋한 칼림바 로파이)
@@ -85,11 +86,17 @@ def fade(x: np.ndarray, fin: float = 0.002, fout: float = 0.01, sr: int = SR) ->
 
 
 ## 받은 파일이라 합성으로 덮어쓰지 않는 소리 (--force 로 강제).
-EXTERNAL = {f"step_{m}_{i}" for m in ("grass", "dirt", "run", "wood", "stone", "metal", "water") for i in (1, 2, 3)} | {
-    "village_theme", "night_theme", "rain_theme", "event_theme",
-    "chop", "tree_creak", "tree_land", "rain_loop", "thunder_1", "thunder_2",
-    "pickup", "coin", "door_bell", "quest_done", "level_up"
+## RECORDED: CC0 실제 녹음으로 바꾼 소리 (tools/audio/import_cc0_sfx.py 의 RECIPES 와 같게 둔다). 주민 말소리(voice_*)만 합성으로 남는다.
+RECORDED = {
+    "birds_loop", "camera_shutter", "cash_in", "chop", "coin", "cook_bubble", "cook_chop", "cook_plate",
+    "cook_sizzle", "crickets_loop", "dig", "door_bell", "emote_down", "emote_hey", "emote_pop", "emote_up",
+    "event_start", "fanfare_big", "fanfare_small", "fish_bite", "fish_cast", "fish_catch", "fish_escape",
+    "fish_nibble", "fish_plop", "fish_reel", "grow", "kick_brake", "kick_latch", "kick_push", "kick_roll_loop",
+    "level_up", "line_zip", "order_bell", "pickup", "plane_loop", "quest_done", "rain_loop", "skid", "thunder_1",
+    "thunder_2", "tree_creak", "tree_land", "twinkle", "ui_cancel", "ui_click", "ui_close", "ui_confirm", "ui_open"
 }
+EXTERNAL = {f"step_{m}_{i}" for m in ("grass", "dirt", "run", "wood", "stone", "metal", "water") for i in (1, 2, 3)} | {
+    "village_theme", "night_theme", "rain_theme", "event_theme"} | RECORDED
 FORCE = False
 
 
