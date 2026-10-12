@@ -39,3 +39,12 @@ CC BY 3.0 은 출처 표시가 필요하다 — 게임을 공개할 때 이 표�
 `village_theme.ogg`(낮) · `night_theme.ogg`(밤) · `rain_theme.ogg`(비) · `event_theme.ogg`(이벤트) — 44.1kHz 스테레오 Vorbis.
 
 받은 묶음(`game_audio.zip`)에 음악의 출처·라이선스는 적혀 있지 않았다. **공개 전에 출처와 라이선스를 확인해 이 칸을 채운다.**
+
+### 고품질 리얼 Foley 효과음 (v0.14+ 개선)
+
+| 용도 | 파일 | 만든 사람 / 출처 | 링크 | 라이선스 |
+|---|---|---|---|---|
+| 도끼질 · 나무 쓰러짐 · 줍기 · 코인 · 상점 벨 · 퀘스트 · 레벨업 | `chop.wav`, `tree_creak.wav`, `tree_land.wav`, `pickup.wav`, `coin.wav`, `door_bell.wav`, `quest_done.wav`, `level_up.wav` | Bramble & Byte (Roberto Mellado) | https://opengameart.org/content/cozy-farm-sfx-50-farming-game-sound-effects-tools-harvest-shop-ui-jingles | CC-BY 4.0 |
+| 창가/지면 실제 빗소리 루프 | `rain_loop.wav` | Ylmir | https://opengameart.org/content/rain-loopable | CC0 (Public Domain) |
+| 실제 천둥소리 | `thunder_1.wav`, `thunder_2.wav` | DoKashiteru | https://opengameart.org/content/rain-and-thunder-loop | CC-BY 3.0 |
+

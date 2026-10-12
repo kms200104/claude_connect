@@ -86,7 +86,10 @@ def fade(x: np.ndarray, fin: float = 0.002, fout: float = 0.01, sr: int = SR) ->
 
 ## 받은 파일이라 합성으로 덮어쓰지 않는 소리 (--force 로 강제).
 EXTERNAL = {f"step_{m}_{i}" for m in ("grass", "dirt", "run", "wood", "stone", "metal", "water") for i in (1, 2, 3)} | {
-    "village_theme", "night_theme", "rain_theme", "event_theme"}
+    "village_theme", "night_theme", "rain_theme", "event_theme",
+    "chop", "tree_creak", "tree_land", "rain_loop", "thunder_1", "thunder_2",
+    "pickup", "coin", "door_bell", "quest_done", "level_up"
+}
 FORCE = False
 
 
