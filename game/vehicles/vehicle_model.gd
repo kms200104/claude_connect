@@ -133,6 +133,14 @@ func set_pedal(phase: float) -> void:
 
 
 ## 이 빠르기(m/s)에서 페달을 밟는 빠르기 (초당 바퀴 수, 기어비).
+## 핸들 손잡이 자리 (월드, side -1 = 왼쪽 · 1 = 오른쪽). 핸들을 꺾으면 따라 돈다 (배달 로봇이 잡는다).
+func grip(side: float) -> Vector3:
+	var p: Vector3 = info.anchor("bar") + Vector3(side * 0.21, 0.02, 0.02) if info != null else Vector3(side * 0.21, 0.8, -0.3)
+	if _steer != null:
+		return _steer.global_transform * (p - _steer.position)
+	return global_transform * p
+
+
 func pedal_rate(speed: float) -> float:
 	return speed / (TAU * maxf(info.wheel, 0.05)) / maxf(info.gear, 0.5) if info != null else 0.0
 

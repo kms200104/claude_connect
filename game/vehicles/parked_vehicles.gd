@@ -1,7 +1,7 @@
 class_name ParkedVehicles
 extends Node3D
 ## 마을에 세워 둔 차고 탈것 (v19.1, 서버 veh_parked · welcome.parked = Net.parked). 내 것 · 친구 것 모두 보인다.
-## 받침대를 세운 듯 살짝 기울여 바닥에 둔다. 주민이 가져오는 중(t 가 서버 시각보다 뒤)이면 VehicleCourier 가 타고 와서 세운다.
+## 받침대를 세운 듯 살짝 기울여 바닥에 둔다. 배달 로봇이 가져오는 중(t 가 서버 시각보다 뒤)이면 VehicleCourier 가 몰고 와서 세운다.
 ## 내 캐릭터가 탈 때는 take 로 그 모형을 넘겨주고(같은 물건이 그대로 타진다), 내리면 put 으로 그 자리에 다시 받는다.
 
 ## 세워 둔 탈것의 기울기 (받침대 쪽 = 왼쪽) · 핸들 꺾임.

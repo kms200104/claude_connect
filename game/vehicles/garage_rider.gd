@@ -1,13 +1,13 @@
 class_name GarageRider
 extends Node
 ## 내 캐릭터의 차고 탈것 (v19.1): 자전거 · 전기오토바이.
-##   부르기: 휴대폰 "탈것" 앱 · HUD 탈것 단추 → 동네 주민이 타고 와서 내 곁에 세워 두고 간다 (서버 veh_call, ParkedVehicles 가 그린다).
+##   부르기: 휴대폰 "탈것" 앱 · HUD 탈것 단추 → 배달 로봇 솔봇이 몰고 와서 내 곁에 세워 두고 날아간다 (서버 veh_call, ParkedVehicles 가 그린다).
 ##   타기: 세워 둔 내 탈것 곁에서 상황 버튼 "타기" (또는 탈것 단추) → 서버가 받아 주면(veh_ride) 그 모형에 폴짝 올라앉는다.
 ##   세우기: HUD 탈것 단추(P) → 왼쪽(막히면 오른쪽)으로 내려서고 탈것은 받침대를 세워 그 자리에 남는다 (서버가 저장, 친구도 본다).
 ## 타는 동안은 Player 가 걷기 대신 drive 를 부르고, 움직임은 VehicleDrive, 모양은 VehicleModel.
 ## 자전거는 리그가 바퀴 속도에 맞춰 페달을 돌리고(set_pedal_rate) 그 위상으로 크랭크가 같이 돈다.
 ## 실내 · 순간이동 · 접속 끊김이면 그 자리에 바로 세운다 (서버도 같은 자리에 세워 둔다). 킥보드(KickboardRider)와는 동시에 못 탄다.
-## 보트(v20): 물가에서 부르면 주민이 물길로 몰고 와 곁의 물 위에 띄워 둔다 (WaterRules). 타는 동안은 물 위에서만 움직이고(땅 · 해안 벽과
+## 보트(v20): 물가에서 부르면 배달 로봇이 물길로 몰고 와 곁의 물 위에 띄워 둔다 (WaterRules). 타는 동안은 물 위에서만 움직이고(땅 · 해안 벽과
 ##   부딪치지 않고 수면 높이에 뜬다), 세우기(P)는 곁의 땅으로 폴짝 내려서기 — 서버가 그 땅을 받아 주면(veh_ride lx, lz) 내린다. 보트는 물에 남는다.
 
 signal changed(riding: bool)
@@ -102,7 +102,7 @@ func mount_problem(id: String) -> String:
 	if spot.is_empty():
 		return "먼저 탈것을 불러요 (휴대폰 탈것 앱 · 탈것 단추)."
 	if not bool(spot.get("arrived", false)):
-		return "주민이 가져오는 중이에요."
+		return "배달 로봇 솔봇이 가져오는 중이에요."
 	if _flat(player.global_position, spot["at"]) > ride_range_of(id):
 		return "세워 둔 곳 곁에서 탈 수 있어요."
 	return ""
@@ -157,7 +157,7 @@ func mount(id: String) -> bool:
 	return true
 
 
-## 주민에게 그 탈것을 가져다 달라고 한다 (내 곁 트인 자리에 세워 두고 간다).
+## 배달 로봇에게 그 탈것을 가져다 달라고 한다 (내 곁 트인 자리에 세워 두고 간다).
 func call_vehicle(id: String) -> bool:
 	var v: Dictionary = Net.vehicle(id)
 	if v.is_empty():
@@ -224,7 +224,7 @@ func quick_action() -> void:
 	var pick: String = _default_vehicle()
 	var spot: Dictionary = parked.spot_of(pick) if parked != null else {}
 	if not spot.is_empty() and not bool(spot.get("arrived", true)):
-		_toast("주민이 가져오는 중이에요.", true)
+		_toast("배달 로봇 솔봇이 가져오는 중이에요.", true)
 		return
 	call_vehicle(pick)
 
@@ -240,8 +240,7 @@ func _on_vehicle_done(result: Dictionary) -> void:
 		return
 	var v: Dictionary = Net.vehicle(str(result.get("v", "")))
 	var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
-	var who: String = GameData.npc_name(str(result.get("npc", "")))
-	_toast("%s님이 %s 을(를) 가져다줄게요!" % [who if not who.is_empty() else "주민", m.name if m != null else "탈것"], true)
+	_toast("배달 로봇 솔봇이 %s 을(를) 가져다줄게요!" % (m.name if m != null else "탈것"), true)
 
 
 func _on_mount_changed(mount_wire: Dictionary) -> void:

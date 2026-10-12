@@ -236,14 +236,14 @@ func _build_garage() -> void:
 		var row: HBoxContainer = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		c.add_child(row)
-		# 어디 있나: 타는 중 · 주민이 가져오는 중 · 세워 둠(거리) · 차고.
+		# 어디 있나: 타는 중 · 배달 로봇이 가져오는 중 · 세워 둠(거리) · 차고.
 		var spot: Dictionary = Net.parked_of(id)
 		var coming: bool = not spot.is_empty() and float(spot.get("t", 0.0)) > Net.server_time_ms()
 		var where: String = "차고에 있어요"
 		if riding:
 			where = "타는 중"
 		elif coming:
-			where = "%s님이 가져오는 중" % GameData.npc_name(str(spot.get("npc", "")))
+			where = "배달 로봇 솔봇이 가져오는 중"
 		elif not spot.is_empty() and phone != null and phone.player != null:
 			var d: float = Vector2(float(spot.get("x", 0.0)) - phone.player.global_position.x, float(spot.get("z", 0.0)) - phone.player.global_position.z).length()
 			where = "%s · %dm 떨어져 있어요" % ["물에 띄워 둠" if GameData.garage.is_water_kind(m.kind) else "세워 둠", roundi(d)]

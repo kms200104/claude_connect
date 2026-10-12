@@ -261,12 +261,12 @@ func _run() -> void:
 	_check(phone_button != null and not button.get_global_rect().intersects(phone_button.get_global_rect()), "탈것 단추가 휴대폰 단추에 가리지 않는다")
 	var parked: ParkedVehicles = _village.get_node("ParkedVehicles")
 
-	# ---- 부르기: 동네 주민이 타고 와서 곁에 세워 두고 간다 ----
+	# ---- 부르기: 배달 로봇이 몰고 와서 곁에 세워 두고 날아간다 ----
 	_check(interaction.target != InteractionController.Target.VEHICLE, "부르기 전에는 곁에 탈것이 없다")
 	button.pressed.emit()
-	_check(await _wait_until(func() -> bool: return parked.courier_count() == 1, 3.0), "탈것 단추를 누르면 주민이 탈것을 타고 온다")
+	_check(await _wait_until(func() -> bool: return parked.courier_count() == 1, 3.0), "탈것 단추를 누르면 배달 로봇이 탈것을 몰고 온다")
 	var courier: VehicleCourier = _find_courier(parked)
-	_check(courier != null and not courier.npc_id.is_empty() and courier.rig.riding_kind() == "bike", "주민이 자전거를 타고 온다 (%s)" % (courier.npc_id if courier != null else "-"))
+	_check(courier != null and not courier.npc_id.is_empty() and courier.robot.riding_kind() == "bike", "배달 로봇이 자전거를 몰고 온다 (%s)" % (courier.npc_id if courier != null else "-"))
 	var spot: Dictionary = parked.spot_of(bike)
 	_check(not spot.is_empty() and _flat(spot["at"], player.global_position) <= 4.0, "내 곁에 세울 자리")
 	var far0: float = _flat(courier.global_position, spot["at"]) if courier != null else 0.0
@@ -352,7 +352,7 @@ func _run() -> void:
 	await get_tree().create_timer(0.3).timeout
 	app = _find_app(phone)
 	_check(app != null and _press(app, "Call_%s" % moto), "휴대폰 앱에서 오토바이 부르기")
-	_check(await _wait_until(func() -> bool: return not phone.visible and parked.courier_count() == 1, 3.0), "휴대폰을 닫고 주민이 오토바이를 타고 온다")
+	_check(await _wait_until(func() -> bool: return not phone.visible and parked.courier_count() == 1, 3.0), "휴대폰을 닫고 배달 로봇이 오토바이를 몰고 온다")
 	_check(await _wait_until(func() -> bool: return parked.nearest_own(player.global_position, GarageRider.RIDE_RANGE) == moto, 9.0), "오토바이가 곁에 세워짐")
 	button.pressed.emit()
 	await _wait_until(func() -> bool: return rider.is_riding(), 3.0)
@@ -418,7 +418,7 @@ func _run() -> void:
 	(_village.get_node("CameraRig") as FollowCamera).snap_to_target()
 	await get_tree().create_timer(0.5).timeout
 	_check(rider.call_vehicle(boat), "호숫가에서 보트 부르기")
-	_check(await _wait_until(func() -> bool: return bool(parked.spot_of(boat).get("arrived", false)), 30.0), "주민이 몰고 와 물 위에 띄워 둠")
+	_check(await _wait_until(func() -> bool: return bool(parked.spot_of(boat).get("arrived", false)), 30.0), "배달 로봇이 몰고 와 물 위에 띄워 둠")
 	await get_tree().create_timer(0.5).timeout
 	var float_at: Vector3 = parked.spot_of(boat)["at"] if not parked.spot_of(boat).is_empty() else Vector3.ZERO
 	_check(WaterRules.is_water(Vector2(float_at.x, float_at.z)), "띄워 둔 자리는 물 (%s)" % float_at)

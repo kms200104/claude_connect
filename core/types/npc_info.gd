@@ -48,7 +48,8 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 	info.about = str(data.get("about", ""))
 	info.look = CharacterLook.from_dict(data.get("look"), info.color)
 	var by_personality: Dictionary = {"kind": 0.9, "lively": 1.3, "lazy": 0.95, "gruff": 0.72, "shopkeeper": 1.1, "snooty": 1.18, "dreamy": 1.08}
-	info.voice = float(data.get("voice", by_personality.get(info.personality, 1.0)))
+	# 성격이 같아도 사람마다 목소리 높이가 살짝 다르다 (id 로 정해져 늘 같은 목소리, ±7%). voice 를 적었으면 그 값 그대로.
+	info.voice = float(data.get("voice", float(by_personality.get(info.personality, 1.0)) * voice_offset(info.id)))
 	info.catchphrase = str(data.get("catchphrase", ""))
 	info.mbti = str(data.get("mbti", ""))
 	info.mbti_self = str(data.get("mbti_self", ""))
@@ -78,6 +79,14 @@ static func from_dict(data: Dictionary) -> NpcInfo:
 	if waypoints is Array and not waypoints.is_empty() and waypoints[0] is Array:
 		info.home = Vector3(float(waypoints[0][0]), 0.0, float(waypoints[0][1]))
 	return info
+
+
+## 사람마다 다른 목소리 높이 배율 (0.93 ~ 1.07). id 로 정해지니 언제 들어도 같은 사람은 같은 목소리.
+static func voice_offset(npc_id: String) -> float:
+	if npc_id.is_empty():
+		return 1.0
+	var h: int = absi(npc_id.hash()) % 1000
+	return 0.93 + 0.14 * float(h) / 999.0
 
 
 ## MBTI 한 축 글자 (0 = E/I, 1 = S/N, 2 = T/F, 3 = J/P). 없으면 빈 문자열.

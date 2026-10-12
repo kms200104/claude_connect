@@ -355,8 +355,23 @@ func _ready() -> void:
 				add_child(mi2)
 				x0 += 5.2
 			_camera(_cam if Array(OS.get_cmdline_user_args()).any(func(a: String) -> bool: return a.begins_with("--cam=")) else Vector3(0.0, 3.2, 7.5), _at, 40.0)
+		"robot":
+			# 배달 로봇 솔봇 (v0.17): 보통 · 손 흔들기(웃는 얼굴) · 날아오르기 · 뒷모습.
+			var clay: Material = load("res://assets/materials/foliage.tres")
+			for i: int in 4:
+				var robot: DeliveryRobot = DeliveryRobot.new()
+				add_child(robot)
+				robot.build(clay)
+				robot.position = Vector3((float(i) - 1.5) * 0.95, 0.0, 0.0)
+				robot.rotation.y = [0.35, -0.2, 0.0, PI - 0.4][i]
+				if i == 1:
+					robot.wave(true)
+				elif i == 2:
+					robot.thrust = 1.0
+					robot.position.y = 0.35
+			_camera(Vector3(0.0, 1.05, -3.6), Vector3(0.0, 0.65, 0.0), 40.0)
 		"vehicles":
-			# 차고 탈것 (v19): --ids=모델+부품+부품,… (없으면 모델 전부), --night 이면 밤(전조등 · 빛 장식), --empty 면 사람 없이.
+			# 차고 탈것 (v19): --ids=모델+부품+부품,… (없으면 모델 전부), --night 이면 밤(전조등 · 빛 장식), --empty 면 사람 없이, --robot 이면 배달 로봇이 몰고.
 			var args: PackedStringArray = OS.get_cmdline_user_args()
 			if "--night" in args:
 				RenderingServer.global_shader_parameter_set(&"night_light", 1.0)
@@ -403,7 +418,15 @@ func _ready() -> void:
 				vm.rotation.y = deg_to_rad(-62.0)
 				vm.build(model.id, fit)
 				vm.set_pedal(0.15)
-				if not "--empty" in args:
+				if "--robot" in args:
+					# 배달 로봇 솔봇 (v0.17)이 몰고 오는 모습.
+					var robot: DeliveryRobot = DeliveryRobot.new()
+					vm.add_child(robot)
+					robot.build(load("res://assets/materials/foliage.tres"))
+					robot.ride(model.kind)
+					robot.position = VehicleCourier.seat_spot(model)
+					get_tree().process_frame.connect(func() -> void: robot.hold(vm.grip(-1.0), vm.grip(1.0)))
+				elif not "--empty" in args:
 					var rig: CharacterRig = load("res://game/player/character_rig.tscn").instantiate()
 					vm.add_child(rig)
 					rig.position = Vector3(0.0, 0.8 + model.lift, 0.0)
