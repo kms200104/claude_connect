@@ -7,6 +7,8 @@ global uniform float toon_softness;
 global uniform float world_wetness;
 // 밤 조명 세기(0~1). 가로등·창문처럼 emission 이 있는 머티리얼만 밤에 빛난다.
 global uniform float night_light;
+// 번개 섬광 세기(0~1). 뇌우 시 젖은 표면과 빗줄기 하이라이트에 연동된다.
+global uniform float lightning_flash;
 
 // 가림 비추기 (v0.13.5): 카메라와 캐릭터 사이를 가리는 건물·나무는 캐릭터 둘레만 점점이(디더) 비워 캐릭터가 비쳐 보인다.
 // xyz = 캐릭터 가슴 높이(월드), w = 세기(0 = 끔). FollowCamera 가 매 프레임 넣는다. 건물·나무 머티리얼(building_clay · building_window)만 이 셰이더를 쓴다.
@@ -138,10 +140,26 @@ void fragment() {
 		float strand = 0.6 * s1 * s1 * s1 + 0.4 * s2 * s2;
 		base *= 1.0 - 0.11 * aa * strand;
 	}
-	ALBEDO = base * mix(1.0, 0.72, world_wetness);
-	ROUGHNESS = toon_softness;
+	float wet = clamp(world_wetness, 0.0, 1.0);
+	ALBEDO = base * mix(1.0, 0.72, wet);
+	
+	// 비에 젖었을 때 표면 물기 광택 (수평 윗면일수록 물이 고여 매끄러움)
+	vec3 v_norm = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float up_facing = max(v_norm.y * 0.7 + 0.3, 0.0);
+	
+	ROUGHNESS = mix(toon_softness, 0.22, wet * up_facing);
+	SPECULAR = mix(0.12, 0.78, wet * up_facing);
 	METALLIC = 0.0;
-	EMISSION = emission * emission_energy * night_light;
+	
+	vec3 emit_val = emission * emission_energy * night_light;
+	if (wet > 0.05) {
+		float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.5);
+		vec3 wet_sheen = mix(vec3(0.5, 0.6, 0.75), vec3(0.15, 0.2, 0.35), night_light) * fres * wet * up_facing * 0.25;
+		// 번개 섬광 시 젖은 지붕/바위 표면 하이라이트 번쩍임
+		wet_sheen += vec3(0.85, 0.92, 1.0) * lightning_flash * wet * up_facing * 1.6;
+		emit_val += wet_sheen;
+	}
+	EMISSION = emit_val;
 	if (v_finish > 0.58 && v_finish < 0.86) {
 		vec3 n = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 		vec3 v = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);

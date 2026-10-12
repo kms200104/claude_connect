@@ -32,7 +32,7 @@ static var night_light: float = 0.0
 @export var day_sky: Color = Color(0.62, 0.79, 0.93)
 @export var dusk_sky: Color = Color(0.96, 0.66, 0.5)
 @export var night_sky: Color = Color(0.09, 0.12, 0.24)
-@export var storm_sky: Color = Color(0.5, 0.54, 0.6)
+@export var storm_sky: Color = Color(0.28, 0.32, 0.44)
 @export var night_ambient: Color = Color(0.42, 0.48, 0.78)
 ## 밤에도 폰 화면에서 보이도록 주변광을 이만큼은 남긴다.
 @export_range(0.0, 2.0, 0.05) var night_ambient_energy: float = 0.7
@@ -79,16 +79,17 @@ func current_hour() -> float:
 	return Net.game_hour() if Net.state == Net.State.ONLINE else offline_hour
 
 
-## 번개 섬광. 두 번 번쩍인다.
+## 번개 섬광. 전조 섬광과 본 섬광의 2단 연출로 극적인 충격감 부여.
 func strike(power: float = 1.0) -> void:
 	var peak: float = power * (0.25 if reduce_flashes else 1.0)
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 	_flash_tween = create_tween()
-	_flash_tween.tween_property(self, "flash", peak, 0.04)
-	_flash_tween.tween_property(self, "flash", 0.1, 0.09)
-	_flash_tween.tween_property(self, "flash", peak * 0.7, 0.05)
-	_flash_tween.tween_property(self, "flash", 0.0, 0.35)
+	_flash_tween.tween_property(self, "flash", peak * 0.65, 0.03)
+	_flash_tween.tween_property(self, "flash", peak * 0.15, 0.04)
+	_flash_tween.tween_property(self, "flash", peak * 1.1, 0.04)
+	_flash_tween.tween_property(self, "flash", peak * 0.25, 0.08)
+	_flash_tween.tween_property(self, "flash", 0.0, 0.42)
 
 
 func _weather_targets() -> Vector2:
@@ -127,31 +128,35 @@ func _apply(delta: float, instant: bool) -> void:
 	if sun != null:
 		var is_day: bool = daylight > 0.05
 		var sun_color: Color = day_sun.lerp(dawn_sun_color, golden * 0.8) if is_day else moon_color
-		var energy: float = lerpf(moon_energy, day_energy, daylight) * (1.0 - 0.55 * clouds)
-		sun.light_color = sun_color
-		sun.light_energy = energy
+		var base_energy: float = lerpf(moon_energy, day_energy, daylight) * (1.0 - 0.55 * clouds)
+		# 번개 발생 시 푸른 백색의 강렬한 섬광 조명 투사
+		var lightning_tint: Color = Color(0.85, 0.93, 1.0)
+		sun.light_color = sun_color.lerp(lightning_tint, minf(flash * 1.2, 1.0))
+		sun.light_energy = base_energy + flash * 3.2
 		sun.rotation = _sun_rotation(hour, is_day)
 		var shadows_allowed: bool = world_style == null or world_style.shadows_enabled
-		sun.shadow_enabled = shadows_allowed and daylight > 0.5 and clouds < 0.3
+		# 맑은 날 또는 번개가 칠 때 순간적으로 번개 그림자 극적 연출
+		sun.shadow_enabled = shadows_allowed and ((daylight > 0.5 and clouds < 0.3) or flash > 0.35)
 
 	if world_environment != null and world_environment.environment != null:
 		var env: Environment = world_environment.environment
 		var sky: Color = night_sky.lerp(dusk_sky, golden).lerp(day_sky, clampf(daylight * 2.0 - 1.0, 0.0, 1.0))
 		sky = sky.lerp(storm_sky * lerpf(0.35, 1.0, daylight), clouds * 0.8)
-		env.background_color = sky.lerp(Color.WHITE, flash * 0.6)
+		env.background_color = sky.lerp(Color(0.92, 0.96, 1.0), flash * 0.85)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = night_ambient.lerp(day_ambient, daylight)
-		env.ambient_light_energy = lerpf(night_ambient_energy, day_ambient_energy, daylight) * (1.0 - 0.2 * clouds) + flash * 1.5
-		# 비·밤에는 옅은 안개로 먼 곳을 흐리게 (먼 물체가 덜 보여 그리기도 가볍다).
-		var fog: float = maxf(rain_amount * 0.9, (1.0 - daylight) * 0.1)
+		env.ambient_light_energy = lerpf(night_ambient_energy, day_ambient_energy, daylight) * (1.0 - 0.2 * clouds) + flash * 2.0
+		# 비·밤에는 촉촉하고 몽환적인 비안개(Mist)로 원경을 채워 적막함 해소 및 깊이감 부여
+		var fog: float = maxf(rain_amount * 0.95, (1.0 - daylight) * 0.15)
 		env.fog_enabled = fog > 0.02 and not indoor
-		env.fog_light_color = sky
-		env.fog_density = 0.002 + 0.01 * fog
+		env.fog_light_color = sky.lerp(Color(0.85, 0.92, 1.0), flash * 0.6)
+		env.fog_density = 0.003 + 0.015 * fog
 
 	var lamps: float = clampf(maxf(1.0 - daylight * 1.4, clouds * rain_amount * 0.5), 0.0, 1.0)
 	RenderingServer.global_shader_parameter_set("night_light", lamps)
 	night_light = lamps
 	RenderingServer.global_shader_parameter_set("world_wetness", 0.0 if indoor else wetness)
+	RenderingServer.global_shader_parameter_set("lightning_flash", 0.0 if indoor else flash)
 	for light: OmniLight3D in lamp_lights:
 		if light != null:
 			light.visible = lamps > 0.05

@@ -87,3 +87,7 @@ see_through_radius={
 "type": "float",
 "value": 1.6
 }
+lightning_flash={
+"type": "float",
+"value": 0.0
+}

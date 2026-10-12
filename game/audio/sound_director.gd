@@ -82,7 +82,8 @@ func _process(delta: float) -> void:
 	if sky == null:
 		return
 	var indoor: float = 0.25 if sky.indoor else 1.0
-	Audio.set_loop(Audio.LOOP_RAIN, sky.rain_amount * indoor, delta)
+	var weather_rain_mult: float = 1.25 if Net.weather == NetProtocol.WEATHER_THUNDER else 1.0
+	Audio.set_loop(Audio.LOOP_RAIN, sky.rain_amount * weather_rain_mult * indoor, delta)
 	var calm: float = clampf(1.0 - sky.clouds * 1.6, 0.0, 1.0) * (0.0 if sky.indoor else 1.0)
 	Audio.set_loop(Audio.LOOP_BIRDS, smoothstep(0.5, 0.9, sky.daylight) * calm * 0.8, delta)
 	Audio.set_loop(Audio.LOOP_CRICKETS, smoothstep(0.4, 0.05, sky.daylight) * (1.0 - sky.rain_amount) * (0.0 if sky.indoor else 0.7), delta)
@@ -103,7 +104,8 @@ func _on_peer_action(_id: int, kind: String, target: String) -> void:
 
 ## 번개: 번쩍인 뒤 조금 있다가 우르릉 (거리감). 실내에서는 작게.
 func _on_lightning(power: float) -> void:
-	await get_tree().create_timer(randf_range(0.4, 1.4)).timeout
+	await get_tree().create_timer(randf_range(0.3, 1.2)).timeout
 	_thunder_index = (_thunder_index + 1) % 2
-	var volume: float = linear_to_db(clampf(power, 0.2, 1.0)) + (-8.0 if sky != null and sky.indoor else 0.0)
-	Audio.play_sfx("thunder_%d" % (_thunder_index + 1), volume, 1.0, 0.08)
+	var volume: float = linear_to_db(clampf(power, 0.2, 1.0)) + 1.5 + (-8.0 if sky != null and sky.indoor else 0.0)
+	var pitch: float = randf_range(0.85, 1.02)
+	Audio.play_sfx("thunder_%d" % (_thunder_index + 1), volume, pitch, 0.05)

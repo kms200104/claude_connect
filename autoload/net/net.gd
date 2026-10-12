@@ -128,7 +128,7 @@ const TEST_SERVER_URL: String = "test://local"
 const MAX_LOCAL_INSTANCES: int = 8
 
 @export_group("Connection")
-@export var default_server_url: String = "ws://127.0.0.1:8080"
+@export var default_server_url: String = TEST_SERVER_URL
 @export_range(1.0, 30.0, 0.5, "suffix:s") var connect_timeout: float = 5.0
 ## ONLINE인데 이 시간 동안 서버에서 아무것도 안 오면 끊긴 것으로 본다.
 @export_range(1.0, 30.0, 0.5, "suffix:s") var idle_timeout: float = 6.0
