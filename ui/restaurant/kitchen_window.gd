@@ -37,8 +37,8 @@ var _full: bool = false
 var _full_bar: HBoxContainer = null
 ## 박자 보정 (ms): 이 기기에서 소리를 듣고 누른 손가락이 늘 늦게(또는 일찍) 닿는 만큼. 누를 때마다 조금씩 배운다 (Prefs).
 var _beat_offset: float = 0.0
-const BEAT_OFFSET_MIN: float = -60.0
-const BEAT_OFFSET_MAX: float = 180.0
+const BEAT_OFFSET_MIN: float = BeatCalibration.OFFSET_MIN
+const BEAT_OFFSET_MAX: float = BeatCalibration.OFFSET_MAX
 const BEAT_LEARN: float = 0.15
 var _quit_button: Button = null
 var _dirty: bool = false
@@ -106,7 +106,7 @@ func _ready() -> void:
 	var gap: Control = Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_full_bar.add_child(gap)
-	_quit_button = _button("손님 그만 받기", 28)
+	_quit_button = _button("손님 그만 받기" if Economy.is_rest_owner() or not Economy.is_rest_staff() else "일 그만하기", 28)
 	_quit_button.name = "QuitCustomersButton"
 	_quit_button.custom_minimum_size = Vector2(240, 76)
 	_quit_button.pressed.connect(func() -> void:
@@ -231,10 +231,11 @@ func _rebuild() -> void:
 		_mode = Mode.MENU
 		_rebuild())
 	row.add_child(menu)
-	var shut: Button = _button("문 닫기" if Economy.is_rest_owner() else "일 그만하기", 28)
-	shut.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	shut.pressed.connect(Economy.close_restaurant)
-	row.add_child(shut)
+	var calibrate: Button = _button("박자 맞추기", 28)
+	calibrate.name = "BeatCalibrationButton"
+	calibrate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	calibrate.pressed.connect(func() -> void: BeatCalibration.open(get_tree()))
+	row.add_child(calibrate)
 
 
 func _order_card(o: Dictionary) -> Control:

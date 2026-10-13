@@ -308,6 +308,17 @@ func _build_play() -> void:
 	_choice_row(col, "조이스틱 자리", Prefs.STICK_SIDE, Prefs.STICK_SIDES)
 	_choice_row(col, "조이스틱 크기", Prefs.STICK_SIZE, Prefs.STICK_NAMES)
 	col.add_child(_label("조이스틱을 오른쪽에 두면 상황 버튼(대화 · 베기 · 낚시)은 왼쪽 아래로 옮겨져요.", 22, SOFT))
+	# 리듬 요리 박자 맞추기 (얼음과 불의 춤 보정처럼, 소리에 맞춰 누르기).
+	var beat: Button = _button("리듬 요리 박자 맞추기 · 지금 %s" % BeatCalibration.offset_text(float(Prefs.get_value(Prefs.BEAT_OFFSET))), 26)
+	beat.name = "BeatCalibrationButton"
+	beat.pressed.connect(func() -> void:
+		Audio.play_ui(Audio.SFX_CLICK)
+		var cal: BeatCalibration = BeatCalibration.open(get_tree())
+		cal.finished.connect(func(_applied: bool) -> void:
+			if is_instance_valid(beat):
+				beat.text = "리듬 요리 박자 맞추기 · 지금 %s" % BeatCalibration.offset_text(float(Prefs.get_value(Prefs.BEAT_OFFSET)))))
+	col.add_child(beat)
+	col.add_child(_label("소리에 맞춰 화면을 누르면 이 기기에서 소리 · 터치가 늦게 닿는 만큼을 재서, 리듬 요리 판정을 맞춰요.", 22, SOFT))
 	_choice_row(col, "탈것 조작", Prefs.RIDE_CONTROL, Prefs.RIDE_CONTROLS)
 	col.add_child(_label("버튼으로 하면 타는 동안 조이스틱 대신 왼쪽 ▲ 가속 · ▼ 브레이크, 오른쪽 ◀ ▶ 핸들이 나와요 (조이스틱을 오른쪽에 두면 반대로).", 22, SOFT))
 
