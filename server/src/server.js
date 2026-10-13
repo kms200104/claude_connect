@@ -40,6 +40,7 @@ import { PHOTO_RULES, createPhotoStore } from './photos.js';
 import { DAY_MS, DAY_START_HOUR } from './clock.js';
 import { createGarage, mountWire } from './garage.js';
 import { createAqua } from './aqua.js';
+import { createSafety } from './safety.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 /** 같이 베기: 이 시간 안에 다른 사람이 같은 나무를 찍었으면 함께 찍는 것으로 본다. */
@@ -96,6 +97,8 @@ export function createServer(overrides = {}) {
     for (const [id, rel] of Object.entries(player.profile.npcs)) friends[id] = rel.f;
     return {
       sol: player.profile.sol,
+      // v0.20 솔걸음: 오늘 인정된 걸음 · 받은 목표 (마을 날짜가 바뀌었으면 0).
+      steps: player.profile.steps?.day === clock.day() ? { today: player.profile.steps.today, got: [...player.profile.steps.got] } : { today: 0, got: [] },
       quests: player.profile.quests.map((q) => questWire(q, player.slots, data)),
       friends,
       outfit: { ...player.profile.outfit },
@@ -134,6 +137,7 @@ export function createServer(overrides = {}) {
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
   const garage = createGarage({ data, send, sendProfile, rooms, now, random, etaMs: cfg.vehicleEtaMs });
+  const safety = createSafety({ data, cfg, clock, now, send, sendTo });
   const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
   const shopLevels = data.shop.levels;
@@ -518,6 +522,8 @@ export function createServer(overrides = {}) {
     // v16: 들어올 때 가진 가구 · 옷을 도감에 올리고 업적을 확인한다 (바뀌었으면 프로필을 다시).
     if (checkProgress(player, room)) sendTo(player, { t: 'profile', ...profileWire(player) });
     celebrate(room, player);
+    // v0.20: 오늘 온 재난문자 · 진행 중인 민방위 훈련.
+    safety.onJoin(room, player);
     // 집 안에서 끊겼다 돌아오면 그 집 안 그대로 (위치로 어느 집인지 찾는다).
     player.home = homeAtPosition(player.x, player.z);
     if (player.home) send(ctx.ws, homeMessage(room, player, null));
@@ -1828,6 +1834,8 @@ export function createServer(overrides = {}) {
       case 'veh_ride':
       case 'veh_call':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
+      case 'steps':
+        return safety.handleSteps(ctx, msg, fail);
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':
@@ -2029,6 +2037,7 @@ export function createServer(overrides = {}) {
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':
+      case 'steps':
         return handleAction(ctx, msg);
       default:
         return sendError(ctx.ws, ErrorCode.badMessage, 'unknown type');
@@ -2111,7 +2120,8 @@ export function createServer(overrides = {}) {
     lastNpcTick = t;
     for (const room of rooms.rooms.values()) {
       const weather = weatherOf(room);
-      const stayHome = weather === 'rain' || weather === 'thunder' || timeBand(clock.hour()) === 'night';
+      // 민방위 훈련 동안에도 제자리로 돌아가 기다린다.
+      const stayHome = weather === 'rain' || weather === 'thunder' || timeBand(clock.hour()) === 'night' || safety.drillActive(room);
       for (const npc of room.npcs.values()) {
         if (npc.talkingWith !== null && t - npc.talkTouchedAt > cfg.talkTimeoutMs) {
           const player = room.players.get(npc.talkingWith);
@@ -2228,6 +2238,7 @@ export function createServer(overrides = {}) {
       economy.tickWeek(room);
       kitchen.tickRestaurant(room);
       tickDigSpots(room, t);
+      safety.tick(room, weather, environment(null).season);
       if (weather === 'thunder' && t >= room.nextLightningAt) {
         // 뇌우가 시작되면 첫 번개는 조금 기다렸다가 (간격 안 아무 때나).
         if (room.nextLightningAt > 0) room.broadcast({ t: 'lightning', st: t, power: Math.round((0.6 + random() * 0.4) * 100) / 100, roll: random() < cfg.thunderRollChance });

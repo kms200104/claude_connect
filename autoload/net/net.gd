@@ -22,6 +22,12 @@ signal profile_updated
 ## v19 차고: 차고(vehicles)가 바뀜 · 사기/꾸미기/팔기 결과 (veh_result: kind, v, model, part, slot, cost, sol) · 내가 차고 탈것에 타고 내림 (mount: { v, m, f }, 빈 사전 = 내림).
 signal vehicles_changed
 signal vehicle_done(result: Dictionary)
+## v0.20 폰다운 기능: 솔걸음 보상 결과 (steps_ok: today, got, reward, sol) · 재난문자 (alert: id, level, sender, text, at, late) ·
+## 민방위 훈련 (drill: on, shelter{name,x,z,r}, until, done) · 대피 보상 (drill_done: reward, sol).
+signal steps_updated(info: Dictionary)
+signal alert_received(alert: Dictionary)
+signal drill_changed(info: Dictionary)
+signal drill_finished(info: Dictionary)
 signal mount_changed(mount: Dictionary)
 ## v19.1 세워 둔 · 주민이 가져오는 중인 차고 탈것 목록이 바뀜 (Net.parked).
 signal parked_changed
@@ -217,6 +223,11 @@ var faces: Dictionary[int, Dictionary] = {}
 var names: Dictionary[int, String] = {}
 ## v19 내 차고: [{ id, model, owned: [부품], fit: { 칸: 부품 } }] (프로필).
 var vehicles: Array[Dictionary] = []
+## v0.20 솔걸음: 오늘 서버가 인정한 걸음 · 받은 목표 번호.
+var steps_today: int = 0
+var steps_got: Array[int] = []
+## 지금 민방위 훈련 중인지 (drill 메시지, 빈 사전 = 아님).
+var drill: Dictionary = {}
 ## v19.1 방에 세워 둔(또는 오는 중인) 차고 탈것: [{ v, o(주인 자리), m, f, x, z, yaw, t(도착 서버 시각, 0 = 이미 있음), npc }].
 var parked: Array[Dictionary] = []
 ## v21 물놀이 배 [{ id, ride, depart(서버 시각 ms), riders: [{ id, seat }] }].
@@ -282,6 +293,7 @@ func has_saved_session() -> bool:
 
 func leave() -> void:
 	_user_closed = true
+	drill = {}
 	_forget_session()
 	_close_socket(1000, "leave")
 	_set_state(State.DISCONNECTED)
@@ -863,6 +875,20 @@ func _handle_text(text: String) -> void:
 		"veh_result":
 			sol = int(msg.get("sol", sol))
 			vehicle_done.emit(msg)
+		"steps_ok":
+			sol = int(msg.get("sol", sol))
+			_apply_steps(msg)
+			steps_updated.emit(msg)
+		"alert":
+			alert_received.emit(msg)
+		"drill":
+			drill = msg if bool(msg.get("on", false)) else {}
+			drill_changed.emit(msg)
+		"drill_done":
+			sol = int(msg.get("sol", sol))
+			if not drill.is_empty():
+				drill["done"] = true
+			drill_finished.emit(msg)
 		"veh_parked":
 			_apply_parked(msg.get("list", []))
 		"aqua_trips":
@@ -1215,10 +1241,20 @@ func _apply_inventory(data: Variant) -> void:
 	inventory_updated.emit(inventory, held_slot)
 
 
+func _apply_steps(info: Dictionary) -> void:
+	steps_today = int(info.get("today", steps_today))
+	var got: Array[int] = []
+	for g: Variant in info.get("got", []):
+		got.append(int(g))
+	steps_got = got
+
+
 func _apply_profile(data: Variant) -> void:
 	if not data is Dictionary:
 		return
 	sol = int(data.get("sol", sol))
+	if data.get("steps") is Dictionary:
+		_apply_steps(data["steps"])
 	var parsed: Array[QuestInfo] = []
 	var list: Variant = data.get("quests", [])
 	if list is Array:

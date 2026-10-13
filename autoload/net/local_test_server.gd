@@ -38,6 +38,10 @@ var _home: String = ""
 var _home_items: Dictionary = {}
 var _home_seq: int = 0
 var _placed: Dictionary = {}
+## v0.20 솔걸음 (접속 동안만).
+var _steps_day: String = ""
+var _steps_today: int = 0
+var _steps_got: Array[int] = []
 var _placed_seq: int = 0
 var _outfit: Dictionary = {"hat": "", "top": ""}
 ## 차고 (v19): [{ id, model, owned, fit }] · 다음 번호.
@@ -369,6 +373,21 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			pass
 		"cal_info":
 			_send(peer, _calendar())
+		"steps":
+			# v0.20 솔걸음: 혼자 노는 테스트 서버는 빠르기 검사 없이 목표만 (하루 상한은 지킨다).
+			var rules: SafetyRules = GameData.safety
+			var day: String = Time.get_date_string_from_system()
+			if _steps_day != day:
+				_steps_day = day
+				_steps_got.clear()
+			_steps_today = mini(rules.daily_cap, maxi(_steps_today if _steps_day == day else 0, int(msg.get("n", 0))))
+			var reward: int = 0
+			for i: int in rules.tiers.size():
+				if _steps_today >= rules.tiers[i].x and not i in _steps_got:
+					_steps_got.append(i)
+					reward += rules.tiers[i].y
+			_sol += reward
+			_send(peer, {"t": "steps_ok", "rid": rid, "today": _steps_today, "got": _steps_got, "reward": reward, "sol": _sol})
 		"dev_grant":
 			_sol += DEV_GRANT_SOL
 			_send(peer, {"t": "dev_granted", "rid": rid, "amount": DEV_GRANT_SOL, "sol": _sol})

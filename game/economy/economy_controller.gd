@@ -30,6 +30,7 @@ const TARGET_CIVIC: String = "civic:"
 var phone: PhoneWindow = null
 var kitchen: KitchenWindow = null
 var civic: CivicWindow = null
+var safety: SafetyController = null
 var _phone_button: Button = null
 ## 화면 오른쪽 위 작은 지도 (설정 "지도 항상 보기").
 var minimap: MiniMap = null
@@ -49,6 +50,14 @@ func _ready() -> void:
 	kitchen.site = restaurant
 	civic = CivicWindow.new()
 	civic.name = "CivicWindow"
+	# v0.20 폰다운 기능: 솔걸음 만보기 · 재난문자 · 민방위 훈련.
+	safety = SafetyController.new()
+	safety.name = "SafetyController"
+	safety.hud = hud
+	safety.player = player
+	safety.phone = phone
+	safety.toast = toast_hud
+	add_child.call_deferred(safety)
 	_phone_button = Button.new()
 	_phone_button.name = "PhoneButton"
 	_phone_button.tooltip_text = "휴대폰"

@@ -67,6 +67,8 @@ var airport: KeeperPlace = null
 var econ: EconData = null
 ## 일거리 (v0.12): 배달 알바 거리.
 var jobs: JobRules = JobRules.new()
+## v0.20 폰다운 기능 (솔걸음 · 재난문자 · 민방위).
+var safety: SafetyRules = SafetyRules.new()
 ## 차고 탈것 (v19): 자전거 · 전기오토바이와 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
 var garage: VehicleCatalog = VehicleCatalog.new()
 ## 물놀이 체험 (v21): 성성호수 선착장의 바나나 보트 · 유람선.
@@ -144,6 +146,7 @@ func _ready() -> void:
 	jobs = JobRules.from_dict(_read_json("res://data/jobs/jobs.json"))
 	garage = VehicleCatalog.from_dict(_read_json("res://data/vehicles/garage.json"))
 	aqua = AquaRules.from_dict(_read_json("res://data/aqua/aqua.json"))
+	safety = SafetyRules.from_dict(_read_json("res://data/safety/safety.json"))
 	econ.build_customers(npcs)
 	var ach_file: Dictionary = _read_json(ACHIEVEMENTS_PATH)
 	for key: Variant in ach_file.get("stats", {}):

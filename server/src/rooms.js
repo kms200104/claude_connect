@@ -111,6 +111,7 @@ function newProfile(uid, slot, cfg, data) {
     tipStreak: 0, // 배달 연속 팁 (시간 안에 갖다준 연속 횟수)
     vehicles: [], // v19 차고: [{ id, model, owned: [산 부품], fit: { 칸: 부품 } }]
     vehSeq: 0,
+    steps: { day: -1, today: 0, got: [] }, // v0.20 솔걸음: 마을 날짜 · 그날 인정된 걸음 · 받은 목표(번호)
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },
@@ -418,6 +419,7 @@ export class Room {
         tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
         vehicles: sanitizeVehicles(p.vehicles, data.garage),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
+        steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),
         dex: sanitizeDex(p.dex, data),
         ach: data.achievements ? sanitizeAch(p.ach, data.achievements) : [],

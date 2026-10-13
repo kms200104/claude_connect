@@ -210,6 +210,28 @@ func _glyph(o: Vector2, s: float, ink: Color) -> void:
 			draw_rect(Rect2(p.call(0.46, 0.5), Vector2(0.08, 0.14) * s), ink)
 			draw_rect(Rect2(p.call(0.32, 0.64), Vector2(0.36, 0.12) * s), ink)
 			draw_circle(p.call(0.43, 0.3), s * 0.035, Color(tint, 0.7))
+		"store":
+			# 앱 스토어: 쇼핑백 + 아래 화살표 (받기).
+			draw_colored_polygon(PackedVector2Array([p.call(0.24, 0.36), p.call(0.76, 0.36), p.call(0.72, 0.8), p.call(0.28, 0.8)]), ink)
+			draw_arc(p.call(0.5, 0.36), s * 0.12, PI, TAU, 16, ink, w, true)
+			draw_line(p.call(0.5, 0.46), p.call(0.5, 0.68), tint, w * 1.2, true)
+			draw_polyline(PackedVector2Array([p.call(0.41, 0.6), p.call(0.5, 0.7), p.call(0.59, 0.6)]), tint, w * 1.2, true)
+		"steps":
+			# 솔걸음: 발자국 둘.
+			for f: Array in [[0.38, 0.6, -0.25], [0.62, 0.38, 0.25]]:
+				var c: Vector2 = p.call(f[0], f[1])
+				var pts: PackedVector2Array = []
+				for k: int in 16:
+					var a: float = TAU * float(k) / 16.0
+					pts.append(c + Vector2(cos(a) * 0.075, sin(a) * 0.12).rotated(f[2]) * s)
+				draw_colored_polygon(pts, ink)
+				for t: int in 3:
+					draw_circle(c + Vector2(-0.045 + 0.045 * float(t), -0.165).rotated(f[2]) * s, s * 0.024, ink)
+		"safety":
+			# 안전알림: 방패 + 느낌표.
+			draw_colored_polygon(PackedVector2Array([p.call(0.5, 0.18), p.call(0.76, 0.28), p.call(0.72, 0.58), p.call(0.5, 0.8), p.call(0.28, 0.58), p.call(0.24, 0.28)]), ink)
+			draw_line(p.call(0.5, 0.32), p.call(0.5, 0.56), tint, w * 1.4, true)
+			draw_circle(p.call(0.5, 0.66), s * 0.04, tint)
 		"vehicle":
 			# 자전거: 두 바퀴 + 몸체 + 핸들.
 			draw_arc(p.call(0.3, 0.62), s * 0.15, 0.0, TAU, 24, ink, w * 1.1, true)
