@@ -191,6 +191,9 @@ describe('식당 계산', () => {
       assert.equal(s.verbs.length, s.hits.length, `${id}: 누를 때마다 하는 일`);
       assert.ok(typeof s.tutorial === 'string' && s.tutorial.length > 10, `${id}: 처음 할 때 설명`);
       assert.equal(stepQuality(s, perfect(s)), 1, `${id}: 박자에 딱 맞으면 완벽`);
+      // v0.19 후하게: 창의 절반 안(약 ±70~110ms)은 일찍이든 늦게든 만점.
+      assert.equal(stepQuality(s, perfect(s).map((x, i) => x + (i % 2 ? 1 : -1) * s.window_ms * 0.48)), 1, `${id}: 조금 엇나가도 완벽`);
+      assert.ok(s.window_ms >= 140, `${id}: 판정 창이 넉넉하다 (${s.window_ms}ms)`);
       assert.ok(stepQuality(s, perfect(s).map((x) => x + s.window_ms * 1.5)) < 0.5, `${id}: 늦으면 깎인다`);
       assert.ok(stepQuality(s, [...perfect(s), ...perfect(s).map((x) => x + 260)]) < 0.95, `${id}: 마구 누르면 깎인다`);
       assert.equal(stepMinMs(s), Math.max(...s.hits) * s.interval_ms - s.window_ms);

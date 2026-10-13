@@ -18,7 +18,7 @@ static func timing_score(off: float, window: float) -> float:
 
 ## 딱 좋은 때와의 차이(off) → 판정. 판정 창(window) 안쪽 40% 면 완벽.
 static func grade(off: float, window: float) -> Grade:
-	if off <= window * 0.4:
+	if off <= window * 0.5:
 		return Grade.PERFECT
 	if off <= window:
 		return Grade.GOOD
@@ -72,6 +72,14 @@ static func beat_grade(step: Dictionary, t: float) -> Grade:
 	return grade(absf(t - hit_ms(step, nearest_hit(step, t))), float(step.get("window_ms", 170)))
 
 
+## 박자 하나의 점수 (서버 hitCredit 와 같다): 완벽(창의 절반 안)은 만점, 그 밖은 창 두 배까지 서서히 줄어든다.
+static func hit_credit(off: float, window: float) -> float:
+	var perfect: float = window * 0.5
+	if off <= perfect:
+		return 1.0
+	return maxf(0.0, 1.0 - (off - perfect) / (window * 2.0 - perfect))
+
+
 ## 동작 하나의 솜씨 0~1 (서버 stepQuality 와 같다).
 static func step_quality(step: Dictionary, raw_taps: Array) -> float:
 	var t: Array[float] = []
@@ -101,7 +109,7 @@ static func step_quality(step: Dictionary, raw_taps: Array) -> float:
 						break
 				if at < 0 or best >= window * 2.0:
 					continue
-				total += 1.0 - best / (window * 2.0)
+				total += hit_credit(best, window)
 				j = at + 1
 			return maxf(0.0, total / float(h.size()) - maxf(0, t.size() - h.size()) * 0.05)
 		"timing":

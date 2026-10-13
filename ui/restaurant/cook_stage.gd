@@ -182,6 +182,10 @@ func _process(_delta: float) -> void:
 func _gui_input(event: InputEvent) -> void:
 	if _tutorial != null:
 		return
+	# 한 번 누름이 두 번 들어오지 않게: 휴대폰은 손가락(터치)마다 흉내 낸 마우스 누름도 함께 오고,
+	# PC 는 마우스마다 흉내 낸 터치가 함께 온다 — 흉내 낸 쪽(DEVICE_ID_EMULATION)은 버린다.
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	var down: bool = false
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		down = (event as InputEventMouseButton).pressed
@@ -222,7 +226,7 @@ func show_tutorial(step_def: Dictionary) -> void:
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(text)
 	var window: float = float(step_def.get("window_ms", 160))
-	var how: Label = _label("완벽: 고리가 과녁에 딱 겹칠 때 (앞뒤 %d ms 안) · 좋아요: %d ms 안 · 박자에 없는 누름은 깎여요" % [roundi(window * 0.4), roundi(window)], 23, Color(0.5, 0.4, 0.3))
+	var how: Label = _label("완벽: 고리가 과녁에 딱 겹칠 때 (앞뒤 %d ms 안) · 좋아요: %d ms 안 · 박자에 없는 누름은 깎여요" % [roundi(window * 0.5), roundi(window)], 23, Color(0.5, 0.4, 0.3))
 	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(how)
 	var demo: Control = Control.new()

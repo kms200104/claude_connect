@@ -47,6 +47,8 @@ func _ready() -> void:
 		if not _only.is_empty() and not scene in _only:
 			continue
 		await _run(kitchen, str(c[0]), str(c[1]))
+	if _only.is_empty() or "late" in _only:
+		await _check_late(kitchen)
 	if _only.is_empty() or "result" in _only:
 		# 마을에서처럼 땅 휘기 기준점(내 캐릭터)이 원점에서 멀다 — 손님 얼굴 무대가 땅 밑으로 가라앉으면 안 된다.
 		var far: Vector3 = Vector3(26.0, 0.0, 64.0)
@@ -157,12 +159,54 @@ func _check_tutorial(kitchen: KitchenWindow) -> void:
 	stage.show_tutorial(step)
 	kitchen.call("_on_tap")
 	_check(closed[0] and not stage.is_tutorial_open(), "큰 단추를 눌러도 설명이 닫힌다")
+	# 손가락 한 번 = 누름 한 번 (흉내 낸 마우스 누름까지 세면 박자 하나를 두 번 눌러 판정이 엉킨다).
+	var downs: Array[int] = [0]
+	stage.pressed.connect(func(down: bool) -> void:
+		if down:
+			downs[0] += 1)
+	var center: Vector2 = get_viewport().get_final_transform() * stage.get_global_rect().get_center()
+	for down: bool in [true, false]:
+		var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch.position = center
+		touch.pressed = down
+		Input.parse_input_event(touch)
+		await get_tree().process_frame
+	_check(downs[0] == 1, "조리대를 손가락으로 한 번 누르면 누름 한 번 (%d)" % downs[0])
 	# 요리 중에는 주방 창이 화면 전체를 덮는다 (게임 HUD 위, 조리대가 대부분).
 	await get_tree().process_frame
 	var panel: Control = kitchen.get("_panel")
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	_check(bool(kitchen.get("_full")) and panel.size.distance_to(view) < 2.0, "요리는 온 화면 (창 %s / 화면 %s)" % [str(panel.size), str(view)])
 	_check(stage.size.y > view.y * 0.7, "조리대가 화면 대부분 (%.0f / %.0f)" % [stage.size.y, view.y])
+
+
+## 늘 90ms 늦게 누르는 기기 (소리 · 터치 지연): 처음 몇 번은 늦어도 판정이 후하고, 누를수록 늦는 만큼을 배워 보정한다.
+func _check_late(kitchen: KitchenWindow) -> void:
+	Prefs.set_value(Prefs.BEAT_OFFSET, 0.0)
+	var qs: Array[float] = []
+	for round_i: int in 3:
+		kitchen.set("_recipe", GameData.econ.recipes.get("braised_fish"))
+		kitchen.call("_start_cooking_view")
+		var recipe: RecipeInfo = kitchen.get("_recipe")
+		kitchen.set("_mode", KitchenWindow.Mode.COOKING)
+		kitchen.call("_begin_step", recipe.steps.find("chop"))
+		var step: Dictionary = kitchen.get("_step")
+		var t0: float = float(kitchen.get("_step_start_ms"))
+		var hits: PackedFloat32Array = CookRules.hits(step)
+		var interval: float = float(step.get("interval_ms", 536))
+		var k: int = 0
+		while kitchen.get("_mode") == KitchenWindow.Mode.COOKING and Time.get_ticks_msec() - t0 < 12000.0:
+			if k < hits.size() and float(Time.get_ticks_msec()) - t0 >= hits[k] * interval + 90.0:
+				kitchen.call("_on_tap")
+				k += 1
+			await get_tree().process_frame
+		var taps: Array = (kitchen.get("_taps") as Array).back()
+		qs.append(CookRules.step_quality(step, taps))
+	var learned: float = float(Prefs.get_value(Prefs.BEAT_OFFSET))
+	print("[kitchen] 90ms 늦게: 솜씨 %s · 배운 보정 %.0fms" % [str(qs), learned])
+	_check(qs[0] >= 0.75, "늘 90ms 늦어도 처음부터 판정이 후하다 (%.2f)" % qs[0])
+	_check(learned >= 50.0 and qs[2] >= qs[0] and qs[2] >= 0.9, "누를수록 늦는 만큼을 배워 보정 (%.0fms, 솜씨 %.2f)" % [learned, qs[2]])
+	Prefs.set_value(Prefs.BEAT_OFFSET, 0.0)
 
 
 ## 손님 반응 글 (v20): 별점 첫마디 + 까닭 — 좋아하는 맛, T 손님의 깐깐한 솜씨 평, 늦은 요리.

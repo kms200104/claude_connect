@@ -113,7 +113,7 @@ describe('v0.9 계산', () => {
   });
 
   it('요리 분담: 동작마다 최소 시간, 둘이 만들면 판정 창이 넓다', () => {
-    assert.equal(stepMinMs(data.cookSteps.mix), 4.5 * 536 - 150, '무치기: 마지막 반 박자(4.5)까지');
+    assert.equal(stepMinMs(data.cookSteps.mix), 4.5 * 536 - data.cookSteps.mix.window_ms, '무치기: 마지막 반 박자(4.5)까지');
     assert.equal(lenientSteps(data.cookSteps, 1.15).grill.window_ms, data.cookSteps.grill.window_ms * 1.15);
   });
 });

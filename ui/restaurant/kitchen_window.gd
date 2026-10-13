@@ -35,6 +35,11 @@ var _top_row: HBoxContainer = null
 ## 식당 일(주문 · 요리 · 결과)은 온 화면: 주방 창이 화면 전체를 덮고(게임 HUD 위), 위에는 '중단하기' · '손님 그만 받기' 만.
 var _full: bool = false
 var _full_bar: HBoxContainer = null
+## 박자 보정 (ms): 이 기기에서 소리를 듣고 누른 손가락이 늘 늦게(또는 일찍) 닿는 만큼. 누를 때마다 조금씩 배운다 (Prefs).
+var _beat_offset: float = 0.0
+const BEAT_OFFSET_MIN: float = -60.0
+const BEAT_OFFSET_MAX: float = 180.0
+const BEAT_LEARN: float = 0.15
 var _quit_button: Button = null
 var _dirty: bool = false
 ## 요리 중인 주문과 동작 진행.
@@ -601,6 +606,7 @@ func _begin_step(i: int) -> void:
 		return
 	_step_index = i
 	_step = GameData.econ.step(_recipe.steps[i])
+	_beat_offset = clampf(float(Prefs.get_value(Prefs.BEAT_OFFSET)), BEAT_OFFSET_MIN, BEAT_OFFSET_MAX)
 	_step_taps = []
 	_hit_taken = PackedByteArray()
 	_hit_taken.resize(CookRules.hits(_step).size())
@@ -667,7 +673,9 @@ func _on_tap() -> void:
 		return
 	if _mode != Mode.COOKING:
 		return
-	var t: float = float(Time.get_ticks_msec()) - _step_start_ms
+	# 이 기기에서 늘 늦게 닿는 만큼(소리 · 터치 지연)은 빼고 잰다.
+	var raw: float = float(Time.get_ticks_msec()) - _step_start_ms
+	var t: float = raw - _beat_offset
 	if t < -float(_step.get("window_ms", 160)) * 2.0:
 		return
 	var hits: PackedFloat32Array = CookRules.hits(_step)
@@ -685,6 +693,10 @@ func _on_tap() -> void:
 	if best >= 0:
 		_hit_taken[best] = 1
 		grade = CookRules.grade(absf(t - hits[best] * interval), window)
+		# 박자에 꽤 가까운 누름으로만 버릇을 배운다 (헛누름 · 한 박자 엇나감은 빼고).
+		var err: float = raw - hits[best] * interval
+		if absf(t - hits[best] * interval) < window * 1.5:
+			_beat_offset = clampf(lerpf(_beat_offset, err, BEAT_LEARN), BEAT_OFFSET_MIN, BEAT_OFFSET_MAX)
 	_play_action_sound(best)
 	_judged(grade, best)
 
@@ -767,13 +779,15 @@ func next_ideal_input() -> Dictionary:
 	var interval: float = float(_step.get("interval_ms", 536))
 	for i: int in hits.size():
 		if i < _hit_taken.size() and _hit_taken[i] == 0:
-			return {"at": hits[i] * interval, "release": false}
+			# 이 기기 보정만큼 늦게 누르면 딱 맞다 (테스트 · 자동 누름용).
+			return {"at": hits[i] * interval + _beat_offset, "release": false}
 	return {"at": INF, "release": false}
 
 
 ## 맡은 동작을 끝냈다: 솜씨 한마디를 띄우고 서버로 보낸다 (rest_stepped → 다음 동작, 마지막이면 rest_result).
 func _finish_step() -> void:
 	_mode = Mode.RESULT
+	Prefs.set_value(Prefs.BEAT_OFFSET, snappedf(_beat_offset, 1.0))
 	var q: float = CookRules.step_quality(_step, _step_taps)
 	_step_scores[_step_index] = q
 	_finish_ms = float(Time.get_ticks_msec())

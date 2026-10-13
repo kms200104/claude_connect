@@ -19,6 +19,8 @@ const MINIMAP: String = "minimap"
 const RIDE_CONTROL: String = "ride_control"
 ## v0.18 리듬 요리: 설명을 본 요리 동작(장면)들 (쉼표로 이은 글).
 const COOK_SEEN: String = "cook_seen"
+## 리듬 요리 박자 보정 (ms): 이 기기에서 소리 · 터치가 늦게 닿는 만큼 (누를 때마다 조금씩 배운다).
+const BEAT_OFFSET: String = "beat_offset"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
@@ -36,6 +38,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"minimap": false,
 	"ride_control": "stick",
 	"cook_seen": "",
+	"beat_offset": 0.0,
 }
 
 

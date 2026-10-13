@@ -161,6 +161,13 @@ export function timingScore(off, window) {
   return Math.max(0, 0.7 - 0.7 * ((off - window) / (window * 2)));
 }
 
+/** 박자 하나의 점수 (v0.19 후하게): 완벽(창의 절반 안)은 만점, 그 밖은 창 두 배까지 서서히 줄어든다. */
+export function hitCredit(off, window) {
+  const perfect = window * 0.5;
+  if (off <= perfect) return 1;
+  return Math.max(0, 1 - (off - perfect) / (window * 2 - perfect));
+}
+
 export function stepQuality(step, taps) {
   const t = Array.isArray(taps) ? taps.filter((x) => Number.isFinite(x) && x >= 0 && x < 20000).sort((a, b) => a - b) : [];
   if (step.kind === 'beats') {
@@ -182,7 +189,7 @@ export function stepQuality(step, taps) {
       }
       // 판정 창 두 배보다 먼 누름은 이 박자 것이 아니다 (놓친 박자 하나가 뒤 박자들을 밀지 않게 남겨 둔다).
       if (at < 0 || best >= step.window_ms * 2) continue;
-      total += 1 - best / (step.window_ms * 2);
+      total += hitCredit(best, step.window_ms);
       j = at + 1;
     }
     const extra = Math.max(0, t.length - hits.length) * 0.05;
