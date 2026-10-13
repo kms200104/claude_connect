@@ -151,6 +151,11 @@ func complex_name() -> String:
 	return str((apartments.get("complex", {}) as Dictionary).get("name", "아파트"))
 
 
+## 동 옆면에 칠하는 짧은 단지 이름 (complex.short).
+func complex_short() -> String:
+	return str((apartments.get("complex", {}) as Dictionary).get("short", complex_name()))
+
+
 func unit(id: String) -> Unit:
 	for u: Unit in units:
 		if u.id == id:
@@ -221,7 +226,7 @@ func home_origin(unit_id: String) -> Vector3:
 	if index < 0:
 		return Vector3.ZERO
 	var cols: int = int(g.get("cols", 3))
-	return Vector3(float(g.get("x0", -185.0)) + (index % cols) * float(g.get("dx", 26.0)), 0.0, float(g.get("z0", -190.0)) + (index / cols) * float(g.get("dz", 19.5)))
+	return Vector3(float(g.get("x0", -185.0)) + (index % cols) * float(g.get("dx", 26.0)), 0.0, float(g.get("z0", 1215.0)) + (index / cols) * float(g.get("dz", 25.0)))
 
 
 ## 동 공동 현관 앞 (집 구경을 시작하는 자리).

@@ -259,7 +259,8 @@ static func _in_building(place: KeeperPlace, p: Vector2, pad: float) -> bool:
 
 ## 바닷가: 모래사장을 따라 기우뚱한 야자수, 그리고 조개·불가사리.
 func _build_beach() -> void:
-	if _layout.island_half <= 0.0:
+	# v0.21 강변도시는 바닷가가 없다 (도시 끝은 들판).
+	if _layout.island_half <= 0.0 or GameData.city != null:
 		return
 	var palms: Array[Transform3D] = []
 	var shells: Array[Transform3D] = []

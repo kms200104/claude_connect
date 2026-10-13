@@ -2,7 +2,7 @@
 //   호수: 윤곽(또는 사각형) 안쪽 LAKE_MARGIN m 부터. 바다: 섬 모양 값 SEA_MIN ~ SEA_MAX (그 너머 바다 건너에는 실내가 있다).
 //   내릴 땅: 호수 윤곽 바깥 LAND_LAKE m, 바닷가는 해안선 안쪽 LAND_COAST m — 그리고 섬 안.
 import { signedDistance } from './outline.js';
-import { islandShape } from './world.js';
+import { islandShape, onIsland } from './world.js';
 
 export const WATER = { LAKE_MARGIN: 1.0, SEA_MIN: 1.05, SEA_MAX: 1.3, LAND_LAKE: 0.8, LAND_COAST: 1.5 };
 
@@ -36,6 +36,8 @@ export function waterAt(data, x, z, slack = 0) {
 /** 걸어 내릴 수 있는 땅인지. */
 export function isLand(data, x, z, slack = 0) {
   for (const spot of data.spots.values()) if (lakeDistance(spot, x, z) < WATER.LAND_LAKE - slack) return false;
+  // v0.21: 도시 땅 밖(강 건너 · 도시 끝)에는 내리지 않는다.
+  if (data.layout?.island && !onIsland(data.layout.island, x, z, WATER.LAND_COAST - slack)) return false;
   const island = data.seaSpot?.island;
   if (!island) return true;
   return (islandShape(island, x, z) - 1) * island.half <= -WATER.LAND_COAST + slack;

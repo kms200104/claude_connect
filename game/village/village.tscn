@@ -48,7 +48,8 @@
 [ext_resource type="Material" path="res://assets/materials/star_glow.tres" id="50_star_glow"]
 [ext_resource type="Script" path="res://ui/hud/event_hud.gd" id="51_event_hud"]
 [ext_resource type="Script" path="res://ui/hud/meteor_overlay.gd" id="52_meteor"]
-[ext_resource type="Script" path="res://game/environment/island_terrain.gd" id="53_island"]
+[ext_resource type="Script" path="res://game/environment/city_terrain.gd" id="53_island"]
+[ext_resource type="Script" path="res://game/city/city_districts.gd" id="95_city"]
 [ext_resource type="Script" path="res://game/places/museum_site.gd" id="54_museum"]
 [ext_resource type="Script" path="res://game/places/airport_site.gd" id="55_airport"]
 [ext_resource type="Script" path="res://game/plants/flower_field.gd" id="56_flowers"]
@@ -67,7 +68,6 @@
 [ext_resource type="Script" path="res://game/field/field_controller.gd" id="68_field"]
 [ext_resource type="Script" path="res://game/home/home_controller.gd" id="69_home"]
 [ext_resource type="Script" path="res://game/jobs/job_controller.gd" id="70_jobs"]
-[ext_resource type="Script" path="res://game/fishing/sea_spot.gd" id="71_sea"]
 [ext_resource type="Script" path="res://game/journal/journal_controller.gd" id="72_journal"]
 [ext_resource type="Material" path="res://assets/materials/building_clay.tres" id="90_bclay"]
 [ext_resource type="Material" path="res://assets/materials/building_window.tres" id="91_bwindow"]
@@ -168,16 +168,28 @@ surface_material_override/0 = ExtResource("7_ground")
 [node name="Shape" type="CollisionShape3D" parent="Terrain/Ground"]
 shape = SubResource("Shape_ground")
 
-[node name="Island" type="Node3D" parent="Terrain" node_paths=PackedStringArray("ground_mesh", "ground_shape", "player")]
+[node name="City" type="Node3D" parent="Terrain" node_paths=PackedStringArray("ground_mesh", "ground_shape", "player")]
 script = ExtResource("53_island")
 ground_mesh = NodePath("../Ground/Mesh")
 ground_shape = NodePath("../Ground/Shape")
 water_material = ExtResource("16_water")
 player = NodePath("../../Player")
 
-[node name="Sea" type="Node3D" parent="Terrain"]
-script = ExtResource("71_sea")
+[node name="RiverLower" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
+script = ExtResource("15_spot")
 spot_id = "sea"
+water = NodePath("Water")
+blocker = NodePath("Blocker/Shape")
+
+[node name="Water" type="MeshInstance3D" parent="Terrain/RiverLower"]
+cast_shadow = 0
+mesh = SubResource("Mesh_water")
+surface_material_override/0 = ExtResource("16_water")
+
+[node name="Blocker" type="StaticBody3D" parent="Terrain/RiverLower"]
+
+[node name="Shape" type="CollisionShape3D" parent="Terrain/RiverLower/Blocker"]
+shape = SubResource("Shape_lake")
 
 [node name="Lake" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
@@ -200,28 +212,27 @@ material_override = ExtResource("33_lily")
 script = ExtResource("32_decor")
 count = 6
 
-[node name="Seongseong" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
+[node name="River" type="Node3D" parent="Terrain" node_paths=PackedStringArray("water", "blocker")]
 script = ExtResource("15_spot")
 spot_id = "seongseong"
 water = NodePath("Water")
 blocker = NodePath("Blocker/Shape")
 
-[node name="Water" type="MeshInstance3D" parent="Terrain/Seongseong"]
+[node name="Water" type="MeshInstance3D" parent="Terrain/River"]
 cast_shadow = 0
 mesh = SubResource("Mesh_water")
 surface_material_override/0 = ExtResource("16_water")
 
-[node name="Blocker" type="StaticBody3D" parent="Terrain/Seongseong"]
+[node name="Blocker" type="StaticBody3D" parent="Terrain/River"]
 
-[node name="Shape" type="CollisionShape3D" parent="Terrain/Seongseong/Blocker"]
+[node name="Shape" type="CollisionShape3D" parent="Terrain/River/Blocker"]
 shape = SubResource("Shape_lake")
 
-[node name="SeongseongLilies" type="MultiMeshInstance3D" parent="Terrain"]
-material_override = ExtResource("33_lily")
-script = ExtResource("32_decor")
-spot_id = "seongseong"
-count = 40
-seed_value = 31
+[node name="CityDistricts" type="Node3D" parent="."]
+script = ExtResource("95_city")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
+foliage_material = ExtResource("23_foliage")
 
 [node name="Decor" type="Node3D" parent="."]
 script = ExtResource("45_decor")

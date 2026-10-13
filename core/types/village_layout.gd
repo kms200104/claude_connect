@@ -15,10 +15,14 @@ class FlowerBed:
 	var count: int = 20
 
 var map_extent: float = 64.0
+## v0.21: 시내 촘촘한 바닥 지도(ground_town)가 덮는 범위 (0 이면 없음).
+var town_extent: float = 0.0
 ## 섬: 해안선 반경(둥근 사각형 |x/h|^p + |z/h|^p = 1), 모래사장 폭. half 가 0 이면 섬이 아니다 (끝없는 땅).
 var island_half: float = 0.0
 var island_power: float = 4.0
 var island_beach: float = 8.0
+## v0.21 강변도시: 이 z 너머(곡교천 한가운데 · 강 건너)는 땅이 아니다 (INF 면 없음).
+var island_south: float = INF
 ## 큰 광장 말고 작은 광장들 (박물관 앞, 공항 앞).
 var plazas: Array[Vector3] = []
 ## 마을에 놓인 거울: (x, z, yaw) — yaw 는 거울 앞면이 보는 방향 (+Z 를 yaw 만큼 돌린 쪽).
@@ -45,6 +49,7 @@ var park: Dictionary = {}
 static func from_dict(data: Dictionary) -> VillageLayout:
 	var layout: VillageLayout = VillageLayout.new()
 	layout.map_extent = float(data.get("map_extent", layout.map_extent))
+	layout.town_extent = float(data.get("town_extent", 0.0))
 	layout.path_width = float(data.get("path_width", layout.path_width))
 	var plaza: Variant = data.get("plaza", {})
 	if plaza is Dictionary:
@@ -55,6 +60,7 @@ static func from_dict(data: Dictionary) -> VillageLayout:
 		layout.island_half = float(island.get("half", 0.0))
 		layout.island_power = float(island.get("power", 4.0))
 		layout.island_beach = float(island.get("beach", 8.0))
+		layout.island_south = float(island.get("south", INF))
 	for entry: Variant in data.get("plazas", []):
 		if entry is Dictionary:
 			layout.plazas.append(Vector3(float(entry.get("x", 0.0)), float(entry.get("z", 0.0)), float(entry.get("r", 4.0))))
@@ -108,11 +114,14 @@ func on_path(point: Vector2, margin: float = 0.0) -> bool:
 	return false
 
 
-## 섬 모양 값: 1 이면 해안선, 작을수록 안쪽 (서버 world.js 의 islandShape 와 같은 식).
+## 섬(도시 땅) 모양 값: 1 이면 경계, 작을수록 안쪽 (서버 world.js 의 islandShape 와 같은 식). south 줄 너머는 1 보다 크다.
 func island_shape(point: Vector2) -> float:
 	if island_half <= 0.0:
 		return 0.0
-	return pow(pow(absf(point.x / island_half), island_power) + pow(absf(point.y / island_half), island_power), 1.0 / island_power)
+	var shape: float = pow(pow(absf(point.x / island_half), island_power) + pow(absf(point.y / island_half), island_power), 1.0 / island_power)
+	if point.y > island_south:
+		return maxf(shape, 1.0 + (point.y - island_south) / island_half)
+	return shape
 
 
 ## 모래사장 안쪽 풀밭인지 (margin: 모래사장 폭에 더해 떨어질 거리).

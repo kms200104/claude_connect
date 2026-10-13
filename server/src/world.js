@@ -1,4 +1,4 @@
-// 섬 지형 판정 (서버는 물리 없이 영역·거리만 본다): 섬 경계, 물, 건물·집 자리.
+// 땅 판정 (서버는 물리 없이 영역·거리만 본다): 도시 땅 경계(예전 섬 모양 + 강 건너 south 줄), 물, 건물·집 자리.
 // 가구 설치와 씨앗 심기가 같은 규칙을 쓴다.
 import { distanceToSpot } from './gamedata.js';
 
@@ -6,7 +6,10 @@ import { distanceToSpot } from './gamedata.js';
 export function islandShape(island, x, z) {
   if (!island) return 0;
   const p = island.power ?? 4;
-  return (Math.abs(x / island.half) ** p + Math.abs(z / island.half) ** p) ** (1 / p);
+  const shape = (Math.abs(x / island.half) ** p + Math.abs(z / island.half) ** p) ** (1 / p);
+  // v0.21 강변도시: south 줄 너머(강 한가운데 · 강 건너)는 땅이 아니다 — 거기서부터 1 을 넘게 이어 붙인다.
+  if (Number.isFinite(island.south) && z > island.south) return Math.max(shape, 1 + (z - island.south) / island.half);
+  return shape;
 }
 
 /** 섬 안쪽인지 (margin: 해안선에서 안쪽으로 떨어져야 하는 거리, 미터). */
@@ -70,6 +73,8 @@ export function blockedAreas(data) {
   for (const b of data.realestate?.buildings ?? []) rects.push(b.w || b.d || b.yaw ? towerRect(b) : { x0: b.x - 5.5, x1: b.x + 5.5, z0: b.z - 4, z1: b.z + 4.5 });
   // 둘레 단지 (겉모습만): 단지 기본 크기·층을 동마다 덮어쓸 수 있다.
   for (const complex of data.realestate?.samples ?? []) for (const b of complex.buildings) rects.push(towerRect(b, complex, 0.6, 1.2));
+  // v0.21 리버파크 단지 시설 (클럽하우스 · 놀이터 · 지하주차장 입구).
+  for (const f of data.realestate?.estate?.facilities ?? []) rects.push({ x0: f.x - f.w / 2 - 1, x1: f.x + f.w / 2 + 1, z0: f.z - f.d / 2 - 1, z1: f.z + f.d / 2 + 1 });
   const office = data.realestate?.office;
   if (office) circles.push({ x: office.x, z: office.z - 1, r: 2.2 });
   const civic = data.civic?.building;
@@ -88,6 +93,8 @@ export function blockedAreas(data) {
     rects.push({ x0: Math.min(...corners.map((q) => q[0])), x1: Math.max(...corners.map((q) => q[0])), z0: Math.min(...corners.map((q) => q[1])), z1: Math.max(...corners.map((q) => q[1])) });
   }
   if (park?.pavilion) circles.push({ x: park.pavilion.x, z: park.pavilion.z, r: park.pavilion.size / 2 + 0.8 });
+  // v0.21 강변도시 건물 (data/world/city.json, 가운데 기준 w×d).
+  for (const b of data.city?.buildings ?? []) rects.push({ x0: b.x - b.w / 2 - 1, x1: b.x + b.w / 2 + 1, z0: b.z - b.d / 2 - 1, z1: b.z + b.d / 2 + 1 });
   return { rects, circles, segments };
 }
 

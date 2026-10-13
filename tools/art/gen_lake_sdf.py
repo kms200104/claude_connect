@@ -17,6 +17,9 @@ MAX_SIZE = 384
 RANGE = 4.0
 FAR_RANGE = 32.0
 PAD = 2.0
+## 반 너비가 이보다 큰 물(긴 강)은 직사각 칸 (긴 변 MAX_LONG 칸).
+LONG_FROM = 96.0
+MAX_LONG = 768
 
 
 def main() -> None:
@@ -27,15 +30,22 @@ def main() -> None:
         if "outline" not in spot:
             continue
         hx, hz = spot["half_x"] + PAD, spot["half_z"] + PAD
-        size = min(int(np.ceil(2 * max(hx, hz) / CELL)), MAX_SIZE)
-        xs = spot["x"] + ((np.arange(size) + 0.5) / size * 2 - 1) * hx
-        zs = spot["z"] + ((np.arange(size) + 0.5) / size * 2 - 1) * hz
+        if max(hx, hz) <= LONG_FROM:
+            w = h = size = min(int(np.ceil(2 * max(hx, hz) / CELL)), MAX_SIZE)
+        else:
+            # v0.21 긴 강: 가로 · 세로 칸 수를 따로 (긴 변 MAX_LONG 칸, 칸 크기는 두 방향 같게).
+            cell = max(CELL, 2 * max(hx, hz) / MAX_LONG)
+            w = int(np.ceil(2 * hx / cell))
+            h = int(np.ceil(2 * hz / cell))
+            size = 0
+        xs = spot["x"] + ((np.arange(w) + 0.5) / w * 2 - 1) * hx
+        zs = spot["z"] + ((np.arange(h) + 0.5) / h * 2 - 1) * hz
         px, pz = np.meshgrid(xs, zs)
         sd = signed_distance(np.array(spot["outline"], dtype=float), px, pz)
         near = np.clip(np.rint((np.clip(sd / RANGE, -1, 1) * 0.5 + 0.5) * 255), 0, 255).astype(np.uint8)
         far = np.clip(np.rint((np.clip(sd / FAR_RANGE, -1, 1) * 0.5 + 0.5) * 255), 0, 255).astype(np.uint8)
         value = np.stack([near, far], axis=-1)
-        doc = {"id": spot["id"], "size": size, "range": RANGE, "far_range": FAR_RANGE, "channels": 2, "half": [round(hx, 3), round(hz, 3)],
+        doc = {"id": spot["id"], "size": size, "w": w, "h": h, "range": RANGE, "far_range": FAR_RANGE, "channels": 2, "half": [round(hx, 3), round(hz, 3)],
                "data": base64.b64encode(value.tobytes()).decode("ascii")}
         path = out_dir / f"{spot['id']}.json"
         path.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")

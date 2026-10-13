@@ -9,6 +9,7 @@ const NPCS_PATH: String = "res://data/npcs/npcs.json"
 const DIALOGUE_PATH: String = "res://data/npcs/dialogue.json"
 const SHOP_PATH: String = "res://data/shop/shop.json"
 const LAYOUT_PATH: String = "res://data/world/village_layout.json"
+const CITY_PATH: String = "res://data/world/city.json"
 const EVENTS_PATH: String = "res://data/events/events.json"
 const PLANTS_PATH: String = "res://data/plants/plants.json"
 const EMOTES_PATH: String = "res://data/emotes/emotes.json"
@@ -43,6 +44,8 @@ var npc_approach: Dictionary = {}
 var shop: ShopData = null
 ## 마을 꾸밈 배치 (길·바위·울타리·꽃밭·선착장).
 var layout: VillageLayout = null
+## v0.21 탕정 제2지구 강변도시: 도로 · 구역 · 건물 · 곡교천 · 침수 구역.
+var city: CityData = null
 ## 마을 이벤트 종류 (id → 정보). 언제 열리는지는 서버가 알려 준다 (Net.events).
 var events: Dictionary[String, EventInfo] = {}
 ## 선물·별 조각을 주울 수 있는 거리 (서버 판정과 같은 값).
@@ -71,7 +74,7 @@ var jobs: JobRules = JobRules.new()
 var safety: SafetyRules = SafetyRules.new()
 ## 차고 탈것 (v19): 자전거 · 전기오토바이와 꾸미기 부품 (킥보드는 아이템 · VehicleInfo).
 var garage: VehicleCatalog = VehicleCatalog.new()
-## 물놀이 체험 (v21): 성성호수 선착장의 바나나 보트 · 유람선.
+## 물놀이 체험 (v21): 곡교천 선착장의 바나나 보트 · 유람선.
 var aqua: AquaRules = AquaRules.new()
 ## v16 업적 (데이터 순서 그대로) · id → 업적 · 판정 값 이름 → 설명.
 var achievements: Array[AchievementInfo] = []
@@ -123,6 +126,7 @@ func _ready() -> void:
 	_catch_shouts = dialogue_file.get("catch_shouts", {})
 	shop = ShopData.from_dict(_read_json(SHOP_PATH))
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
+	city = CityData.from_dict(_read_json(CITY_PATH))
 	if sea_spot != null:
 		sea_spot.island = layout
 	var plants_file: Dictionary = _read_json(PLANTS_PATH)

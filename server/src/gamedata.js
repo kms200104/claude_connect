@@ -82,6 +82,13 @@ export function loadGameData(dataDir, cfg) {
     layout = null; // 꾸밈 배치는 없어도 된다 (선물이 바위 위에 떨어질 수 있을 뿐)
   }
   if (seaSpot) seaSpot.island = layout?.island ?? null;
+  // v0.21 강변도시: 도로 · 구역 · 건물 (서버는 건물 자리만 쓴다 — 놓기 · 심기 금지).
+  let city = null;
+  try {
+    city = read('world/city.json');
+  } catch {
+    city = null;
+  }
 
   const quests = read('quests/quests.json');
   for (const t of quests.templates) if (t.item && !items.has(t.item)) throw new Error(`quest ${t.id}: unknown item ${t.item}`);
@@ -217,6 +224,7 @@ export function loadGameData(dataDir, cfg) {
     shop,
     events,
     layout,
+    city,
     plants,
     flowerDefs,
     treeKinds,

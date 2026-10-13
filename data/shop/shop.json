@@ -20,17 +20,17 @@
   "enter_range": 2.2,
   "interior": {
     "x": 0,
-    "z": 190,
+    "z": 1190,
     "half_x": 6.5,
     "half_z": 5
   },
   "inside_spawn": {
     "x": 0,
-    "z": 192.4
+    "z": 1192.4
   },
   "exit": {
     "x": 0,
-    "z": 194.0
+    "z": 1194.0
   },
   "exit_range": 1.3,
   "points_per_sol": 1,
@@ -59,7 +59,7 @@
   ],
   "room_origin": {
     "x": 0,
-    "z": 194.5
+    "z": 1194.5
   },
   "delivery": {
     "fee": 3000, "min_delay_s": 20, "max_delay_s": 30, "speed": 3.4, "hand_range": 1.5, "wait_s": 90, "max_active": 3, "max_n": 99,

@@ -55,7 +55,7 @@
     "danchu": { "likes": ["sweet", "fresh", "light"], "dislikes": ["fishy"] }
   },
   "visitors": [
-    { "id": "v_hiker", "name": "하늘", "about": "주말마다 섬 둘레길을 걷는 등산객", "mbti": "ESTP", "likes": ["hearty", "spicy"], "dislikes": ["fancy"], "look": { "hair": "#2A2222", "style": "short", "top": "#E06A3A", "bottom": "#3A4A5A", "shoes": "#5A4030", "eyes": "dot", "mouth": "open" } },
+    { "id": "v_hiker", "name": "하늘", "about": "주말마다 곡교천 둔치길을 걷는 등산객", "mbti": "ESTP", "likes": ["hearty", "spicy"], "dislikes": ["fancy"], "look": { "hair": "#2A2222", "style": "short", "top": "#E06A3A", "bottom": "#3A4A5A", "shoes": "#5A4030", "eyes": "dot", "mouth": "open" } },
     { "id": "v_student", "name": "콩이", "about": "시험 기간에 간식을 찾아오는 학생", "mbti": "ENFP", "likes": ["sweet", "savory"], "dislikes": ["spicy"], "look": { "hair": "#5A3A2A", "style": "pigtails", "top": "#F2C6DE", "bottom": "#3A3A5A", "shoes": "#E8E2D8", "eyes": "sparkle", "mouth": "tiny" } },
     { "id": "v_office", "name": "박대리", "about": "점심시간에 들르는 회사원", "mbti": "ISTJ", "likes": ["savory", "hearty"], "dislikes": ["fishy"], "look": { "hair": "#1E1A1A", "style": "side", "top": "#F2F2F2", "bottom": "#2A2A3A", "shoes": "#1A1A1A", "eyes": "line", "mouth": "flat" } },
     { "id": "v_angler", "name": "강태공", "about": "호숫가에 사는 낚시광 할아버지", "mbti": "ISFP", "likes": ["fishy", "spicy"], "dislikes": ["sweet"], "look": { "hair": "#D8D2C8", "style": "buzz", "top": "#6A8A5A", "bottom": "#5A4A3A", "shoes": "#4A3A2A", "eyes": "droopy", "nose": "big", "mouth": "smile" } },

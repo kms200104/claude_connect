@@ -116,7 +116,7 @@ func _collect() -> void:
 func _add_places() -> void:
 	var econ: EconData = GameData.econ
 	var plaza: Vector2 = GameData.layout.plaza_center if GameData.layout != null else Vector2.ZERO
-	_add("place", "plaza", "마을 광장", "성성호수 남쪽 상점가 한가운데. 거울과 꽃밭이 있어요.", plaza, "광")
+	_add("place", "plaza", "마을 광장", "시내 상점가 한가운데. 거울과 꽃밭이 있어요.", plaza, "광")
 	if GameData.shop != null:
 		_add("place", "shop", "솔바람 상점", "물건을 사고팔아요. 상점이 크면 파는 것도 늘어요.", Vector2(GameData.shop.door.x, GameData.shop.door.z - 3.0), "상")
 	if GameData.museum != null:
@@ -335,7 +335,7 @@ func _show_info() -> void:
 			dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			legend.add_child(dot)
 			legend.add_child(label(str(pair[1]), 22, INK, false))
-		_info.add_child(label("바다 낚시는 섬 둘레 바닷가 어디서나 할 수 있어요.", 22, SOFT))
+		_info.add_child(label("곡교천은 둔치 물가 어디서나 낚시할 수 있어요. 보 아래 하류에는 바다 물고기도 올라와요.", 22, SOFT))
 		return
 	_info.add_child(label(m.title, 32, INK))
 	if not m.about.is_empty():

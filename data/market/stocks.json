@@ -14,9 +14,9 @@
   "reversion": 0.002,
   "stocks": [
     { "id": "SBE", "name": "솔바람전자", "sector": "반도체", "price": 72000, "vol": 0.0016, "drift": 0.00001, "feed_symbol": "005930.KS", "about": "마을 이름을 딴 반도체 회사. 시가총액 1위." },
-    { "id": "HSB", "name": "호수바이오", "sector": "바이오", "price": 18500, "vol": 0.0035, "drift": 0.0, "feed_symbol": "207940.KS", "about": "성성호수 미생물로 신약을 만든다는 바이오 회사. 오르내림이 크다." },
+    { "id": "HSB", "name": "호수바이오", "sector": "바이오", "price": 18500, "vol": 0.0035, "drift": 0.0, "feed_symbol": "207940.KS", "about": "곡교천 미생물로 신약을 만든다는 바이오 회사. 오르내림이 크다." },
     { "id": "CAM", "name": "천안모빌리티", "sector": "자동차", "price": 215000, "vol": 0.0018, "drift": 0.00001, "feed_symbol": "005380.KS", "about": "전기 자전거부터 자동차까지." },
-    { "id": "SSC", "name": "성성건설", "sector": "건설", "price": 9800, "vol": 0.0022, "drift": 0.0, "feed_symbol": "000720.KS", "about": "호숫가 아파트를 짓는 건설사. 부동산 경기를 탄다." },
+    { "id": "SSC", "name": "강변건설", "sector": "건설", "price": 9800, "vol": 0.0022, "drift": 0.0, "feed_symbol": "000720.KS", "about": "강변도시 아파트를 짓는 건설사. 부동산 경기를 탄다. 침수 복구 공사도 맡는다." },
     { "id": "GRT", "name": "구름통신", "sector": "통신", "price": 38000, "vol": 0.0009, "drift": 0.000005, "feed_symbol": "017670.KS", "about": "잔잔한 통신주. 크게 오르지도 내리지도 않는다." },
     { "id": "BYE", "name": "별빛엔터", "sector": "엔터", "price": 54000, "vol": 0.0030, "drift": 0.0, "feed_symbol": "352820.KS", "about": "마을 출신 아이돌 기획사. 소식 하나에 출렁인다." },
     { "id": "DBF", "name": "달보식품", "sector": "식품", "price": 126000, "vol": 0.0011, "drift": 0.000008, "feed_symbol": "097950.KS", "about": "상점 주인 달보의 집안이 세운 식품 회사." },

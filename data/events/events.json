@@ -76,8 +76,8 @@
       "drop_multiplier": 2
     },
     {
-      "id": "sea_derby", "kind": "derby", "name": "여름 바다 낚시 대회", "weight": 3, "icon": "fishing", "hours": [6, 19], "seasons": ["summer"],
-      "desc": "바닷가에서 물고기를 낚을 때마다 상금! 귀한 바다 물고기가 더 잘 잡혀요.",
+      "id": "sea_derby", "kind": "derby", "name": "여름 하류 낚시 대회", "weight": 3, "icon": "fishing", "hours": [6, 19], "seasons": ["summer"],
+      "desc": "곡교천 하류(보 아래)에서 물고기를 낚을 때마다 상금! 귀한 바다 물고기가 더 잘 잡혀요.",
       "spots": ["sea"], "bonus": { "common": 5000, "uncommon": 20000, "rare": 80000 }, "rare_boost": 2
     },
     {
@@ -113,7 +113,7 @@
     },
     {
       "id": "housing_boom", "kind": "economy", "name": "집값 급등", "weight": 2, "icon": "coin",
-      "desc": "성성호수 공원 개발 소식에 아파트 값이 6% 뛰었어요.",
+      "desc": "곡교천 수변공원 개발 소식에 아파트 값이 6% 뛰었어요.",
       "effect": { "type": "apt_index", "mult": 1.06 }
     },
     {

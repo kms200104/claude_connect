@@ -23,6 +23,8 @@ const COOK_SEEN: String = "cook_seen"
 const BEAT_OFFSET: String = "beat_offset"
 ## 휴대폰 앱 스토어에서 받은 앱 (쉼표로 이은 kind).
 const APPS: String = "apps"
+## 성능 표시 (프레임 시간 · 그리기 · 삼각형, PerfHud).
+const PERF_HUD: String = "perf_hud"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
@@ -42,6 +44,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"cook_seen": "",
 	"beat_offset": 0.0,
 	"apps": "",
+	"perf_hud": false,
 }
 
 
@@ -107,6 +110,10 @@ static func music() -> String:
 
 static func minimap() -> bool:
 	return bool(get_value(MINIMAP))
+
+
+static func perf_hud() -> bool:
+	return bool(get_value(PERF_HUD))
 
 
 ## 탈것을 버튼(▲▼ · ◀▶)으로 모는지.

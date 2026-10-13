@@ -151,7 +151,7 @@ func _apply_pack(pack: String) -> void:
 	var material: ShaderMaterial = load(GROUND_MATERIAL)
 	if material == null:
 		return
-	for pair: Array in [["map_texture", "ground_map.png"], ["detail_texture", "ground_detail.png"]]:
+	for pair: Array in [["map_texture", "ground_map.png"], ["detail_texture", "ground_detail.png"], ["town_texture", "ground_town.png"]]:
 		var path: String = "%s/%s/%s" % [PACK_DIR, pack, pair[1]]
 		if ResourceLoader.exists(path):
 			material.set_shader_parameter(pair[0], load(path))

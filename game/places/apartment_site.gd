@@ -1,15 +1,16 @@
 class_name ApartmentSite
 extends Node3D
-## 성성호수공원 아파트: 살 수 있는 단지(buildings) + 단지 문 + 부동산·은행 부스, 그리고 둘레의 다른 단지(samples, 겉모습만).
+## 솔바람 리버파크 (v0.21 강변도시): 살 수 있는 단지(buildings) + 단지 문 · 조경 · 지하주차장 입구 + 부동산·은행 부스, 그리고 둘레의 다른 단지(samples, 겉모습만).
+## 동 모양은 ApartmentKit (필로티 · 발코니 · 실외기실 · 계단실 · 옥상 크라운) — 살 수 있는 동은 FULL, 둘레 단지는 SIMPLE.
 ## 동·층·호는 data/realestate/apartments.json (서버와 같은 파일). 동마다 w·d(바닥 크기)와 yaw(앞면 방향)를 지도대로 줄 수 있다.
 ## 누가 산 집은 그 호수 발코니에 깃발이 걸린다 (내 집 = 금빛, 친구 집 = 하늘빛). 부스에서 "부동산"을 누르면 휴대폰의 부동산 앱이 열린다.
-## samples 는 단지마다 메시 하나(점토 + 창)로 합쳐 그린다.
+## samples 는 동마다 메시 둘(점토 + 창)로, 멀면 그리지 않는다 (visibility range).
 
 @export var clay_material: Material
 @export var window_material: Material
 
-## 한 층 높이 (m). 캐릭터 키가 1.6m 라 실제보다 낮게 줄였다.
-const FLOOR_HEIGHT: float = 1.5
+## 한 층 높이 (m) · 필로티 높이 — v0.21 강변도시는 실제 크기 (ApartmentKit 과 같다).
+const FLOOR_HEIGHT: float = ApartmentKit.FLOOR_HEIGHT
 ## 동 하나의 기본 너비(x) · 깊이(z). 데이터의 w·d 가 있으면 그것을 쓴다.
 const TOWER_SIZE: Vector2 = Vector2(9.0, 6.0)
 const WALL: Array = ["#E9E4DA", "#F8F6F0"]
@@ -18,7 +19,7 @@ const ACCENT: Array = ["#4E7FA8", "#7AA8CC"]
 const ROOF: Array = ["#5C6670", "#7E8A94"]
 ## e편한세상 성성호수공원 외관 (v0.13.8): 모든 동 5m 필로티(층 높이를 줄인 것과 같은 비율로 2.6m), 흰 몸통 + 짙은 회색 세로 프레임,
 ## 유리 난간 발코니, 옆면 꼭대기에 브랜드 · 동 번호, 옥상 크라운 틀 + 경관조명, 105동 최상층 스카이라운지 (분양 자료 기준).
-const PILOTI_HEIGHT: float = 2.6
+const PILOTI_HEIGHT: float = ApartmentKit.PILOTI_HEIGHT
 const STONE_DARK: Array = ["#5F5B57", "#77726C"]
 const STONE_LIGHT: Array = ["#CFCAC2", "#DDD9D2"]
 const CHARCOAL: String = "#3B4046"
@@ -49,6 +50,7 @@ func _ready() -> void:
 		if b is Dictionary:
 			_build_tower(b)
 	_build_gate(econ)
+	_build_estate(econ.apartments.get("estate", {}))
 	for complex: Variant in econ.apartments.get("samples", []):
 		if complex is Dictionary:
 			_build_sample(complex)
@@ -81,7 +83,7 @@ func unit_position(unit_id: String) -> Vector3:
 	var size: Vector2 = tower_size(tower.get_meta(&"data", {}))
 	var lines: int = int((tower.get_meta(&"data", {}) as Dictionary).get("lines", 2))
 	var x: float = _line_x(u.line - 1, lines, size.x)
-	return tower.global_transform * Vector3(x, PILOTI_HEIGHT + (u.floor - 1) * FLOOR_HEIGHT + 1.0, size.y * 0.5 + 0.35)
+	return tower.global_transform * Vector3(x, PILOTI_HEIGHT + (u.floor - 1) * FLOOR_HEIGHT + 1.2, size.y * 0.5 + ApartmentKit.BALCONY + 0.1)
 
 
 ## 그 집이 있는 동의 방향 (로컬 +Z = 앞면 · 발코니 쪽). 없으면 기본 방향.
@@ -121,92 +123,145 @@ func _build_tower(b: Dictionary) -> void:
 	var floors: int = int(b.get("floors", 10))
 	var lines: int = int(b.get("lines", 2))
 	var size: Vector2 = tower_size(b)
+	var clay: BoxBatch = BoxBatch.new()
+	var glass: BoxBatch = BoxBatch.new()
+	var top: float = ApartmentKit.tower(clay, glass, size.x, size.y, floors, lines, ApartmentKit.Detail.FULL, id == SKY_LOUNGE_TOWER)
+	tower.add_child(_mesh(clay.commit(), clay_material))
+	tower.add_child(_mesh(glass.commit(), window_material))
+	# ---- 측벽: 브랜드와 동 번호 (양쪽 옆면 꼭대기), 주황 포인트 띠 — 벽에 칠한 글씨처럼 벽 폭 안에 맞춘다 ----
 	var w: float = size.x
 	var d: float = size.y
-	var top: float = PILOTI_HEIGHT + floors * FLOOR_HEIGHT
-	var front: float = d * 0.5
-	var parts: Array = []
-	var glass: Array = []
-	# ---- 1층 필로티 (5m, 모든 동): 돌 기둥 사이로 비우고, 가운데에 유리 공동현관 + 앞 캐노피 ----
-	parts.append(KeeperSite.p("box", [w + 0.5, 0.12, d + 0.5], Vector3(0.0, 0.06, 0.0), STONE_DARK))
-	for cx: float in [-w * 0.5 + 0.2, -w * 0.18, w * 0.18, w * 0.5 - 0.2]:
-		for cz: float in [-front + 0.2, front - 0.2]:
-			parts.append(KeeperSite.p("box", [0.32, PILOTI_HEIGHT, 0.32], Vector3(cx, PILOTI_HEIGHT * 0.5, cz), STONE_DARK))
-	parts.append(KeeperSite.p("box", [w * 0.3, PILOTI_HEIGHT, d * 0.55], Vector3(0.0, PILOTI_HEIGHT * 0.5, -d * 0.1), CHARCOAL))
-	glass.append(KeeperSite.p("box", [w * 0.28, PILOTI_HEIGHT - 0.3, 0.04], Vector3(0.0, (PILOTI_HEIGHT - 0.3) * 0.5 + 0.12, d * 0.18), "#FFFFFF"))
-	parts.append(KeeperSite.p("box", [w * 0.42, 0.14, 1.3], Vector3(0.0, PILOTI_HEIGHT - 0.35, front + 0.45), CHARCOAL))
-	# 필로티 천장 띠 (돌 마감).
-	parts.append(KeeperSite.p("box", [w + 0.16, 0.34, d + 0.16], Vector3(0.0, PILOTI_HEIGHT + 0.07, 0.0), STONE_LIGHT))
-	# ---- 몸통: 흰 벽, 층마다 얇은 띠, 뒷면 가운데 계단실 ----
-	var body_h: float = top - PILOTI_HEIGHT
-	parts.append(KeeperSite.p("box", [w, body_h, d], Vector3(0.0, PILOTI_HEIGHT + body_h * 0.5, 0.0), BODY_WHITE))
-	for f: int in range(1, floors):
-		parts.append(KeeperSite.p("box", [w + 0.05, 0.05, d + 0.05], Vector3(0.0, PILOTI_HEIGHT + f * FLOOR_HEIGHT, 0.0), BAND))
-	parts.append(KeeperSite.p("box", [w * 0.16, body_h + 0.6, 0.22], Vector3(0.0, PILOTI_HEIGHT + (body_h + 0.6) * 0.5, -front - 0.08), STONE_LIGHT))
-	# ---- 앞면 (호수 쪽): 짙은 회색 세로 프레임 (가운데 + 양 끝) ----
-	parts.append(KeeperSite.p("box", [0.42, body_h + 0.45, 0.56], Vector3(0.0, PILOTI_HEIGHT + (body_h + 0.45) * 0.5, front + 0.04), CHARCOAL))
 	for side: float in [-1.0, 1.0]:
-		parts.append(KeeperSite.p("box", [0.16, body_h, 0.5], Vector3(side * (w * 0.5 - 0.04), PILOTI_HEIGHT + body_h * 0.5, front + 0.18), CHARCOAL))
-	# ---- 집마다 층마다: 큰 거실 창(밤에 빛남) + 튀어나온 발코니 판 + 유리 난간 ----
-	for f: int in floors:
-		var y0: float = PILOTI_HEIGHT + f * FLOOR_HEIGHT
-		for line: int in lines:
-			var x: float = _line_x(line, lines, w)
-			var span: float = w / lines - 0.5
-			glass.append(KeeperSite.p("box", [span - 0.3, FLOOR_HEIGHT * 0.58, 0.04], Vector3(x, y0 + FLOOR_HEIGHT * 0.52, front + 0.02), "#FFFFFF"))
-			parts.append(KeeperSite.p("box", [span, 0.07, 0.42], Vector3(x, y0 + 0.035, front + 0.21), WALL_TRIM))
-			parts.append(KeeperSite.p("box", [span, 0.4, 0.03], Vector3(x, y0 + 0.27, front + 0.41), RAIL_GLASS))
-			# 뒷면 작은 창.
-			glass.append(KeeperSite.p("box", [span * 0.45, FLOOR_HEIGHT * 0.45, 0.04], Vector3(x, y0 + FLOOR_HEIGHT * 0.55, -front - 0.02), "#FFFFFF"))
-	# ---- 옥상 크라운: 짙은 회색 틀 + 세로 루버 + 밤에 빛나는 경관조명 띠 ----
-	parts.append(KeeperSite.p("box", [w + 0.12, 0.3, d + 0.12], Vector3(0.0, top + 0.15, 0.0), STONE_LIGHT))
-	var crown_h: float = FLOOR_HEIGHT * 2.0
-	var cw: float = w * 0.82
-	var cd: float = d * 0.8
-	# 열린 틀: 네 모서리 기둥 + 위 테두리 (가운데는 비어 하늘이 보인다), 앞면 세로 루버.
-	for cx: float in [-cw * 0.5, cw * 0.5]:
-		for cz: float in [-cd * 0.5, cd * 0.5]:
-			parts.append(KeeperSite.p("box", [0.18, crown_h, 0.18], Vector3(cx, top + crown_h * 0.5, cz), CROWN))
-	for cz: float in [-cd * 0.5, cd * 0.5]:
-		parts.append(KeeperSite.p("box", [cw + 0.18, 0.18, 0.18], Vector3(0.0, top + crown_h, cz), CROWN))
-	for cx: float in [-cw * 0.5, cw * 0.5]:
-		parts.append(KeeperSite.p("box", [0.18, 0.18, cd], Vector3(cx, top + crown_h, 0.0), CROWN))
-	for i: int in 7:
-		var lx: float = lerpf(-cw * 0.4, cw * 0.4, float(i) / 6.0)
-		parts.append(KeeperSite.p("box", [0.06, crown_h * 0.6, 0.06], Vector3(lx, top + crown_h * 0.62, cd * 0.5), CROWN))
-	glass.append(KeeperSite.p("box", [cw, 0.06, 0.04], Vector3(0.0, top + crown_h - 0.14, cd * 0.5 + 0.1), "#FFFFFF"))
-	# 105동 최상층: 호수가 보이는 스카이라운지 (유리 상자, 밤에 빛남).
-	if id == SKY_LOUNGE_TOWER:
-		glass.append(KeeperSite.p("box", [cw - 0.5, crown_h - 0.5, d * 0.62], Vector3(0.0, top + (crown_h - 0.5) * 0.5 + 0.3, 0.0), "#FFFFFF"))
-	tower.add_child(_mesh(PartMesh.build(parts), clay_material))
-	tower.add_child(_mesh(PartMesh.build(glass), window_material))
-	# ---- 측벽: 브랜드와 동 번호 (양쪽 옆면 꼭대기), 주황 포인트 띠 — 벽에 칠한 글씨처럼 벽 폭 안에 맞춘다 ----
-	for side: float in [-1.0, 1.0]:
-		var brand: MeshInstance3D = _wall_label(BRAND_TEXT, 72, d * 0.78, 0.55)
+		var brand: MeshInstance3D = _wall_label(GameData.econ.complex_short(), 72, d * 0.78, 1.1)
 		tower.add_child(brand)
-		brand.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 0.95, 0.0)
+		brand.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 1.9, 0.0)
 		brand.rotation.y = side * PI * 0.5
-		var number: MeshInstance3D = _wall_label(id, 150, d * 0.7, 1.1)
+		var number: MeshInstance3D = _wall_label(id, 150, d * 0.7, 2.6)
 		tower.add_child(number)
-		number.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 2.25, 0.0)
+		number.position = Vector3(side * (w * 0.5 + WALL_TEXT_OFFSET), top - 4.8, 0.0)
 		number.rotation.y = side * PI * 0.5
-	parts.clear()
+	var stripe: BoxBatch = BoxBatch.new()
 	for side: float in [-1.0, 1.0]:
-		parts.append(KeeperSite.p("box", [0.02, 0.08, d * 0.5], Vector3(side * (w * 0.5 + 0.01), top - 1.45, 0.0), BRAND_ORANGE))
-	tower.add_child(_mesh(PartMesh.build(parts), clay_material))
+		stripe.box(Vector3(side * (w * 0.5 + 0.01), top - 3.1, 0.0), Vector3(0.02, 0.16, d * 0.5), Color(BRAND_ORANGE))
+	tower.add_child(_mesh(stripe.commit(), clay_material))
+	# 필로티 기둥 사이로는 걸어 다닌다 — 몸통 아래 공동현관 · 계단실 덩어리만 막는다.
 	var body: StaticBody3D = StaticBody3D.new()
-	var shape: CollisionShape3D = CollisionShape3D.new()
-	var box: BoxShape3D = BoxShape3D.new()
-	box.size = Vector3(w, 4.0, d + 0.6)
-	shape.shape = box
-	shape.position = Vector3(0.0, 2.0, 0.3)
-	body.add_child(shape)
+	for box_def: Array in ApartmentKit.solid_boxes(w, d):
+		var shape: CollisionShape3D = CollisionShape3D.new()
+		var box: BoxShape3D = BoxShape3D.new()
+		box.size = box_def[1]
+		shape.shape = box
+		shape.position = box_def[0]
+		body.add_child(shape)
 	tower.add_child(body)
 
 
 ## 앞면에서 호(라인)의 가로 자리 (왼쪽부터, 가운데 세로 프레임을 비켜).
 static func _line_x(line: int, lines: int, w: float) -> float:
 	return -w * 0.5 + (float(line) + 0.5) * w / float(lines)
+
+
+## v0.21 단지 꾸밈 (apartments.json estate): 담장 + 회양목, 단지 안 길 · 보도블록, 클럽하우스, 놀이터, 지하주차장 입구, 환기구 · 조경 나무.
+func _build_estate(estate: Dictionary) -> void:
+	if estate.is_empty():
+		return
+	var root: Node3D = Node3D.new()
+	root.name = "Estate"
+	add_child(root)
+	var clay: BoxBatch = BoxBatch.new()
+	var glass: BoxBatch = BoxBatch.new()
+	var r: Array = estate.get("rect", [])
+	var road: Dictionary = estate.get("road", {})
+	var road_z: float = float(road.get("z", 0.0))
+	var road_w: float = float(road.get("w", 7.0))
+	if r.size() == 4:
+		var x0: float = float(r[0])
+		var z0: float = float(r[1])
+		var x1: float = float(r[2])
+		var z1: float = float(r[3])
+		# 담장: 돌 턱 + 회양목 (문 · 길 자리는 비운다, 남쪽 강 쪽은 낮은 철제 울타리).
+		for seg: Array in [[Vector2(x0, z0), Vector2(x1, z0)], [Vector2(x0, z0), Vector2(x0, z1)], [Vector2(x1, z0), Vector2(x1, road_z - road_w * 0.5 - 2.0)],
+				[Vector2(x1, road_z + road_w * 0.5 + 2.0), Vector2(x1, z1)], [Vector2(x0, z1), Vector2(x1, z1)]]:
+			var a: Vector2 = seg[0]
+			var b: Vector2 = seg[1]
+			var mid: Vector2 = (a + b) * 0.5
+			var horizontal: bool = absf(a.y - b.y) < 0.01
+			var len_m: float = a.distance_to(b)
+			var size_low: Vector3 = Vector3(len_m, 0.5, 0.5) if horizontal else Vector3(0.5, 0.5, len_m)
+			clay.box(Vector3(mid.x, 0.25, mid.y), size_low, STONE_DARK_C)
+			var size_hedge: Vector3 = Vector3(len_m, 0.8, 0.9) if horizontal else Vector3(0.9, 0.8, len_m)
+			clay.box(Vector3(mid.x, 0.85, mid.y), size_hedge, Color("#4E8A44"))
+		# 단지 안 길 (아스팔트 + 양쪽 보도블록).
+		var rx0: float = float(road.get("x0", x0))
+		var rx1: float = float(road.get("x1", x1))
+		clay.quad_up(Vector3((rx0 + rx1) * 0.5, 0.02, road_z), Vector2(rx1 - rx0, road_w), Color("#4A4D52"))
+		for s: float in [-1.0, 1.0]:
+			clay.quad_up(Vector3((rx0 + rx1) * 0.5, 0.025, road_z + s * (road_w * 0.5 + 1.0)), Vector2(rx1 - rx0, 2.0), Color("#C9B9A6"))
+		# 동 앞 보도 (동마다 현관에서 단지 안 길까지).
+		for b: Variant in GameData.econ.buildings():
+			if b is Dictionary:
+				var bx: float = float(b.get("x", 0.0))
+				var bz: float = float(b.get("z", 0.0))
+				var bd: float = float(b.get("d", 6.0))
+				clay.quad_up(Vector3(bx, 0.025, bz + bd * 0.5 + 4.0), Vector2(6.0, 8.0), Color("#D3C4B0"))
+				clay.quad_up(Vector3(bx, 0.024, bz + bd * 0.5 + 8.6), Vector2(float(b.get("w", 9.0)) + 8.0, 2.2), Color("#C9B9A6"))
+	for f: Variant in estate.get("facilities", []):
+		if f is Dictionary:
+			_facility(root, clay, glass, f)
+	# 환기구 (지하주차장 숨구멍): 동 사이 잔디밭에 군데군데.
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 77
+	for b: Variant in GameData.econ.buildings():
+		if b is Dictionary and rng.randf() < 0.6:
+			var p: Vector3 = Vector3(float(b.get("x", 0.0)) + 14.0, 0.0, float(b.get("z", 0.0)) - 9.0)
+			clay.box(p + Vector3(0.0, 0.9, 0.0), Vector3(1.4, 1.8, 1.4), Color("#9AA3A9"))
+			clay.box(p + Vector3(0.0, 1.9, 0.0), Vector3(1.8, 0.2, 1.8), Color("#6F787E"))
+	root.add_child(_mesh(clay.commit(), clay_material))
+	root.add_child(_mesh(glass.commit(), window_material))
+
+
+const STONE_DARK_C: Color = Color("#77726C")
+
+
+func _facility(root: Node3D, clay: BoxBatch, glass: BoxBatch, f: Dictionary) -> void:
+	var c: Vector3 = Vector3(float(f.get("x", 0.0)), 0.0, float(f.get("z", 0.0)))
+	var w: float = float(f.get("w", 10.0))
+	var d: float = float(f.get("d", 10.0))
+	match str(f.get("kind", "")):
+		"clubhouse":
+			var h: float = 4.0 * float(f.get("floors", 2))
+			clay.box(c + Vector3(0.0, h * 0.5, 0.0), Vector3(w, h, d), Color("#E9E5DD"))
+			for fl: int in int(f.get("floors", 2)):
+				glass.box(c + Vector3(0.0, 2.0 + fl * 4.0, d * 0.5 + 0.03), Vector3(w * 0.9, 2.8, 0.05), Color.WHITE)
+				clay.box(c + Vector3(0.0, 4.0 + fl * 4.0, d * 0.5 + 0.5), Vector3(w + 0.4, 0.25, 1.0), Color(CHARCOAL))
+			clay.box(c + Vector3(0.0, h + 0.3, 0.0), Vector3(w + 0.6, 0.6, d + 0.6), Color(CROWN))
+		"playground":
+			clay.quad_up(c + Vector3(0.0, 0.03, 0.0), Vector2(w, d), Color("#E07A4F"))
+			clay.quad_up(c + Vector3(-w * 0.2, 0.035, 0.0), Vector2(w * 0.4, d * 0.6), Color("#5BA4D9"))
+			# 미끄럼틀 탑 · 미끄럼판 · 그네 틀 · 시소.
+			clay.box(c + Vector3(-w * 0.25, 1.2, 0.0), Vector3(2.4, 2.4, 2.4), Color("#F2C14E"))
+			clay.box(c + Vector3(-w * 0.25, 2.8, 0.0), Vector3(2.8, 0.3, 2.8), Color("#E04B3C"))
+			clay.box(c + Vector3(-w * 0.25 + 2.6, 1.1, 0.0), Vector3(3.6, 0.15, 1.0), Color("#35A26B"), Basis(Vector3.BACK, -0.55))
+			for k: float in [-1.0, 1.0]:
+				clay.box(c + Vector3(w * 0.22 + k * 2.0, 1.4, -d * 0.2), Vector3(0.15, 2.8, 0.15), Color("#5A646C"))
+			clay.box(c + Vector3(w * 0.22, 2.8, -d * 0.2), Vector3(4.3, 0.15, 0.15), Color("#5A646C"))
+			for k: float in [-0.8, 0.8]:
+				clay.box(c + Vector3(w * 0.22 + k, 0.55, -d * 0.2), Vector3(0.6, 0.08, 0.3), Color("#8E5BD0"))
+			clay.box(c + Vector3(w * 0.25, 0.45, d * 0.25), Vector3(3.6, 0.12, 0.4), Color("#2F7DD1"), Basis(Vector3.BACK, 0.12))
+		"parking":
+			# 지하주차장 입구: 비탈 지붕(짙은 회색) 아래 어두운 입구, 옆 벽, 높이 제한 막대 (노랑 · 검정).
+			clay.box(c + Vector3(0.0, 3.0, 0.0), Vector3(w, 0.3, d + 0.6), Color(CHARCOAL))
+			for s: float in [-1.0, 1.0]:
+				clay.box(c + Vector3(0.0, 1.5, s * (d * 0.5)), Vector3(w, 3.0, 0.3), Color("#C6C1B8"))
+			clay.box(c + Vector3(w * 0.5, 1.5, 0.0), Vector3(0.3, 3.0, d), Color("#C6C1B8"))
+			clay.quad_up(c + Vector3(-1.0, 0.04, 0.0), Vector2(w - 2.0, d - 0.4), Color("#1E2226"))
+			for k: int in 5:
+				clay.box(c + Vector3(-w * 0.5 - 0.2, 2.5, -d * 0.4 + float(k) * d * 0.2), Vector3(0.12, 0.25, d * 0.2), Color("#F2C14E") if k % 2 == 0 else Color("#222222"))
+	var label: Label3D = _label(str(f.get("name", "")), 56, Color("#FFFFFF"))
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.visibility_range_end = 60.0
+	root.add_child(label)
+	label.position = c + Vector3(0.0, 4.5 if str(f.get("kind", "")) != "clubhouse" else 9.5, 0.0)
 
 
 ## 단지 이름 문 (가운데 동 앞 길가) + 낮은 회양목 울타리. 데이터에 gate 가 있으면 그 자리에 문만 세운다.
@@ -277,59 +332,50 @@ func _build_sample(complex: Dictionary) -> void:
 	root.name = "Sample_%s" % str(complex.get("id", "complex"))
 	add_child(root)
 	root.global_transform = Transform3D.IDENTITY
-	var wall: Variant = complex.get("wall", WALL)
-	var accent: Variant = complex.get("accent", ACCENT)
-	var parts: Array = []
-	var windows: Array = []
 	var center: Vector3 = Vector3.ZERO
 	var top: float = 0.0
 	var list: Array = complex.get("buildings", [])
+	var wall: Array = complex.get("wall", BODY_WHITE)
+	var accent: Array = complex.get("accent", ACCENT)
 	for entry: Variant in list:
 		if not entry is Dictionary:
 			continue
 		var b: Dictionary = entry
 		var size: Vector2 = Vector2(float(b.get("w", complex.get("w", TOWER_SIZE.x))), float(b.get("d", complex.get("d", TOWER_SIZE.y))))
 		var floors: int = int(b.get("floors", complex.get("floors", 12)))
-		var height: float = floors * FLOOR_HEIGHT
 		var yaw: float = float(b.get("yaw", 0.0))
-		var xf: Transform3D = Transform3D(Basis(Vector3.UP, yaw), Vector3(float(b.get("x", 0.0)), 0.0, float(b.get("z", 0.0))))
-		center += xf.origin
-		top = maxf(top, height)
-		var w: float = size.x
-		var d: float = size.y
-		var local: Array = [
-			KeeperSite.p("rbox", [w + 0.5, 0.2, d + 0.5], Vector3(0.0, 0.1, 0.0), ["#B8B2A6", "#D8D2C6"], 0.2),
-			KeeperSite.p("rbox", [w, height - 0.2, d], Vector3(0.0, height * 0.5 + 0.1, 0.0), wall, 0.04),
-			KeeperSite.p("rbox", [0.9, height, d + 0.14], Vector3(0.0, height * 0.5, 0.0), accent, 0.1),
-			KeeperSite.p("rbox", [w + 0.4, 0.3, d + 0.4], Vector3(0.0, height + 0.15, 0.0), ROOF, 0.3),
-			KeeperSite.p("rbox", [1.8, 0.16, 1.1], Vector3(0.0, 2.0, d * 0.5 + 0.55), ROOF, 0.3),
-			KeeperSite.p("rbox", [1.3, 1.8, 0.1], Vector3(0.0, 0.9, d * 0.5 + 0.02), ["#3E4A54", "#5E6A74"], 0.2),
-		]
-		for f: int in range(2, floors + 1, 2):
-			local.append(KeeperSite.p("box", [w + 0.1, 0.08, d + 0.1], Vector3(0.0, f * FLOOR_HEIGHT, 0.0), BAND))
-		parts.append_array(place_parts(local, xf))
-		var lights: Array = []
-		for f: int in floors:
-			var y: float = f * FLOOR_HEIGHT + 0.85
-			lights.append(KeeperSite.p("box", [w * 0.78, 0.6, 0.04], Vector3(0.0, y, d * 0.5 + 0.02), "#FFFFFF"))
-		windows.append_array(place_parts(lights, xf))
+		var at: Vector3 = Vector3(float(b.get("x", 0.0)), 0.0, float(b.get("z", 0.0)))
+		center += at
+		# 동마다 노드 하나 (visibility range 가 동 자리에서 재도록).
+		var node: Node3D = Node3D.new()
+		node.name = "Tower_%s" % str(b.get("id", ""))
+		root.add_child(node)
+		node.position = at
+		node.rotation.y = yaw
+		var clay: BoxBatch = BoxBatch.new()
+		var glass: BoxBatch = BoxBatch.new()
+		var lines: int = 4 if size.x >= 18.0 else 2
+		var t: float = ApartmentKit.tower(clay, glass, size.x, size.y, floors, lines, ApartmentKit.Detail.SIMPLE, false, Color(str(wall[0])), Color(str(accent[0])))
+		top = maxf(top, t)
+		for pair: Array in [[clay, clay_material], [glass, window_material]]:
+			var mi: MeshInstance3D = _mesh((pair[0] as BoxBatch).commit(), pair[1])
+			mi.visibility_range_end = 420.0
+			node.add_child(mi)
 		var body: StaticBody3D = StaticBody3D.new()
 		var shape: CollisionShape3D = CollisionShape3D.new()
 		var box: BoxShape3D = BoxShape3D.new()
-		box.size = Vector3(w, 4.0, d + 0.6)
+		box.size = Vector3(size.x, 4.0, size.y)
 		shape.shape = box
-		shape.position = Vector3(0.0, 2.0, 0.3)
+		shape.position = Vector3(0.0, 2.0, 0.0)
 		body.add_child(shape)
-		root.add_child(body)
-		body.transform = xf
+		node.add_child(body)
 	if list.is_empty():
 		return
-	root.add_child(_mesh(PartMesh.build(parts), clay_material))
-	root.add_child(_mesh(PartMesh.build(windows), window_material))
 	var label: Label3D = _label(str(complex.get("name", "")), 96, Color("#FFFFFF"))
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.visibility_range_end = 260.0
 	root.add_child(label)
-	label.position = center / float(list.size()) + Vector3(0.0, top + 2.5, 0.0)
+	label.position = center / float(list.size()) + Vector3(0.0, top + 4.0, 0.0)
 
 
 ## 로컬 도형들을 그 자리(xf: 회전 yaw + 위치)로 옮긴 도형들 (at·to 를 옮기고 rot 에 yaw 를 더한다). 집 안 붙박이도 쓴다.

@@ -167,7 +167,7 @@ func _on_failed(kind: String, code: String) -> void:
 		NetProtocol.ERR_CANT_RIDE:
 			_note = "지금은 탈 수 없어요 (실내 · 낚시 중)."
 		NetProtocol.ERR_NOT_ON_WATER:
-			_note = "보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가)."
+			_note = "보트는 물가에서 불러요 (곡교천 · 중앙공원 연못)."
 		_:
 			_note = "할 수 없어요 (%s)." % code
 	_rebuild()
@@ -321,7 +321,7 @@ func _build_garage() -> void:
 			if r != null and r.call_vehicle(id) and phone != null:
 				phone.close()
 			elif GameData.garage.is_water_kind(m.kind):
-				_note = "보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가)."
+				_note = "보트는 물가에서 불러요 (곡교천 · 중앙공원 연못)."
 				_note_good = false
 				_build())
 		row.add_child(call)

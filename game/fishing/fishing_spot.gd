@@ -34,8 +34,10 @@ func _ready() -> void:
 		var plane: PlaneMesh = water.mesh
 		plane.size = info.half_extent * 2.0
 		# 월드 커브는 정점 단위로 휘므로, 수면도 1m 격자로 쪼개야 지면과 같이 휜다.
-		plane.subdivide_width = maxi(int(plane.size.x), 1)
-		plane.subdivide_depth = maxi(int(plane.size.y), 1)
+		# v0.21 긴 강은 4m 격자 (1m 면 수만 칸이 된다).
+		var cell: float = 1.0 if maxf(plane.size.x, plane.size.y) < 200.0 else 4.0
+		plane.subdivide_width = maxi(int(plane.size.x / cell), 1)
+		plane.subdivide_depth = maxi(int(plane.size.y / cell), 1)
 		water.position = Vector3(0.0, water_height, 0.0)
 		var mat: ShaderMaterial = _water_material()
 		if mat != null:
@@ -69,9 +71,12 @@ func _apply_outline_sdf(mat: ShaderMaterial) -> void:
 		push_error("FishingSpot: 거리 그림 없음 — python3 tools/art/gen_lake_sdf.py (%s)" % path)
 		return
 	var size: int = int(doc["size"])
+	# v0.21 긴 강: 가로(w) · 세로(h) 칸 수가 다를 수 있다.
+	var w: int = int(doc.get("w", size))
+	var h: int = int(doc.get("h", size))
 	# v0.13.5: 두 채널(RG8: R = 물가 ±range m, G = 깊이 ±far_range m)이면 큰 호수 가운데까지 깊이를 잰다.
 	var two: bool = int(doc.get("channels", 1)) == 2
-	var image: Image = Image.create_from_data(size, size, false, Image.FORMAT_RG8 if two else Image.FORMAT_L8, Marshalls.base64_to_raw(str(doc["data"])))
+	var image: Image = Image.create_from_data(w, h, false, Image.FORMAT_RG8 if two else Image.FORMAT_L8, Marshalls.base64_to_raw(str(doc["data"])))
 	var half: Array = doc["half"]
 	mat.set_shader_parameter("use_outline", true)
 	mat.set_shader_parameter("outline_sdf", ImageTexture.create_from_image(image))

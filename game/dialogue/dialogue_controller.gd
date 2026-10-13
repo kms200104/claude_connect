@@ -319,7 +319,7 @@ static func fish_tip() -> FishInfo:
 static func fish_when(fish: FishInfo) -> String:
 	var when: String = _fish_time(fish)
 	if GameData.is_sea_fish(fish.id):
-		return "바닷가에서 " + when
+		return "곡교천 하류에서 " + when
 	return when
 
 

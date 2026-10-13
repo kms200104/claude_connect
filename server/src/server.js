@@ -14,7 +14,7 @@ import { insideOutline, nearestOnBoundary } from './outline.js';
 import { createMessenger } from './messenger.js';
 import { addChatFriendship, addFriendship, makeQuest, pruneExpired, questAccepts, questReady, questWire, relationOf, shouldOffer } from './quests.js';
 import { flowerWire, onPath, pickFlower, plantProblem, refreshFlower, snapPlant } from './plants.js';
-import { groundProblem } from './world.js';
+import { groundProblem, onIsland } from './world.js';
 import { baseMood, chooseReaction, currentMood, emoteToTeach, giftToGive, mbtiLetter, moodAfterEmote, setMood } from './social.js';
 import { inInterior, levelFor, nearPoint, sellValue, shopWire, stockFor } from './shop.js';
 import { defaultFurniture, furnitureWire, interiorOrigin, lobbyOf, normRot, onFloor, snapGrid } from './homes.js';
@@ -1452,8 +1452,10 @@ export function createServer(overrides = {}) {
     if (count('beach') < rules.beach.max && t >= room.nextDigAt.beach) {
       // 처음엔 반쯤 한꺼번에, 그다음은 천천히.
       room.nextDigAt.beach = count('beach') < rules.beach.max / 2 ? t : t + rules.beach.spawn_every_s * 1000 * cfg.eventSpawnScale;
-      const at = beachSpot(data.layout?.island, random);
-      if (at && !data.blocked.rects.some((r) => at.x >= r.x0 && at.x <= r.x1 && at.z >= r.z0 && at.z <= r.z1)) add('beach', at, rules.beach.hp);
+      // v0.21 강변도시: 조개 모래밭은 도시 끝이 아니라 곡교천 하류 갯벌(island.clam_spot 낚시터 물가, 도시 쪽만).
+      const clamSpot = data.layout?.island?.clam_spot ? data.spots.get(data.layout.island.clam_spot) : null;
+      const at = clamSpot ? lakeShoreSpot(clamSpot, 3.2, random) : beachSpot(data.layout?.island, random);
+      if (at && onIsland(data.layout?.island, at.x, at.z, 1) && !data.blocked.rects.some((r) => at.x >= r.x0 && at.x <= r.x1 && at.z >= r.z0 && at.z <= r.z1)) add('beach', at, rules.beach.hp);
     }
     if (t >= room.nextDigAt.lake) {
       room.nextDigAt.lake = t + rules.lake.spawn_every_s * 1000 * cfg.eventSpawnScale;
@@ -1461,7 +1463,8 @@ export function createServer(overrides = {}) {
         const here = [...room.digSpots.values()].filter((d) => d.kind === 'lake' && d.spot === spot.id).length;
         if (here >= rules.lake.max_per_spot) continue;
         const at = lakeShoreSpot(spot, data.layout?.lake_shore ?? 1.6, random);
-        if (distanceToSpot(spot, at.x, at.z) > 0.3) add('lake', at, rules.lake.hp, spot.id);
+        if (spot.id === data.layout?.island?.clam_spot) continue;
+        if (distanceToSpot(spot, at.x, at.z) > 0.3 && onIsland(data.layout?.island, at.x, at.z, 1)) add('lake', at, rules.lake.hp, spot.id);
       }
     }
   }

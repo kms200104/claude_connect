@@ -28,6 +28,7 @@ var _orient_buttons: Dictionary[String, Button] = {}
 var _pref_buttons: Dictionary[String, Dictionary] = {}
 var _vibration: CheckButton = null
 var _minimap: CheckButton = null
+var _perf: CheckButton = null
 var _bday_month: int = 1
 var _bday_day: int = 1
 var _bday_label: Label = null
@@ -96,6 +97,8 @@ func refresh() -> void:
 		_vibration.set_pressed_no_signal(Prefs.vibration())
 	if _minimap != null:
 		_minimap.set_pressed_no_signal(Prefs.minimap())
+	if _perf != null:
+		_perf.set_pressed_no_signal(Prefs.perf_hud())
 
 
 ## 닉네임 입력 칸 (테스트용).
@@ -304,6 +307,12 @@ func _build_play() -> void:
 		Prefs.set_value(Prefs.MINIMAP, on)
 		Audio.play_ui(Audio.SFX_CLICK))
 	col.add_child(_minimap)
+	_perf = _check("성능 표시 (프레임 시간 · 그리기 수 · 삼각형 수, 화면 왼쪽 위)")
+	_perf.name = "PerfToggle"
+	_perf.toggled.connect(func(on: bool) -> void:
+		Prefs.set_value(Prefs.PERF_HUD, on)
+		Audio.play_ui(Audio.SFX_CLICK))
+	col.add_child(_perf)
 	_choice_row(col, "글자 크기", Prefs.FONT, Prefs.FONT_NAMES)
 	_choice_row(col, "조이스틱 자리", Prefs.STICK_SIDE, Prefs.STICK_SIDES)
 	_choice_row(col, "조이스틱 크기", Prefs.STICK_SIZE, Prefs.STICK_NAMES)

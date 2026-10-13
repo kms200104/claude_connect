@@ -178,7 +178,7 @@ func call_vehicle(id: String) -> bool:
 		var here: Vector2 = Vector2(player.global_position.x, player.global_position.z)
 		var water: Vector2 = WaterRules.water_near(here, minf(GameData.garage.park_range(m.kind) - 0.8, ride_range_of(id) - 0.3))
 		if water == Vector2.INF:
-			_toast("보트는 물가에서 불러요 (성성호수 · 서쪽 연못 · 바닷가).", false)
+			_toast("보트는 물가에서 불러요 (곡교천 · 중앙공원 연못).", false)
 			return false
 		var out: Vector2 = (water - here)
 		yaw = atan2(-out.x, -out.y) if out.length() > 0.1 else yaw

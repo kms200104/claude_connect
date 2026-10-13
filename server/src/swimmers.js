@@ -24,6 +24,7 @@ export const SWIM = {
   lakeMargin: 0.9, // 물가에서 이만큼 안쪽에서만 헤엄친다
   seaMinShape: 1.03, // 바다: 해안선 바깥 (섬 모양 값 ≥ 이것)
   seaRange: 22, // 바다 물고기는 이 거리 안에 사람이 없으면 사라진다
+  riverShore: 10, // v0.21 긴 강(near_people): 물가에서 이 거리 안에 선 사람 둘레에 물고기가 나타난다
   respawnMs: 20000,
   waryMs: 8000,
   lifeMs: [150000, 260000], // 이만큼 지나면 다른 물고기로 바뀐다 (시각·날씨에 맞춰)
@@ -82,6 +83,21 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
     return null;
   }
 
+  /** 긴 강(near_people): 물가에 선 사람 앞 물 (사람에게서 2.5~9m, 물가에서 lakeMargin 안쪽). */
+  function riverPointNear(spot, px, pz) {
+    for (let i = 0; i < 24; i++) {
+      const a = rand(-Math.PI, Math.PI);
+      const r = rand(2.5, 9);
+      const x = px + Math.cos(a) * r;
+      const z = pz + Math.sin(a) * r;
+      if (inWater(spot, x, z)) return { x, z };
+    }
+    return null;
+  }
+
+  /** 사람 둘레에만 물고기가 나타나는 넓은 물 (바다 · 긴 강). */
+  const nearPeople = (spot) => spot.kind === 'sea' || spot.near_people === true;
+
   function zoneOf(spot, x, z) {
     return spot.kind !== 'sea' && shallowAt(spot, x, z) ? 'shallow' : 'deep';
   }
@@ -119,7 +135,7 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
       const d = rand(1, 3.2);
       const x = s.x - Math.sin(a) * d;
       const z = s.z - Math.cos(a) * d;
-      const near = spot.kind !== 'sea' || Math.hypot(x - s.anchor.x, z - s.anchor.z) < 9;
+      const near = !nearPeople(spot) || Math.hypot(x - s.anchor.x, z - s.anchor.z) < 9;
       if (inWater(spot, x, z) && near) return { x, z };
     }
     return { x: s.anchor.x, z: s.anchor.z };
@@ -153,10 +169,12 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
       const spot = data.fishingSpot(id);
       if (!spot) continue;
       const list = [...room.swimmers.values()].filter((s) => s.spot === id);
-      if (spot.kind === 'sea') {
-        if (!spot.island) continue;
-        // 바닷가에 선 사람만 (바다 건너 실내 — 상점 · 집 안 — 는 빼고).
-        const shore = people.filter((p) => !p.home && islandShape(spot.island, p.x, p.z) > 0.82 && islandShape(spot.island, p.x, p.z) <= SEA_STAND_MAX);
+      if (nearPeople(spot)) {
+        if (spot.kind === 'sea' && !spot.island) continue;
+        // 바닷가 · 강가에 선 사람만 (바다 건너 실내 — 상점 · 집 안 — 는 빼고).
+        const shore = spot.kind === 'sea'
+          ? people.filter((p) => !p.home && islandShape(spot.island, p.x, p.z) > 0.82 && islandShape(spot.island, p.x, p.z) <= SEA_STAND_MAX)
+          : people.filter((p) => !p.home && distanceToSpot(spot, p.x, p.z) < SWIM.riverShore);
         for (const s of list) {
           if (s.st !== 'engaged' && !shore.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < SWIM.seaRange)) {
             room.swimmers.delete(s.id);
@@ -166,7 +184,7 @@ export function createSwimmers({ data, random, now, environment, weightFor, spot
         for (const p of shore) {
           const near = [...room.swimmers.values()].filter((s) => s.spot === id && Math.hypot(p.x - s.x, p.z - s.z) < 12).length;
           if (near < SWIM.perSeaPlayer && t >= (room.swimNext?.[`${id}:${p.id}`] ?? 0)) {
-            const at = seaPointNear(spot, p.x, p.z);
+            const at = spot.kind === 'sea' ? seaPointNear(spot, p.x, p.z) : riverPointNear(spot, p.x, p.z);
             if (at) {
               spawn(room, spot, at, t);
               changed.add(id);

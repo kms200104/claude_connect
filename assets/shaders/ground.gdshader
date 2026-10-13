@@ -1,5 +1,5 @@
 shader_type spatial;
-// 마을 바닥: 색 지도(잔디·길·모래톱, 0.25m/px) 위에 세부 잔결을 겹치고,
+// 마을 바닥: 색 지도(잔디·길·모래톱 · v0.21 도시 도로, 도시 0.43m/px · 시내 0.2m/px) 위에 세부 잔결을 겹치고,
 // 비/뇌우 시에는 사실적인 젖은 반사광(Wet Specular), 절차적 물 웅덩이(Puddles), 빗방울 파문(Ripples), 번개 반사를 추가.
 render_mode diffuse_toon, specular_schlick_ggx;
 
@@ -12,6 +12,9 @@ global uniform float lightning_flash;
 
 uniform sampler2D map_texture : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D detail_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+// v0.21 강변도시: 시내(±town_extent)는 촘촘한 색 지도를 따로 쓴다 (0 이면 없음). 가장자리 4m 에서 도시 지도와 섞는다.
+uniform sampler2D town_texture : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
+uniform float town_extent = 0.0;
 // 색 지도가 덮는 범위 (마을 가운데 ±map_extent 미터). village_layout.json 의 map_extent 와 같아야 한다.
 uniform float map_extent = 64.0;
 uniform float detail_tile = 3.0;
@@ -44,6 +47,13 @@ void vertex() {
 
 void fragment() {
 	vec4 map = texture(map_texture, world_pos.xz / (2.0 * map_extent) + 0.5);
+	if (town_extent > 0.0) {
+		vec2 inner = town_extent - abs(world_pos.xz);
+		float town = smoothstep(0.0, 4.0, min(inner.x, inner.y));
+		if (town > 0.0) {
+			map = mix(map, texture(town_texture, world_pos.xz / (2.0 * town_extent) + 0.5), town);
+		}
+	}
 	float fine = texture(detail_texture, world_pos.xz / detail_tile).r - 0.5;
 	float broad = texture(detail_texture, world_pos.xz / (detail_tile * 4.3) + vec2(0.37, 0.11)).r - 0.5;
 	

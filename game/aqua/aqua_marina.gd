@@ -688,7 +688,7 @@ func _fill_window() -> void:
 	for c: Node in _window_body.get_children():
 		c.queue_free()
 	var head: HBoxContainer = HBoxContainer.new()
-	var title: Label = _label("성성호 물놀이 선착장", 40, Color(0.32, 0.2, 0.12))
+	var title: Label = _label("곡교천 물놀이 선착장", 40, Color(0.32, 0.2, 0.12))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
 	var close: Button = _button("닫기", close_window)
@@ -776,7 +776,7 @@ func _build_dock() -> void:
 	booth.position = Vector3(rules.booth.x, 0.0, rules.booth.y)
 	booth.rotation.y = atan2(-face.x, -face.y)
 	var sign_label: Label3D = Label3D.new()
-	sign_label.text = "성성호 물놀이"
+	sign_label.text = "곡교천 물놀이"
 	sign_label.font_size = 64
 	sign_label.pixel_size = 0.0035
 	sign_label.modulate = Color(0.2, 0.32, 0.55)

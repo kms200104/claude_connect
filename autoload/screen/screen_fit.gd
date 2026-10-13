@@ -36,6 +36,9 @@ func _ready() -> void:
 	var touch_scroll: TouchScroll = TouchScroll.new()
 	touch_scroll.name = "TouchScroll"
 	add_child(touch_scroll)
+	var perf: PerfHud = PerfHud.new()
+	perf.name = "PerfHud"
+	add_child(perf)
 
 
 ## 화면 방향 고르기: 기억해 두고 바로 적용한다.
