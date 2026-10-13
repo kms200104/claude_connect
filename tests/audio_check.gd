@@ -45,8 +45,9 @@ func _ready() -> void:
 		[Vector3(dock.x, 0.0, dock.y), "wood", "선착장"],
 		[GameData.shop.inside_spawn, "wood", "상점 안"],
 		[Vector3((float(runway.x0) + float(runway.x1)) * 0.5, 0.0, float(runway.z)), "metal", "공항 활주로"],
-		[Vector3(0.0, 0.0, 94.0), "dirt", "모래사장"],
-		[Vector3(0.0, 0.0, 98.4), "water", "바닷가 젖은 모래"],
+		[Vector3(30.0, 0.0, 104.0), "stone", "강변로 아스팔트"],
+		[Vector3(150.0, 0.0, 40.0), "stone", "탕정역 상권 포장"],
+		[Vector3(-100.0, 0.0, GameData.city.north_z(-100.0) - 0.8), "dirt", "곡교천 물가"],
 		[grass, "grass", "풀밭"],
 	]
 	for c: Array in cases:

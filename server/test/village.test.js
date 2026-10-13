@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
-import { defaultConfig } from '../src/config.js';
+import { defaultConfig, spawnPoints } from '../src/config.js';
 import { Client, sleep, uid } from './helpers.js';
 
 /** 테스트가 마음대로 돌리는 시계. */
@@ -278,6 +278,26 @@ describe('마을: 나무 베기 · 주민 대화 · 부탁 · 날씨', () => {
     assert.deepEqual(w.inv.slots.slice(0, 2), [{ id: 'rod', n: 1 }, { id: 'axe', n: 1 }]);
     assert.deepEqual(w.inv.slots[5], { id: 'carp', n: 2 });
     assert.equal(w.inv.held, 0);
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('schema 6 저장(섬 마을)은 강변도시로 이사: 사람은 출발점, 세워 둔 탈것은 차고로', async () => {
+    const A = uid();
+    const dir = mkdtempSync(path.join(tmpdir(), 'solbaram-move-'));
+    // 옛 섬 마을의 아파트 집 안 자리(z 300) — 새 도시에서는 강 건너다.
+    const vehicles = [{ id: 'V1', model: 'boat_kayak', owned: [], fit: {}, at: { x: 115, z: 0, yaw: 0 } }];
+    writeFileSync(
+      path.join(dir, 'MVCTYA.json'),
+      JSON.stringify({ schema: 6, code: 'MVCTYA', createdAt: 1, world: {}, profiles: { [A]: { slot: 1, slots: [], sol: 100, x: 12, y: 0.1, z: 300, yaw: 1, vehicles } } }),
+    );
+    const s = createServer({ port: 0, saveDir: dir, ...BASE, clock: fakeClock() });
+    const a = await open(s);
+    const w = await enter(a, { code: 'MVCTYA', id: A });
+    const me = w.players.find((p) => p.id === w.id);
+    assert.ok(Math.hypot(me.x - spawnPoints[0].x, me.z - spawnPoints[0].z) < 5, `출발점에서 (${me.x}, ${me.z})`);
+    const room = [...s.rooms.rooms.values()].find((r) => r.code === 'MVCTYA');
+    assert.equal(room.profiles.get(A).vehicles[0].at, null, '바다에 세워 둔 보트는 차고로');
     await s.close();
     rmSync(dir, { recursive: true, force: true });
   });

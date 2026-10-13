@@ -32,8 +32,8 @@ extends Node
 	set(value):
 		curve_enabled = value
 		_apply_curve()
-## 기준점에서 d미터 떨어진 곳이 strength × d² 미터 가라앉는다.
-@export_range(0.0, 0.02, 0.0001) var curve_strength: float = 0.004:
+## 기준점에서 d미터 떨어진 곳이 strength × d² 미터 가라앉는다. v0.21 강변도시는 멀리까지 보이게 0.004 → 0.0025.
+@export_range(0.0, 0.02, 0.0001) var curve_strength: float = 0.0025:
 	set(value):
 		curve_strength = value
 		_apply_curve()

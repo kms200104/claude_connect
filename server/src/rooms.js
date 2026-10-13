@@ -376,6 +376,9 @@ export class Room {
     room.econ = world.econ && typeof world.econ.id === 'string' && Number.isInteger(world.econ.week) ? { id: world.econ.id, week: world.econ.week, bank: typeof world.econ.bank === 'string' ? world.econ.bank : undefined } : null;
     room.closedBanks = Object.fromEntries(Object.entries(world.closedBanks ?? {}).filter(([id, w]) => data.savings?.institutions.has(id) && Number.isInteger(w)));
     room.restaurant = sanitizeRestaurant(world.restaurant, data.recipes, data.kindOf);
+    // schema 7 (v0.21): 섬 마을에서 강변도시로 이사 — 옛 자리(옛 실내 · 바다 · 호수 자리)는 새 도시에서 강 · 강 건너일 수 있어
+    // 사람은 출발점(광장)에서, 세워 둔 탈것은 차고에서 다시 시작한다. 집 · 가구 · 심은 나무 · 꽃은 그대로 (옛 섬 자리는 모두 새 시내 땅).
+    const moved = !Number.isInteger(saved.schema) || saved.schema < 7;
     for (const [uid, p] of Object.entries(saved.profiles ?? {})) {
       const slot = Number.isInteger(p?.slot) ? p.slot : 0;
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
@@ -389,10 +392,10 @@ export class Room {
         held: held >= -1 && held < cfg.quickSlots ? held : base.held,
         sol: Math.max(0, Math.trunc(finite(p.sol, 0) * money)),
         catches: Math.max(0, Math.trunc(finite(p.catches, 0))),
-        x: finite(p.x, base.x),
-        y: finite(p.y, base.y),
-        z: finite(p.z, base.z),
-        yaw: finite(p.yaw, 0),
+        x: moved ? base.x : finite(p.x, base.x),
+        y: moved ? base.y : finite(p.y, base.y),
+        z: moved ? base.z : finite(p.z, base.z),
+        yaw: moved ? 0 : finite(p.yaw, 0),
         npcs: sanitizeRelations(p.npcs, data),
         quests: sanitizeQuests(p.quests, data).map((q) => ({ ...q, reward: q.reward * money })),
         questSeq: Math.max(0, intOr(p.questSeq, 0)),
@@ -417,7 +420,7 @@ export class Room {
         coopMember: !!p.coopMember,
         jobDay: Number.isInteger(p.jobDay?.day) && Number.isInteger(p.jobDay?.done) ? { day: p.jobDay.day, done: Math.max(0, p.jobDay.done) } : null,
         tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
-        vehicles: sanitizeVehicles(p.vehicles, data.garage),
+        vehicles: sanitizeVehicles(p.vehicles, data.garage).map((v) => (moved ? { ...v, at: null } : v)),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
         steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),

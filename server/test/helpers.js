@@ -48,3 +48,12 @@ export class Client {
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+
+/** v0.21 곡교천 북쪽(도시 쪽) 가장자리 z (x 에서, data/world/city.json river.north 를 이어서). */
+export function riverNorthZ(data, x) {
+  const pts = data.city.river.north;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    if (x <= pts[i + 1][0]) return pts[i][1] + ((pts[i + 1][1] - pts[i][1]) * (x - pts[i][0])) / (pts[i + 1][0] - pts[i][0]);
+  }
+  return pts[pts.length - 1][1];
+}

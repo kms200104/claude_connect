@@ -19,7 +19,7 @@ want() { [[ " ${MODES:-places life fish mirror} " == *" $1 "* ]]; }
 
 run_mode() { # mode port hour env...
   local mode=$1 port=$2 hour=$3; shift 3
-  (cd "$ROOT/server" && exec env PORT="$port" SAVE_DIR="$DIR/$mode" CLOCK_OFFSET_MIN="$(offset_for "$hour")" MOVE_SLACK_M=300 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 QUEST_CHANCE=0 "$@" node src/index.js >"$DIR/$mode.log" 2>&1) &
+  (cd "$ROOT/server" && exec env PORT="$port" SAVE_DIR="$DIR/$mode" CLOCK_OFFSET_MIN="$(offset_for "$hour")" MOVE_SLACK_M=1500 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0 QUEST_CHANCE=0 "$@" node src/index.js >"$DIR/$mode.log" 2>&1) &
   local pid=$!
   sleep 1
   xvfb-run -a -s "-screen 0 2200x2200x24" "$GODOT" --path "$ROOT" --rendering-driver vulkan --rendering-method mobile ${RES:+--resolution $RES} \

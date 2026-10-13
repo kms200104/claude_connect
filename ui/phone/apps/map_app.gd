@@ -1,6 +1,6 @@
 class_name MapApp
 extends PhoneApp
-## 지도 (v16): 섬 전체 지도(바닥 색 지도 ground_map) 위에 내 위치 · 친구 · 주민 · 상점 · 식당 · 낚시터 등을 표시한다.
+## 지도 (v16, v0.21 시내 / 도시 전체): 도시 지도(바닥 색 지도 ground_map) 위에 내 위치 · 친구 · 주민 · 상점 · 식당 · 낚시터 등을 표시한다.
 ## 표시를 누르면 아래에 이름과 설명, 친구면 "놀러 가기"(그 친구 집으로 바로). 위치는 화면에 그리는 값 그대로라 판정과 상관없다.
 
 const GROUND_MAP: String = "res://assets/packs/low/ground_map.png"
@@ -31,6 +31,12 @@ var _picked: String = ""
 var _shown: Dictionary[String, bool] = {"사람": true, "장소": true, "낚시터": true}
 var _ground: Texture2D = null
 var _extent: float = 104.0
+## v0.21 강변도시: 보이는 범위 (가운데 · 반 너비). 시내(기본) / 도시 전체.
+var _view_center: Vector2 = Vector2.ZERO
+var _view_half: float = 104.0
+var _whole: bool = false
+const TOWN_VIEW_CENTER: Vector2 = Vector2(-60.0, 40.0)
+const TOWN_VIEW_HALF: float = 190.0
 var _pulse: float = 0.0
 var _refresh: float = 0.0
 
@@ -39,7 +45,15 @@ func _ready() -> void:
 	_ground = load(GROUND_MAP) if ResourceLoader.exists(GROUND_MAP) else null
 	if GameData.layout != null:
 		_extent = GameData.layout.map_extent
+	_set_view(false)
 	_build()
+
+
+## 시내(리버파크 · 시내 · 둔치) 또는 도시 전체.
+func _set_view(whole: bool) -> void:
+	_whole = whole or _extent <= TOWN_VIEW_HALF
+	_view_center = Vector2.ZERO if _whole else TOWN_VIEW_CENTER
+	_view_half = _extent if _whole else TOWN_VIEW_HALF
 
 
 func _process(delta: float) -> void:
@@ -73,6 +87,15 @@ func _build() -> void:
 			Audio.play_ui(Audio.SFX_CLICK)
 			_build())
 		filters.add_child(b)
+	if _extent > TOWN_VIEW_HALF:
+		var zoom: Button = button("도시 전체" if not _whole else "시내 크게", 26, INK, false)
+		zoom.name = "ZoomButton"
+		zoom.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		zoom.pressed.connect(func() -> void:
+			_set_view(not _whole)
+			Audio.play_ui(Audio.SFX_CLICK)
+			_build())
+		filters.add_child(zoom)
 	_canvas = Control.new()
 	_canvas.name = "MapCanvas"
 	var side: float = minf(view_width() - 6.0, view_height() - 120.0)
@@ -142,6 +165,17 @@ func _add_places() -> void:
 				c += Vector2(float(b2.get("x", 0.0)), float(b2.get("z", 0.0)))
 			c /= float((complex["buildings"] as Array).size())
 			_add("place", "complex:%s" % str(complex.get("id", "")), str(complex.get("name", "")), "둘레 아파트 단지 (구경만).", c, "단")
+	# v0.21 강변도시 이름 있는 건물 (학교 · 도서관 · 역 · 출장소) · 끊긴 다리 · 침수 구역.
+	var city: CityData = GameData.city
+	if city != null:
+		for cb: CityData.Building in city.buildings:
+			if not cb.name.is_empty():
+				_add("place", "city:%s" % cb.id, cb.name, "탕정 제2지구 강변도시.", cb.center, cb.name.left(1))
+		if city.flood_polygon.size() >= 3:
+			var fc: Vector2 = Vector2.ZERO
+			for pt: Vector2 in city.flood_polygon:
+				fc += pt
+			_add("place", "flood", "강 건너 구시가지 (침수)", "지난 장마에 둑이 터져 잠겼어요. 강을 건너갈 수는 없어요.", fc / float(city.flood_polygon.size()), "침")
 	for npc: NpcInfo in GameData.npcs.values():
 		if not npc.has_house:
 			continue
@@ -187,7 +221,14 @@ func _fish_names(spot: SpotInfo) -> PackedStringArray:
 
 func _to_map(world: Vector2) -> Vector2:
 	var s: Vector2 = _canvas.size
-	return Vector2((world.x / (2.0 * _extent) + 0.5) * s.x, (world.y / (2.0 * _extent) + 0.5) * s.y)
+	var q: Vector2 = world - _view_center
+	return Vector2((q.x / (2.0 * _view_half) + 0.5) * s.x, (q.y / (2.0 * _view_half) + 0.5) * s.y)
+
+
+## 보이는 범위 안인지 (지도 칸 밖 표시는 그리지 않는다).
+func _in_view(world: Vector2) -> bool:
+	var q: Vector2 = (world - _view_center).abs()
+	return q.x <= _view_half and q.y <= _view_half
 
 
 func _draw_map() -> void:
@@ -203,7 +244,11 @@ func _draw_map() -> void:
 		var y: float = s.y * (0.08 + i * 0.11)
 		_canvas.draw_arc(Vector2(s.x * (0.1 + fmod(i * 0.37, 0.8)), y), 10.0, PI * 1.1, PI * 1.9, 8, Color(1, 1, 1, 0.35), 2.0, true)
 	if _ground != null:
-		_canvas.draw_texture_rect(_ground, Rect2(Vector2.ZERO, s), false)
+		# 바닥 지도(±_extent)에서 보이는 범위만 잘라 그린다.
+		var tex: Vector2 = _ground.get_size()
+		var lo: Vector2 = (_view_center - Vector2.ONE * _view_half + Vector2.ONE * _extent) / (2.0 * _extent) * tex
+		var span: Vector2 = Vector2.ONE * (_view_half / _extent) * tex
+		_canvas.draw_texture_rect_region(_ground, Rect2(Vector2.ZERO, s), Rect2(lo, span))
 	# 낚시터 물 (사각형 수역, 윤곽이 있는 호수는 윤곽 그대로).
 	for spot: SpotInfo in GameData.spots.values():
 		if spot.is_sea:
@@ -232,6 +277,8 @@ func _draw_map() -> void:
 
 
 func _draw_marker(m: Marker, font: Font) -> void:
+	if not _in_view(m.at):
+		return
 	var p: Vector2 = _to_map(m.at)
 	var picked: bool = m.key == _picked
 	var color: Color = COLORS.get(m.kind, Color.WHITE)

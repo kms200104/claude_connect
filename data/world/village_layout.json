@@ -7,7 +7,7 @@
     "half": 420,
     "power": 10.0,
     "beach": 2.0,
-    "south": 200.0,
+    "south": 190.0,
     "clam_spot": "sea"
   },
   "path_width": 2.6,
@@ -440,7 +440,7 @@
   },
   "dock": {
     "x": 30.0,
-    "z": 161.5,
+    "z": 168.08,
     "length": 6.0,
     "width": 1.6
   },

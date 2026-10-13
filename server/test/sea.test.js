@@ -1,4 +1,4 @@
-// v0.12 바다 낚시 · 계절: 섬 둘레 바닷가 어디서나, 물고기는 계절(마을 날짜의 달)마다 다르다.
+// v0.12 바다 낚시 · 계절 (v0.21: 바다 = 곡교천 하류 기수역, 보 아래 둔치 물가 어디서나), 물고기는 계절(마을 날짜의 달)마다 다르다.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -10,12 +10,12 @@ import { SEASONS, seasonOf } from '../src/clock.js';
 import { availableFish, distanceToSpot, loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
 import { menuOf } from '../src/restaurant.js';
-import { Client, uid } from './helpers.js';
+import { Client, riverNorthZ, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
-const sea = data.seaSpot;
-/** 섬 가운데에서 +X 쪽, 해안선 안쪽 inset 미터. */
-const coastPoint = (inset) => ({ x: data.layout.island.half - inset, z: 0 });
+const sea = data.spots.get('sea');
+/** 하류 북쪽 물가 (x = 200)에서 물 바깥(둔치) 쪽으로 inset 미터 (음수면 물 안). */
+const coastPoint = (inset) => ({ x: 200, z: riverNorthZ(data, 200) - inset });
 
 describe('계절', () => {
   it('달로 정한다: 3~5 봄 · 6~8 여름 · 9~11 가을 · 12~2 겨울', () => {
@@ -84,13 +84,13 @@ describe('바다 낚시', () => {
     rmSync(saveDir, { recursive: true, force: true });
   });
 
-  it('해안선까지의 거리로 판정한다', () => {
+  it('하류 물가까지의 거리로 판정한다', () => {
     assert.ok(distanceToSpot(sea, 0, 0) > 90);
-    assert.ok(Math.abs(distanceToSpot(sea, coastPoint(2).x, 0) - 2) < 1e-6);
-    assert.equal(distanceToSpot(sea, coastPoint(-3).x, 0), 0);
+    assert.ok(Math.abs(distanceToSpot(sea, coastPoint(2).x, coastPoint(2).z) - 2) < 0.05);
+    assert.equal(distanceToSpot(sea, coastPoint(-3).x, coastPoint(-3).z), 0);
   });
 
-  it('바닷가 젖은 모래에서 던지면 제철 바다 물고기가 문다, 섬 안쪽에서는 못 던진다', async () => {
+  it('하류 물가에서 던지면 제철 바다 물고기가 문다, 둔치 안쪽에서는 못 던진다', async () => {
     const c = new Client(server.port);
     clients.push(c);
     await c.opened;

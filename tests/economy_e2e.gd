@@ -334,30 +334,30 @@ func _run() -> void:
 		interaction.action_hud.action_pressed.emit()
 		_check(await _wait_until(func() -> bool: return _count(forage.item) == before + 1, 2.0), "%s 을(를) 채집" % GameData.item_name(forage.item))
 
-	# ---- 성성호수 낚시터 ----
+	# ---- 곡교천(상류) 낚시터 ----
 	var spot: SpotInfo = GameData.spots.get("seongseong")
-	# 실제 윤곽 호수: 바깥 사각형 위쪽이 아니라 북쪽에서 가장 가까운 물가에 선다.
-	var shore: Vector2 = spot.boundary_nearest(Vector2(spot.center.x, spot.center.y - spot.half_extent.y))
-	await _teleport(Vector3(shore.x, 0.1, shore.y - 1.0))
+	# 긴 강: 둔치 물가(북쪽 가장자리)에 선다 — 리버파크 앞.
+	var bank_x: float = -120.0
+	await _teleport(Vector3(bank_x, 0.1, GameData.city.north_z(bank_x) - 1.0))
 	Net.equip(0)
 	await get_tree().create_timer(0.3).timeout
 	await get_tree().process_frame
-	_check(fishing.spot != null and fishing.spot.spot_id == "seongseong", "성성호수 물가에서는 그 호수로 던진다")
-	_check(fishing.spot.can_cast_from(player.global_position), "성성호수에서 낚시할 수 있다")
+	_check(fishing.spot != null and fishing.spot.spot_id == "seongseong", "곡교천 물가에서는 그 강으로 던진다")
+	_check(fishing.spot.can_cast_from(player.global_position), "곡교천에서 낚시할 수 있다")
 
-	# ---- 바다 낚시 (v0.12): 섬 둘레 바닷가 어디서나 ----
-	var half: float = GameData.layout.island_half
-	await _teleport(Vector3(half - 2.0, 0.1, 0.0), -PI * 0.5)
+	# ---- 하류 낚시 (v0.12 바다 → v0.21 곡교천 하류 기수역): 보 아래 둔치 물가 ----
+	var low_x: float = 160.0
+	await _teleport(Vector3(low_x, 0.1, GameData.city.north_z(low_x) - 1.0), PI)
 	await get_tree().create_timer(0.3).timeout
 	await get_tree().process_frame
-	_check(fishing.spot != null and fishing.spot.spot_id == "sea", "바닷가에서는 바다로 던진다 (%s)" % (fishing.spot.spot_id if fishing.spot != null else "-"))
-	_check(fishing.spot.can_cast_from(player.global_position), "바닷가에서 낚시할 수 있다")
-	var bobber_at: Vector3 = fishing.spot.info.clamp_inside(player.global_position + Vector3(4.0, 0.0, 0.0))
-	_check(GameData.layout.island_shape(Vector2(bobber_at.x, bobber_at.z)) > 1.0, "찌는 바다 위에 떨어진다")
+	_check(fishing.spot != null and fishing.spot.spot_id == "sea", "보 아래에서는 하류로 던진다 (%s)" % (fishing.spot.spot_id if fishing.spot != null else "-"))
+	_check(fishing.spot.can_cast_from(player.global_position), "하류에서 낚시할 수 있다")
+	var bobber_at: Vector3 = fishing.spot.info.clamp_inside(player.global_position + Vector3(0.0, 0.0, 4.0))
+	_check(WaterRules.water_at(Vector2(bobber_at.x, bobber_at.z)) == "sea", "찌는 하류 물 위에 떨어진다")
 	var started: Array = [false]
 	Net.fish_started.connect(func(_shadow: float) -> void: started[0] = true, CONNECT_ONE_SHOT)
 	fishing.call("_on_action_pressed")
-	_check(await _wait_until(func() -> bool: return started[0], 3.0), "바다에 낚싯대를 던졌다")
+	_check(await _wait_until(func() -> bool: return started[0], 3.0), "하류에 낚싯대를 던졌다")
 
 
 func _seated(site: RestaurantSite) -> int:

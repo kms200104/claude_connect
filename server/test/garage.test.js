@@ -9,7 +9,7 @@ import { loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
 import { resaleValue, sanitizeVehicles, vehicleStats, partPrice } from '../src/garage.js';
 import { isLand, waterAt } from '../src/water.js';
-import { Client, sleep, uid } from './helpers.js';
+import { Client, riverNorthZ, sleep, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
 const rules = data.garage;
@@ -65,28 +65,29 @@ describe('v19 차고 탈것 규칙', () => {
 });
 
 describe('v20 보트가 다니는 물 · 내릴 땅', () => {
-  it('성성호수 가운데 · 섬 둘레 바다는 물, 해안선 바로 앞 · 바다 건너 먼 곳 · 마을 땅은 아니다', () => {
-    assert.equal(waterAt(data, 0, 0), 'seongseong');
-    assert.equal(waterAt(data, 0, 0, 0), 'seongseong');
-    assert.equal(waterAt(data, 115, 0), 'sea', '섬 둘레 바다 (섬 모양 1.15)');
-    assert.equal(waterAt(data, 101, 0), '', '해안선 바로 앞은 너무 얕다');
-    assert.equal(waterAt(data, 0, 190), '', '바다 건너 실내 쪽으로는 못 간다');
+  it('곡교천 한가운데(보 위 · 아래)는 물, 물가 바로 앞 · 도시 밖 먼 곳 · 마을 땅 · 강 건너는 아니다', () => {
+    assert.equal(waterAt(data, 0, 189), 'seongseong');
+    assert.equal(waterAt(data, 0, 189, 0), 'seongseong');
+    assert.equal(waterAt(data, 200, 192), 'sea', '보 아래 하류');
+    assert.equal(waterAt(data, 0, riverNorth(0) + 0.4), '', '물가 바로 앞은 너무 얕다');
+    assert.equal(waterAt(data, 0, 1190), '', '도시 밖 실내 쪽으로는 못 간다');
     assert.equal(waterAt(data, 26, 64), '', '식당 앞 땅');
     assert.equal(isLand(data, 26, 64), true);
-    assert.equal(isLand(data, 0, 0), false, '호수 가운데는 땅이 아니다');
-    assert.equal(isLand(data, 99.5, 0), false, '해안 벽 너머 젖은 모래는 내릴 땅이 아니다');
+    assert.equal(isLand(data, 0, 189), false, '강 한가운데는 땅이 아니다');
+    assert.equal(isLand(data, 0, 240), false, '강 건너(침수 구시가지)에는 내리지 않는다');
+    assert.equal(isLand(data, 0, riverNorth(0) - 1.5), true, '둔치 물가는 내릴 땅');
   });
 });
 
-/** 호수 가운데서 (dx, dz) 쪽으로 나가며 마지막 물 자리와 처음 땅 자리. */
-function shoreAlong(dx, dz) {
-  const len = Math.hypot(dx, dz);
+const riverNorth = (x) => riverNorthZ(data, x);
+
+/** 강 한가운데(x, 189)에서 북쪽(둔치)으로 나가며 마지막 물 자리와 처음 땅 자리. */
+function shoreAlong(x0) {
   let water = null;
-  for (let t = 0; t < 80; t += 0.25) {
-    const x = (dx / len) * t;
-    const z = (dz / len) * t;
-    if (waterAt(data, x, z)) water = { x, z };
-    else if (water && isLand(data, x, z)) return { water, land: { x, z } };
+  for (let t = 0; t < 40; t += 0.25) {
+    const z = 189 - t;
+    if (waterAt(data, x0, z)) water = { x: x0, z };
+    else if (water && isLand(data, x0, z)) return { water, land: { x: x0, z } };
   }
   return null;
 }
@@ -118,7 +119,7 @@ describe('v20 보트 사기 · 물 위에 부르기 · 타기 · 내리기', () 
     a.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
     const w = await a.type('welcome');
     const me = w.players.find((p) => p.id === w.id);
-    const shore = shoreAlong(17.8, 35);
+    const shore = shoreAlong(30);
     assert.ok(shore, '선착장 쪽 물가');
     const { water, land } = shore;
     const bought = await ask(a, { t: 'veh_buy', model: 'boat_kayak' });
@@ -127,7 +128,7 @@ describe('v20 보트 사기 · 물 위에 부르기 · 타기 · 내리기', () 
     a.send({ t: 'move', x: land.x, y: me.y, z: land.z, yaw: 0, vx: 0, vz: 0 });
     await sleep(150);
     assert.equal((await ask(a, { t: 'veh_call', v, x: land.x, z: land.z })).code, 'not_on_water', '땅에는 보트를 못 띄운다');
-    const far = shoreAlong(-1, 0);
+    const far = shoreAlong(-60);
     assert.equal((await ask(a, { t: 'veh_call', v, x: far.water.x, z: far.water.z })).code, 'not_on_water', '멀리 떨어진 물에는 못 부른다');
     const called = await ask(a, { t: 'veh_call', v, x: water.x, z: water.z, yaw: 0 });
     assert.equal(called.kind, 'call');
@@ -135,7 +136,7 @@ describe('v20 보트 사기 · 물 위에 부르기 · 타기 · 내리기', () 
     const rode = await ask(a, { t: 'veh_ride', v });
     assert.equal(rode.mount?.m, 'boat_kayak', '물가에서 보트에 올라탄다 (보트 ride_range)');
     // 물 위로는 나아간다.
-    const inner = { x: water.x * 0.85, z: water.z * 0.85 };
+    const inner = { x: water.x, z: water.z + 2.5 };
     a.send({ t: 'move', x: inner.x, y: 0.03, z: inner.z, yaw: 0, vx: 0, vz: 0 });
     await sleep(150);
     assert.equal(a.inbox.filter((m) => m.t === 'correct').length, 0, '물 위로는 간다');

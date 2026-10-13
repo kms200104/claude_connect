@@ -24,16 +24,17 @@ CITY = ROOT / "data/world/city.json"
 X0, X1 = -480.0, 480.0
 STEP = 8.0
 WEIR = 60.0
-SOUTH = 200.0  # 이 줄 남쪽(강 한가운데 너머)은 땅이 아니다.
+SOUTH = 190.0  # 이 줄 남쪽(강 한가운데 너머)은 땅이 아니다.
 HALF = 420.0   # 도시 땅 반경 (village_layout island.half)
 
 
 def z_c(x: float) -> float:
-    return 190.0 + 6.0 * math.sin(x / 90.0) + 3.5 * math.sin(x / 37.0 + 1.0)
+    return 188.0 + 4.0 * math.sin(x / 90.0) + 2.0 * math.sin(x / 37.0 + 1.0)
 
 
 def w(x: float) -> float:
-    return 31.0 + 5.0 * (x - X0) / (X1 - X0) + 1.5 * math.sin(x / 53.0)
+    # 강 건너 침수 구시가지가 둔치에서 보이도록 너무 넓지 않게 (땅 휘기 0.0025 로 60m 앞이 9m 가라앉는다).
+    return 21.0 + 4.0 * (x - X0) / (X1 - X0) + 1.2 * math.sin(x / 53.0)
 
 
 def north(x: float) -> float:
@@ -131,7 +132,7 @@ DISTRICTS = [
     {"id": "ne", "name": "업무지구", "rect": [105, -255, 420, -115], "kind": "office"},
     {"id": "industry", "name": "디스플레이 산업단지", "rect": [-420, -420, 420, -269], "kind": "industry"},
     {"id": "riverbank", "name": "곡교천 둔치", "rect": [-420, 111, 420, 150], "kind": "park"},
-    {"id": "oldtown", "name": "강 건너 구시가지 (침수)", "rect": [-480, 236, 480, 470], "kind": "flooded"},
+    {"id": "oldtown", "name": "강 건너 구시가지 (침수)", "rect": [-480, 222, 480, 470], "kind": "flooded"},
 ]
 
 # 종류별 (층 범위, 너비 범위, 깊이 범위, 벽 색 후보)
@@ -140,7 +141,7 @@ KINDS = {
     "office": ((8, 18), (18, 30), (14, 22), ["#B9C4CC", "#A8B4BE", "#C8D0D6", "#9AA8B4"]),
     "villa": ((3, 4), (10, 14), (10, 13), ["#E6D2BC", "#D8C0A6", "#EDE2D2", "#C9B39A"]),
     "factory": ((2, 3), (50, 90), (30, 55), ["#D4D8DC", "#C5CBD0", "#E1E4E6"]),
-    "flooded": ((2, 4), (10, 18), (9, 14), ["#C9BCA8", "#B8AA94", "#D2C6B4", "#A99C88"]),
+    "flooded": ((3, 6), (10, 18), (9, 14), ["#C9BCA8", "#B8AA94", "#D2C6B4", "#A99C88"]),
 }
 
 
@@ -202,8 +203,8 @@ def build_city() -> dict:
     buildings += place_in([-415, -415, 415, -275], "factory", rng, 11, gap=14)
     # 강 건너 침수 구시가지: 강 남쪽 가장자리에서 6m 너머부터.
     old = []
-    for b in place_in([-470, 244, 470, 460], "flooded", rng, 70, gap=3):
-        if b["z"] - b["d"] / 2 > south(b["x"]) + 6:
+    for b in place_in([-470, 222, 470, 440], "flooded", rng, 80, gap=3):
+        if b["z"] - b["d"] / 2 > south(b["x"]) + 5:
             old.append(b)
     buildings += old
     # 학교 · 도서관 (손으로).
@@ -222,7 +223,7 @@ def build_city() -> dict:
     flood = {
         "_comment": "강 건너 구시가지가 잠긴 자리 (지난 장마 때 둑이 터졌다): 다각형 안 바닥은 물 밑, 수면 level.",
         "level": 0.35,
-        "polygon": [[-430.0, 248.0], [-120.0, 246.0], [-40.0, 262.0], [40.0, 300.0], [10.0, 360.0], [-160.0, 400.0], [-430.0, 420.0]],
+        "polygon": [[-430.0, 228.0], [-120.0, 226.0], [-40.0, 234.0], [40.0, 270.0], [10.0, 330.0], [-160.0, 370.0], [-430.0, 390.0]],
         "breach": [-60.0, south(-60.0)],
     }
     return {

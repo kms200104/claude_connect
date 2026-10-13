@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './protocol.js';
 
-export const SAVE_SCHEMA_VERSION = 6;
+// 7: v0.21 탕정 제2지구 강변도시로 이사 (옛 섬 자리의 사람 · 세워 둔 탈것을 새 도시 출발점 · 차고로).
+export const SAVE_SCHEMA_VERSION = 7;
 
 const CODE_RE = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
 

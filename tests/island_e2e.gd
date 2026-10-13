@@ -73,7 +73,9 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	# 섬
-	_check(_village.get_node("Terrain/Island").get_node_or_null("Ocean") != null, "섬을 둘러싼 바다")
+	var city: Node = _village.get_node("Terrain/City")
+	_check(city.get_node_or_null("FloodWater") != null and city.get_node_or_null("GroundChunks").get_child_count() >= 16, "강변도시 바닥 칸 · 강 건너 침수 수면")
+	_check(_village.get_node("CityDistricts").get_child_count() > 20, "도시 건물 · 가로수 · 가로등")
 	_check(museum.actor != null and museum.actor.info.display_name == "부엉", "박물관 앞에 관장 부엉")
 	_check(airport.actor != null and airport.plane != null, "공항 앞에 조종사, 활주로에 비행기")
 	_check(npcs.actor("rara") != null and npcs.actor("danchu") != null, "새 주민 라라·단추")

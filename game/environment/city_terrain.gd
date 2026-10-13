@@ -225,8 +225,11 @@ func _build_flood_water() -> void:
 	var mat: ShaderMaterial = water_material.duplicate()
 	mat.set_shader_parameter("half_extent", Vector2(1000.0, 1000.0))
 	# 흙탕물 (침수).
-	mat.set_shader_parameter("shallow_color", Color(0.62, 0.56, 0.42))
-	mat.set_shader_parameter("deep_color", Color(0.48, 0.44, 0.34))
+	mat.set_shader_parameter("shallow_color", Color(0.56, 0.55, 0.43))
+	mat.set_shader_parameter("deep_color", Color(0.4, 0.43, 0.36))
+	mat.set_shader_parameter("abyss_color", Color(0.33, 0.36, 0.3))
+	mat.set_shader_parameter("reflect_strength", 0.85)
+	mat.set_shader_parameter("glint", 1.6)
 	water.material_override = mat
 	water.visibility_range_end = draw_distance + 200.0
 	add_child(water)

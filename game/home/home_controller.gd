@@ -23,6 +23,8 @@ const TARGET_EXIT: String = "exit"
 const DECOR_BUTTON_Y: float = 340.0
 
 var interior: HomeInterior = null
+## 지난번 들어간 집 (나올 때 엘리베이터 층 표시).
+var _last_unit: String = ""
 ## 창밖 풍경을 찍는 곳 (마을의 아파트 동). 없으면 창은 하늘색.
 @export var apartments: ApartmentSite
 ## 그 집 발코니에서 바깥으로 이만큼 나간 자리에서 찍는다 (자기 동 벽이 가리지 않게).
@@ -171,6 +173,15 @@ func _process(_delta: float) -> void:
 func _on_door(unit: String, position: Vector3) -> void:
 	editor.stop()
 	first_person.exit()
+	# v0.21 엘리베이터: 들어갈 때는 1층 → 그 집 층, 나올 때는 그 층 → 1층 (그림만).
+	var ride_unit: String = unit if not unit.is_empty() else _last_unit
+	var ride_info: EconData.Unit = GameData.econ.unit(ride_unit) if GameData.econ != null and not ride_unit.is_empty() else null
+	if hud != null and ride_info != null:
+		if unit.is_empty():
+			ElevatorRide.play(hud, ride_info.floor, 1, "%s동 엘리베이터" % ride_info.building)
+		else:
+			ElevatorRide.play(hud, 1, ride_info.floor, "%s동 엘리베이터" % ride_info.building)
+	_last_unit = unit
 	player.global_position = position
 	player.velocity = Vector3.ZERO
 	player.clear_look_direction()

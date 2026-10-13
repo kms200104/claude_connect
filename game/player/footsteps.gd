@@ -82,7 +82,7 @@ static func is_raining_outside(position: Vector3) -> bool:
 
 
 ## 발밑 바닥: wood(선착장·상점 안) / metal(공항 활주로) / water(바닷가 젖은 모래) / dirt(모래사장·길·모래톱) /
-## stone(큰 광장·박물관 앞·공항 앞 광장) / grass.
+## stone(큰 광장·박물관 앞·공항 앞 광장 · v0.21 도로 · 인도 · 포장 구역) / grass.
 static func surface_of(position: Vector3) -> String:
 	var p: Vector2 = Vector2(position.x, position.z)
 	if GameData.shop != null and GameData.shop.is_inside(position):
@@ -107,6 +107,14 @@ static func surface_of(position: Vector3) -> String:
 		return "stone"
 	for plaza: Vector3 in layout.plazas:
 		if p.distance_to(Vector2(plaza.x, plaza.y)) <= plaza.z + 0.1:
+			return "stone"
+	# v0.21 강변도시: 도로 · 인도 · 포장된 구역(상권 · 역 · 산업단지)은 딱딱한 바닥.
+	var city: CityData = GameData.city
+	if city != null:
+		if city.on_road(p):
+			return "stone"
+		var district: CityData.District = city.district_at(p)
+		if district != null and district.kind in ["commercial", "station", "industry"]:
 			return "stone"
 	if layout.on_path(p, 0.1):
 		return "dirt"

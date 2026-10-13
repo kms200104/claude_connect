@@ -24,7 +24,7 @@ const fakeClock = (hour = 12) => {
 // random=0: 반응은 첫 후보, 선물은 첫 물건, 꽃 색은 0번.
 const BASE = { port: 0, moveSlackMeters: 200, random: () => 0, saveIntervalMs: 60000, chopCooldownMs: 0, weatherForce: 'rain', questChance: 0 };
 
-describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물관 · 공항', () => {
+describe('도시 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물관 · 공항', () => {
   const servers = [];
   const clients = [];
   const dirs = [];
@@ -57,19 +57,23 @@ describe('섬 생활: 심기 · 꽃 · 감정표현 · 주민 마음 · 박물�
     for (const d of dirs) rmSync(d, { recursive: true, force: true });
   });
 
-  it('섬 지형: 바다·길·건물 자리에는 심거나 놓을 수 없다', () => {
+  it('도시 지형: 강·도시 밖·강 건너·길·건물 자리에는 심거나 놓을 수 없다', () => {
     const data = loadGameData(defaultConfig.dataDir, defaultConfig);
     const island = data.layout.island;
-    assert.ok(onIsland(island, 0, 0) && onIsland(island, 60, 60));
-    assert.ok(!onIsland(island, 99, 99), '모서리 바다');
-    assert.equal(groundProblem(data, 0, 120), 'edge');
-    assert.equal(groundProblem(data, 10, 0), 'water', '성성호수 가운데');
+    assert.ok(onIsland(island, 0, 0) && onIsland(island, 300, -300) && onIsland(island, -150, 150));
+    assert.ok(!onIsland(island, 415, 415), '도시 모서리 밖');
+    assert.ok(!onIsland(island, 0, 230), '강 건너 (south 줄 너머)');
+    assert.equal(groundProblem(data, 0, 440), 'edge');
+    assert.equal(groundProblem(data, 0, 185), 'water', '곡교천 한가운데');
     assert.equal(groundProblem(data, data.museum.building.x, data.museum.building.z - 4), 'building', '박물관');
     assert.equal(groundProblem(data, 0, -80), 'building', '공항');
-    assert.equal(groundProblem(data, -30.3, -7.9), 'building', 'e편한세상 112동');
+    assert.equal(groundProblem(data, -230, -42), 'building', '리버파크 112동');
+    assert.equal(groundProblem(data, -134, -80), 'building', '리버파크 클럽하우스');
+    const factory = data.city.buildings.find((b) => b.kind === 'factory');
+    assert.equal(groundProblem(data, factory.x, factory.z), 'building', '산업단지 공장');
     assert.equal(groundProblem(data, GRASS.x, GRASS.z), null);
     const plaza = data.layout.plaza;
-    assert.ok(onPath(data.layout, plaza.x, plaza.z) && onPath(data.layout, 3, -56) && !onPath(data.layout, GRASS.x, GRASS.z));
+    assert.ok(onPath(data.layout, plaza.x, plaza.z) && onPath(data.layout, 0, -50) && !onPath(data.layout, GRASS.x, GRASS.z));
   });
 
   it('씨앗을 심으면 새싹 → 묘목 → 어린 나무 → 다 자란 나무 (베면 다시 그루터기), 꽃은 피면 딸 수 있다', async () => {

@@ -10,7 +10,7 @@ DIR="$(mktemp -d)"
 trap 'kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; rm -rf "$DIR"' EXIT
 NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (900 - NOW_MIN + 1440) % 1440 ))
-(cd "$ROOT/server" && exec env PORT=18212 SAVE_DIR="$DIR/saves" CLOCK_OFFSET_MIN="$OFFSET" MOVE_SLACK_M=300 DOOR_GRACE_MS=0 QUEST_CHANCE=0 \
+(cd "$ROOT/server" && exec env PORT=18212 SAVE_DIR="$DIR/saves" CLOCK_OFFSET_MIN="$OFFSET" MOVE_SLACK_M=1500 DOOR_GRACE_MS=0 QUEST_CHANCE=0 \
   WEATHER_FORCE=clear EVENT_FORCE=none EVENT_SPAWN_SCALE=0.02 START_SOL=30000000 START_ITEMS=fishing_net:1,shovel:1 \
   node src/index.js >"$DIR/server.log" 2>&1) &
 sleep 1

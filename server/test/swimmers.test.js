@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { SIZE_SCALE } from '../src/swimmers.js';
-import { Client, sleep, uid } from './helpers.js';
+import { Client, riverNorthZ, sleep, uid } from './helpers.js';
 
 // 같은 순서로 나오는 난수 (물고기가 여기저기 흩어지게).
 function seeded(seed = 7) {
@@ -16,8 +16,8 @@ function seeded(seed = 7) {
     return s / 2147483648;
   };
 }
-const FAST = { fishTimeScale: 0.01, fishHookGraceMs: 500, moveSlackMeters: 200, reconnectGraceMs: 300, saveIntervalMs: 60000, npcTickRate: 30, weatherForce: 'clear' };
-// 서쪽 연못(lake) 동쪽 물가 (성성호수공원 배치, fishing.test.js 와 같은 자리).
+const FAST = { fishTimeScale: 0.01, fishHookGraceMs: 500, moveSlackMeters: 400, reconnectGraceMs: 300, saveIntervalMs: 60000, npcTickRate: 30, weatherForce: 'clear' };
+// 중앙공원 연못(lake) 동쪽 물가 (fishing.test.js 와 같은 자리).
 const AT_POND = { x: -42.6, z: 35.4 };
 
 describe('v13 물고기 그림자 · 겨눠 던지기', () => {
@@ -140,16 +140,16 @@ describe('v13 물고기 그림자 · 겨눠 던지기', () => {
     await a.type('fish_result');
   });
 
-  it('바닷가에 서면 앞바다에 물고기 그림자가 몇 마리 나타난다', async () => {
+  it('강가(하류)에 서면 앞 물에 물고기 그림자가 몇 마리 나타난다 — 긴 강은 사람 둘레에만', async () => {
     const a = await open();
     await enter(a);
-    const half = server.data.layout.island.half;
-    const beach = { x: half - 2, z: 0 };
-    a.send({ t: 'move', x: beach.x, y: 0.1, z: beach.z, yaw: 0, vx: 0, vz: 0 });
+    const edge = riverNorthZ(server.data, 200);
+    const bank = { x: 200, z: edge - 1.5 };
+    a.send({ t: 'move', x: bank.x, y: 0.1, z: bank.z, yaw: 0, vx: 0, vz: 0 });
     const m = await a.next((x) => x.t === 'fishes' && x.spot === 'sea' && x.f.length >= 2, 6000);
     for (const f of m.f) {
-      assert.ok(f.x > half - 1, `바다 쪽 (${f.x.toFixed(1)})`);
-      assert.ok(Math.hypot(f.x - beach.x, f.z - beach.z) < 16, '내 앞바다');
+      assert.ok(f.z > edge, `물 쪽 (${f.z.toFixed(1)})`);
+      assert.ok(Math.hypot(f.x - bank.x, f.z - bank.z) < 16, '내 앞 물');
     }
   });
 
@@ -163,7 +163,7 @@ describe('v13 물고기 그림자 · 겨눠 던지기', () => {
     await a.type('shop_door');
     a.send({ t: 'fish_cast', rid: newRid(), spot: 'sea' });
     assert.equal((await a.type('error')).code, 'not_at_spot');
-    a.send({ t: 'fish_cast', rid: newRid(), spot: 'sea', x: 0, z: 300 });
+    a.send({ t: 'fish_cast', rid: newRid(), spot: 'sea', x: 200, z: 190 });
     assert.equal((await a.type('error')).code, 'not_at_spot');
   });
 

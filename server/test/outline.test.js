@@ -17,14 +17,15 @@ test('다각형 안팎·부호 있는 거리', () => {
   assert.ok(Math.abs(signedDistance(sq, 7, 2) - 3) < 1e-9);
 });
 
-test('성성호수 실제 윤곽: 거리·여울·호숫가', () => {
+test('곡교천(상류) 윤곽: 거리·여울·물가', () => {
   const data = loadGameData(dataDir, {});
   const s = data.spots.get('seongseong');
   assert.ok(s.outline.length >= 100);
-  // 윤곽 안 = 거리 0, 바깥 사각형 모서리(물 아님) = 0 보다 큼.
-  const deep = { x: 10, z: 0 };
+  assert.equal(s.near_people, true, '긴 강은 물가에 선 사람 둘레에 물고기가 나타난다');
+  // 윤곽 안 = 거리 0, 둔치 · 시내(물 아님) = 0 보다 큼.
+  const deep = { x: -100, z: 188 };
   assert.equal(distanceToSpot(s, deep.x, deep.z), 0);
-  assert.ok(distanceToSpot(s, s.x - s.half_x, s.z - s.half_z) > 3);
+  assert.ok(distanceToSpot(s, -100, 120) > 30, '둔치 북쪽 길');
   assert.ok(distanceToSpot(s, s.x + s.half_x + 40, s.z + s.half_z + 40) > 30);
   // 여울: 안쪽 점은 여울, 호수 가운데는 깊은 물, 호수 밖이라도 가장 가까운 물이 여울이면 여울.
   const ford = s.shallows.find((z) => z.id === 'seongseong_ford');
@@ -43,7 +44,7 @@ test('성성호수 실제 윤곽: 거리·여울·호숫가', () => {
   assert.ok(nearSpot(s, deep.x, deep.z, 2));
 });
 
-test('성성호수공원: 방문자센터·정자 자리는 막힌다 (회전한 건물 사각형 포함)', async () => {
+test('중앙공원: 관리사무소·정자 자리는 막힌다 (회전한 건물 사각형 포함)', async () => {
   const { groundProblem } = await import('../src/world.js');
   const data = loadGameData(dataDir, {});
   const v = data.layout.park.visitor_center;
