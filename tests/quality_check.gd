@@ -29,7 +29,7 @@ func _ready() -> void:
 	var low_mesh: Mesh = player.rig.body_mesh.mesh
 	var root: Window = get_tree().root
 	_check(CharacterModel.detail == 0 and root.msaa_3d == Viewport.MSAA_2X and root.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR, "절약: 캐릭터 0단계 · MSAA 2배 · 쌍선형")
-	_check(_ground_size() == 512, "절약 리소스팩: 바닥 512 (%d)" % _ground_size())
+	_check(_ground_size() == 1024, "절약 리소스팩: 바닥 1024 — v0.21 도시 ±440m (%d)" % _ground_size())
 	Quality.choose("high")
 	await get_tree().process_frame
 	var high_grass: int = _instances(decor)

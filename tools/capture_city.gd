@@ -78,3 +78,9 @@ func _run() -> void:
 	await _view("c10_market", Vector3(180.0, 0.1, -100.0), 30.0, 26.0)
 	await _view("c11_bridge", Vector3(262.0, 0.1, 140.0), 40.0, 26.0)
 	await _view("c12_plaza", Vector3(0.0, 0.1, 66.0), base[0], base[1], base[2], true)
+	# v0.21 M1 리버파크: 동 앞(공동현관) · 단지 하늘 · 놀이터 · 지하주차장 입구 · 강에서 본 단지.
+	await _view("c13_lobby", Vector3(-182.0, 0.1, 44.0), 16.0, 14.0)
+	await _view("c14_estate_sky", Vector3(-180.0, 0.1, 10.0), 150.0, 50.0)
+	await _view("c15_playground", Vector3(-230.0, 0.1, -66.0), 26.0, 62.0)
+	await _view("c16_parking", Vector3(-152.0, 0.1, 10.0), 30.0, 70.0)
+	await _view("c17_estate_river", Vector3(-180.0, 0.1, 150.0), 50.0, 8.0)

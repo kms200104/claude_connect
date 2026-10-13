@@ -54,25 +54,28 @@ func _batches(at: Vector2) -> Array:
 	if not _chunks.has(key):
 		var clay: BoxBatch = BoxBatch.new()
 		var glass: BoxBatch = BoxBatch.new()
+		# 바닥에 붙은 판(차선 · 건널목)은 내 캐릭터 둘레를 비우는 see-through 를 쓰지 않는다 (발밑 차선이 사라지지 않게).
+		var flat: BoxBatch = BoxBatch.new()
 		var origin: Vector3 = Vector3((key.x + 0.5) * CHUNK, 0.0, (key.y + 0.5) * CHUNK)
 		clay.origin = origin
 		glass.origin = origin
-		_chunks[key] = [clay, glass]
+		flat.origin = origin
+		_chunks[key] = [clay, glass, flat]
 	return _chunks[key]
 
 
 func _flush() -> void:
 	for key: Vector2i in _chunks:
 		var origin: Vector3 = (_chunks[key][0] as BoxBatch).origin
-		for i: int in 2:
+		for i: int in 3:
 			var batch: BoxBatch = _chunks[key][i]
 			if batch.is_empty():
 				continue
 			triangles += batch.triangle_count()
 			var mi: MeshInstance3D = MeshInstance3D.new()
-			mi.name = "%s_%d_%d" % ["Clay" if i == 0 else "Glass", key.x, key.y]
+			mi.name = "%s_%d_%d" % [["Clay", "Glass", "Flat"][i], key.x, key.y]
 			mi.mesh = batch.commit()
-			mi.material_override = clay_material if i == 0 else window_material
+			mi.material_override = [clay_material, window_material, foliage_material][i]
 			mi.position = origin
 			mi.visibility_range_end = draw_distance + CHUNK * 0.7
 			mi.visibility_range_end_margin = 20.0
@@ -368,7 +371,7 @@ func _road_markings() -> void:
 			t += 12.0
 			if _in_other_road(road, mid, 2.5):
 				continue
-			var batch: BoxBatch = _batches(mid)[0]
+			var batch: BoxBatch = _batches(mid)[2]
 			for s: float in [-0.18, 0.18]:
 				var p: Vector2 = mid + side * s
 				batch.quad_up(Vector3(p.x, 0.025, p.y), Vector2(seg, 0.14), yellow, yaw)
@@ -378,7 +381,7 @@ func _road_markings() -> void:
 			t += 9.0
 			if _in_other_road(road, mid2, 4.0):
 				continue
-			var batch2: BoxBatch = _batches(mid2)[0]
+			var batch2: BoxBatch = _batches(mid2)[2]
 			for s: float in [-1.0, 1.0]:
 				var p2: Vector2 = mid2 + side * s * road.width * 0.25
 				batch2.quad_up(Vector3(p2.x, 0.025, p2.y), Vector2(3.0, 0.14), white, yaw)
@@ -398,7 +401,7 @@ func _road_markings() -> void:
 			# 남북 건널목 (가로 길을 건넌다): 교차로 동 · 서쪽.
 			for sx: float in [-1.0, 1.0]:
 				var cx: float = x + sx * (hw + 2.2)
-				var batch: BoxBatch = _batches(Vector2(cx, z))[0]
+				var batch: BoxBatch = _batches(Vector2(cx, z))[2]
 				var n: int = int(h.width / 1.0)
 				for i: int in n:
 					var zz: float = z - hd + (float(i) + 0.5) * h.width / float(n)
@@ -407,7 +410,7 @@ func _road_markings() -> void:
 			# 동서 건널목 (세로 길을 건넌다): 교차로 남 · 북쪽.
 			for sz: float in [-1.0, 1.0]:
 				var cz: float = z + sz * (hd + 2.2)
-				var batch3: BoxBatch = _batches(Vector2(x, cz))[0]
+				var batch3: BoxBatch = _batches(Vector2(x, cz))[2]
 				var m: int = int(v.width / 1.0)
 				for i: int in m:
 					var xx: float = x - hw + (float(i) + 0.5) * v.width / float(m)

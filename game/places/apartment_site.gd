@@ -170,6 +170,8 @@ func _build_estate(estate: Dictionary) -> void:
 	add_child(root)
 	var clay: BoxBatch = BoxBatch.new()
 	var glass: BoxBatch = BoxBatch.new()
+	# 바닥 판(길 · 보도 · 놀이터 바닥)은 see-through 없는 재료로 (발밑이 비지 않게).
+	var flat: BoxBatch = BoxBatch.new()
 	var r: Array = estate.get("rect", [])
 	var road: Dictionary = estate.get("road", {})
 	var road_z: float = float(road.get("z", 0.0))
@@ -194,20 +196,20 @@ func _build_estate(estate: Dictionary) -> void:
 		# 단지 안 길 (아스팔트 + 양쪽 보도블록).
 		var rx0: float = float(road.get("x0", x0))
 		var rx1: float = float(road.get("x1", x1))
-		clay.quad_up(Vector3((rx0 + rx1) * 0.5, 0.02, road_z), Vector2(rx1 - rx0, road_w), Color("#4A4D52"))
+		flat.quad_up(Vector3((rx0 + rx1) * 0.5, 0.02, road_z), Vector2(rx1 - rx0, road_w), Color("#4A4D52"))
 		for s: float in [-1.0, 1.0]:
-			clay.quad_up(Vector3((rx0 + rx1) * 0.5, 0.025, road_z + s * (road_w * 0.5 + 1.0)), Vector2(rx1 - rx0, 2.0), Color("#C9B9A6"))
+			flat.quad_up(Vector3((rx0 + rx1) * 0.5, 0.025, road_z + s * (road_w * 0.5 + 1.0)), Vector2(rx1 - rx0, 2.0), Color("#C9B9A6"))
 		# 동 앞 보도 (동마다 현관에서 단지 안 길까지).
 		for b: Variant in GameData.econ.buildings():
 			if b is Dictionary:
 				var bx: float = float(b.get("x", 0.0))
 				var bz: float = float(b.get("z", 0.0))
 				var bd: float = float(b.get("d", 6.0))
-				clay.quad_up(Vector3(bx, 0.025, bz + bd * 0.5 + 4.0), Vector2(6.0, 8.0), Color("#D3C4B0"))
-				clay.quad_up(Vector3(bx, 0.024, bz + bd * 0.5 + 8.6), Vector2(float(b.get("w", 9.0)) + 8.0, 2.2), Color("#C9B9A6"))
+				flat.quad_up(Vector3(bx, 0.025, bz + bd * 0.5 + 4.0), Vector2(6.0, 8.0), Color("#D3C4B0"))
+				flat.quad_up(Vector3(bx, 0.024, bz + bd * 0.5 + 8.6), Vector2(float(b.get("w", 9.0)) + 8.0, 2.2), Color("#C9B9A6"))
 	for f: Variant in estate.get("facilities", []):
 		if f is Dictionary:
-			_facility(root, clay, glass, f)
+			_facility(root, clay, glass, flat, f)
 	# 환기구 (지하주차장 숨구멍): 동 사이 잔디밭에 군데군데.
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = 77
@@ -218,12 +220,13 @@ func _build_estate(estate: Dictionary) -> void:
 			clay.box(p + Vector3(0.0, 1.9, 0.0), Vector3(1.8, 0.2, 1.8), Color("#6F787E"))
 	root.add_child(_mesh(clay.commit(), clay_material))
 	root.add_child(_mesh(glass.commit(), window_material))
+	root.add_child(_mesh(flat.commit(), Puff.MATERIAL))
 
 
 const STONE_DARK_C: Color = Color("#77726C")
 
 
-func _facility(root: Node3D, clay: BoxBatch, glass: BoxBatch, f: Dictionary) -> void:
+func _facility(root: Node3D, clay: BoxBatch, glass: BoxBatch, flat: BoxBatch, f: Dictionary) -> void:
 	var c: Vector3 = Vector3(float(f.get("x", 0.0)), 0.0, float(f.get("z", 0.0)))
 	var w: float = float(f.get("w", 10.0))
 	var d: float = float(f.get("d", 10.0))
@@ -236,8 +239,8 @@ func _facility(root: Node3D, clay: BoxBatch, glass: BoxBatch, f: Dictionary) -> 
 				clay.box(c + Vector3(0.0, 4.0 + fl * 4.0, d * 0.5 + 0.5), Vector3(w + 0.4, 0.25, 1.0), Color(CHARCOAL))
 			clay.box(c + Vector3(0.0, h + 0.3, 0.0), Vector3(w + 0.6, 0.6, d + 0.6), Color(CROWN))
 		"playground":
-			clay.quad_up(c + Vector3(0.0, 0.03, 0.0), Vector2(w, d), Color("#E07A4F"))
-			clay.quad_up(c + Vector3(-w * 0.2, 0.035, 0.0), Vector2(w * 0.4, d * 0.6), Color("#5BA4D9"))
+			flat.quad_up(c + Vector3(0.0, 0.03, 0.0), Vector2(w, d), Color("#E07A4F"))
+			flat.quad_up(c + Vector3(-w * 0.2, 0.035, 0.0), Vector2(w * 0.4, d * 0.6), Color("#5BA4D9"))
 			# 미끄럼틀 탑 · 미끄럼판 · 그네 틀 · 시소.
 			clay.box(c + Vector3(-w * 0.25, 1.2, 0.0), Vector3(2.4, 2.4, 2.4), Color("#F2C14E"))
 			clay.box(c + Vector3(-w * 0.25, 2.8, 0.0), Vector3(2.8, 0.3, 2.8), Color("#E04B3C"))
@@ -250,11 +253,12 @@ func _facility(root: Node3D, clay: BoxBatch, glass: BoxBatch, f: Dictionary) -> 
 			clay.box(c + Vector3(w * 0.25, 0.45, d * 0.25), Vector3(3.6, 0.12, 0.4), Color("#2F7DD1"), Basis(Vector3.BACK, 0.12))
 		"parking":
 			# 지하주차장 입구: 비탈 지붕(짙은 회색) 아래 어두운 입구, 옆 벽, 높이 제한 막대 (노랑 · 검정).
-			clay.box(c + Vector3(0.0, 3.0, 0.0), Vector3(w, 0.3, d + 0.6), Color(CHARCOAL))
+			clay.box(c + Vector3(0.0, 3.0, 0.0), Vector3(w, 0.3, d + 0.6), Color("#7A838A"))
+			flat.quad_up(c + Vector3(0.0, 3.17, 0.0), Vector2(w - 0.6, d), Color("#6FA35E"))
 			for s: float in [-1.0, 1.0]:
 				clay.box(c + Vector3(0.0, 1.5, s * (d * 0.5)), Vector3(w, 3.0, 0.3), Color("#C6C1B8"))
 			clay.box(c + Vector3(w * 0.5, 1.5, 0.0), Vector3(0.3, 3.0, d), Color("#C6C1B8"))
-			clay.quad_up(c + Vector3(-1.0, 0.04, 0.0), Vector2(w - 2.0, d - 0.4), Color("#1E2226"))
+			flat.quad_up(c + Vector3(-1.0, 0.04, 0.0), Vector2(w - 2.0, d - 0.4), Color("#1E2226"))
 			for k: int in 5:
 				clay.box(c + Vector3(-w * 0.5 - 0.2, 2.5, -d * 0.4 + float(k) * d * 0.2), Vector3(0.12, 0.25, d * 0.2), Color("#F2C14E") if k % 2 == 0 else Color("#222222"))
 	var label: Label3D = _label(str(f.get("name", "")), 56, Color("#FFFFFF"))
