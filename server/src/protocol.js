@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -71,6 +71,10 @@ export const ErrorCode = Object.freeze({
   // v0.22 제작
   notAtBench: 'not_at_bench', // 그 물건을 만들 작업대 곁이 아님 (등급이 모자람)
   notEnoughItems: 'not_enough_items', // 재료가 모자람
+  // v0.23 생존
+  tooFar: 'too_far', // 가구 · 대상이 너무 멂
+  alreadyLooted: 'already_looted', // 이미 뒤진 가구 (다시 찰 때까지)
+  hpFull: 'hp_full', // 체력이 가득해 먹을 필요가 없음
   notEnoughShares: 'not_enough_shares', // 가진 주식보다 많이 팔려고 함
   // 예적금 (v0.12)
   badProduct: 'bad_product', // 모르는 상품·기간·금액

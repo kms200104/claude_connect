@@ -41,6 +41,7 @@ import { DAY_MS, DAY_START_HOUR } from './clock.js';
 import { createGarage, mountWire } from './garage.js';
 import { createAqua } from './aqua.js';
 import { createCrafting } from './crafting.js';
+import { createSurvival } from './survival.js';
 import { createSafety } from './safety.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -144,6 +145,18 @@ export function createServer(overrides = {}) {
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
+  // v0.23 생존: 떨어뜨린 물건 (크리처 · 가방이 가득 찰 때).
+  const dropAt = (room, item, n, x, z) => {
+    const ground = [...room.drops.values()].filter((d) => d.kind === 'item');
+    if (ground.length >= cfg.groundItemMax) return null;
+    const at = groundSpot(ground, x, z);
+    room.groundSeq += 1;
+    const d = { id: `g${room.groundSeq}`, kind: 'item', item, n, x: at.x, z: at.z };
+    room.drops.set(d.id, d);
+    room.broadcast({ t: 'drop', d: dropWire(d) });
+    return d;
+  };
+  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a) });
   // v0.22 제작대.
   const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
@@ -518,6 +531,8 @@ export function createServer(overrides = {}) {
       parked: garage.parkedWire(room),
       // v21: 물놀이 배 (손님 받는 중 · 도는 중).
       aqua: aqua.tripsWire(room),
+      // v0.23 생존: 체력 · 뒤진 가구 · 크리처.
+      surv: survival.welcomeWire(room, player),
       // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
       dev: cfg.devTools,
     });
@@ -1815,6 +1830,12 @@ export function createServer(overrides = {}) {
         return handleDig(ctx, msg, fail);
       case 'craft':
         return crafting.handleCraft(ctx, msg, fail);
+      case 'loot':
+        return survival.handleLoot(ctx, msg, fail);
+      case 'attack':
+        return survival.handleAttack(ctx, msg, fail);
+      case 'use':
+        return survival.handleUse(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2025,6 +2046,9 @@ export function createServer(overrides = {}) {
       case 'net':
       case 'dig':
       case 'craft':
+      case 'loot':
+      case 'attack':
+      case 'use':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2176,6 +2200,7 @@ export function createServer(overrides = {}) {
       tickShoals(room, dtMs / 1000, t);
       if (delivery.tick(room, dtMs, t)) room.broadcast({ t: 'couriers', c: delivery.wire(room) });
       for (const spotId of swimmers.tick(room, dtMs, t, online)) room.broadcast({ t: 'fishes', spot: spotId, f: swimmers.wire(room, spotId) });
+      survival.tick(room, dtMs, t);
     }
   }, 1000 / cfg.npcTickRate);
 
@@ -2247,6 +2272,7 @@ export function createServer(overrides = {}) {
       economy.tickWeek(room);
       kitchen.tickRestaurant(room);
       tickDigSpots(room, t);
+      survival.regen(room, 1000);
       safety.tick(room, weather, environment(null).season);
       if (weather === 'thunder' && t >= room.nextLightningAt) {
         // 뇌우가 시작되면 첫 번개는 조금 기다렸다가 (간격 안 아무 때나).

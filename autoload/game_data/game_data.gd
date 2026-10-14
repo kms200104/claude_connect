@@ -11,6 +11,8 @@ const SHOP_PATH: String = "res://data/shop/shop.json"
 const LAYOUT_PATH: String = "res://data/world/village_layout.json"
 const CITY_PATH: String = "res://data/world/city.json"
 const CRAFTING_PATH: String = "res://data/crafting/crafting.json"
+const SURVIVAL_PATH: String = "res://data/survival/survival.json"
+const HOUSES_PATH: String = "res://data/survival/houses.json"
 const EVENTS_PATH: String = "res://data/events/events.json"
 const PLANTS_PATH: String = "res://data/plants/plants.json"
 const EMOTES_PATH: String = "res://data/emotes/emotes.json"
@@ -49,6 +51,8 @@ var layout: VillageLayout = null
 var city: CityData = null
 ## v0.22 제작대 (생존용품).
 var crafting: CraftingRules = CraftingRules.new()
+## v0.23 생존 (빈집 · 체력 · 무기 · 크리처).
+var survival: SurvivalRules = SurvivalRules.new()
 ## 마을 이벤트 종류 (id → 정보). 언제 열리는지는 서버가 알려 준다 (Net.events).
 var events: Dictionary[String, EventInfo] = {}
 ## 선물·별 조각을 주울 수 있는 거리 (서버 판정과 같은 값).
@@ -131,6 +135,7 @@ func _ready() -> void:
 	layout = VillageLayout.from_dict(_read_json(LAYOUT_PATH))
 	city = CityData.from_dict(_read_json(CITY_PATH))
 	crafting = CraftingRules.from_dict(_read_json(CRAFTING_PATH))
+	survival = SurvivalRules.from_dicts(_read_json(SURVIVAL_PATH), _read_json(HOUSES_PATH))
 	if sea_spot != null:
 		sea_spot.island = layout
 	var plants_file: Dictionary = _read_json(PLANTS_PATH)

@@ -37,6 +37,9 @@ var _held: int = 0
 var _sol: int = 0
 var _pos: Vector3 = Vector3.ZERO
 var _home: String = ""
+## v0.23 오프라인 생존: 뒤진 가구 · 체력.
+var _looted: Dictionary = {}
+var _hp: int = 10
 var _home_items: Dictionary = {}
 var _home_seq: int = 0
 var _placed: Dictionary = {}
@@ -297,6 +300,33 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_save()
 		"craft":
 			_handle_craft(peer, msg, rid, fail)
+		"loot":
+			# v0.23 오프라인: 가구에서 천 조각 하나 (진짜 서버는 가구마다 표가 있다), 한 번만.
+			var cid: String = str(msg.get("c", ""))
+			var box: SurvivalRules.LootBox = GameData.survival.containers.get(cid)
+			if box == null or _looted.has(cid):
+				fail.call(NetProtocol.ERR_ALREADY_LOOTED if box != null else NetProtocol.ERR_BAD_ITEM)
+				return
+			_looted[cid] = true
+			_add("cloth", 1)
+			_send_inventory(peer)
+			_send(peer, {"t": "looted", "rid": rid, "c": cid, "items": [{"id": "cloth", "n": 1}], "got": [{"id": "cloth", "n": 1}]})
+			_send(peer, {"t": "container", "c": cid, "until": 1.0e15})
+		"attack":
+			_send(peer, {"t": "swing", "rid": rid, "hit": ""})
+		"use":
+			var uslot: int = int(msg.get("slot", -1))
+			var heal: int = GameData.survival.heal_of(str(_slots[uslot]["id"])) if uslot >= 0 and uslot < _slots.size() and _slots[uslot] != null else 0
+			if heal <= 0:
+				fail.call(NetProtocol.ERR_BAD_ITEM)
+				return
+			if _hp >= GameData.survival.max_hp:
+				fail.call(NetProtocol.ERR_HP_FULL)
+				return
+			_remove(uslot, 1)
+			_hp = mini(GameData.survival.max_hp, _hp + heal)
+			_send_inventory(peer)
+			_send(peer, {"t": "hp", "rid": rid, "hp": _hp, "max": GameData.survival.max_hp})
 		"home_enter", "home_exit", "home_place", "home_move", "home_pickup":
 			_handle_home(peer, msg, fail)
 		"talk":

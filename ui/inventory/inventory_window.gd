@@ -320,7 +320,8 @@ func _refresh_detail() -> void:
 	var item: InventoryItem = _item_at(selected_slot)
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	_discard.visible = info != null and not info.is_tool()
-	_use.visible = info != null and (info.is_furniture() or info.is_clothing() or not info.ride.is_empty())
+	var heal: int = GameData.survival.heal_of(item.id) if item != null else 0
+	_use.visible = info != null and (info.is_furniture() or info.is_clothing() or not info.ride.is_empty() or heal > 0)
 	if info == null:
 		_name.text = "아이템을 골라 보세요"
 		_name.add_theme_color_override("font_color", TITLE_COLOR)
@@ -334,6 +335,9 @@ func _refresh_detail() -> void:
 	var price: String = " · 상점에서 %s" % Money.sol(info.price) if info.price > 0 else ""
 	_meta.text = "%s · %d개%s%s" % [info.kind_label(), item.count, " · 손에 듦" if selected_slot == Net.held_slot else "", price]
 	_use.text = "설치하기" if info.is_furniture() else "입기"
+	if heal > 0:
+		# v0.23 회복 아이템: 먹기 · 쓰기 (체력 +heal).
+		_use.text = "%s (♥+%d)" % ["먹기" if item.id in ["hardtack", "canned_food", "clean_water"] else "쓰기", heal]
 	if not info.ride.is_empty():
 		_use.text = "접어 넣기" if player != null and player.is_riding() else "꺼내 타기"
 	_hint.text = "옮길 칸을 누르거나 끌어다 놓아요"
@@ -348,6 +352,10 @@ func _on_use_pressed() -> void:
 	var item: InventoryItem = _item_at(selected_slot)
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	if info == null:
+		return
+	# v0.23 회복 아이템: 서버가 체력을 올리고 하나를 쓴다.
+	if GameData.survival.heal_of(item.id) > 0:
+		Net.use_item(selected_slot)
 		return
 	# v0.16 탈것: 가방 창을 닫고 꺼내 펼쳐 올라탄다 (타고 있으면 내려서 접어 넣는다).
 	if not info.ride.is_empty() and player != null and player.vehicle != null:

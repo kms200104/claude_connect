@@ -80,6 +80,12 @@ export function blockedAreas(data) {
   const civic = data.civic?.building;
   if (civic) rects.push(buildingRect(civic, 1.5));
   for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
+  // v0.23 빈집촌 단층집 (안쪽도 막는다 — 가구 · 씨앗을 집 안에 놓지 않고, 크리처는 집 안으로 들어오지 못한다).
+  for (const h of data.survival?.houses ?? []) {
+    const hw = (Math.abs(Math.cos(h.yaw)) > 0.5 ? h.w : h.d) / 2;
+    const hd = (Math.abs(Math.cos(h.yaw)) > 0.5 ? h.d : h.w) / 2;
+    rects.push({ x0: h.x - hw - 0.3, x1: h.x + hw + 0.3, z0: h.z - hd - 0.3, z1: h.z + hd + 0.3 });
+  }
   // v0.22 공용 작업대 (공구 창고).
   for (const b of data.crafting?.publicBenches ?? []) circles.push({ x: b.x, z: b.z, r: 2.4 });
   // 성성호수공원: 방문자센터(앞면 가운데 기준, yaw 는 90° 단위)와 정자.

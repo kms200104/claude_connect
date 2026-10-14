@@ -27,6 +27,17 @@ signal vehicle_done(result: Dictionary)
 signal steps_updated(info: Dictionary)
 ## v0.22 제작: 만들었다 { recipe, item, n, tier }.
 signal crafted(info: Dictionary)
+## v0.23 생존: 가구를 뒤졌다 { c, items[{id,n}], got } · 누가 뒤져 비었다(c, 다시 차는 세상 ms) · 체력 · 다쳤다 · 기절 ·
+## 크리처 목록 · 맞았다 · 쓰러졌다(사라졌다) · 내가 휘둘렀다 { hit }.
+signal looted(info: Dictionary)
+signal container_changed(container_id: String, until: float)
+signal hp_changed(hp: int, max_hp: int)
+signal hurt(info: Dictionary)
+signal knocked_out(info: Dictionary)
+signal creatures_updated
+signal creature_hit(info: Dictionary)
+signal creature_dead(info: Dictionary)
+signal swung(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -261,6 +272,12 @@ var _clock_scale: float = 1.0
 var _clock_server_ms: float = 0.0
 ## v0.22 세상 시각(낮 · 밤): 서버가 보낸 기준값과 배율 (기본 60배 — 현실 1분이 마을 1시간).
 var _clock_world_ms: float = 0.0
+## v0.23 생존 상태: 체력 · 뒤진 가구(id → 다시 차는 세상 ms) · 크리처(id → {k, x, z, yaw, hp, a}).
+var hp: int = 10
+var max_hp: int = 10
+var looted_until: Dictionary[String, float] = {}
+var creatures: Dictionary[String, Dictionary] = {}
+var night: bool = false
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -902,6 +919,31 @@ func _handle_text(text: String) -> void:
 			drill_changed.emit(msg)
 		"crafted":
 			crafted.emit(msg)
+		"looted":
+			looted.emit(msg)
+		"container":
+			looted_until[str(msg.get("c", ""))] = float(msg.get("until", 0.0))
+			container_changed.emit(str(msg.get("c", "")), float(msg.get("until", 0.0)))
+		"hp":
+			_set_hp(msg)
+		"hurt":
+			_set_hp(msg)
+			hurt.emit(msg)
+		"ko":
+			_set_hp(msg)
+			knocked_out.emit(msg)
+		"creatures":
+			_apply_creatures(msg.get("c", []))
+		"creature_hit":
+			var hit_id: String = str(msg.get("id", ""))
+			if creatures.has(hit_id):
+				creatures[hit_id]["hp"] = int(msg.get("hp", 0))
+			creature_hit.emit(msg)
+		"creature_dead":
+			creatures.erase(str(msg.get("id", "")))
+			creature_dead.emit(msg)
+		"swing":
+			swung.emit(msg)
 		"drill_done":
 			sol = int(msg.get("sol", sol))
 			if not drill.is_empty():
@@ -1142,6 +1184,17 @@ func _on_welcome(msg: Dictionary) -> void:
 	_apply_profile(msg.get("prof", {}))
 	_sync_nickname()
 	_apply_clock(msg.get("clock", {}))
+	# v0.23 생존.
+	var surv: Dictionary = msg.get("surv", {}) if msg.get("surv") is Dictionary else {}
+	looted_until.clear()
+	var looted_map: Variant = surv.get("looted", {})
+	if looted_map is Dictionary:
+		for id: Variant in looted_map:
+			looted_until[str(id)] = float(looted_map[id])
+	night = bool(surv.get("night", false))
+	_set_hp({"hp": surv.get("hp", max_hp), "max": surv.get("max", max_hp)})
+	creatures.clear()
+	_apply_creatures(surv.get("creatures", []))
 	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
 	tree_stages.clear()
 	planted_trees.clear()
@@ -1217,6 +1270,46 @@ func _apply_events(data: Variant, announce: bool = true) -> void:
 func _next_rid() -> String:
 	_rid_counter += 1
 	return "%s-%d" % [uid.left(6), _rid_counter]
+
+
+## v0.23 빈집 가구 뒤지기 · 크리처 공격 · 회복 아이템 쓰기 (모두 서버가 판정).
+func loot(container_id: String) -> void:
+	if state == State.ONLINE:
+		_request("loot", {"c": container_id})
+
+
+func attack() -> void:
+	if state == State.ONLINE:
+		_request("attack", {})
+
+
+func use_item(slot: int) -> void:
+	if state == State.ONLINE:
+		_request("use", {"slot": slot})
+
+
+## 이 가구를 지금 뒤질 수 있는지 (다시 찰 때가 지났는지).
+func can_loot(container_id: String) -> bool:
+	return float(looted_until.get(container_id, 0.0)) <= world_ms()
+
+
+func _set_hp(msg: Dictionary) -> void:
+	hp = int(msg.get("hp", hp))
+	max_hp = int(msg.get("max", max_hp))
+	hp_changed.emit(hp, max_hp)
+
+
+func _apply_creatures(list: Variant) -> void:
+	var seen: Dictionary = {}
+	for c: Variant in list if list is Array else []:
+		if c is Dictionary:
+			var id: String = str(c.get("id", ""))
+			seen[id] = true
+			creatures[id] = c
+	for id: String in creatures.keys():
+		if not seen.has(id):
+			creatures.erase(id)
+	creatures_updated.emit()
 
 
 ## v0.22 제작대에서 만들기 (서버가 작업대 거리 · 재료 · 가방을 보고 crafted 또는 request_failed("craft", …)).

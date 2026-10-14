@@ -124,7 +124,7 @@ SIDEWALK = 3.0
 DISTRICTS = [
     {"id": "downtown", "name": "솔바람 시내 (중앙공원 · 상가)", "rect": [-91, -101, 91, 97], "kind": "downtown"},
     {"id": "estate", "name": "솔바람 리버파크 (1 · 2단지)", "rect": [-255, -101, -105, 97], "kind": "estate"},
-    {"id": "west", "name": "서쪽 주거지", "rect": [-420, -101, -269, 97], "kind": "residential"},
+    {"id": "west", "name": "솔내 옛마을 (빈집촌) · 리버시티", "rect": [-420, -101, -269, 97], "kind": "residential"},
     {"id": "east_market", "name": "탕정역 상권", "rect": [105, -101, 255, 97], "kind": "commercial"},
     {"id": "station", "name": "탕정역", "rect": [269, -101, 420, 97], "kind": "station"},
     {"id": "nw", "name": "솔내 주거지", "rect": [-420, -255, -105, -115], "kind": "residential"},
@@ -195,7 +195,7 @@ def build_city() -> dict:
     buildings += along_road(road_edge(104, 14, -1), 108, 252, "shop", rng, 1)
     buildings += place_in([110, -70, 250, 70], "office", rng, 6, gap=8)
     # 서쪽 주거지 · 솔내 주거지: 빌라 골목 (+ 아파트 단지는 apartments.json samples).
-    buildings += place_in([-415, -96, -272, -10], "villa", rng, 16, gap=4)
+    # 서쪽 주거지 아래쪽은 v0.23 빈집촌 (data/survival/houses.json, tools/art/gen_houses.py).
     buildings += place_in([-252, -250, -110, -150], "villa", rng, 12, gap=4)
     # 업무지구.
     buildings += place_in([110, -250, 415, -120], "office", rng, 9, gap=10)

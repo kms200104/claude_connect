@@ -112,6 +112,7 @@ function newProfile(uid, slot, cfg, data) {
     vehicles: [], // v19 차고: [{ id, model, owned: [산 부품], fit: { 칸: 부품 } }]
     vehSeq: 0,
     steps: { day: -1, today: 0, got: [] }, // v0.20 솔걸음: 마을 날짜 · 그날 인정된 걸음 · 받은 목표(번호)
+    hp: data?.survival?.player?.max_hp ?? 10, // v0.23 체력
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },
@@ -422,6 +423,7 @@ export class Room {
         tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
         vehicles: sanitizeVehicles(p.vehicles, data.garage).map((v) => (moved ? { ...v, at: null } : v)),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
+        hp: Number.isFinite(p.hp) ? Math.max(1, Math.min(data?.survival?.player?.max_hp ?? 10, Math.round(p.hp))) : (data?.survival?.player?.max_hp ?? 10),
         steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),
         dex: sanitizeDex(p.dex, data),
@@ -435,6 +437,7 @@ export class Room {
       saved.title = typeof p.title === 'string' && saved.ach.some((a) => a.id === p.title) ? p.title : '';
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);
+    room.looted = Object.fromEntries(Object.entries(world.looted ?? {}).filter(([id, until]) => data.survival?.containers.has(id) && Number.isFinite(until)));
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
     for (const h of Array.isArray(world.households) ? world.households : []) {
       const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
@@ -492,6 +495,8 @@ export class Room {
         delivSeq: this.delivSeq,
         ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),
         groundSeq: this.groundSeq,
+        // v0.23 뒤진 빈집 가구 → 다시 차는 세상 시각 (ms).
+        looted: { ...(this.looted ?? {}) },
       },
       profiles,
     };

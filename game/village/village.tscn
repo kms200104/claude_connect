@@ -51,6 +51,7 @@
 [ext_resource type="Script" path="res://game/environment/city_terrain.gd" id="53_island"]
 [ext_resource type="Script" path="res://game/city/city_districts.gd" id="95_city"]
 [ext_resource type="Script" path="res://game/crafting/craft_controller.gd" id="96_craft"]
+[ext_resource type="Script" path="res://game/survival/survival_controller.gd" id="97_surv"]
 [ext_resource type="Script" path="res://game/places/museum_site.gd" id="54_museum"]
 [ext_resource type="Script" path="res://game/places/airport_site.gd" id="55_airport"]
 [ext_resource type="Script" path="res://game/plants/flower_field.gd" id="56_flowers"]
@@ -451,8 +452,18 @@ toast_hud = NodePath("../HUD/FishingHud")
 inventory_window = NodePath("../HUD/InventoryWindow")
 clay_material = ExtResource("90_bclay")
 
-[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs", "parked", "aqua", "crafting")]
+[node name="Survival" type="Node" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud")]
+script = ExtResource("97_surv")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
+toast_hud = NodePath("../HUD/FishingHud")
+clay_material = ExtResource("90_bclay")
+window_material = ExtResource("91_bwindow")
+creature_material = ExtResource("23_foliage")
+
+[node name="InteractionController" type="Node" parent="." node_paths=PackedStringArray("player", "trees", "npcs", "shop", "furniture", "drops", "merchant", "museum", "airport", "flowers", "mirrors", "mirror_window", "dialogue", "fishing", "action_hud", "toast_hud", "economy", "field", "home", "jobs", "parked", "aqua", "crafting", "survival")]
 script = ExtResource("34_interaction")
+survival = NodePath("../Survival")
 crafting = NodePath("../Crafting")
 parked = NodePath("../ParkedVehicles")
 aqua = NodePath("../AquaMarina")
