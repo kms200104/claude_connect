@@ -1472,7 +1472,25 @@ export function createServer(overrides = {}) {
       room.nextDigAt.beach = count('beach') < rules.beach.max / 2 ? t : t + rules.beach.spawn_every_s * 1000 * cfg.eventSpawnScale;
       // v0.21 강변도시: 조개 모래밭은 도시 끝이 아니라 곡교천 하류 갯벌(island.clam_spot 낚시터 물가, 도시 쪽만).
       const clamSpot = data.layout?.island?.clam_spot ? data.spots.get(data.layout.island.clam_spot) : null;
-      const at = clamSpot ? lakeShoreSpot(clamSpot, 3.2, random) : beachSpot(data.layout?.island, random);
+      // 강 건너(남쪽, 물에 잠긴 쪽)에 떨어지면 몇 번 다시 뽑는다 — 곡교천 북쪽 가장자리(city.json river.north)보다 북쪽만.
+      const north = data.city?.river?.north;
+      const cityBank = (p) => {
+        if (!north?.length) return true;
+        let edge = north[north.length - 1][1];
+        for (let i = 0; i + 1 < north.length; i++) {
+          if (p.x <= north[i + 1][0]) {
+            edge = north[i][1] + ((north[i + 1][1] - north[i][1]) * (p.x - north[i][0])) / (north[i + 1][0] - north[i][0]);
+            break;
+          }
+        }
+        return p.z < edge + 0.5;
+      };
+      let at = null;
+      for (let tries = 0; tries < 8; tries++) {
+        at = clamSpot ? lakeShoreSpot(clamSpot, 3.2, random) : beachSpot(data.layout?.island, random);
+        if (!at || !clamSpot || cityBank(at)) break;
+        at = null;
+      }
       if (at && onIsland(data.layout?.island, at.x, at.z, 1) && !data.blocked.rects.some((r) => at.x >= r.x0 && at.x <= r.x1 && at.z >= r.z0 && at.z <= r.z1)) add('beach', at, rules.beach.hp);
     }
     if (t >= room.nextDigAt.lake) {
