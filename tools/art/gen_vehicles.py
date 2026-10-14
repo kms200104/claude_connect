@@ -115,6 +115,9 @@ MODELS = [
 # v0.26 무게(kg, 타는 사람 포함 — 들이받을 때 크리처가 날아가는 정도) · 내구도 (0 이면 고장).
 # v0.27 seats = 동승 자리 (탈것 좌표 x, 앉는 높이 y, z — 트럭 짐칸 둘 · ATV 뒷자리 하나).
 for _m in MODELS:
+    # v0.27 배터리로 갈 수 있는 거리 (m, 0 = 배터리 없음 — 자전거 · 카약).
+    _m['range'] = {'moto_scooter': 4000, 'moto_classic': 5000, 'moto_sport': 6000, 'car_atv': 3500, 'car_truck': 4500,
+                   'boat_motor': 3000, 'boat_jetski': 2500}.get(_m['id'], 0)
     if 'mass' not in _m:
         _m['mass'] = {'bike': 90, 'moto': 190, 'boat': 400}[_m['kind']]
         _m['durability'] = {'bike': 40, 'moto': 90, 'boat': 120}[_m['kind']]
@@ -351,6 +354,9 @@ data = {
     # v0.26 내구도: 크리처를 들이받거나 벽에 세게 부딪치면 준다 (0 이면 고장 — 탈 수 없다). kit = 세워 둔 곁(또는 타는 중)에서 재료로
     # kit_fix 만큼 고치기, shop = 휴대폰 탈것 앱에서 솔로 다 고치기 (값 × shop_rate × 닳은 몫). 벽: 속도가 crash_min m/s 넘게 갑자기 줄면
     # (줄어든 속도 − crash_min) × crash_k.
+    # v0.27 충전: 배터리가 바닥나면 crawl m/s 로만 (밀고 가듯) 간다. pack = 배터리 팩 하나로 pack_fix 만큼, 공구 창고(공용 작업대) station_range m 안에 서면
+    # 공짜로 가득.
+    'charge': {'crawl': 1.4, 'pack_fix': 0.45, 'station_range': 8.0},
     'repair': {'kit': [{'id': 'scrap_metal', 'n': 1}, {'id': 'nails', 'n': 1}], 'kit_fix': 0.4, 'shop_rate': 0.08, 'crash_min': 3.0, 'crash_k': 2.5},
     'slots': SLOTS,
     'models': MODELS,

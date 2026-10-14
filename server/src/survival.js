@@ -776,7 +776,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
         continue;
       }
-      if ((c.downUntil ?? 0) > t) continue;
+      if ((c.downUntil ?? 0) > t || cfg.creatureFreeze) continue;
       if (c.wasDown) {
         c.wasDown = false;
         changed = true;

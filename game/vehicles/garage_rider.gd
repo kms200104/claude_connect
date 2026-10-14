@@ -13,6 +13,7 @@ extends Node
 ## v0.26 차량 · 내구도 · 들이받기: 타는 동안 크리처가 차 앞 · 옆(차체 크기)에 닿으면 Net.ram — 빠르면(ram.fast) 날아가고 차는
 ##   무게 비만큼 조금 느려지고, 느리면 크리처가 넘어지며 차가 확 느려진다. 넘어진 크리처에 닿아 있는 동안은 contact_top 넘게
 ##   빨라지지 못한다 (좀보이드처럼 밟고 넘어가기 어렵다). 벽 · 나무에 세게 부딪치면(갑자기 crash_min 넘게 느려짐) Net.vehicle_crash.
+##   v0.27 배터리: 속도계 아래 "배터리 n%", 바닥나면 charge.crawl m/s 로만 (밀고 가듯). 배터리 팩(가방 '충전') · 공구 창고 곁에 서면 자동 충전.
 ##   속도계 아래 내구도, 0 이면 고장 — 내려서 "고치기"(고철 · 못) 또는 탈것 앱 정비. 부르기는 배달 로봇 또는 헬기 보급 낙하 (air).
 
 signal changed(riding: bool)
@@ -70,6 +71,9 @@ var _bob_t: float = 0.0
 var _hp_label: Label = null
 var _rammed_at: Dictionary[String, int] = {}
 var _crash_at: int = 0
+## 공구 창고 충전을 다시 청할 수 있는 시각 · 배터리 바닥 안내를 했는지.
+var _station_at: int = 0
+var _empty_told: bool = false
 
 
 func _ready() -> void:
@@ -81,6 +85,7 @@ func _ready() -> void:
 	Net.vehicles_changed.connect(_on_vehicles_changed)
 	Net.vehicle_done.connect(_on_vehicle_done)
 	Net.vehicle_hp.connect(_on_vehicle_hp)
+	Net.vehicle_charge.connect(_on_vehicle_charge)
 	if hud != null:
 		_build_hud()
 	# v0.27 동승 (친구 차 빈자리).
@@ -274,6 +279,10 @@ func _default_vehicle() -> String:
 
 
 func _on_vehicle_done(result: Dictionary) -> void:
+	if str(result.get("kind", "")) == "refuel":
+		_toast("%s 배터리 %d%%" % ["공구 창고 충전기로 가득 충전했어요!" if str(result.get("how", "")) == "station" else "배터리 팩으로 충전했어요!", roundi(float(result.get("charge", 0)) / maxf(1.0, float(result.get("max", 1))) * 100.0)], true)
+		Audio.play_sfx("kick_latch", -6.0, 1.4)
+		return
 	if str(result.get("kind", "")) == "repair":
 		_toast("고쳤어요! 내구도 %d%%%s" % [roundi(float(result.get("hp", 0)) / maxf(1.0, float(result.get("max", 1))) * 100.0), " (%s)" % Money.delta(-int(result.get("cost", 0))) if int(result.get("cost", 0)) > 0 else ""], true)
 		Audio.play_sfx("chop", -6.0, 1.2)
@@ -301,6 +310,12 @@ func _on_mount_changed(mount_wire: Dictionary) -> void:
 func _on_failed(kind: String, code: String) -> void:
 	if kind == "veh_repair":
 		_toast("고칠 재료가 모자라요 (%s)." % kit_text() if code == NetProtocol.ERR_NOT_ENOUGH_ITEMS else ("솔이 모자라요." if code == NetProtocol.ERR_NOT_ENOUGH_SOL else "고칠 수 없어요."), false)
+		return
+	if kind == "veh_refuel":
+		if code == NetProtocol.ERR_NOT_ENOUGH_ITEMS:
+			_toast("배터리 팩이 없어요.", false)
+		elif code != NetProtocol.ERR_TOO_FAR:
+			_toast("배터리가 가득해요." if code == NetProtocol.ERR_BAD_PART else "충전할 수 없어요 (탈것 곁에서).", code == NetProtocol.ERR_BAD_PART)
 		return
 	if kind == "veh_call" and code == NetProtocol.ERR_NOT_ENOUGH_SOL:
 		_toast("헬기 보급은 %s 이 들어요." % Money.short(int(GameData.garage.delivery.get("air_cost", 0))), false)
@@ -563,7 +578,9 @@ func _process(delta: float) -> void:
 	if state == State.RIDING and _gauge != null:
 		_gauge.text = ("R · %d km/h" if drive_state.speed < -0.05 else "%d km/h") % roundi(speed_kmh())
 		var health: float = Net.vehicle_health(vehicle_id)
-		_hp_label.text = "내구도 %d%%" % roundi(health * 100.0)
+		var battery: float = Net.vehicle_battery(vehicle_id)
+		_hp_label.text = "내구도 %d%%" % roundi(health * 100.0) + ("" if battery < 0.0 else " · 배터리 %d%%" % roundi(battery * 100.0))
+		_check_station()
 		_hp_label.add_theme_color_override("font_color", Color("#7EE08A") if health > 0.6 else (Color("#F2D05A") if health > 0.3 else Color("#FF6A5A")))
 
 
@@ -592,6 +609,13 @@ func drive(delta: float, move_dir: Vector3, amount: float) -> void:
 	if boat:
 		v = _keep_on_water(v, delta)
 	elif _ram_check(delta):
+		v = drive_state.forward() * drive_state.speed
+	# 배터리가 바닥나면 밀고 가듯 천천히.
+	if Net.vehicle_battery(vehicle_id) == 0.0:
+		var crawl: float = float(GameData.garage.charge.get("crawl", 1.4))
+		if absf(drive_state.speed) > crawl:
+			drive_state.speed = move_toward(drive_state.speed, signf(drive_state.speed) * crawl, 6.0 * delta)
+			drive_state.accel = minf(drive_state.accel, 0.0)
 		v = drive_state.forward() * drive_state.speed
 	player.velocity.x = v.x
 	player.velocity.z = v.z
@@ -703,6 +727,42 @@ func _ram_check(delta: float) -> bool:
 		drive_state.accel = minf(drive_state.accel, 0.0)
 		changed = true
 	return changed
+
+
+## 공구 창고(공용 작업대) 곁에 서면 공짜로 가득 충전.
+func _check_station() -> void:
+	var battery: float = Net.vehicle_battery(vehicle_id)
+	if battery < 0.0 or battery > 0.97 or absf(drive_state.speed) > 0.4 or Time.get_ticks_msec() < _station_at:
+		return
+	var range_m: float = float(GameData.garage.charge.get("station_range", 8.0)) - 1.0
+	for b: CraftingRules.Bench in GameData.crafting.benches:
+		if Vector2(b.position.x - player.global_position.x, b.position.z - player.global_position.z).length() <= range_m:
+			_station_at = Time.get_ticks_msec() + 5000
+			Net.request("veh_refuel", {"v": vehicle_id, "how": "station"})
+			return
+
+
+## 가방 "충전": 타는 탈것 (아니면 곁에 세워 둔 내 탈것) 에 배터리 팩 하나.
+func refuel_pack() -> void:
+	var id: String = vehicle_id if state == State.RIDING else (parked.nearest_own(player.global_position, RIDE_RANGE + 1.0) if parked != null else "")
+	if id.is_empty():
+		_toast("충전할 탈것 곁에서 써요 (타고 있거나 세워 둔 곁).", false)
+		return
+	if Net.vehicle_battery(id) < 0.0:
+		_toast("배터리가 없는 탈것이에요.", false)
+		return
+	Net.request("veh_refuel", {"v": id, "how": "pack"})
+
+
+func _on_vehicle_charge(info_c: Dictionary) -> void:
+	if str(info_c.get("v", "")) != vehicle_id:
+		return
+	if bool(info_c.get("empty", false)):
+		if not _empty_told:
+			_empty_told = true
+			_toast("배터리가 다 됐어요! 배터리 팩으로 충전하거나 공구 창고 곁에서 충전해요 (지금은 천천히만).", false)
+	else:
+		_empty_told = false
 
 
 func _on_vehicle_hp(info_hp: Dictionary) -> void:

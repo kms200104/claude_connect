@@ -12,6 +12,8 @@
 // v0.26 차량(car: ATV · 미니트럭) · 내구도(durability — 크리처를 들이받거나 벽에 세게 부딪치면 준다, 0 이면 고장) ·
 //   veh_repair { v, how: kit (고철 · 못, 곁에서) | shop (솔, 어디서나) } · veh_crash { s } (클라이언트가 느낀 갑작스러운 감속 m/s) ·
 //   veh_call { mode: 'air' } 보급 낙하 (헬기가 지나가며 낙하산 상자로, air_cost 솔 · air_eta_ms 뒤 도착, npc 'heli').
+// v0.27 배터리 (모델 range m — 전기 오토바이 · 차량 · 모터보트): 타고 간 거리만큼 닳고 바닥나면 걷는 빠르기까지만 (클라이언트는 crawl).
+//   veh_refuel { v, how: pack (배터리 팩 하나, 곁 · 타는 중) | station (공구 창고 곁에서 공짜로 가득) } · veh_charge { v, charge, max, empty }.
 // v0.27 동승: veh_board { p: 운전자 id } → 그 탈것의 빈자리(모델 seats)에 앉는다 (veh_seat { d, s, seat }, 방 전체 seat { id, d, s }).
 //   앉은 동안은 운전자 곁(SEAT_SLACK m)으로 오는 이동을 그대로 받는다 (빠르기 검사는 운전자 탈것 기준). veh_unboard · 운전자가 내리면 내린다.
 import { ErrorCode } from './protocol.js';
@@ -82,7 +84,11 @@ export function sanitizeVehicles(raw, rules) {
     // 세워 둔 자리 (다시 켜면 이미 도착한 것으로).
     const at = v.at && [v.at.x, v.at.z].every(Number.isFinite) ? { x: v.at.x, z: v.at.z, yaw: Number.isFinite(v.at.yaw) ? v.at.yaw : 0, t: 0, npc: '' } : null;
     const max = m.durability ?? 60;
-    out.push({ id: v.id, model: m.id, owned, fit, at, hp: Number.isFinite(v.hp) ? Math.max(0, Math.min(max, Math.round(v.hp))) : max });
+    const cmax = m.range ?? 0;
+    out.push({
+      id: v.id, model: m.id, owned, fit, at, hp: Number.isFinite(v.hp) ? Math.max(0, Math.min(max, Math.round(v.hp))) : max,
+      charge: Number.isFinite(v.charge) ? Math.max(0, Math.min(cmax, Math.round(v.charge))) : cmax,
+    });
     if (out.length >= rules.max_owned) break;
   }
   return out;
@@ -127,6 +133,23 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
   const R = rules?.repair ?? {};
   const hpOf = (v) => (Number.isFinite(v.hp) ? v.hp : durabilityOf(rules, v));
   const hpWire = (v) => ({ v: v.id, hp: hpOf(v), max: durabilityOf(rules, v) });
+  const C = rules?.charge ?? {};
+  const chargeMax = (v) => rules?.models.get(v.model)?.range ?? 0;
+  const chargeOf = (v) => (Number.isFinite(v.charge) ? v.charge : chargeMax(v));
+  const chargeWire = (v) => ({ v: v.id, charge: Math.round(chargeOf(v)), max: chargeMax(v), empty: chargeMax(v) > 0 && chargeOf(v) <= 0 });
+
+  /** 타고 간 만큼 배터리가 닳는다 (0.5% 마다 · 바닥나면 알린다). */
+  function consume(player, room, meters) {
+    const v = mountedVehicle(player);
+    if (!v || !(meters > 0) || chargeMax(v) <= 0 || chargeOf(v) <= 0) return;
+    const step = Math.max(10, chargeMax(v) * 0.005);
+    const before = Math.floor(chargeOf(v) / step);
+    v.charge = Math.max(0, chargeOf(v) - meters);
+    if (Math.floor(v.charge / step) !== before || v.charge <= 0) {
+      sendTo(player, { t: 'veh_charge', ...chargeWire(v) });
+      if (room) room.saveDirty = true;
+    }
+  }
 
   // ---- 동승 (v0.27) ----
 
@@ -214,6 +237,8 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
   function topSpeed(player) {
     const id = player.mount ?? (now() < (player.mountGraceUntil ?? 0) ? player.lastMount : null);
     const v = id ? player.profile.vehicles.find((x) => x.id === id) : null;
+    // 배터리가 바닥난 탈것은 걷는 빠르기까지만.
+    if (v && chargeMax(v) > 0 && chargeOf(v) <= 0) return 0;
     return v && rules ? vehicleStats(rules, v).top : 0;
   }
 
@@ -248,7 +273,7 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
         if (p.sol < m.price) return fail(ErrorCode.notEnoughSol);
         p.sol -= m.price;
         p.vehSeq = (p.vehSeq ?? 0) + 1;
-        const v = { id: `V${p.vehSeq}`, model: m.id, owned: [], fit: {} };
+        const v = { id: `V${p.vehSeq}`, model: m.id, owned: [], fit: {}, hp: m.durability ?? 60, charge: m.range ?? 0 };
         p.vehicles.push(v);
         send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'buy', v: v.id, model: m.id, cost: m.price, sol: p.sol });
         break;
@@ -406,6 +431,26 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
         send(ctx.ws, { t: 'veh_seat', rid: msg.rid, d: 0, s: -1 });
         return;
       }
+      case 'veh_refuel': {
+        // v0.27 충전: 배터리 팩 (곁 · 타는 중) · 공구 창고 충전기 (곁에서 공짜로 가득).
+        if (!vehicle || chargeMax(vehicle) <= 0) return fail(ErrorCode.badVehicle);
+        if (chargeOf(vehicle) >= chargeMax(vehicle)) return fail(ErrorCode.badPart);
+        const at = player.mount === vehicle.id ? { x: player.x, z: player.z } : vehicle.at && (vehicle.at.t ?? 0) <= now() ? vehicle.at : null;
+        if (!at || Math.hypot(player.x - at.x, player.z - at.z) > rideRange(kindOf(vehicle)) + 0.8) return fail(ErrorCode.notNearVehicle);
+        if (msg.how === 'station') {
+          const benches = data.crafting?.publicBenches ?? [];
+          if (!benches.some((b) => Math.hypot(at.x - b.x, at.z - b.z) <= (C.station_range ?? 8))) return fail(ErrorCode.tooFar);
+          vehicle.charge = chargeMax(vehicle);
+        } else {
+          if (countWhere(player.slots, (id) => id === 'battery_pack') < 1) return fail(ErrorCode.notEnoughItems);
+          removeWhere(player.slots, (id) => id === 'battery_pack', 1);
+          vehicle.charge = Math.min(chargeMax(vehicle), chargeOf(vehicle) + chargeMax(vehicle) * (C.pack_fix ?? 0.45));
+          sendInventory(player);
+        }
+        send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'refuel', how: msg.how === 'station' ? 'station' : 'pack', ...chargeWire(vehicle), cost: 0, sol: p.sol });
+        send(ctx.ws, { t: 'veh_charge', ...chargeWire(vehicle) });
+        break;
+      }
       case 'veh_crash': {
         // v0.26 벽 · 나무에 세게 부딪쳤다 (클라이언트가 느낀 갑작스러운 감속, 그 탈것 최고 속도까지만 믿는다).
         const mv = mountedVehicle(player);
@@ -429,7 +474,7 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
 
   /** 프로필에 싣는 차고. */
   function profileWire(profile) {
-    return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null, hp: hpOf(v), max: durabilityOf(rules, v) })) };
+    return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null, hp: hpOf(v), max: durabilityOf(rules, v), charge: Math.round(chargeOf(v)), cmax: chargeMax(v) })) };
   }
 
   /** 방에 지금 동승한 사람 [{ id, d, s }] (welcome). */
@@ -437,5 +482,5 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
     return [...room.players.values()].filter((p) => p.passenger).map((p) => ({ id: p.id, ...seatWire(p) }));
   }
 
-  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat, mounted, damage, unboard, driverOf, passengerMove, seatsWire };
+  return { consume, handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat, mounted, damage, unboard, driverOf, passengerMove, seatsWire };
 }

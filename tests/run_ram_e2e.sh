@@ -11,8 +11,8 @@ trap cleanup EXIT
 
 NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (1380 - NOW_MIN + 1440) % 1440 ))
-(cd "$ROOT/server" && CLOCK_OFFSET_MIN="$OFFSET" PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=1500 WORLD_TIME_SCALE=1 CREATURE_SPAWN_SCALE=0.15 WEATHER_FORCE=clear \
-  START_SOL=30000000 START_ITEMS=first_aid_kit:2 VEHICLE_ETA_MS=5000 EVENT_FORCE=none QUEST_CHANCE=0 MESSENGER_CHECK_MS=600000 NPC_APPROACH_SCALE=0 exec node src/index.js >"$DIR/server.log" 2>&1) &
+(cd "$ROOT/server" && CLOCK_OFFSET_MIN="$OFFSET" PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=1500 WORLD_TIME_SCALE=1 CREATURE_SPAWN_SCALE=0.15 CREATURE_FREEZE=1 WEATHER_FORCE=clear \
+  START_SOL=30000000 START_ITEMS=first_aid_kit:2,battery_pack:1 VEHICLE_ETA_MS=5000 EVENT_FORCE=none QUEST_CHANCE=0 MESSENGER_CHECK_MS=600000 NPC_APPROACH_SCALE=0 exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1
 
@@ -20,7 +20,7 @@ if [ -n "${SHOTS:-}" ]; then
   mkdir -p "$SHOTS"
   xvfb-run -a -s "-screen 0 ${SCREEN:-1080x1920x24}" "$GODOT" --path "$ROOT" --rendering-driver vulkan --rendering-method mobile ${GODOT_ARGS:-} res://tests/ram_e2e.tscn -- --server="ws://127.0.0.1:$PORT" --shots="$SHOTS" >"$DIR/client.log" 2>&1
 else
-  RAM_DEBUG=${RAM_DEBUG:-} timeout "${CLIENT_TIMEOUT:-200}" "$GODOT" --headless --path "$ROOT" res://tests/ram_e2e.tscn -- --server="ws://127.0.0.1:$PORT" >"$DIR/client.log" 2>&1
+  RAM_DEBUG=${RAM_DEBUG:-} timeout "${CLIENT_TIMEOUT:-300}" "$GODOT" --headless --path "$ROOT" res://tests/ram_e2e.tscn -- --server="ws://127.0.0.1:$PORT" >"$DIR/client.log" 2>&1
 fi
 RC=$?
 grep -hE "^\[ram\]|^\[dbg\]|SCRIPT ERROR|ERROR:|at: " "$DIR/client.log" | grep -v VK_KHR | head -80

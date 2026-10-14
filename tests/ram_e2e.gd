@@ -96,8 +96,30 @@ func _nearest_creature(at: Vector3, skip: Dictionary) -> String:
 
 
 ## 크리처 쪽으로 몬다 (amount = 조이스틱 세기). 들이받으면 그 결과, 시간이 다 되면 빈 사전.
+## 가장 가까운 (서 있는) 크리처에서 11m 넘게 물러나 선 뒤 그쪽을 본다 (CREATURE_FREEZE — 크리처가 걷지 않는다).
+func _back_off(player: Player, skip: Dictionary) -> String:
+	var drive: VehicleDrive = player.garage_ride.drive_state
+	var field: CreatureField = _village.get_node("Survival").creatures
+	var id: String = _nearest_creature(player.global_position, skip)
+	if id.is_empty():
+		return ""
+	var at: Vector3 = field.actor_position(id)
+	var away: Vector3 = ((player.global_position - at) * Vector3(1, 0, 1)).normalized()
+	if player.global_position.distance_to(at) < 11.0:
+		drive.yaw = atan2(-away.x, -away.z)
+		player.joystick.output = _stick_toward(away)
+		await _wait_until(func() -> bool: return player.global_position.distance_to(at) >= 12.0, 6.0)
+	player.joystick.output = _stick_toward(-drive.forward())
+	await _wait_until(func() -> bool: return absf(drive.speed) < 0.2, 4.0)
+	player.joystick.output = Vector2.ZERO
+	var to: Vector3 = ((field.actor_position(id) - player.global_position) * Vector3(1, 0, 1)).normalized()
+	drive.yaw = atan2(-to.x, -to.z)
+	await get_tree().create_timer(0.2).timeout
+	return id
+
+
 ## max_speed 를 넘으면 손을 뗀다 (천천히 닿기).
-func _drive_into(player: Player, amount: float, timeout_s: float, skip: Dictionary, max_speed: float = INF) -> Dictionary:
+func _drive_into(player: Player, amount: float, timeout_s: float, skip: Dictionary, max_speed: float = INF, only: String = "") -> Dictionary:
 	var got: Array = [{}]
 	var on_ram: Callable = func(info: Dictionary) -> void: got[0] = info
 	Net.rammed.connect(on_ram)
@@ -107,13 +129,13 @@ func _drive_into(player: Player, amount: float, timeout_s: float, skip: Dictiona
 	while (got[0] as Dictionary).is_empty() and waited < timeout_s:
 		# 벽에 막혀 못 나아가면 조금 물러선다.
 		var ds: VehicleDrive = player.garage_ride.drive_state
-		stuck = stuck + get_process_delta_time() if absf(ds.speed) < 0.6 and player.joystick.output.length() > 0.3 else 0.0
-		if stuck > 1.5:
+		stuck = stuck + get_process_delta_time() if max_speed == INF and absf(ds.speed) < 0.6 and player.joystick.output.length() > 0.3 else 0.0
+		if stuck > 2.5:
 			player.joystick.output = _stick_toward(-ds.forward())
 			await get_tree().create_timer(1.2).timeout
 			ds.yaw = _open_yaw(player)
 			stuck = 0.0
-		var id: String = _nearest_creature(player.global_position, skip)
+		var id: String = only if not only.is_empty() and Net.creatures.has(only) else _nearest_creature(player.global_position, skip)
 		if not id.is_empty():
 			var at: Vector3 = field.actor_position(id)
 			var dir: Vector3 = ((at if at != Vector3.INF else player.global_position) - player.global_position) * Vector3(1, 0, 1)
@@ -127,7 +149,12 @@ func _drive_into(player: Player, amount: float, timeout_s: float, skip: Dictiona
 				elif build_up:
 					player.joystick.output = _stick_toward(drive.forward())
 				else:
-					player.joystick.output = _stick_toward(dir.normalized()) * amount
+					# 뒤쪽이면 브레이크가 걸리지 않게 옆으로 밀어 크게 돈다 (U 턴).
+					var want: Vector3 = dir.normalized()
+					var diff: float = drive.forward().signed_angle_to(want, Vector3.UP)
+					if absf(diff) > 1.6 and drive.speed > 0.5:
+						want = drive.forward().rotated(Vector3.UP, signf(diff) * 1.3)
+					player.joystick.output = _stick_toward(want) * amount
 		await get_tree().process_frame
 		waited += get_process_delta_time()
 		if not OS.get_environment("RAM_DEBUG").is_empty() and Engine.get_process_frames() % 30 == 0:
@@ -205,7 +232,8 @@ func _run() -> void:
 	var hard: Dictionary = {}
 	var before_speed: float = 0.0
 	for attempt: int in 6:
-		hard = await _drive_into(player, 1.0, 10.0, skip)
+		var aim: String = await _back_off(player, skip)
+		hard = await _drive_into(player, 1.0, 8.0, skip, INF, aim)
 		if not hard.is_empty() and bool(hard.get("hard", false)):
 			break
 		if not hard.is_empty():
@@ -218,7 +246,7 @@ func _run() -> void:
 	await _shot("ram_hit")
 	_check(await _wait_until(func() -> bool: return Net.vehicle_health(id) < 1.0, 2.0), "트럭 내구도가 조금 줄었다 (%d%%)" % roundi(Net.vehicle_health(id) * 100.0))
 	var health_label: Label = _village.get_node("HUD").find_child("VehicleHealth", true, false) as Label
-	_check(health_label != null and health_label.visible and health_label.text.begins_with("내구도"), "속도계 아래 내구도 '%s'" % (health_label.text if health_label != null else "-"))
+	_check(health_label != null and health_label.visible and health_label.text.begins_with("내구도") and health_label.text.contains("배터리"), "속도계 아래 내구도 · 배터리 '%s'" % (health_label.text if health_label != null else "-"))
 	var landed: Array = [Vector3.INF]
 	await _wait_until(func() -> bool:
 		if not Net.creatures.has(victim):
@@ -239,8 +267,11 @@ func _run() -> void:
 	player.joystick.output = Vector2.ZERO
 	skip[victim] = true
 	var soft: Dictionary = {}
-	for attempt: int in 4:
-		soft = await _drive_into(player, 0.4, 14.0, skip, 2.4)
+	for attempt: int in 6:
+		var aim_soft: String = await _back_off(player, skip)
+		soft = await _drive_into(player, 0.5, 18.0, skip, 2.2, aim_soft)
+		if OS.get_environment("RAM_DEBUG") != "":
+			print("[dbg] soft try %d → %s" % [attempt, str(soft)])
 		if not soft.is_empty() and not bool(soft.get("hard", true)):
 			break
 		if not soft.is_empty():
@@ -253,4 +284,21 @@ func _run() -> void:
 	player.joystick.output = Vector2.ZERO
 	rider.dismount()
 	_check(await _wait_until(func() -> bool: return not rider.is_active(), 3.0), "내렸다")
+	# ---- v0.27 배터리 팩으로 충전 (달린 만큼 닳았다) ----
+	var before: float = Net.vehicle_battery(id)
+	_check(before > 0.0 and before < 1.0, "달린 만큼 배터리가 닳았다 (%.1f%%)" % (before * 100.0))
+	var bag: InventoryWindow = _village.get_node("HUD/InventoryWindow")
+	var slot: int = -1
+	for i: int in Net.inventory.size():
+		if Net.inventory[i] != null and Net.inventory[i].id == "battery_pack":
+			slot = i
+	bag.open()
+	await get_tree().process_frame
+	bag.press_slot(slot)
+	await get_tree().process_frame
+	var use: Button = bag.find_child("UseButton", true, false) as Button
+	_check(use.visible and use.text == "탈것 충전", "가방 배터리 팩 '%s'" % use.text)
+	use.pressed.emit()
+	_check(await _wait_until(func() -> bool: return Net.vehicle_battery(id) > before + 0.001, 3.0) or before > 0.99, "배터리 팩으로 충전 (%.1f%% → %.1f%%)" % [before * 100.0, Net.vehicle_battery(id) * 100.0])
+	bag.close()
 	_finished = true

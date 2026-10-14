@@ -26,6 +26,8 @@ signal vehicle_done(result: Dictionary)
 signal vehicle_hp(info: Dictionary)
 ## v0.27 동승: 누가 친구 차에 탔다 · 내렸다 (Net.seats).
 signal seat_changed(player_id: int)
+## v0.27 탈것 배터리가 바뀜 { v, charge, max, empty }.
+signal vehicle_charge(info: Dictionary)
 signal rammed(info: Dictionary)
 ## v0.20 폰다운 기능: 솔걸음 보상 결과 (steps_ok: today, got, reward, sol) · 재난문자 (alert: id, level, sender, text, at, late) ·
 ## 민방위 훈련 (drill: on, shelter{name,x,z,r}, until, done) · 대피 보상 (drill_done: reward, sol).
@@ -942,6 +944,12 @@ func _handle_text(text: String) -> void:
 		"veh_hp":
 			_set_vehicle_hp(msg)
 			vehicle_hp.emit(msg)
+		"veh_charge":
+			var cv: Dictionary = vehicle(str(msg.get("v", "")))
+			if not cv.is_empty():
+				cv["charge"] = int(msg.get("charge", 0))
+				cv["cmax"] = int(msg.get("max", 0))
+			vehicle_charge.emit(msg)
 		"rammed":
 			rammed.emit(msg)
 		"seat", "veh_seat":
@@ -1779,6 +1787,18 @@ func ram(creature_id: String, speed: float, heading: Vector3) -> void:
 func vehicle_crash(drop: float) -> void:
 	if state == State.ONLINE:
 		_request("veh_crash", {"s": snappedf(drop, 0.01)})
+
+
+## 탈것 배터리 (0~1, 배터리가 없는 탈것이면 -1).
+func vehicle_battery(id: String) -> float:
+	var v: Dictionary = vehicle(id)
+	var cmax: float = float(v.get("cmax", 0))
+	if cmax <= 0.0:
+		var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
+		cmax = m.range if m != null else 0.0
+	if cmax <= 0.0:
+		return -1.0
+	return clampf(float(v.get("charge", cmax)) / cmax, 0.0, 1.0)
 
 
 ## 탈것 내구도 (없으면 가득 = 1.0).

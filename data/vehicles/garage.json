@@ -49,6 +49,11 @@
    "park_range": 5.0
   }
  },
+ "charge": {
+  "crawl": 1.4,
+  "pack_fix": 0.45,
+  "station_range": 8.0
+ },
  "repair": {
   "kit": [
    {
@@ -183,6 +188,7 @@
      0.42
     ]
    },
+   "range": 0,
    "mass": 90,
    "durability": 40
   },
@@ -253,6 +259,7 @@
      0.38
     ]
    },
+   "range": 0,
    "mass": 90,
    "durability": 40
   },
@@ -324,6 +331,7 @@
      0.42
     ]
    },
+   "range": 0,
    "mass": 90,
    "durability": 40
   },
@@ -394,6 +402,7 @@
      0.42
     ]
    },
+   "range": 0,
    "mass": 90,
    "durability": 40
   },
@@ -469,6 +478,7 @@
      -0.1
     ]
    },
+   "range": 4000,
    "mass": 190,
    "durability": 90
   },
@@ -544,6 +554,7 @@
      -0.1
     ]
    },
+   "range": 5000,
    "mass": 190,
    "durability": 90
   },
@@ -619,6 +630,7 @@
      -0.1
     ]
    },
+   "range": 6000,
    "mass": 190,
    "durability": 90
   },
@@ -690,6 +702,7 @@
      1.4
     ]
    },
+   "range": 0,
    "mass": 400,
    "durability": 120
   },
@@ -761,6 +774,7 @@
      1.9
     ]
    },
+   "range": 3000,
    "mass": 400,
    "durability": 120
   },
@@ -832,6 +846,7 @@
      1.2
     ]
    },
+   "range": 2500,
    "mass": 400,
    "durability": 120
   },
@@ -907,7 +922,8 @@
      0.72,
      0.72
     ]
-   }
+   },
+   "range": 3500
   },
   {
    "id": "car_truck",
@@ -986,7 +1002,8 @@
      0.9,
      1.2
     ]
-   }
+   },
+   "range": 4500
   }
  ],
  "parts": [

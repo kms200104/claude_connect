@@ -58,7 +58,7 @@ describe('v19 차고 탈것 규칙', () => {
       { id: 'V2', model: 'jet_ski', owned: [], fit: {} },
       { id: 'V1', model: 'bike_road', owned: [], fit: {} },
     ], rules);
-    assert.deepEqual(out, [{ id: 'V1', model: 'bike_city', owned: ['paint_mint'], fit: { paint: 'paint_mint' }, at: null, hp: rules.models.get('bike_city').durability }]);
+    assert.deepEqual(out, [{ id: 'V1', model: 'bike_city', owned: ['paint_mint'], fit: { paint: 'paint_mint' }, at: null, hp: rules.models.get('bike_city').durability, charge: 0 }]);
     const parked = sanitizeVehicles([{ id: 'V2', model: 'moto_sport', owned: [], fit: {}, at: { x: 3, z: 4, yaw: 1, t: 999999, npc: 'rara' } }], rules);
     assert.deepEqual(parked[0].at, { x: 3, z: 4, yaw: 1, t: 0, npc: '' }, '세워 둔 자리는 남고, 다시 켜면 이미 도착한 것으로');
   });
@@ -214,7 +214,7 @@ describe('v19 차고 탈것 사기 · 꾸미기 · 타기', () => {
     assert.equal(bought.cost, 6890000);
     assert.equal(bought.sol, 12000000 - 6890000);
     const prof = await a.next((m) => m.t === 'profile' && m.vehicles?.length === 1, 2000);
-    assert.deepEqual(prof.vehicles, [{ id: bought.v, model: 'moto_sport', owned: [], fit: {}, at: null, hp: 90, max: 90 }]);
+    assert.deepEqual(prof.vehicles, [{ id: bought.v, model: 'moto_sport', owned: [], fit: {}, at: null, hp: 90, max: 90, charge: 6000, cmax: 6000 }]);
     assert.equal((await ask(a, { t: 'veh_buy', model: 'moto_sport' })).code, 'not_enough_sol', '두 대째는 돈이 모자란다');
 
     const v = bought.v;

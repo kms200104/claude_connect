@@ -1879,6 +1879,7 @@ export function createServer(overrides = {}) {
       case 'veh_crash':
       case 'veh_board':
       case 'veh_unboard':
+      case 'veh_refuel':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       case 'steps':
         return safety.handleSteps(ctx, msg, fail);
@@ -1949,6 +1950,8 @@ export function createServer(overrides = {}) {
       corrected = true;
     }
 
+    // v0.27 타고 간 만큼 배터리가 닳는다.
+    if (player.mount) garage.consume(player, room, Math.hypot(tx - player.x, tz - player.z));
     player.x = tx;
     player.y = ty;
     player.z = tz;
@@ -2106,6 +2109,7 @@ export function createServer(overrides = {}) {
       case 'veh_crash':
       case 'veh_board':
       case 'veh_unboard':
+      case 'veh_refuel':
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':
