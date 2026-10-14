@@ -45,7 +45,7 @@ func _ready() -> void:
 				continue
 			await _shoot(r.id, DishArt.mesh(r.id), Vector3(0.0, 1.0, 0.85), DishArt.ICON_DIR)
 			count += 1
-	# 이벤트 그림: 선물 풍선 (assets/ui/icons/gift.png).
+	# 이벤트 그림: 협회 보급품 꾸러미 (assets/ui/icons/gift.png).
 	if only.is_empty() or "gift" in only:
 		await _shoot("gift", DropField.gift_mesh(0), Vector3(0.5, 0.35, 1.0), "res://assets/ui/icons")
 		count += 1

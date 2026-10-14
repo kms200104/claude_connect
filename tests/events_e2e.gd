@@ -1,7 +1,7 @@
 extends Node
-## 이벤트 종단 테스트 (서버 둘: 떠돌이 상인의 날 / 선물 풍선의 날, 둘 다 한낮으로 맞춤).
-##   A. 떠돌이 상인: 이벤트 칩·알림판 → 광장에 노점 → 목재를 베어 누리에게 2배 값에 팔기 → 보따리 물건 사기
-##   B. 선물 풍선: 선물이 내려앉음 → 가까이 가서 줍기 · 나무를 쓰러뜨리면 넘어지는 연출 ·
+## 이벤트 종단 테스트 (서버 둘: 암시장 상인의 날 / 협회 보급 투하, 둘 다 한낮으로 맞춤).
+##   A. 암시장 상인: 이벤트 칩·알림판 → 광장에 노점 → 목재를 베어 누리에게 2배 값에 팔기 → 보따리 물건 사기
+##   B. 보급 투하: 보급품 꾸러미가 내려앉음 → 가까이 가서 줍기 · 나무를 쓰러뜨리면 넘어지는 연출 ·
 ##      상점 문으로 걸어 들어가고 걸어 나오기 (문 밖 허공으로 빠져나가지 않음)
 ## tests/run_events_e2e.sh 가 서버를 띄운다. 인자: -- --server-a=ws://… --server-b=ws://…
 
@@ -88,8 +88,8 @@ func _merchant_day() -> void:
 	await Net.welcomed
 	_check(Net.event_active(EventInfo.MERCHANT) != null, "서버가 정한 오늘의 이벤트: 떠돌이 상인")
 	await get_tree().process_frame
-	_check(event_hud.chip_text() == "떠돌이 상인 누리", "위쪽에 이벤트 칩 (%s)" % event_hud.chip_text())
-	_check(event_hud.banner_text() == "떠돌이 상인 누리", "들어오면 이벤트 알림판이 내려옴")
+	_check(event_hud.chip_text() == "암시장 상인 누리", "위쪽에 이벤트 칩 (%s)" % event_hud.chip_text())
+	_check(event_hud.banner_text() == "암시장 상인 누리", "들어오면 이벤트 알림판이 내려옴")
 	event_hud.toggle_card()
 	_check(" ".join(event_hud.card_lines()).contains("목재"), "칩을 누르면 오늘 찾는 물건(목재 ×2)이 보임")
 	event_hud.toggle_card()
@@ -122,9 +122,9 @@ func _merchant_day() -> void:
 	_check(shop_window.row_count() == GameData.event_info(EventInfo.MERCHANT).stock.size(), "보따리 물건 %d가지" % shop_window.row_count())
 	traded.clear()
 	Net.shop_traded.connect(func(kind: String, item: String, n: int, amount: int) -> void: traded.append([kind, item, n, amount]), CONNECT_ONE_SHOT)
-	Net.buy_item("toy_windmill", 1, ShopWindow.AT_MERCHANT)
-	_check(await _wait_until(func() -> bool: return _count("toy_windmill") == 1, 3.0), "바람개비를 삼")
-	_check(Net.sol == sol_before + price - GameData.item("toy_windmill").buy_price, "솔 계산 (%d)" % Net.sol)
+	Net.buy_item("first_aid_kit", 1, ShopWindow.AT_MERCHANT)
+	_check(await _wait_until(func() -> bool: return _count("first_aid_kit") == 1, 3.0), "구급상자를 삼")
+	_check(Net.sol == sol_before + price - GameData.item("first_aid_kit").buy_price, "솔 계산 (%d)" % Net.sol)
 	shop_window.close()
 	await _advance_until_closed(box, dialogue)
 	_check(not dialogue.is_active() and not player.is_input_locked(), "대화가 끝나면 다시 움직임")
@@ -140,18 +140,18 @@ func _gift_day() -> void:
 
 	Net.create_room(_servers["b"])
 	await Net.welcomed
-	_check(Net.event_active(EventInfo.GIFT_DAY) != null and not merchant.is_open(), "다른 마을: 선물 풍선의 날 (상인은 없음)")
-	_check(await _wait_until(func() -> bool: return not Net.drops.is_empty(), 5.0), "선물 풍선이 내려앉음")
+	_check(Net.event_active(EventInfo.GIFT_DAY) != null and not merchant.is_open(), "다른 마을: 협회 보급 투하 (상인은 없음)")
+	_check(await _wait_until(func() -> bool: return not Net.drops.is_empty(), 5.0), "보급품 꾸러미가 내려앉음")
 	var drop: DropInfo = Net.drops.values()[0]
-	_check(drops.has_drop(drop.id), "선물 상자가 보임")
+	_check(drops.has_drop(drop.id), "보급품 상자가 보임")
 	player.global_position = drop.position + Vector3(0.8, 0.1, 0.0)
-	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.COLLECT and interaction.target_id == drop.id, 2.0), "선물 곁에서 '선물 줍기'")
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.COLLECT and interaction.target_id == drop.id, 2.0), "보급품 곁에서 '보급품 줍기'")
 	var got: Array = []
 	Net.collected.connect(func(kind: String, item: String) -> void: got.append([kind, item]), CONNECT_ONE_SHOT)
 	interaction.action_hud.action_pressed.emit()
-	_check(await _wait_until(func() -> bool: return not got.is_empty(), 3.0), "선물을 주움: %s" % str(got))
-	_check(not got.is_empty() and _count(got[0][1]) >= 1, "선물 속 물건이 가방에")
-	_check(await _wait_until(func() -> bool: return not drops.has_drop(drop.id), 2.0), "주운 선물은 사라짐")
+	_check(await _wait_until(func() -> bool: return not got.is_empty(), 3.0), "보급품을 주움: %s" % str(got))
+	_check(not got.is_empty() and _count(got[0][1]) >= 1, "꾸러미 속 물건이 가방에")
+	_check(await _wait_until(func() -> bool: return not drops.has_drop(drop.id), 2.0), "주운 보급품은 사라짐")
 
 	# 나무를 쓰러뜨리면 넘어지는 연출이 나온다.
 	var tree_id: String = "t24"

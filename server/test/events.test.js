@@ -99,11 +99,11 @@ describe('마을 이벤트', () => {
     assert.equal(sold.amount, 12000, '목재 6,000솔 × 2');
   });
 
-  it('떠돌이 상인: 곁에서만, 찾는 물건만 2배로 사고, 귀한 물건을 판다', async () => {
+  it('암시장 상인: 곁에서만, 찾는 물건만 2배로 사고, 생존 장비를 판다', async () => {
     const { server, c, welcome } = await start({ eventForce: 'merchant', eventWanted: 'wood', startSol: 500000 });
     const merchant = welcome.ev.list.find((e) => e.id === 'merchant');
     assert.deepEqual(merchant.wanted, ['wood']);
-    assert.ok(merchant.stock.includes('star_lamp'));
+    assert.ok(merchant.stock.includes('first_aid_kit'));
     await chopOnce(server, c);
     c.send({ t: 'shop_sell', rid: newRid(), slot: 5, n: 1, at: 'merchant' });
     assert.equal((await c.type('error')).code, 'merchant_away', '멀리서는 안 된다');
@@ -114,14 +114,14 @@ describe('마을 이벤트', () => {
     c.send({ t: 'shop_sell', rid: newRid(), slot: 5, n: 1, at: 'merchant' });
     const sold = await c.type('shop_result');
     assert.deepEqual({ amount: sold.amount, at: sold.at }, { amount: 12000, at: 'merchant' });
-    c.send({ t: 'shop_buy', rid: newRid(), item: 'star_lamp', n: 1, at: 'merchant' });
+    c.send({ t: 'shop_buy', rid: newRid(), item: 'first_aid_kit', n: 1, at: 'merchant' });
     const bought = await c.type('shop_result');
-    assert.deepEqual({ item: bought.item, sol: bought.sol }, { item: 'star_lamp', sol: 500000 + 12000 - 300000 });
+    assert.deepEqual({ item: bought.item, sol: bought.sol }, { item: 'first_aid_kit', sol: 500000 + 12000 - 30000 });
     c.send({ t: 'shop_buy', rid: newRid(), item: 'sofa', n: 1, at: 'merchant' });
     assert.equal((await c.type('error')).code, 'not_for_sale');
   });
 
-  it('나무꾼의 날: 한 번 찍으면 두 개', async () => {
+  it('바리케이드 자재 지원: 한 번 찍으면 두 개', async () => {
     const { server, c, welcome } = await start({ eventForce: 'lumber_day' });
     assert.deepEqual(welcome.ev.list, [{ id: 'lumber_day' }]);
     const result = await chopOnce(server, c);
@@ -130,7 +130,7 @@ describe('마을 이벤트', () => {
     assert.deepEqual(inv.slots[5], { id: 'wood', n: 2 });
   });
 
-  it('낚시 대회: 낚을 때마다 상금', async () => {
+  it('변이어 포획 작전: 낚을 때마다 수당', async () => {
     const { c } = await start({ eventForce: 'fishing_derby' });
     await moveTo(c, -42.6, 35.4); // 서쪽 연못 동쪽 물가
     const r = newRid();
@@ -144,11 +144,11 @@ describe('마을 이벤트', () => {
     assert.equal(prof.sol, 4000);
   });
 
-  it('선물 풍선의 날: 선물이 떨어지고, 가까이 가야 주울 수 있다', async () => {
+  it('협회 보급 투하: 보급품이 떨어지고, 가까이 가야 주울 수 있다', async () => {
     const { c } = await start({ eventForce: 'gift_day', eventSpawnScale: 0.001 });
     const dropped = await c.type('drop', 3000);
     assert.equal(dropped.d.kind, 'gift');
-    assert.equal(dropped.d.item, undefined, '선물 속은 주울 때까지 비밀');
+    assert.equal(dropped.d.item, undefined, '꾸러미 속은 주울 때까지 비밀');
     await moveTo(c, dropped.d.x + 8, dropped.d.z);
     c.send({ t: 'collect', rid: newRid(), id: dropped.d.id });
     assert.equal((await c.type('error')).code, 'no_drop');
@@ -160,10 +160,10 @@ describe('마을 이벤트', () => {
     await c.next((m) => m.t === 'drop_gone' && m.id === dropped.d.id && m.by === 1);
   });
 
-  it('유성우: 맑은 밤에 별 조각이 떨어진다', async () => {
+  it('마나 유성우: 맑은 밤에 마나 결정 조각이 떨어진다', async () => {
     const { welcome, c } = await start({ eventForce: 'meteor_shower', eventSpawnScale: 0.001 }, 22);
     const dropped = welcome.drops.length > 0 ? { d: welcome.drops[0] } : await c.type('drop', 3000);
-    assert.deepEqual({ kind: dropped.d.kind, item: dropped.d.item }, { kind: 'star', item: 'star_fragment' });
+    assert.deepEqual({ kind: dropped.d.kind, item: dropped.d.item }, { kind: 'star', item: 'mana_shard' });
     const ev = welcome.ev.list.length > 0 ? welcome.ev : await c.type('ev', 3000);
     assert.deepEqual(ev.list.map((e) => e.id), ['meteor_shower']);
   });

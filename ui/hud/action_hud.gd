@@ -22,8 +22,8 @@ const ICONS: Dictionary[String, String] = {
 	"들어가기": "res://assets/ui/icons/shop.png",
 	"나가기": "res://assets/ui/icons/shop.png",
 	"줍기": "res://assets/icons/items/log_stool.png",
-	"선물 줍기": "res://assets/ui/icons/gift.png",
-	"별 줍기": "res://assets/icons/items/star_fragment.png",
+	"보급품 줍기": "res://assets/ui/icons/gift.png",
+	"마나 조각 줍기": "res://assets/icons/items/mana_shard.png",
 }
 
 

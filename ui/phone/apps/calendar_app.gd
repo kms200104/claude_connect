@@ -1,6 +1,6 @@
 class_name CalendarApp
 extends PhoneApp
-## 날씨 · 달력 (v16): 오늘과 내일 날씨(3시간 칸), 이번 주(이레) 마을 이벤트(낚시 대회 · 나무꾼의 날 …) · 유성우 · 생일.
+## 날씨 · 달력 (v16): 오늘과 내일 날씨(3시간 칸), 이번 주(이레) 마을 이벤트(변이어 포획 · 자재 지원 …) · 마나 유성우 · 생일.
 ## 앞날 날씨와 이벤트는 마을 시드로 정해지는 값이라 서버가 미리 계산해 보내 준다 (cal_info).
 
 const BLOCK_HOURS: PackedInt32Array = [0, 3, 6, 9, 12, 15, 18, 21]
@@ -123,7 +123,7 @@ func _day_events(col: VBoxContainer, d: Dictionary, ink: Color, soft: Color, det
 	if bool(d["meteor"]):
 		var weather: PackedStringArray = d["weather"]
 		var clear_night: bool = weather.size() >= 8 and weather[7] == "clear"
-		col.add_child(label("✨ 유성우가 올지도 몰라요%s" % (" (밤에 맑음!)" if clear_night else " (밤에 맑아야 보여요)"), 26, ink))
+		col.add_child(label("✨ 마나 유성우가 올지도 몰라요%s" % (" (밤에 맑음!)" if clear_night else " (밤에 맑아야 보여요)"), 26, ink))
 	for name_text: String in _birthday_names(d):
 		col.add_child(label("🎂 %s 생일" % name_text, 26, ink))
 
@@ -155,7 +155,7 @@ func _week_row(d: Dictionary, index: int) -> Control:
 	if ev != null:
 		extras.append(_hours_text(ev.hours))
 	if bool(d["meteor"]):
-		extras.append("✨ 유성우")
+		extras.append("✨ 마나 유성우")
 	for n: String in _birthday_names(d):
 		extras.append("🎂 %s" % n)
 	if not extras.is_empty():

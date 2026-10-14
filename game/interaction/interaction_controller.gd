@@ -80,7 +80,7 @@ func _ready() -> void:
 	Net.request_failed.connect(_on_request_failed)
 	Net.furniture_placed.connect(_on_furniture_placed)
 	Net.collected.connect(_on_collected)
-	Net.fish_bonus.connect(func(amount: int) -> void: toast_hud.show_toast("낚시 대회 상금 %s!" % Money.delta(amount), true))
+	Net.fish_bonus.connect(func(amount: int) -> void: toast_hud.show_toast("포획 수당 %s!" % Money.delta(amount), true))
 	Net.planted.connect(_on_planted)
 	Net.npc_greeted.connect(_on_npc_greeted)
 	Net.flower_picked.connect(func(item_id: String) -> void: toast_hud.show_toast("%s을(를) 땄어요" % GameData.item_name(item_id), true))
@@ -391,10 +391,10 @@ func _collect_label(drop_id: String) -> String:
 		DropInfo.KIND_ITEM:
 			return "줍기"
 		DropInfo.KIND_GIFT:
-			return "선물 줍기"
+			return "보급품 줍기"
 		DropInfo.KIND_FORAGE:
 			return "채집"
-	return "별 줍기"
+	return "마나 조각 줍기"
 
 
 ## 캐릭터 앞 땅, 0.5m 격자 (서버가 맞추는 자리와 같다).
