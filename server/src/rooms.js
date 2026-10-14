@@ -438,6 +438,8 @@ export class Room {
     }
     room.tiles = sanitizeTiles(world.tiles, data.dig?.max_tiles ?? 400);
     room.looted = Object.fromEntries(Object.entries(world.looted ?? {}).filter(([id, until]) => data.survival?.containers.has(id) && Number.isFinite(until)));
+    room.boards = Object.fromEntries(Object.entries(world.boards ?? {}).filter(([key, hp]) => data.survival?.breaches.has(key) && Number.isInteger(hp) && hp > 0)
+      .map(([key, hp]) => [key, Math.min(hp, data.survival.breaches.get(key).max)]));
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
     for (const h of Array.isArray(world.households) ? world.households : []) {
       const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
@@ -497,6 +499,8 @@ export class Room {
         groundSeq: this.groundSeq,
         // v0.23 뒤진 빈집 가구 → 다시 차는 세상 시각 (ms).
         looted: { ...(this.looted ?? {}) },
+        // v0.24 빈집 현관 · 깨진 창에 댄 판자 ("집:자리" → 남은 hp).
+        boards: { ...(this.boards ?? {}) },
       },
       profiles,
     };

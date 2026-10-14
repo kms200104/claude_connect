@@ -33,6 +33,21 @@ WALLS = [
     # 침실 / 욕실 (x = 2.0)
     [[2.0, -4], [2.0, 0]],
 ]
+# v0.24 뚫린 곳 (판자로 막을 수 있는 자리): 현관 + 창 5개 (로컬 가운데 · 바깥쪽 n). 집마다 창 2개는 깨져 있다 (broken).
+# 막지 않은 현관 · 깨진 창으로 크리처가 들어온다.
+OPENINGS = [
+    {"id": "door", "kind": "door", "lx": -3.0, "lz": 4.0, "nx": 0, "nz": 1},
+    {"id": "w1", "kind": "window", "lx": 1.6, "lz": 4.0, "nx": 0, "nz": 1},
+    {"id": "w2", "kind": "window", "lx": -2.0, "lz": -4.0, "nx": 0, "nz": -1},
+    {"id": "w3", "kind": "window", "lx": 2.8, "lz": -4.0, "nx": 0, "nz": -1},
+    {"id": "w4", "kind": "window", "lx": -5.0, "lz": 2.0, "nx": -1, "nz": 0},
+    {"id": "w5", "kind": "window", "lx": 5.0, "lz": -2.0, "nx": 1, "nz": 0},
+]
+# 안쪽 방 (앞방이 아닌 곳): 크리처가 방 사이를 문틈(door, 로컬)으로만 지나다니게. 문틈 앞(+z)이 앞방.
+ROOMS = [
+    {"id": "bed", "x0": -5.0, "x1": 2.0, "z0": -4.0, "z1": 0.0, "door": [-0.65, 0.0]},
+    {"id": "bath", "x0": 2.0, "x1": 5.0, "z0": -4.0, "z1": 0.0, "door": [3.05, 0.0]},
+]
 WALL_COLORS = ["#E8DCC6", "#D9CDB4", "#EFE6D6", "#CDBFA6", "#E2D2B8", "#D6CCC0"]
 ROOF_COLORS = ["#4F7FA8", "#B8573E", "#5E8A5A", "#8A6A9A", "#C98B3A", "#5B6670"]
 
@@ -57,18 +72,24 @@ def main() -> None:
             for i, (kind, lx, lz, lyaw) in enumerate(CONTAINERS):
                 wx, wz = world(hx, hz, yaw, lx, lz)
                 cont.append({"id": "%s_%d" % (hid, i + 1), "kind": kind, "x": wx, "z": wz, "lx": lx, "lz": lz, "yaw": round(lyaw, 4)})
+            wall, roof = rng.choice(WALL_COLORS), rng.choice(ROOF_COLORS)
+            rng.random()  # (예전 boarded 자리 — 뒤 집들의 자리가 바뀌지 않게 하나 버린다)
+            broken = sorted(random.Random(hid).sample([o["id"] for o in OPENINGS if o["kind"] == "window"], 2))
             houses.append({
                 "id": hid, "x": round(hx, 2), "z": round(hz, 2), "yaw": round(yaw, 4), "w": W, "d": D,
-                "wall": rng.choice(WALL_COLORS), "roof": rng.choice(ROOF_COLORS), "boarded": rng.random() < 0.5,
-                "containers": cont,
+                "wall": wall, "roof": roof,
+                "broken": broken, "containers": cont,
             })
     doc = {
         "version": 1,
         "_comment": "v0.23 솔내 옛마을 빈집촌 (tools/art/gen_houses.py 가 만든다). 장마 뒤 사람이 떠난 1층 단층집 16채. "
-                    "x,z = 집 가운데, yaw = 앞면(현관) 방향, w × d. walls = 로컬 칸막이 선분(문틈은 비움), containers = 뒤질 수 있는 가구 "
+                    "x,z = 집 가운데, yaw = 앞면(현관) 방향, w × d. walls = 로컬 칸막이 선분(문틈은 비움), openings = 판자로 막을 수 있는 현관 · 창 "
+                    "(로컬, n = 바깥쪽), broken = 그 집의 깨진 창 (현관과 함께 크리처가 들어오는 곳), containers = 뒤질 수 있는 가구 "
                     "(x,z 월드 · lx,lz 로컬 · yaw 가구 앞면). 무엇이 나오는지는 data/survival/survival.json loot.",
         "name": "솔내 옛마을",
         "walls": WALLS,
+        "openings": OPENINGS,
+        "rooms": ROOMS,
         "houses": houses,
     }
     OUT.write_text(dumps(doc), encoding="utf-8")

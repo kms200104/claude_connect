@@ -32,6 +32,21 @@
     }
   },
 
+  "fortify": {
+    "_comment": "v0.24 빈집을 거점으로: 현관과 깨진 창(houses.json broken)에 판자를 댄다 (range 안, cost 를 쓴다). 막지 않은 곳으로는 크리처가 들어오고, 막은 곳은 크리처가 두드려 hp 를 깎는다 (0 이면 부서져 다시 뚫린다). 다친 판자는 같은 값으로 보수 (가득 찬다). 낮 · 밤 언제든.",
+    "range": 1.7,
+    "cost": [{ "id": "wood", "n": 2 }, { "id": "nails", "n": 1 }],
+    "hp": { "door": 14, "window": 10 }
+  },
+
+  "downed": {
+    "_comment": "v0.24 같이 하기: 체력이 0 이 되면 곁에 일으켜 줄 동료(같은 방, 접속 중, 쓰러지지 않음)가 있으면 바로 기절하지 않고 ms 동안 쓰러져 있다. 동료가 revive_range 안에서 '일으키기'를 revive_ms 동안 하면 체력 revive_hp 로 일어난다 (솔을 잃지 않는다). 시간이 다 되거나 '포기'하면 기절.",
+    "ms": 45000,
+    "revive_range": 1.8,
+    "revive_ms": 3000,
+    "revive_hp": 4
+  },
+
   "player": {
     "_comment": "체력 (하트). 0 이 되면 기절 → 가까운 대피소(민방위)에서 깨어나고 솔을 조금 잃는다 (ko_sol_rate, 최대 ko_sol_max). 체력은 낮 동안 천천히 돌아온다.",
     "max_hp": 10,
@@ -66,7 +81,7 @@
   },
 
   "creatures": {
-    "_comment": "밤(night 시각, 세상 시각)에 사람 둘레 spawn_min~spawn_max m 땅에 나타나 aggro 안의 사람을 쫓는다. 닿으면(reach) damage, attack_ms 마다. 해가 뜨면 사라진다. 대피소 · 상점 · 집 안에는 오지 않는다. 쓰러뜨리면 drops 에서 하나 (drop_chance).",
+    "_comment": "밤(night 시각, 세상 시각)에 사람 둘레 spawn_min~spawn_max m 땅에 나타나 aggro 안의 사람을 쫓는다. 닿으면(reach) damage, attack_ms 마다. 해가 뜨면 사라진다. 대피소 · 상점에는 오지 않는다. 빈집에는 막지 않은 현관 · 깨진 창으로 들어오고, 판자를 대 둔 곳은 두드려 부순다 (fortify). 쓰러뜨리면 drops 에서 하나 (drop_chance).",
     "night": [20, 5],
     "per_player": 3,
     "max_per_room": 10,

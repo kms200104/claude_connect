@@ -1836,6 +1836,12 @@ export function createServer(overrides = {}) {
         return survival.handleAttack(ctx, msg, fail);
       case 'use':
         return survival.handleUse(ctx, msg, fail);
+      case 'board':
+        return survival.handleBoard(ctx, msg, fail);
+      case 'revive':
+        return survival.handleRevive(ctx, msg, fail);
+      case 'give_up':
+        return survival.handleGiveUp(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -1901,6 +1907,8 @@ export function createServer(overrides = {}) {
       room.dirty = true;
       return;
     }
+    // v0.24 쓰러진 동안은 움직이지 않는다.
+    if (survival.isDowned(player)) return;
     // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
     if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
     // v19: 차고 탈것을 타는 동안은 그 탈것의 최고 속도까지.
@@ -2049,6 +2057,9 @@ export function createServer(overrides = {}) {
       case 'loot':
       case 'attack':
       case 'use':
+      case 'board':
+      case 'revive':
+      case 'give_up':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

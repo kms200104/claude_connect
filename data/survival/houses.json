@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "v0.23 솔내 옛마을 빈집촌 (tools/art/gen_houses.py 가 만든다). 장마 뒤 사람이 떠난 1층 단층집 16채. x,z = 집 가운데, yaw = 앞면(현관) 방향, w × d. walls = 로컬 칸막이 선분(문틈은 비움), containers = 뒤질 수 있는 가구 (x,z 월드 · lx,lz 로컬 · yaw 가구 앞면). 무엇이 나오는지는 data/survival/survival.json loot.",
+  "_comment": "v0.23 솔내 옛마을 빈집촌 (tools/art/gen_houses.py 가 만든다). 장마 뒤 사람이 떠난 1층 단층집 16채. x,z = 집 가운데, yaw = 앞면(현관) 방향, w × d. walls = 로컬 칸막이 선분(문틈은 비움), openings = 판자로 막을 수 있는 현관 · 창 (로컬, n = 바깥쪽), broken = 그 집의 깨진 창 (현관과 함께 크리처가 들어오는 곳), containers = 뒤질 수 있는 가구 (x,z 월드 · lx,lz 로컬 · yaw 가구 앞면). 무엇이 나오는지는 data/survival/survival.json loot.",
   "name": "솔내 옛마을",
   "walls": [
     [
@@ -40,6 +40,74 @@
       [2.0, 0]
     ]
   ],
+  "openings": [
+    {
+      "id": "door",
+      "kind": "door",
+      "lx": -3.0,
+      "lz": 4.0,
+      "nx": 0,
+      "nz": 1
+    },
+    {
+      "id": "w1",
+      "kind": "window",
+      "lx": 1.6,
+      "lz": 4.0,
+      "nx": 0,
+      "nz": 1
+    },
+    {
+      "id": "w2",
+      "kind": "window",
+      "lx": -2.0,
+      "lz": -4.0,
+      "nx": 0,
+      "nz": -1
+    },
+    {
+      "id": "w3",
+      "kind": "window",
+      "lx": 2.8,
+      "lz": -4.0,
+      "nx": 0,
+      "nz": -1
+    },
+    {
+      "id": "w4",
+      "kind": "window",
+      "lx": -5.0,
+      "lz": 2.0,
+      "nx": -1,
+      "nz": 0
+    },
+    {
+      "id": "w5",
+      "kind": "window",
+      "lx": 5.0,
+      "lz": -2.0,
+      "nx": 1,
+      "nz": 0
+    }
+  ],
+  "rooms": [
+    {
+      "id": "bed",
+      "x0": -5.0,
+      "x1": 2.0,
+      "z0": -4.0,
+      "z1": 0.0,
+      "door": [-0.65, 0.0]
+    },
+    {
+      "id": "bath",
+      "x0": 2.0,
+      "x1": 5.0,
+      "z0": -4.0,
+      "z1": 0.0,
+      "door": [3.05, 0.0]
+    }
+  ],
   "houses": [
     {
       "id": "h01",
@@ -50,7 +118,7 @@
       "d": 8.0,
       "wall": "#E8DCC6",
       "roof": "#4F7FA8",
-      "boarded": false,
+      "broken": ["w3", "w4"],
       "containers": [
         {
           "id": "h01_1",
@@ -117,7 +185,7 @@
       "d": 8.0,
       "wall": "#D9CDB4",
       "roof": "#5B6670",
-      "boarded": true,
+      "broken": ["w1", "w2"],
       "containers": [
         {
           "id": "h02_1",
@@ -184,7 +252,7 @@
       "d": 8.0,
       "wall": "#CDBFA6",
       "roof": "#4F7FA8",
-      "boarded": true,
+      "broken": ["w3", "w5"],
       "containers": [
         {
           "id": "h03_1",
@@ -251,7 +319,7 @@
       "d": 8.0,
       "wall": "#E8DCC6",
       "roof": "#C98B3A",
-      "boarded": false,
+      "broken": ["w4", "w5"],
       "containers": [
         {
           "id": "h04_1",
@@ -318,7 +386,7 @@
       "d": 8.0,
       "wall": "#D9CDB4",
       "roof": "#4F7FA8",
-      "boarded": false,
+      "broken": ["w2", "w4"],
       "containers": [
         {
           "id": "h05_1",
@@ -385,7 +453,7 @@
       "d": 8.0,
       "wall": "#D6CCC0",
       "roof": "#5E8A5A",
-      "boarded": false,
+      "broken": ["w1", "w4"],
       "containers": [
         {
           "id": "h06_1",
@@ -452,7 +520,7 @@
       "d": 8.0,
       "wall": "#EFE6D6",
       "roof": "#5B6670",
-      "boarded": false,
+      "broken": ["w1", "w5"],
       "containers": [
         {
           "id": "h07_1",
@@ -519,7 +587,7 @@
       "d": 8.0,
       "wall": "#D9CDB4",
       "roof": "#5B6670",
-      "boarded": true,
+      "broken": ["w1", "w5"],
       "containers": [
         {
           "id": "h08_1",
@@ -586,7 +654,7 @@
       "d": 8.0,
       "wall": "#D9CDB4",
       "roof": "#B8573E",
-      "boarded": false,
+      "broken": ["w1", "w3"],
       "containers": [
         {
           "id": "h09_1",
@@ -653,7 +721,7 @@
       "d": 8.0,
       "wall": "#E2D2B8",
       "roof": "#B8573E",
-      "boarded": false,
+      "broken": ["w1", "w3"],
       "containers": [
         {
           "id": "h10_1",
@@ -720,7 +788,7 @@
       "d": 8.0,
       "wall": "#E2D2B8",
       "roof": "#5E8A5A",
-      "boarded": false,
+      "broken": ["w2", "w4"],
       "containers": [
         {
           "id": "h11_1",
@@ -787,7 +855,7 @@
       "d": 8.0,
       "wall": "#E8DCC6",
       "roof": "#5E8A5A",
-      "boarded": false,
+      "broken": ["w2", "w4"],
       "containers": [
         {
           "id": "h12_1",
@@ -854,7 +922,7 @@
       "d": 8.0,
       "wall": "#CDBFA6",
       "roof": "#C98B3A",
-      "boarded": true,
+      "broken": ["w1", "w4"],
       "containers": [
         {
           "id": "h13_1",
@@ -921,7 +989,7 @@
       "d": 8.0,
       "wall": "#E8DCC6",
       "roof": "#5B6670",
-      "boarded": false,
+      "broken": ["w1", "w4"],
       "containers": [
         {
           "id": "h14_1",
@@ -988,7 +1056,7 @@
       "d": 8.0,
       "wall": "#D9CDB4",
       "roof": "#5B6670",
-      "boarded": false,
+      "broken": ["w2", "w3"],
       "containers": [
         {
           "id": "h15_1",
@@ -1055,7 +1123,7 @@
       "d": 8.0,
       "wall": "#E8DCC6",
       "roof": "#4F7FA8",
-      "boarded": false,
+      "broken": ["w3", "w4"],
       "containers": [
         {
           "id": "h16_1",
