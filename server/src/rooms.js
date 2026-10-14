@@ -1,4 +1,4 @@
-import { mountWire, sanitizeVehicles } from './garage.js';
+import { mountWire, sanitizeVehicles, seatWire } from './garage.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './protocol.js';
@@ -237,6 +237,7 @@ export class Player {
       job: this.job !== null, // v0.15: 배달 알바 중 (헬멧 · 가방 연출)
       ride: this.rideItem,
       mount: mountWire(this),
+      seat: seatWire(this),
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',

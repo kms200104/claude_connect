@@ -83,6 +83,13 @@ func _ready() -> void:
 	Net.vehicle_hp.connect(_on_vehicle_hp)
 	if hud != null:
 		_build_hud()
+	# v0.27 동승 (친구 차 빈자리).
+	var ps: PassengerRide = PassengerRide.new()
+	ps.name = "PassengerRide"
+	ps.player = player
+	ps.hud = hud
+	ps.toast_hud = toast_hud
+	add_child(ps)
 
 
 func is_active() -> bool:

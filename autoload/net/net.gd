@@ -24,6 +24,8 @@ signal vehicles_changed
 signal vehicle_done(result: Dictionary)
 ## v0.26 타는 탈것 내구도가 바뀜 { v, hp, max, why, broken } · 들이받기 결과 { c, hard, u, dmg, slow }.
 signal vehicle_hp(info: Dictionary)
+## v0.27 동승: 누가 친구 차에 탔다 · 내렸다 (Net.seats).
+signal seat_changed(player_id: int)
 signal rammed(info: Dictionary)
 ## v0.20 폰다운 기능: 솔걸음 보상 결과 (steps_ok: today, got, reward, sol) · 재난문자 (alert: id, level, sender, text, at, late) ·
 ## 민방위 훈련 (drill: on, shelter{name,x,z,r}, until, done) · 대피 보상 (drill_done: reward, sol).
@@ -258,6 +260,8 @@ var steps_got: Array[int] = []
 var drill: Dictionary = {}
 ## v19.1 방에 세워 둔(또는 오는 중인) 차고 탈것: [{ v, o(주인 자리), m, f, x, z, yaw, t(도착 서버 시각, 0 = 이미 있음), npc }].
 var parked: Array[Dictionary] = []
+## v0.27 동승한 사람 (id → {d: 운전자, s: 자리 번호, seat?: [x, y, z] (나만)}).
+var seats: Dictionary[int, Dictionary] = {}
 ## v21 물놀이 배 [{ id, ride, depart(서버 시각 ms), riders: [{ id, seat }] }].
 var aqua_trips: Array[Dictionary] = []
 
@@ -940,6 +944,18 @@ func _handle_text(text: String) -> void:
 			vehicle_hp.emit(msg)
 		"rammed":
 			rammed.emit(msg)
+		"seat", "veh_seat":
+			var sid: int = int(msg.get("id", my_id))
+			if int(msg.get("d", 0)) != 0:
+				var entry: Dictionary = {"d": int(msg.get("d", 0)), "s": int(msg.get("s", 0))}
+				if msg.has("seat"):
+					entry["seat"] = msg.get("seat")
+				elif seats.has(sid) and seats[sid].has("seat"):
+					entry["seat"] = seats[sid]["seat"]
+				seats[sid] = entry
+			else:
+				seats.erase(sid)
+			seat_changed.emit(sid)
 		"steps_ok":
 			sol = int(msg.get("sol", sol))
 			_apply_steps(msg)
@@ -1335,6 +1351,10 @@ func _on_welcome(msg: Dictionary) -> void:
 	drops.clear()
 	_apply_couriers(msg.get("couriers", []))
 	_apply_parked(msg.get("parked", []))
+	seats.clear()
+	for st: Variant in msg.get("seats", []):
+		if st is Dictionary:
+			seats[int(st.get("id", 0))] = {"d": int(st.get("d", 0)), "s": int(st.get("s", 0))}
 	_apply_aqua(msg.get("aqua", []))
 	my_deliveries.clear()
 	for entry: Variant in msg.get("deliv", []):

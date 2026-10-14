@@ -38,6 +38,8 @@ class Model:
 	## v0.26 무게 (kg, 타는 사람 포함 — 들이받기) · 내구도 최대값.
 	var mass: float = 150.0
 	var durability: int = 60
+	## v0.27 동승 자리 (탈것 좌표 x, 앉는 높이 y, z).
+	var seats: Array[Vector3] = []
 	## 자리 이름 → 탈것 좌표 (바닥 y = 0, 앞 = -z).
 	var anchors: Dictionary[String, Vector3] = {}
 
@@ -136,6 +138,9 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 		m.seat = Color.html(str(raw.get("seat", "#232326")))
 		m.mass = float(raw.get("mass", 150.0))
 		m.durability = int(raw.get("durability", 60))
+		for st: Variant in raw.get("seats", []):
+			if st is Array and (st as Array).size() >= 3:
+				m.seats.append(Vector3(float(st[0]), float(st[1]), float(st[2])))
 		var anchors: Variant = raw.get("anchors", {})
 		if anchors is Dictionary:
 			for key: Variant in anchors:

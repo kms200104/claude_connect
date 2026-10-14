@@ -38,7 +38,7 @@ import { calendarWire } from './calendar.js';
 import { GUESTBOOK, addEntry, cleanEntryText, guestbookWire } from './guestbook.js';
 import { PHOTO_RULES, createPhotoStore } from './photos.js';
 import { DAY_MS, DAY_START_HOUR } from './clock.js';
-import { createGarage, mountWire } from './garage.js';
+import { createGarage, mountWire, seatWire } from './garage.js';
 import { createAqua } from './aqua.js';
 import { createCrafting } from './crafting.js';
 import { createSurvival } from './survival.js';
@@ -529,6 +529,7 @@ export function createServer(overrides = {}) {
       deliv: delivery.mine(room, player.uid),
       // v19.1: 세워 둔 · 오는 중인 차고 탈것 (방 전체).
       parked: garage.parkedWire(room),
+      seats: garage.seatsWire(room),
       // v21: 물놀이 배 (손님 받는 중 · 도는 중).
       aqua: aqua.tripsWire(room),
       // v0.23 생존: 체력 · 뒤진 가구 · 크리처.
@@ -1876,6 +1877,8 @@ export function createServer(overrides = {}) {
       case 'veh_call':
       case 'veh_repair':
       case 'veh_crash':
+      case 'veh_board':
+      case 'veh_unboard':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       case 'steps':
         return safety.handleSteps(ctx, msg, fail);
@@ -1917,6 +1920,14 @@ export function createServer(overrides = {}) {
     }
     // v0.24 쓰러진 동안은 움직이지 않는다.
     if (survival.isDowned(player)) return;
+    // v0.27 동승: 운전자 곁이면 그대로 (탈것 빠르기로 따라간다), 멀면 운전자 자리로 고친다.
+    const seated = garage.passengerMove(player, room, tx, tz);
+    if (seated !== null) {
+      player.y = ty;
+      player.yaw = msg.yaw;
+      if (seated) send(ctx.ws, { t: 'correct', x: player.x, y: player.y, z: player.z });
+      return;
+    }
     // v0.25 달리면 소리 (크리처가 몰려온다), 움직이면 잠에서 깬다.
     survival.moved(room, player, Math.hypot(isNum(msg.vx) ? msg.vx : 0, isNum(msg.vz) ? msg.vz : 0));
     // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
@@ -2093,6 +2104,8 @@ export function createServer(overrides = {}) {
       case 'veh_call':
       case 'veh_repair':
       case 'veh_crash':
+      case 'veh_board':
+      case 'veh_unboard':
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':
@@ -2160,6 +2173,7 @@ export function createServer(overrides = {}) {
           job: p.job !== null,
           ride: p.rideItem,
           ...(p.mount ? { mount: mountWire(p) } : {}),
+          ...(p.passenger ? { seat: seatWire(p) } : {}),
           x: p.x,
           y: p.y,
           z: p.z,

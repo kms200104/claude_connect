@@ -128,6 +128,11 @@ func set_ride(item_id: String) -> void:
 
 ## 차고 탈것 (v19, 스냅샷마다 온다 { v, m, f }, 빈 사전 = 안 탐): 세워 둔 탈것(ParkedVehicles)에서 옮겨 탄 모습, 내리면 다시 세워 둔 목록이 그린다.
 ## 부품을 바꾸면(같은 탈것) 모양만 다시 빚는다.
+## v0.27 타고 있는 차고 탈것 모델 (안 타면 null — 동승 자리를 찾는다).
+func mount_model() -> VehicleCatalog.Model:
+	return _mount_info if _mount != null else null
+
+
 func set_mount(mount: Dictionary) -> void:
 	if rig == null:
 		return

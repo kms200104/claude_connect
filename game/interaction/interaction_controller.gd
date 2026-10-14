@@ -53,7 +53,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA, CRAFT, SURVIVE }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA, CRAFT, SURVIVE, PASSENGER }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
 const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE, Target.AQUA]
 ## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리.
@@ -105,6 +105,8 @@ func _process(_delta: float) -> void:
 	match target:
 		Target.RIDE_OFF:
 			action_hud.show_action("내리기")
+		Target.PASSENGER:
+			action_hud.show_action("같이 타기 · %s" % GameData.player_name(int(target_id)))
 		Target.VEHICLE:
 			if Net.vehicle_health(target_id) <= 0.0 and not player.is_riding():
 				action_hud.show_action("고치기 · %s" % GarageRider.kit_text())
@@ -253,6 +255,13 @@ func _pick_target() -> void:
 		if shop.near_entrance(pos):
 			target = Target.ENTER_SHOP
 			return
+	# v0.27 친구가 운전하는 차량 곁 (빈자리가 있으면 같이 타기).
+	if player.passenger != null and not (player.vehicle != null and player.vehicle.is_active()):
+		var driver: int = player.passenger.pick_target(pos)
+		if driver != 0:
+			target = Target.PASSENGER
+			target_id = str(driver)
+			return
 	# 세워 둔 내 탈것 곁 (킥보드를 타는 중에는 아니다).
 	if parked != null and player.garage_ride != null and not (player.vehicle != null and player.vehicle.is_active()):
 		var vehicle_id: String = parked.nearest_own(pos, SWAP_RANGE if player.is_riding() else GarageRider.RIDE_RANGE - safety_margin, not player.is_riding())
@@ -348,6 +357,8 @@ func _on_action_pressed() -> void:
 			crafting.activate(target_id)
 		Target.SURVIVE:
 			survival.activate(target_id)
+		Target.PASSENGER:
+			player.passenger.board(int(target_id))
 		Target.VEHICLE:
 			if player.garage_ride != null and Net.vehicle_health(target_id) <= 0.0 and not player.is_riding():
 				player.play_chop()

@@ -77,6 +77,8 @@ var garage_ride: GarageRider = null
 var ride_buttons: RideButtons = null
 ## 물놀이 배 (v21). 타는 동안은 배의 자리에 앉아 있고(AquaMarina 가 자리를 정한다) 걷지 않는다.
 var aqua: AquaMarina = null
+## v0.27 친구 차에 동승 (PassengerRide 가 자리를 따라가게 한다).
+var passenger: PassengerRide = null
 var _look_yaw: float = 0.0
 var _look_active: bool = false
 var _full_push_time: float = 0.0
@@ -91,6 +93,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_ride_buttons()
+	if passenger != null and passenger.is_active():
+		passenger.follow(delta)
+		return
 	if aqua != null and aqua.is_riding():
 		aqua.drive_player(delta)
 		return

@@ -515,6 +515,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   function knockOut(room, player) {
     if (player.downed) getUp(room, player, 0, true);
+    garage?.unboard(player, room);
     stopBleeding(room, player);
     const lost = Math.min(S.player.ko_sol_max ?? 0, Math.floor((player.profile.sol ?? 0) * (S.player.ko_sol_rate ?? 0)));
     player.profile.sol = Math.max(0, (player.profile.sol ?? 0) - lost);
@@ -565,6 +566,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   }
 
   function down(room, player) {
+    garage?.unboard(player, room);
     player.downed = { until: now() + D.ms, by: 0, doneAt: 0 };
     setHp(player, 0);
     for (const c of room.creatures?.values() ?? []) if (c.target === player.id) c.target = 0;
@@ -838,7 +840,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         if (moveToward(c, aim, stop, step, stand)) changed = true;
         c.yaw = Math.atan2(best.x - c.x, best.z - c.z);
         // 탈것을 타고 달리는 사람(ram.immune_speed 넘게)은 붙잡지 못한다.
-        const driving = best.mount && Math.hypot(best.vx ?? 0, best.vz ?? 0) > (RAM?.immune_speed ?? 2.0);
+        const mover = best.passenger ? room.players.get(best.passenger.d) : best;
+        const driving = mover?.mount && Math.hypot(mover.vx ?? 0, mover.vz ?? 0) > (RAM?.immune_speed ?? 2.0);
         if (c.target && sameRoom && !driving && Math.hypot(best.x - c.x, best.z - c.z) <= kind.reach && t >= c.nextAttack) {
           c.nextAttack = t + kind.attack_ms;
           c.attackAt = t;

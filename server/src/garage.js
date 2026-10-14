@@ -12,6 +12,8 @@
 // v0.26 차량(car: ATV · 미니트럭) · 내구도(durability — 크리처를 들이받거나 벽에 세게 부딪치면 준다, 0 이면 고장) ·
 //   veh_repair { v, how: kit (고철 · 못, 곁에서) | shop (솔, 어디서나) } · veh_crash { s } (클라이언트가 느낀 갑작스러운 감속 m/s) ·
 //   veh_call { mode: 'air' } 보급 낙하 (헬기가 지나가며 낙하산 상자로, air_cost 솔 · air_eta_ms 뒤 도착, npc 'heli').
+// v0.27 동승: veh_board { p: 운전자 id } → 그 탈것의 빈자리(모델 seats)에 앉는다 (veh_seat { d, s, seat }, 방 전체 seat { id, d, s }).
+//   앉은 동안은 운전자 곁(SEAT_SLACK m)으로 오는 이동을 그대로 받는다 (빠르기 검사는 운전자 탈것 기준). veh_unboard · 운전자가 내리면 내린다.
 import { ErrorCode } from './protocol.js';
 import { isLand, waterAt } from './water.js';
 import { countWhere, removeWhere } from './inventory.js';
@@ -92,6 +94,11 @@ export function mountWire(player) {
   return v ? { v: v.id, m: v.model, f: { ...v.fit } } : null;
 }
 
+/** 스냅샷에 싣는 동승 자리 { d: 운전자 id, s: 자리 번호 } (안 탔으면 null). */
+export function seatWire(player) {
+  return player.passenger ? { d: player.passenger.d, s: player.passenger.s } : null;
+}
+
 /** 방에 세워 둔(또는 오는 중인) 탈것 전부 (veh_parked · welcome.parked). */
 export function parkedWire(room) {
   const out = [];
@@ -120,6 +127,55 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
   const R = rules?.repair ?? {};
   const hpOf = (v) => (Number.isFinite(v.hp) ? v.hp : durabilityOf(rules, v));
   const hpWire = (v) => ({ v: v.id, hp: hpOf(v), max: durabilityOf(rules, v) });
+
+  // ---- 동승 (v0.27) ----
+
+  const SEAT_SLACK = 4.5;
+
+  /** 동승자를 내린다 (운전자 쪽 목록에서도 뺀다). */
+  function unboard(player, room) {
+    const ps = player.passenger;
+    if (!ps) return false;
+    const driver = room?.players.get(ps.d);
+    if (driver?.passengers) driver.passengers = driver.passengers.filter((id) => id !== player.id);
+    player.passenger = null;
+    room?.broadcast({ t: 'seat', id: player.id, d: 0, s: -1 });
+    if (room) room.dirty = true;
+    return true;
+  }
+
+  /** 운전자가 내렸다: 태운 사람을 모두 내린다. */
+  function unboardAll(driver, room) {
+    for (const id of [...(driver.passengers ?? [])]) {
+      const p = room?.players.get(id);
+      if (p) unboard(p, room);
+    }
+    driver.passengers = [];
+  }
+
+  /** 동승 중이면 그 운전자 (운전자가 떠났거나 내렸으면 내리고 null). */
+  function driverOf(player, room) {
+    if (!player.passenger) return null;
+    const d = room?.players.get(player.passenger.d);
+    if (!d || !d.online || !d.mount) {
+      unboard(player, room);
+      return null;
+    }
+    return d;
+  }
+
+  /** 동승자 이동: 운전자 곁이면 그대로, 멀면 운전자 자리로. 고쳤으면 true. */
+  function passengerMove(player, room, x, z) {
+    const d = driverOf(player, room);
+    if (!d) return null;
+    const far = Math.hypot(x - d.x, z - d.z) > SEAT_SLACK;
+    player.x = far ? d.x : x;
+    player.z = far ? d.z : z;
+    player.vx = d.vx;
+    player.vz = d.vz;
+    room.dirty = true;
+    return far;
+  }
 
   /** 타고 있는 탈것 (들이받기 판정용): { vehicle, model, kind, stats, mass } 또는 null. */
   function mounted(player) {
@@ -164,6 +220,7 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
   /** 내린다: 지금 자리(순간이동 전이면 떠나기 전 자리)에 세워 둔다. 탄 채였으면 스냅샷 · veh_parked 로 알린다. */
   function dismount(player, room) {
     if (!player.mount) return false;
+    unboardAll(player, room);
     const v = player.profile.vehicles.find((x) => x.id === player.mount);
     player.lastMount = player.mount;
     player.mountGraceUntil = now() + delivery.speed_grace_ms;
@@ -252,6 +309,7 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
           if (why) return fail(why);
           if (player.mount === vehicle.id) return send(ctx.ws, { t: 'veh_ride', rid: msg.rid, id: player.id, mount: mountWire(player) });
           if (hpOf(vehicle) <= 0) return fail(ErrorCode.vehicleBroken);
+          if (player.passenger) unboard(player, room);
           // 세워 둔(도착한) 그 탈것 곁에서만 탄다.
           const at = vehicle.at;
           if (!at || (at.t ?? 0) > now() || Math.hypot(player.x - at.x, player.z - at.z) > rideRange(kindOf(vehicle)) + 0.5) return fail(ErrorCode.notNearVehicle);
@@ -322,6 +380,32 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
         send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'repair', v: vehicle.id, how: msg.how === 'shop' ? 'shop' : 'kit', ...hpWire(vehicle), cost, sol: p.sol });
         break;
       }
+      case 'veh_board': {
+        // v0.27 동승: 친구가 운전하는 탈것의 빈자리에.
+        const driver = room.players.get(msg.p);
+        const dv = driver ? mountedVehicle(driver) : null;
+        const seats = dv ? rules.models.get(dv.model)?.seats ?? [] : [];
+        if (!driver || driver === player || !dv || seats.length === 0) return fail(ErrorCode.badVehicle);
+        if (player.mount || player.passenger || player.downed) return fail(ErrorCode.cantRide);
+        if (Math.hypot(player.x - driver.x, player.z - driver.z) > rideRange(kindOf(dv)) + 1.5) return fail(ErrorCode.notNearVehicle);
+        driver.passengers = (driver.passengers ?? []).filter((id) => room.players.get(id)?.passenger?.d === driver.id);
+        const taken = new Set(driver.passengers.map((id) => room.players.get(id).passenger.s));
+        const s = seats.findIndex((_, i) => !taken.has(i));
+        if (s < 0) return fail(ErrorCode.vehicleFull);
+        player.passenger = { d: driver.id, s };
+        player.ride = '';
+        driver.passengers.push(player.id);
+        send(ctx.ws, { t: 'veh_seat', rid: msg.rid, d: driver.id, s, seat: seats[s], m: dv.model });
+        room.broadcast({ t: 'seat', id: player.id, d: driver.id, s });
+        room.dirty = true;
+        return;
+      }
+      case 'veh_unboard': {
+        if (!player.passenger) return fail(ErrorCode.badVehicle);
+        unboard(player, room);
+        send(ctx.ws, { t: 'veh_seat', rid: msg.rid, d: 0, s: -1 });
+        return;
+      }
       case 'veh_crash': {
         // v0.26 벽 · 나무에 세게 부딪쳤다 (클라이언트가 느낀 갑작스러운 감속, 그 탈것 최고 속도까지만 믿는다).
         const mv = mountedVehicle(player);
@@ -348,5 +432,10 @@ export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInvento
     return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null, hp: hpOf(v), max: durabilityOf(rules, v) })) };
   }
 
-  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat, mounted, damage };
+  /** 방에 지금 동승한 사람 [{ id, d, s }] (welcome). */
+  function seatsWire(room) {
+    return [...room.players.values()].filter((p) => p.passenger).map((p) => ({ id: p.id, ...seatWire(p) }));
+  }
+
+  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat, mounted, damage, unboard, driverOf, passengerMove, seatsWire };
 }
