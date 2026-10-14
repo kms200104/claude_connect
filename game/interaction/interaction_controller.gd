@@ -171,6 +171,8 @@ func _pick_target() -> void:
 		return
 	if crafting != null and crafting.is_busy():
 		return
+	if survival != null and survival.is_busy():
+		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
 	var pos: Vector3 = player.global_position
@@ -227,7 +229,7 @@ func _pick_target() -> void:
 			return
 	if survival != null and not (shop != null and shop.is_inside(pos)):
 		var loot_target: String = survival.pick_target(pos, safety_margin)
-		if loot_target.begins_with(SurvivalController.TARGET_LOOT) or loot_target.begins_with(SurvivalController.TARGET_BOARD):
+		if not loot_target.is_empty() and not loot_target.begins_with(SurvivalController.TARGET_ATTACK) and not loot_target.begins_with(SurvivalController.TARGET_REVIVE):
 			target = Target.SURVIVE
 			target_id = loot_target
 			return

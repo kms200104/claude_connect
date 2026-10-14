@@ -4,7 +4,9 @@ extends Node
 ## 기절 안내 · 든 횃불 · 손전등 불빛 · 해 질 녘 안내. 상황 버튼 대상: "뒤지기"(빈집 가구) · "공격"(가까운 크리처).
 ## v0.24: "판자 대기 · 보수"(빈집 현관 · 깨진 창) · "일으키기"(쓰러진 동료). 쓰러지면 누운 몸 · 화면 안내(남은 시간 · 포기),
 ## 쓰러진 동료 머리 위 "도와줘요!".
-## 판정은 서버 (Net.loot · Net.attack · Net.use_item · Net.board · Net.revive · Net.give_up).
+## v0.25: 판자는 시간 들여 대고 (진행 막대, 함께 대면 빨라진다), 밤에 소리를 내면 크리처가 몰려온다 (먼지 · 안내),
+## 거점(다 막은 빈집)의 "거점 상자"(StashWindow) · "자기"(침대, 누운 몸 · 일어나기). 집 안에서는 판자 몇 곳을 막았는지 알림.
+## 판정은 서버 (Net.loot · Net.attack · Net.use_item · Net.board · Net.revive · Net.give_up · Net.stash_* · Net.sleep_in_bed).
 
 @export var player: Player
 @export var hud: CanvasLayer
@@ -17,10 +19,15 @@ const TARGET_LOOT: String = "loot:"
 const TARGET_ATTACK: String = "attack:"
 const TARGET_BOARD: String = "board:"
 const TARGET_REVIVE: String = "revive:"
+const TARGET_STASH: String = "stash:"
+const TARGET_BED: String = "bed:"
 ## 누운 몸: 옆으로 눕히는 각 · 내리는 높이 (리그 뿌리 기준). 앞뒤(x)는 리그가 낚시 당김에 쓴다.
 const DOWN_ROLL: float = 1.45
 const DOWN_DROP: float = 0.55
 const INPUT_LOCK: StringName = &"downed"
+const SLEEP_LOCK: StringName = &"sleeping"
+## 침대 매트 높이만큼 몸을 올린다.
+const BED_LIFT: float = 0.42
 
 var houses: HouseField = null
 var creatures: CreatureField = null
@@ -35,6 +42,15 @@ var _down_label: Label = null
 var _give_up: Button = null
 ## 쓰러진 동료 머리 위 글자 (id → Label3D).
 var _help_tags: Dictionary[int, Label3D] = {}
+var stash_window: StashWindow = null
+## 판자 대는 중 막대 · 자는 중 안내 · 집 안 알림.
+var _job_panel: PanelContainer = null
+var _job_bar: ProgressBar = null
+var _job_label: Label = null
+var _sleep_panel: PanelContainer = null
+var _chip: Label = null
+var _hammer_at: float = 0.0
+var _noise_tip_at: float = -100.0
 
 
 func _ready() -> void:
@@ -67,6 +83,8 @@ func _ready() -> void:
 	Net.swung.connect(_on_swung)
 	Net.request_failed.connect(_on_failed)
 	Net.boarded.connect(_on_boarded)
+	Net.sleep_changed.connect(_on_sleep_changed)
+	Net.noise_made.connect(_on_noise)
 	Net.downed_changed.connect(_on_downed_changed)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
 		_on_downed_changed(Net.my_id)
@@ -97,12 +115,14 @@ func _process(_delta: float) -> void:
 	if _vignette != null and _vignette.color.a > 0.0:
 		_vignette.color.a = maxf(0.0, _vignette.color.a - _delta * 1.2)
 	_update_downed(_delta)
+	_update_jobs()
+	_update_chip()
 
 
 ## 상황 버튼 대상 (빈 글자 = 없음). 쓰러진 동료 곁이면 일으키기, 밤에 크리처가 곁이면 공격이 먼저,
 ## 그다음 가까운 쪽: 뒤질 가구 · 판자 댈 곳. 내가 쓰러져 있으면 없음.
 func pick_target(position: Vector3, margin: float = 0.3) -> String:
-	if Net.is_downed(Net.my_id):
+	if Net.is_downed(Net.my_id) or Net.sleeping.has(Net.my_id):
 		return ""
 	var rules: SurvivalRules = GameData.survival
 	for id: int in Net.downed:
@@ -127,7 +147,22 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 		if d <= board_d and int(Net.boards.get(b.key, 0)) < b.max_hp:
 			board_d = d
 			best = TARGET_BOARD + b.key
+	# 빈집 안: 거점 상자 · 침대.
+	var house: SurvivalRules.House = rules.house_at(position)
+	if house != null:
+		var near_d: float = board_d if best.begins_with(TARGET_BOARD) else (best_d if not best.is_empty() else INF)
+		var sd: float = Vector2(house.stash_position.x - position.x, house.stash_position.z - position.z).length()
+		if sd <= rules.base_range - margin and sd < near_d:
+			near_d = sd
+			best = TARGET_STASH + house.id
+		var bd: float = Vector2(house.bed_position.x - position.x, house.bed_position.z - position.z).length()
+		if bd <= rules.base_range - margin + 0.2 and bd < near_d:
+			best = TARGET_BED + house.id
 	return best
+
+
+func is_busy() -> bool:
+	return stash_window != null and stash_window.is_open()
 
 
 func target_label(target: String) -> String:
@@ -138,8 +173,16 @@ func target_label(target: String) -> String:
 	if target.begins_with(TARGET_BOARD):
 		var key: String = target.trim_prefix(TARGET_BOARD)
 		var where: String = "현관" if key.ends_with(":door") else "창"
+		if Net.board_jobs.has(key) and not (Net.board_jobs[key]["helpers"] as Array).has(Net.my_id):
+			return "함께 판자 대기 · %s (빨라져요)" % where
 		var verb: String = "판자 보수" if int(Net.boards.get(key, 0)) > 0 else "판자 대기"
 		return "%s · %s (%s)" % [verb, where, cost_text()]
+	if target.begins_with(TARGET_STASH):
+		var h: SurvivalRules.House = _house(target.trim_prefix(TARGET_STASH))
+		return "거점 상자 열기" if h != null and HouseField.is_base(h) else "상자 · 판자를 다 대면 열려요 (%s)" % _boarded_text(h)
+	if target.begins_with(TARGET_BED):
+		var hb: SurvivalRules.House = _house(target.trim_prefix(TARGET_BED))
+		return "자기 · 빨리 회복" if hb != null and HouseField.is_base(hb) else "침대 · 판자를 다 대야 잘 수 있어요 (%s)" % _boarded_text(hb)
 	var c: SurvivalRules.LootBox = GameData.survival.containers.get(target.trim_prefix(TARGET_LOOT))
 	return "뒤지기 · %s" % GameData.survival.kind_name(c.kind) if c != null else "뒤지기"
 
@@ -185,6 +228,25 @@ func activate(target: String) -> void:
 		player.play_chop()
 		Audio.play_sfx("chop", -8.0, 0.9)
 		Net.board(b.house, b.id)
+		return
+	if target.begins_with(TARGET_STASH) or target.begins_with(TARGET_BED):
+		var bed: bool = target.begins_with(TARGET_BED)
+		var h: SurvivalRules.House = _house(target.trim_prefix(TARGET_BED if bed else TARGET_STASH))
+		if h == null:
+			return
+		if not HouseField.is_base(h):
+			if toast_hud != null:
+				toast_hud.show_toast("현관과 깨진 창에 판자를 다 대야 거점이 돼요 (%s)" % _boarded_text(h), false)
+			return
+		if bed:
+			if Net.hp >= Net.max_hp:
+				if toast_hud != null:
+					toast_hud.show_toast("체력이 가득해서 잠이 안 와요", false)
+				return
+			Net.sleep_in_bed(true)
+		else:
+			player.look_toward(h.stash_position - player.global_position)
+			stash_window.open(h.id)
 		return
 	var c: SurvivalRules.LootBox = GameData.survival.containers.get(target.trim_prefix(TARGET_LOOT))
 	if c == null:
@@ -248,14 +310,117 @@ func _on_failed(kind: String, code: String) -> void:
 		toast_hud.show_toast("판자를 대려면 %s 가 있어야 해요 (목재는 도끼로 나무, 못은 공구 창고에서 고철로)" % cost_text(), false)
 	elif kind == "board" and code == NetProtocol.ERR_ALREADY_BOARDED:
 		toast_hud.show_toast("판자가 아직 튼튼해요", true)
+	elif (kind == "stash" or kind == "sleep") and code == NetProtocol.ERR_NOT_BASE:
+		toast_hud.show_toast("판자가 부서졌어요 — 다시 막아야 거점이 돼요", false)
+	elif kind == "stash" and code == NetProtocol.ERR_STASH_FULL:
+		toast_hud.show_toast("상자가 가득해요 (%d칸)" % GameData.survival.stash_slots, false)
+	elif kind == "stash" and code == NetProtocol.ERR_INVENTORY_FULL:
+		toast_hud.show_toast("가방이 가득해요", false)
+	elif kind == "sleep" and code == NetProtocol.ERR_HP_FULL:
+		toast_hud.show_toast("체력이 가득해서 잠이 안 와요", false)
 
 
 func _on_boarded(info: Dictionary) -> void:
 	if toast_hud == null:
 		return
 	var where: String = "현관" if str(info.get("o", "")) == "door" else "창"
-	toast_hud.show_toast("%s에 판자를 %s (튼튼함 %d)" % [where, "다시 댔어요" if bool(info.get("repaired", false)) else "댔어요", int(info.get("hp", 0))], true)
+	var together: String = " · 함께 대서 빨랐어요" if int(info.get("helpers", 1)) > 1 else ""
+	toast_hud.show_toast("%s에 판자를 %s (튼튼함 %d)%s" % [where, "다시 댔어요" if bool(info.get("repaired", false)) else "댔어요", int(info.get("hp", 0)), together], true)
 	Audio.play_sfx("chop", -6.0, 0.8)
+	var h: SurvivalRules.House = _house(str(info.get("h", "")))
+	if h != null and HouseField.is_base(h):
+		toast_hud.show_toast("거점이 됐어요! 상자에 물건을 두고 침대에서 쉴 수 있어요", true)
+
+
+func _house(id: String) -> SurvivalRules.House:
+	for h: SurvivalRules.House in GameData.survival.houses:
+		if h.id == id:
+			return h
+	return null
+
+
+func _boarded_text(h: SurvivalRules.House) -> String:
+	if h == null:
+		return ""
+	var done: int = 0
+	for b: SurvivalRules.Breach in h.breaches:
+		if int(Net.boards.get(b.key, 0)) > 0:
+			done += 1
+	return "판자 %d/%d" % [done, h.breaches.size()]
+
+
+# ---- 판자 대는 중 · 소리 · 잠 · 집 안 알림 (v0.25) ----
+
+func _update_jobs() -> void:
+	if _job_panel == null:
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	var mine: Dictionary = {}
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	var swing: bool = Time.get_ticks_msec() / 1000.0 >= _hammer_at
+	if swing:
+		_hammer_at = Time.get_ticks_msec() / 1000.0 + 0.55
+	for key: String in Net.board_jobs:
+		var j: Dictionary = Net.board_jobs[key]
+		var helpers: Array = j["helpers"]
+		if helpers.has(Net.my_id):
+			mine = j
+		if swing and replicator != null:
+			for r: RemotePlayer in replicator.remote_nodes():
+				if helpers.has(r.player_id):
+					r.play_action("chop")
+	_job_panel.visible = not mine.is_empty()
+	if mine.is_empty():
+		return
+	var n: int = (mine["helpers"] as Array).size()
+	var progress: float = float(mine["progress"]) + float(now_ms - int(mine["at"])) * n
+	_job_bar.value = clampf(progress / maxf(1.0, float(mine["need"])), 0.0, 1.0) * 100.0
+	_job_label.text = "판자 대는 중…" + (" 둘이서 ×%d 빨라요" % n if n > 1 else " (곁에 있어 주세요)")
+	if swing and player != null:
+		player.play_chop()
+		Audio.play_sfx("chop", -12.0, 0.9)
+
+
+func _on_noise(info: Dictionary) -> void:
+	if player != null:
+		Puff.burst(player.get_parent(), player.global_position + Vector3(0.0, 0.1, 0.0), Color(0.8, 0.78, 0.72, 0.7), 10, 1.4, 0.15, 0.08, 0.6)
+	var now_s: float = Time.get_ticks_msec() / 1000.0
+	if toast_hud != null and int(info.get("n", 0)) > 0 and now_s - _noise_tip_at > 20.0:
+		_noise_tip_at = now_s
+		var what: String = {"swing": "휘두르는", "run": "뛰는", "board": "망치질"}.get(str(info.get("k", "")), "")
+		toast_hud.show_toast("%s 소리를 듣고 크리처 %d마리가 다가와요!" % [what, int(info.get("n", 0))], false)
+
+
+func _on_sleep_changed(id: int) -> void:
+	if id != Net.my_id:
+		return
+	var on: bool = Net.sleeping.has(id)
+	if player != null:
+		player.set_input_lock(SLEEP_LOCK, on)
+		if on:
+			player.velocity = Vector3.ZERO
+			# 침대 위에 길게 눕는다 (머리는 베개 쪽).
+			var h: SurvivalRules.House = GameData.survival.house_at(player.global_position)
+			if h != null:
+				player.global_position = Vector3(h.bed_position.x, player.global_position.y, h.bed_position.z)
+				# 옆으로 눕히면(DOWN_ROLL) 머리가 몸의 −x 쪽 → 그쪽이 집의 −z (베개) 를 보게.
+				var yaw: float = h.yaw - PI * 0.5
+				player.look_toward(Vector3(-sin(yaw), 0.0, -cos(yaw)))
+				player.body.rotation.y = yaw
+	if _sleep_panel != null:
+		_sleep_panel.visible = on
+	if toast_hud != null and not on and Net.hp >= Net.max_hp:
+		toast_hud.show_toast("푹 잤어요! 체력이 가득해요", true)
+
+
+func _update_chip() -> void:
+	if _chip == null or player == null:
+		return
+	var h: SurvivalRules.House = GameData.survival.house_at(player.global_position)
+	_chip.visible = h != null and Net.state == Net.State.ONLINE
+	if h != null:
+		_chip.text = "거점 · 안전해요" if HouseField.is_base(h) else "빈집 · %s" % _boarded_text(h)
+		_chip.add_theme_color_override("font_color", Color("#FFE9A8") if HouseField.is_base(h) else Color("#F4E8D8"))
 
 
 # ---- 쓰러짐 ----
@@ -311,12 +476,12 @@ func _on_downed_changed(id: int) -> void:
 ## 누운 몸 (나 · 동료), 쓰러진 동안 화면 안내 · 동료 머리 위 글자.
 func _update_downed(delta: float) -> void:
 	if player != null and player.body != null:
-		_pose(player.body, Net.is_downed(Net.my_id), player.body_rest_height(), delta)
+		_pose(player.body, Net.is_downed(Net.my_id) or Net.sleeping.has(Net.my_id), player.body_rest_height(), delta, BED_LIFT if Net.sleeping.has(Net.my_id) else 0.0)
 	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
 	if replicator != null:
 		for r: RemotePlayer in replicator.remote_nodes():
 			if r.body != null:
-				_pose(r.body, Net.is_downed(r.player_id), 0.8, delta)
+				_pose(r.body, Net.is_downed(r.player_id) or Net.sleeping.has(r.player_id), 0.8, delta, BED_LIFT if Net.sleeping.has(r.player_id) else 0.0)
 	var now_ms: int = Time.get_ticks_msec()
 	for id: int in _help_tags:
 		var info: Dictionary = Net.downed.get(id, {})
@@ -330,12 +495,12 @@ func _update_downed(delta: float) -> void:
 		_down_label.text = ("%s 님이 일으키는 중…" % GameData.player_name(by)) if by != 0 else "쓰러졌어요!\n동료가 와서 일으켜 주면 솔을 잃지 않아요 (%d초)" % left
 
 
-func _pose(body: Node3D, down: bool, rest: float, delta: float) -> void:
+func _pose(body: Node3D, down: bool, rest: float, delta: float, lift: float = 0.0) -> void:
 	var goal: float = DOWN_ROLL if down else 0.0
 	if is_equal_approx(body.rotation.z, goal) and not down:
 		return
 	body.rotation.z = move_toward(body.rotation.z, goal, delta * 4.0)
-	body.position.y = rest - DOWN_DROP * (body.rotation.z / DOWN_ROLL)
+	body.position.y = rest + (lift - DOWN_DROP) * (body.rotation.z / DOWN_ROLL)
 
 
 func _build_hud() -> void:
@@ -379,11 +544,75 @@ func _build_hud() -> void:
 	_give_up.pressed.connect(Net.give_up)
 	box.add_child(_give_up)
 	_down_panel.visible = false
+	# 판자 대는 중 막대.
+	_job_panel = _bottom_panel("BoardJobPanel", -560.0, -440.0)
+	var job_box: VBoxContainer = VBoxContainer.new()
+	_job_panel.add_child(job_box)
+	_job_label = Label.new()
+	_job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_job_label.add_theme_font_size_override("font_size", 30)
+	_job_label.add_theme_color_override("font_color", Color("#FFF4E0"))
+	job_box.add_child(_job_label)
+	_job_bar = ProgressBar.new()
+	_job_bar.name = "BoardJobBar"
+	_job_bar.custom_minimum_size = Vector2(0.0, 28.0)
+	_job_bar.show_percentage = false
+	job_box.add_child(_job_bar)
+	# 자는 중.
+	_sleep_panel = _bottom_panel("SleepPanel", -600.0, -420.0)
+	var sleep_box: VBoxContainer = VBoxContainer.new()
+	sleep_box.add_theme_constant_override("separation", 14)
+	_sleep_panel.add_child(sleep_box)
+	var sleep_label: Label = Label.new()
+	sleep_label.text = "쿨쿨… 자는 동안 체력이 빨리 차요"
+	sleep_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sleep_label.add_theme_font_size_override("font_size", 32)
+	sleep_label.add_theme_color_override("font_color", Color("#E8EEFF"))
+	sleep_box.add_child(sleep_label)
+	var wake_button: Button = Button.new()
+	wake_button.name = "WakeButton"
+	wake_button.text = "일어나기"
+	wake_button.custom_minimum_size = Vector2(0.0, 92.0)
+	wake_button.add_theme_font_size_override("font_size", 32)
+	wake_button.pressed.connect(func() -> void: Net.sleep_in_bed(false))
+	sleep_box.add_child(wake_button)
+	# 집 안 알림 (하트 아래).
+	_chip = Label.new()
+	_chip.name = "HouseChip"
+	_chip.position = Vector2(28.0, 318.0)
+	_chip.add_theme_font_size_override("font_size", 28)
+	_chip.add_theme_constant_override("outline_size", 8)
+	_chip.add_theme_color_override("font_outline_color", Color("#3A2A20"))
+	_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chip.visible = false
+	stash_window = StashWindow.new()
 	if hud != null:
 		hud.add_child.call_deferred(_vignette)
 		hud.add_child.call_deferred(_hearts)
 		hud.add_child.call_deferred(_down_panel)
+		hud.add_child.call_deferred(_job_panel)
+		hud.add_child.call_deferred(_sleep_panel)
+		hud.add_child.call_deferred(_chip)
+		hud.add_child.call_deferred(stash_window)
 	_refresh_hearts()
+
+
+func _bottom_panel(node_name: String, top: float, bottom: float) -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = node_name
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.1, 0.14, 0.8)
+	style.set_corner_radius_all(24)
+	style.set_content_margin_all(22)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	panel.offset_left = -400.0
+	panel.offset_right = 400.0
+	panel.offset_top = top
+	panel.offset_bottom = bottom
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.visible = false
+	return panel
 
 
 func _refresh_hearts() -> void:

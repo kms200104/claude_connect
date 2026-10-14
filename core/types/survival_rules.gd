@@ -3,6 +3,7 @@ extends RefCounted
 ## v0.23 생존 규칙 (data/survival/survival.json + houses.json — 서버 server/src/survival.js 와 같은 파일).
 ## 빈집 · 뒤질 가구, 체력, 회복 아이템, 무기(피해 · 거리 · 불빛), 놓은 가구의 방어, 밤 크리처 종류.
 ## v0.24: 판자를 댈 수 있는 곳 (현관 · 깨진 창) · 판자 값 · 쓰러짐/일으키기.
+## v0.25: 판자 대는 시간 · 거점 상자 · 침대 자리.
 
 class LootBox:
 	var id: String = ""
@@ -38,6 +39,9 @@ class House:
 	## 깨진 창 id (현관과 함께 크리처가 들어오는 곳).
 	var broken: PackedStringArray = []
 	var breaches: Array[Breach] = []
+	## 거점 상자 · 침대 (월드).
+	var stash_position: Vector3 = Vector3.ZERO
+	var bed_position: Vector3 = Vector3.ZERO
 
 	## 집 안인지 (로컬 사각형).
 	func contains(p: Vector3, margin: float = 0.0) -> bool:
@@ -79,6 +83,12 @@ var fortify_cost: Array[Dictionary] = []
 var downed_ms: int = 45000
 var revive_range: float = 1.8
 var revive_ms: int = 3000
+var board_ms: int = 2500
+## 거점 상자 · 침대 (로컬) · 곁 거리 · 상자 칸 수.
+var stash_local: Vector2 = Vector2(2.9, 3.45)
+var bed_local: Vector2 = Vector2(-3.2, -2.5)
+var base_range: float = 1.6
+var stash_slots: int = 12
 
 
 static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRules:
@@ -126,6 +136,14 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		if c is Dictionary:
 			r.fortify_cost.append({"id": str(c.get("id", "")), "n": int(c.get("n", 1))})
 	var hp_of: Dictionary = fortify.get("hp", {})
+	r.board_ms = int(fortify.get("board_ms", r.board_ms))
+	var base: Dictionary = rules.get("base", {})
+	var st: Array = base.get("stash", [r.stash_local.x, r.stash_local.y])
+	var bd: Array = base.get("bed", [r.bed_local.x, r.bed_local.y])
+	r.stash_local = Vector2(float(st[0]), float(st[1]))
+	r.bed_local = Vector2(float(bd[0]), float(bd[1]))
+	r.base_range = float(base.get("range", r.base_range))
+	r.stash_slots = int(base.get("slots", r.stash_slots))
 	var downed: Dictionary = rules.get("downed", {})
 	r.downed_ms = int(downed.get("ms", r.downed_ms))
 	r.revive_range = float(downed.get("revive_range", r.revive_range))
@@ -148,6 +166,8 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		for b: Variant in h.get("broken", []):
 			house.broken.append(str(b))
 		var turn: Basis = Basis(Vector3.UP, house.yaw)
+		house.stash_position = house.position + turn * Vector3(r.stash_local.x, 0.0, r.stash_local.y)
+		house.bed_position = house.position + turn * Vector3(r.bed_local.x, 0.0, r.bed_local.y)
 		for o: Dictionary in r.openings:
 			var kind: String = str(o.get("kind", "window"))
 			if kind != "door" and not house.broken.has(str(o.get("id", ""))):

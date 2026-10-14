@@ -42,6 +42,11 @@ signal swung(info: Dictionary)
 signal board_changed(key: String, hp: int, info: Dictionary)
 signal boarded(info: Dictionary)
 signal downed_changed(player_id: int)
+## v0.25: 판자 대는 중 (key, 끝났거나 그만두면 Net.board_jobs 에서 빠진다) · 거점 상자 · 자는 사람 · 내가 낸 소리 { k, r, n }.
+signal board_job_changed(key: String)
+signal stash_changed(house_id: String)
+signal sleep_changed(player_id: int)
+signal noise_made(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -285,6 +290,10 @@ var night: bool = false
 ## v0.24 판자 ("집:자리" → 남은 hp, 없으면 뚫림) · 쓰러진 사람 (id → {until: 이 기기 ms, by: 일으키는 사람, done: 다 되는 이 기기 ms}).
 var boards: Dictionary[String, int] = {}
 var downed: Dictionary[int, Dictionary] = {}
+## v0.25 판자 대는 중 ("집:자리" → {progress, need, helpers: Array[int], at: 받은 이 기기 ms}) · 거점 상자 (집 → [{id, n}]) · 자는 사람.
+var board_jobs: Dictionary[String, Dictionary] = {}
+var stash: Dictionary[String, Array] = {}
+var sleeping: Dictionary[int, bool] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -961,6 +970,21 @@ func _handle_text(text: String) -> void:
 			board_changed.emit(key, bhp, msg)
 		"boarded":
 			boarded.emit(msg)
+		"boarding", "board_job":
+			_apply_board_job(msg)
+		"stash":
+			var sh: String = str(msg.get("h", ""))
+			stash[sh] = (msg.get("items", []) as Array).duplicate(true) if msg.get("items") is Array else []
+			stash_changed.emit(sh)
+		"sleep":
+			var sid: int = int(msg.get("id", 0))
+			if bool(msg.get("on", false)):
+				sleeping[sid] = true
+			else:
+				sleeping.erase(sid)
+			sleep_changed.emit(sid)
+		"noise":
+			noise_made.emit(msg)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1229,6 +1253,18 @@ func _on_welcome(msg: Dictionary) -> void:
 	if board_map is Dictionary:
 		for key: Variant in board_map:
 			boards[str(key)] = int(board_map[key])
+	board_jobs.clear()
+	for j: Variant in surv.get("jobs", []):
+		if j is Dictionary:
+			_apply_board_job(j)
+	stash.clear()
+	var stash_map: Variant = surv.get("stash", {})
+	if stash_map is Dictionary:
+		for h: Variant in stash_map:
+			stash[str(h)] = (stash_map[h] as Array).duplicate(true) if stash_map[h] is Array else []
+	sleeping.clear()
+	for sid: Variant in surv.get("sleeping", []):
+		sleeping[int(sid)] = true
 	downed.clear()
 	for d: Variant in surv.get("downed", []):
 		if d is Dictionary:
@@ -1340,6 +1376,34 @@ func revive(player_id: int) -> void:
 func give_up() -> void:
 	if state == State.ONLINE:
 		_request("give_up", {})
+
+
+## v0.25 거점 상자에 넣기 (가방 칸, n = 0 이면 그 칸 다) · 꺼내기 · 침대에서 자기 / 일어나기.
+func stash_put(house_id: String, slot: int, n: int = 0) -> void:
+	if state == State.ONLINE:
+		_request("stash", {"h": house_id, "op": "put", "slot": slot, "n": n})
+
+
+func stash_take(house_id: String, item_id: String, n: int = 0) -> void:
+	if state == State.ONLINE:
+		_request("stash", {"h": house_id, "op": "take", "id": item_id, "n": n})
+
+
+func sleep_in_bed(on: bool) -> void:
+	if state == State.ONLINE:
+		_request("sleep", {"on": on})
+
+
+func _apply_board_job(msg: Dictionary) -> void:
+	var key: String = "%s:%s" % [str(msg.get("h", "")), str(msg.get("o", ""))]
+	if bool(msg.get("cancel", false)) or bool(msg.get("done", false)):
+		board_jobs.erase(key)
+	else:
+		var helpers: Array[int] = []
+		for id: Variant in msg.get("helpers", []):
+			helpers.append(int(id))
+		board_jobs[key] = {"progress": float(msg.get("progress", 0.0)), "need": float(msg.get("need", 1.0)), "helpers": helpers, "at": Time.get_ticks_msec()}
+	board_job_changed.emit(key)
 
 
 func is_downed(player_id: int) -> bool:

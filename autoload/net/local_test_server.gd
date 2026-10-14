@@ -324,6 +324,9 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send(peer, {"t": "board", "h": br.house, "o": br.id, "hp": br.max_hp, "max": br.max_hp, "by": 1})
 		"revive", "give_up":
 			fail.call(NetProtocol.ERR_NOT_DOWNED)
+		"stash", "sleep":
+			# v0.25 오프라인: 판자가 서버에만 있으니 거점도 없다.
+			fail.call(NetProtocol.ERR_NOT_BASE)
 		"use":
 			var uslot: int = int(msg.get("slot", -1))
 			var heal: int = GameData.survival.heal_of(str(_slots[uslot]["id"])) if uslot >= 0 and uslot < _slots.size() and _slots[uslot] != null else 0

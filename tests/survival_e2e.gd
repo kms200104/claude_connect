@@ -3,6 +3,8 @@ extends Node
 ## 빈집 냉장고 앞 상황 버튼 "뒤지기 · 냉장고" → 찾은 것 · 열린 냉장고, 체력 하트, 둔치에서 크리처가 나타나 다가와 때리고(하트가 준다),
 ## "공격"으로 쓰러뜨리면 땅에 아이템이 떨어진다, 가방에서 붕대 "쓰기" → 체력이 오른다.
 ## v0.24: 깨진 창 앞 "판자 대기" → 판자가 보이고 목재 · 못을 쓴다.
+## v0.25: 판자는 망치질 막대가 찬 뒤에 붙는다 · 휘두르면 소리 · 현관 · 깨진 창을 다 막으면 거점 (알림 · 등불) →
+## "거점 상자 열기" 넣기 · 꺼내기 → 침대 "자기" (누운 몸 · 체력이 오른다) → "일어나기".
 ## 인자: -- --server=ws://127.0.0.1:PORT [--shots=폴더]
 
 var _server: String = ""
@@ -111,8 +113,11 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.SURVIVE and interaction.target_id == "board:h01:w4", 2.0), "깨진 창 앞 상황 버튼 '%s' (%s)" % [survival.target_label("board:h01:w4"), interaction.target_id])
 	_check(survival.target_label("board:h01:w4").begins_with("판자 대기 · 창"), "판자 값이 보인다")
 	interaction.action_hud.action_pressed.emit()
-	_check(await _wait_until(func() -> bool: return int(Net.boards.get("h01:w4", 0)) == rules.breaches["h01:w4"].max_hp, 3.0), "판자를 댔다 (%d)" % int(Net.boards.get("h01:w4", 0)))
-	_check(board_node.visible and _count("wood") == 0 and _count("nails") == 0, "판자가 보이고 목재 · 못을 썼다")
+	_check(await _wait_until(func() -> bool: return Net.board_jobs.has("h01:w4") and (survival.get("_job_panel") as Control).visible, 2.0), "망치질 막대가 보인다")
+	_check(await _wait_until(func() -> bool: return int(Net.boards.get("h01:w4", 0)) == rules.breaches["h01:w4"].max_hp, 6.0), "판자를 댔다 (%d)" % int(Net.boards.get("h01:w4", 0)))
+	_check(board_node.visible and _count("wood") == 4 and _count("nails") == 2, "판자가 보이고 목재 · 못을 썼다")
+	var chip: Label = survival.get("_chip")
+	_check(chip.visible and chip.text.contains("판자 1/3"), "집 안 알림 '%s'" % chip.text)
 	_check(await _wait_until(func() -> bool: return interaction.target_id != "board:h01:w4", 1.0), "멀쩡한 판자에는 '판자 대기'가 없다")
 	await _shot("surv_boarded")
 
@@ -121,6 +126,8 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty() and survival.creatures.get_child_count() > 0, 5.0), "둔치에 크리처가 나타났다 (%d)" % Net.creatures.size())
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
 	await _shot("surv_creature")
+	var noises: Array = [0]
+	Net.noise_made.connect(func(_i: Dictionary) -> void: noises[0] += 1)
 	var dead: Array = [false]
 	Net.creature_dead.connect(func(i: Dictionary) -> void:
 		if int(i.get("by", 0)) == Net.my_id:
@@ -134,8 +141,61 @@ func _run() -> void:
 			interaction.action_hud.action_pressed.emit()
 		await get_tree().create_timer(0.35).timeout
 	_check(dead[0], "'공격'으로 크리처를 쓰러뜨렸다")
+	_check(noises[0] > 0, "밤에 휘두르면 소리가 난다 (%d번)" % noises[0])
 	_check(await _wait_until(func() -> bool: return Net.drops.size() > drops_before, 2.0), "쓰러진 자리에 아이템이 떨어졌다")
 	await _shot("surv_drop")
+
+	# ---- v0.25 거점: 현관 · 깨진 창 하나 더 → 상자 · 침대 ----
+	var turn: Basis = Basis(Vector3.UP, house.yaw)
+	for spot: Array in [["h01:door", Vector3(-3.0, 0.3, 4.8)], ["h01:w3", Vector3(2.8, 0.3, -3.3)]]:
+		await _teleport(house.position + turn * spot[1])
+		var key: String = spot[0]
+		_check(await _wait_until(func() -> bool: return interaction.target_id == "board:" + key, 2.0), "'%s' 앞 상황 버튼 (%s)" % [key, interaction.target_id])
+		interaction.action_hud.action_pressed.emit()
+		_check(await _wait_until(func() -> bool: return int(Net.boards.get(key, 0)) > 0, 6.0), "%s 에 판자" % key)
+	await get_tree().create_timer(0.4).timeout
+	var lantern: Node3D = survival.houses.find_child("Lantern_h01", true, false) as Node3D
+	_check(HouseField.is_base(house) and lantern != null and lantern.visible, "거점이 됐다 (등불)")
+	await _teleport(house.position + turn * Vector3(rules.stash_local.x, 0.3, rules.stash_local.y - 0.85))
+	_check(await _wait_until(func() -> bool: return interaction.target_id == "stash:h01", 2.0), "상자 앞 상황 버튼 '%s' (%s)" % [survival.target_label("stash:h01"), interaction.target_id])
+	_check(chip.text.begins_with("거점"), "집 안 알림 '%s'" % chip.text)
+	interaction.action_hud.action_pressed.emit()
+	await get_tree().process_frame
+	_check(survival.stash_window.is_open(), "거점 상자 창이 열렸다")
+	var band_slot: int = -1
+	for i: int in Net.inventory.size():
+		if Net.inventory[i] != null and Net.inventory[i].id == "bandage":
+			band_slot = i
+	var put: Button = survival.stash_window.find_child("PutOne_%d" % band_slot, true, false) as Button
+	_check(put != null, "가방 붕대 '1개' 넣기 단추")
+	if put != null:
+		put.pressed.emit()
+	_check(await _wait_until(func() -> bool: return not (Net.stash.get("h01", []) as Array).is_empty(), 3.0), "상자에 붕대를 넣었다 (%s)" % str(Net.stash.get("h01", [])))
+	await get_tree().process_frame
+	var take: Button = survival.stash_window.find_child("Take_bandage", true, false) as Button
+	_check(take != null, "상자 '꺼내기' 단추")
+	if take != null:
+		take.pressed.emit()
+	_check(await _wait_until(func() -> bool: return (Net.stash.get("h01", []) as Array).is_empty() and _count("bandage") == 3, 3.0), "다시 꺼냈다")
+	await _shot("surv_stash")
+	survival.stash_window.close()
+	if Net.hp < Net.max_hp:
+		await _teleport(house.position + turn * Vector3(rules.bed_local.x + 1.15, 0.3, rules.bed_local.y))
+		_check(await _wait_until(func() -> bool: return interaction.target_id == "bed:h01", 2.0), "침대 곁 상황 버튼 '%s' (%s)" % [survival.target_label("bed:h01"), interaction.target_id])
+		var hp0: int = Net.hp
+		interaction.action_hud.action_pressed.emit()
+		_check(await _wait_until(func() -> bool: return Net.sleeping.has(Net.my_id), 2.0), "침대에서 잔다")
+		await get_tree().create_timer(0.6).timeout
+		_check(player.is_input_locked() and player.body.rotation.z > 1.2 and (survival.get("_sleep_panel") as Control).visible, "누운 몸 · 자는 중 안내")
+		_check(await _wait_until(func() -> bool: return Net.hp > hp0, 5.0), "자는 동안 체력이 오른다 (%d → %d)" % [hp0, Net.hp])
+		await _shot("surv_sleep")
+		var wake: Button = survival.find_child("WakeButton", true, false) as Button
+		if wake == null:
+			wake = _village.get_node("HUD").find_child("WakeButton", true, false) as Button
+		wake.pressed.emit()
+		_check(await _wait_until(func() -> bool: return not Net.sleeping.has(Net.my_id) and not player.is_input_locked(), 2.0), "일어났다")
+	else:
+		_check(true, "(체력 가득 — 침대는 건너뜀)")
 
 	# ---- 붕대 쓰기 ----
 	await _teleport(Vector3(-58.0, 0.1, 68.0))

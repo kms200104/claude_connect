@@ -2,6 +2,7 @@ extends Node
 ## v0.24 쓰러짐 · 일으키기 종단 테스트 (서버 1개 + 헤드리스 Godot 2개 · tests/run_revive_e2e.sh 가 띄운다, 밤 23시 · 체력 2로 시작).
 ##   a: 둔치에서 크리처에게 맞아 쓰러진다 → 누운 몸 · 화면 안내 · 움직이지 못함 → b 가 일으키면 체력 4로 일어난다 (솔을 잃지 않음).
 ##   b: 대피소(안전)에서 구급상자로 체력을 채우고 기다리다 a 가 쓰러지면 곁으로 → 머리 위 "도와줘요!" · 누운 a → 상황 버튼 "일으키기" → a 가 일어난다.
+## v0.25 그다음 둘이 h02 현관에 함께 판자: a 가 시작, b 는 "함께 판자 대기" → 빨리 붙고 재료는 a 만 낸다.
 ## 두 프로세스는 --dir 의 작은 파일로 순서를 맞춘다. 인자: -- --role=a|b --server=ws://… --dir=/tmp/…
 
 var _role: String = ""
@@ -87,6 +88,48 @@ func _run() -> void:
 		await _downed_side()
 	else:
 		await _helper_side()
+	await _board_together()
+
+
+## v0.25 h02 현관에 둘이서 판자 (a 가 먼저 시작, b 가 함께).
+func _board_together() -> void:
+	var interaction: InteractionController = _village.get_node("InteractionController")
+	var survival: SurvivalController = _village.get_node("Survival")
+	var h: SurvivalRules.House = GameData.survival.houses[1]
+	var key: String = "%s:door" % h.id
+	# 체력을 채우고 간다 (밤이라 크리처가 있다).
+	for i: int in Net.inventory.size():
+		if Net.hp < Net.max_hp and Net.inventory[i] != null and Net.inventory[i].id == "first_aid_kit":
+			Net.use_item(i)
+	await _teleport(h.position + Basis(Vector3.UP, h.yaw) * Vector3(-3.0 + (-0.45 if _role == "a" else 0.45), 0.3, 4.8))
+	var wood: int = _count("wood")
+	var got: Array = [{}]
+	Net.boarded.connect(func(i: Dictionary) -> void: got[0] = i, CONNECT_ONE_SHOT)
+	if _role == "a":
+		_check(await _wait_until(func() -> bool: return interaction.target_id == "board:" + key, 3.0), "현관 앞 '판자 대기' (%s)" % interaction.target_id)
+		interaction.action_hud.action_pressed.emit()
+		_write("board_started", "1")
+	else:
+		await _wait_file("board_started", 20.0)
+		_check(await _wait_until(func() -> bool: return Net.board_jobs.has(key) and survival.target_label("board:" + key).begins_with("함께"), 3.0), "상황 버튼 '%s'" % survival.target_label("board:" + key))
+		interaction.action_hud.action_pressed.emit()
+	var t0: int = Time.get_ticks_msec()
+	_check(await _wait_until(func() -> bool: return not (got[0] as Dictionary).is_empty(), 6.0), "판자를 댔다")
+	_check(int(got[0].get("helpers", 0)) == 2, "둘이서 댔다 (%s)" % str(got[0]))
+	if _role == "b":
+		_check(Time.get_ticks_msec() - t0 < GameData.survival.board_ms, "함께 대니 빨랐다 (%dms)" % (Time.get_ticks_msec() - t0))
+		_check(_count("wood") == wood, "도운 사람은 재료를 안 냈다")
+	else:
+		_check(_count("wood") == wood - 2, "시작한 사람이 재료를 냈다")
+	await _teleport(Vector3(-58.0, 0.1, 68.0))
+
+
+func _count(item_id: String) -> int:
+	var n: int = 0
+	for it: InventoryItem in Net.inventory:
+		if it != null and it.id == item_id:
+			n += it.count
+	return n
 
 
 func _downed_side() -> void:

@@ -6,6 +6,7 @@ extends Node3D
 ## 그냥 놓인 가구(밥상 · 넘어진 의자 · 침대 · 변기 · 욕조). 뒤진 가구는 문이 열리고 서랍이 빠진 모습이 된다 (다시 차면 닫힌다).
 ## v0.24 거점: 깨진 창(검은 구멍 · 유리 조각)과 떨어진 현관문 자리에 판자를 대면 판자(안팎) · 판자문이 보인다.
 ## 반쯤 부서지면 금 간 판자, 크리처가 두드리면 흔들린다. 판자문은 사람이 다가가면 열린다 (사람은 지나가고 크리처는 못 지나간다).
+## v0.25 거점: 앞방에 나무 상자 (거점 상자), 뚫린 곳을 다 막으면 상자 위 등불이 켜진다.
 
 @export var clay_material: Material
 @export var window_material: Material
@@ -27,6 +28,8 @@ var _boards: Dictionary[String, Array] = {}
 ## 현관 key → 판자문 경첩 · 떨어진 옛 문.
 var _door_hinges: Dictionary[String, Node3D] = {}
 var _fallen_doors: Dictionary[String, Node3D] = {}
+## 집 id → 거점 등불 (다 막으면 보인다).
+var _lanterns: Dictionary[String, Node3D] = {}
 
 
 func _ready() -> void:
@@ -91,6 +94,20 @@ func _refresh_boards() -> void:
 		(parts[2] as Node3D).visible = hp > 0 and hp * 2 <= br.max_hp
 		if _fallen_doors.has(key):
 			_fallen_doors[key].visible = hp <= 0
+	for h: SurvivalRules.House in GameData.survival.houses:
+		var lantern: Node3D = _lanterns.get(h.id)
+		if lantern != null:
+			lantern.visible = is_base(h)
+
+
+## 뚫린 곳을 모두 막은 빈집 (거점).
+static func is_base(h: SurvivalRules.House) -> bool:
+	if h.breaches.is_empty():
+		return false
+	for b: SurvivalRules.Breach in h.breaches:
+		if int(Net.boards.get(b.key, 0)) <= 0:
+			return false
+	return true
 
 
 ## 뒤진 가구는 열린 모습으로.
@@ -208,6 +225,27 @@ func _build_house(h: SurvivalRules.House, rules: SurvivalRules) -> void:
 		var fx: float = -hw - 1.0 + float(k) * (h.size.x + 2.0) / 8.0
 		clay.box(Vector3(fx, 0.5, hd + 4.2), Vector3(0.08, 1.0, 0.08), Color("#8A7A62"), Basis(Vector3.RIGHT, 0.15 * float(k % 3 - 1)))
 	clay.box(Vector3(0.0, 0.85, hd + 4.2), Vector3(h.size.x + 2.0, 0.08, 0.06), Color("#8A7A62"), Basis(Vector3.BACK, 0.04))
+	# 거점 상자 (앞방, 앞면이 방 안쪽 −z) · 등불.
+	var sp: Vector3 = Vector3(rules.stash_local.x, 0.2, rules.stash_local.y)
+	clay.box(sp + Vector3(0, 0.27, 0), Vector3(0.9, 0.54, 0.5), Color("#8A5A30"))
+	clay.box(sp + Vector3(0, 0.58, 0), Vector3(0.94, 0.1, 0.54), Color("#6E4628"))
+	for bx: float in [-0.3, 0.3]:
+		clay.box(sp + Vector3(bx, 0.3, -0.26), Vector3(0.06, 0.6, 0.03), Color("#4A4440"))
+	clay.box(sp + Vector3(0, 0.45, -0.27), Vector3(0.12, 0.12, 0.03), Color("#C9A23A"))
+	_collider(body, sp + Vector3(0, 0.3, 0), Vector3(0.9, 0.6, 0.5))
+	var lamp: BoxBatch = BoxBatch.new()
+	lamp.box(sp + Vector3(0.3, 0.72, 0.05), Vector3(0.16, 0.2, 0.16), Color("#FFD86A"))
+	lamp.box(sp + Vector3(0.3, 0.85, 0.05), Vector3(0.2, 0.05, 0.2), DARK)
+	var lantern: MeshInstance3D = _mesh(lamp, clay_material, "Lantern_%s" % h.id)
+	lantern.visible = false
+	var glow: OmniLight3D = OmniLight3D.new()
+	glow.light_color = Color("#FFC870")
+	glow.light_energy = 0.8
+	glow.omni_range = 4.0
+	glow.position = sp + Vector3(0.3, 0.9, 0.05)
+	lantern.add_child(glow)
+	root.add_child(lantern)
+	_lanterns[h.id] = lantern
 	# 뒤질 수 있는 가구 (닫힌 모습 · 열린 모습 따로).
 	for c: SurvivalRules.LootBox in h.containers:
 		_build_box(root, body, c)
