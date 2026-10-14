@@ -80,7 +80,7 @@ export function blockedAreas(data) {
   const civic = data.civic?.building;
   if (civic) rects.push(buildingRect(civic, 1.5));
   for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
-  // v0.23 빈집촌 단층집 (안쪽도 막는다 — 가구 · 씨앗을 집 안에 놓지 않고, 크리처는 집 안으로 들어오지 못한다).
+  // v0.23 빈집촌 단층집 (안쪽도 막는다 — 가구 · 씨앗을 집 안에 놓지 않고, 크리처는 벽을 뚫고 다니지 못한다 — v0.24 뚫린 현관 · 깨진 창으로만 드나든다, survival.js).
   for (const h of data.survival?.houses ?? []) {
     const hw = (Math.abs(Math.cos(h.yaw)) > 0.5 ? h.w : h.d) / 2;
     const hd = (Math.abs(Math.cos(h.yaw)) > 0.5 ? h.d : h.w) / 2;

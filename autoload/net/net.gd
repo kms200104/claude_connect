@@ -38,6 +38,10 @@ signal creatures_updated
 signal creature_hit(info: Dictionary)
 signal creature_dead(info: Dictionary)
 signal swung(info: Dictionary)
+## v0.24 거점 · 같이 하기: 판자 hp 가 바뀜 (key "집:자리", hp, 소식 {by, c}) · 내가 댔다 · 누가 쓰러짐 · 일으키기 시작/멈춤 · 일어남(기절 포함).
+signal board_changed(key: String, hp: int, info: Dictionary)
+signal boarded(info: Dictionary)
+signal downed_changed(player_id: int)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -278,6 +282,9 @@ var max_hp: int = 10
 var looted_until: Dictionary[String, float] = {}
 var creatures: Dictionary[String, Dictionary] = {}
 var night: bool = false
+## v0.24 판자 ("집:자리" → 남은 hp, 없으면 뚫림) · 쓰러진 사람 (id → {until: 이 기기 ms, by: 일으키는 사람, done: 다 되는 이 기기 ms}).
+var boards: Dictionary[String, int] = {}
+var downed: Dictionary[int, Dictionary] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -944,6 +951,28 @@ func _handle_text(text: String) -> void:
 			creature_dead.emit(msg)
 		"swing":
 			swung.emit(msg)
+		"board":
+			var key: String = "%s:%s" % [str(msg.get("h", "")), str(msg.get("o", ""))]
+			var bhp: int = int(msg.get("hp", 0))
+			if bhp > 0:
+				boards[key] = bhp
+			else:
+				boards.erase(key)
+			board_changed.emit(key, bhp, msg)
+		"boarded":
+			boarded.emit(msg)
+		"downed":
+			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
+			downed_changed.emit(int(msg.get("id", 0)))
+		"revive":
+			var who: int = int(msg.get("id", 0))
+			if downed.has(who):
+				downed[who]["by"] = int(msg.get("by", 0))
+				downed[who]["done"] = Time.get_ticks_msec() + int(msg.get("ms", 0)) if int(msg.get("by", 0)) != 0 else 0
+				downed_changed.emit(who)
+		"up":
+			downed.erase(int(msg.get("id", 0)))
+			downed_changed.emit(int(msg.get("id", 0)))
 		"drill_done":
 			sol = int(msg.get("sol", sol))
 			if not drill.is_empty():
@@ -1195,6 +1224,15 @@ func _on_welcome(msg: Dictionary) -> void:
 	_set_hp({"hp": surv.get("hp", max_hp), "max": surv.get("max", max_hp)})
 	creatures.clear()
 	_apply_creatures(surv.get("creatures", []))
+	boards.clear()
+	var board_map: Variant = surv.get("boards", {})
+	if board_map is Dictionary:
+		for key: Variant in board_map:
+			boards[str(key)] = int(board_map[key])
+	downed.clear()
+	for d: Variant in surv.get("downed", []):
+		if d is Dictionary:
+			downed[int(d.get("id", 0))] = {"until": Time.get_ticks_msec() + int(d.get("left", 0)), "by": int(d.get("by", 0)), "done": 0}
 	weather = str(msg.get("w", NetProtocol.WEATHER_CLEAR))
 	tree_stages.clear()
 	planted_trees.clear()
@@ -1286,6 +1324,26 @@ func attack() -> void:
 func use_item(slot: int) -> void:
 	if state == State.ONLINE:
 		_request("use", {"slot": slot})
+
+
+## v0.24 빈집 현관 · 깨진 창에 판자 대기 (보수도 같다) · 쓰러진 동료 일으키기 · 쓰러진 채 포기 (대피소에서 깨어난다).
+func board(house_id: String, opening_id: String) -> void:
+	if state == State.ONLINE:
+		_request("board", {"h": house_id, "o": opening_id})
+
+
+func revive(player_id: int) -> void:
+	if state == State.ONLINE:
+		_request("revive", {"p": player_id})
+
+
+func give_up() -> void:
+	if state == State.ONLINE:
+		_request("give_up", {})
+
+
+func is_downed(player_id: int) -> bool:
+	return downed.has(player_id)
 
 
 ## 이 가구를 지금 뒤질 수 있는지 (다시 찰 때가 지났는지).

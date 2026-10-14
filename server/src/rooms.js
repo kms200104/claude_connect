@@ -112,7 +112,7 @@ function newProfile(uid, slot, cfg, data) {
     vehicles: [], // v19 차고: [{ id, model, owned: [산 부품], fit: { 칸: 부품 } }]
     vehSeq: 0,
     steps: { day: -1, today: 0, got: [] }, // v0.20 솔걸음: 마을 날짜 · 그날 인정된 걸음 · 받은 목표(번호)
-    hp: data?.survival?.player?.max_hp ?? 10, // v0.23 체력
+    hp: cfg.startHp > 0 ? cfg.startHp : (data?.survival?.player?.max_hp ?? 10), // v0.23 체력 (START_HP 는 시험용)
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },

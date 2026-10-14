@@ -2,6 +2,7 @@ class_name SurvivalRules
 extends RefCounted
 ## v0.23 생존 규칙 (data/survival/survival.json + houses.json — 서버 server/src/survival.js 와 같은 파일).
 ## 빈집 · 뒤질 가구, 체력, 회복 아이템, 무기(피해 · 거리 · 불빛), 놓은 가구의 방어, 밤 크리처 종류.
+## v0.24: 판자를 댈 수 있는 곳 (현관 · 깨진 창) · 판자 값 · 쓰러짐/일으키기.
 
 class LootBox:
 	var id: String = ""
@@ -13,6 +14,19 @@ class LootBox:
 	var yaw: float = 0.0
 
 
+## 판자를 댈 수 있는 곳 (현관 · 깨진 창). key = "집:자리".
+class Breach:
+	var key: String = ""
+	var house: String = ""
+	var id: String = ""
+	var kind: String = "window"
+	## 로컬 가운데 · 바깥쪽.
+	var local: Vector2 = Vector2.ZERO
+	var normal: Vector2 = Vector2.ZERO
+	var position: Vector3 = Vector3.ZERO
+	var max_hp: int = 10
+
+
 class House:
 	var id: String = ""
 	var position: Vector3 = Vector3.ZERO
@@ -20,8 +34,10 @@ class House:
 	var size: Vector2 = Vector2(10.0, 8.0)
 	var wall: Color = Color.WHITE
 	var roof: Color = Color.GRAY
-	var boarded: bool = false
 	var containers: Array[LootBox] = []
+	## 깨진 창 id (현관과 함께 크리처가 들어오는 곳).
+	var broken: PackedStringArray = []
+	var breaches: Array[Breach] = []
 
 	## 집 안인지 (로컬 사각형).
 	func contains(p: Vector3, margin: float = 0.0) -> bool:
@@ -54,6 +70,15 @@ var weapons: Dictionary[String, Weapon] = {}
 var lights: Dictionary[String, float] = {}
 var creature_kinds: Dictionary[String, CreatureKind] = {}
 var night: Vector2i = Vector2i(20, 5)
+## 창 · 현관 자리 (로컬, houses.json openings): id → {kind, lx, lz, nx, nz}.
+var openings: Array[Dictionary] = []
+var breaches: Dictionary[String, Breach] = {}
+var fortify_range: float = 1.7
+## 판자 값 [{id, n}].
+var fortify_cost: Array[Dictionary] = []
+var downed_ms: int = 45000
+var revive_range: float = 1.8
+var revive_ms: int = 3000
 
 
 static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRules:
@@ -95,8 +120,21 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		kind.hp = int(c.get("hp", 5))
 		kind.speed = float(c.get("speed", 1.5))
 		r.creature_kinds[kind.id] = kind
+	var fortify: Dictionary = rules.get("fortify", {})
+	r.fortify_range = float(fortify.get("range", r.fortify_range))
+	for c: Variant in fortify.get("cost", []):
+		if c is Dictionary:
+			r.fortify_cost.append({"id": str(c.get("id", "")), "n": int(c.get("n", 1))})
+	var hp_of: Dictionary = fortify.get("hp", {})
+	var downed: Dictionary = rules.get("downed", {})
+	r.downed_ms = int(downed.get("ms", r.downed_ms))
+	r.revive_range = float(downed.get("revive_range", r.revive_range))
+	r.revive_ms = int(downed.get("revive_ms", r.revive_ms))
 	for w: Variant in house_doc.get("walls", []):
 		r.walls.append(w)
+	for o: Variant in house_doc.get("openings", []):
+		if o is Dictionary:
+			r.openings.append(o)
 	for h: Variant in house_doc.get("houses", []):
 		if not h is Dictionary:
 			continue
@@ -107,7 +145,24 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		house.size = Vector2(float(h.get("w", 10.0)), float(h.get("d", 8.0)))
 		house.wall = Color(str(h.get("wall", "#E8DCC6")))
 		house.roof = Color(str(h.get("roof", "#4F7FA8")))
-		house.boarded = bool(h.get("boarded", false))
+		for b: Variant in h.get("broken", []):
+			house.broken.append(str(b))
+		var turn: Basis = Basis(Vector3.UP, house.yaw)
+		for o: Dictionary in r.openings:
+			var kind: String = str(o.get("kind", "window"))
+			if kind != "door" and not house.broken.has(str(o.get("id", ""))):
+				continue
+			var br: Breach = Breach.new()
+			br.house = house.id
+			br.id = str(o.get("id", ""))
+			br.key = "%s:%s" % [house.id, br.id]
+			br.kind = kind
+			br.local = Vector2(float(o.get("lx", 0.0)), float(o.get("lz", 0.0)))
+			br.normal = Vector2(float(o.get("nx", 0.0)), float(o.get("nz", 0.0)))
+			br.position = house.position + turn * Vector3(br.local.x, 0.0, br.local.y)
+			br.max_hp = int(hp_of.get(kind, 10))
+			house.breaches.append(br)
+			r.breaches[br.key] = br
 		for c: Variant in h.get("containers", []):
 			var box: LootBox = LootBox.new()
 			box.id = str(c.get("id", ""))

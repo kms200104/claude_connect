@@ -121,6 +121,8 @@ export const defaultConfig = {
   shopPointsScale: num('SHOP_POINTS_SCALE', 1),
   // 처음 들어온 사람이 가진 솔 (시연·테스트용).
   startSol: num('START_SOL', 0),
+  // v0.24 처음 들어온 사람의 체력 (시험용, 0 이면 가득).
+  startHp: num('START_HP', 0),
   // 테스트 도구 (v0.13.7): 켜면 앱 설정의 "테스트: 2000억 솔 받기"가 동작한다. 서버 실행 파일(tools/server_app)은 켜서 띄운다. 실제 서비스에서는 끈다.
   devTools: process.env.DEV_TOOLS === '1',
   // 테스트 도구 한 번에 주는 솔.

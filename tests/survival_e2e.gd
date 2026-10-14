@@ -2,6 +2,7 @@ extends Node
 ## v0.23 생존 종단 테스트 (서버 1개 + Godot 1개, 밤 23시 · 크리처가 빨리 나온다):
 ## 빈집 냉장고 앞 상황 버튼 "뒤지기 · 냉장고" → 찾은 것 · 열린 냉장고, 체력 하트, 둔치에서 크리처가 나타나 다가와 때리고(하트가 준다),
 ## "공격"으로 쓰러뜨리면 땅에 아이템이 떨어진다, 가방에서 붕대 "쓰기" → 체력이 오른다.
+## v0.24: 깨진 창 앞 "판자 대기" → 판자가 보이고 목재 · 못을 쓴다.
 ## 인자: -- --server=ws://127.0.0.1:PORT [--shots=폴더]
 
 var _server: String = ""
@@ -101,6 +102,19 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return interaction.target_id != "loot:h01_2", 1.0), "빈 냉장고에는 '뒤지기'가 없다")
 	var roof: Node3D = survival.houses.find_child("House_h01", true, false).get_node("Roof") as Node3D
 	_check(not roof.visible, "집 안에 들어가면 지붕을 걷는다")
+
+	# ---- v0.24 깨진 창에 판자 대기 ----
+	_check(house.broken.has("w4") and rules.breaches.has("h01:w4"), "h01 왼쪽 창이 깨져 있다 (%s)" % str(house.broken))
+	var board_node: Node3D = survival.houses.find_child("Boards_h01_w4", true, false) as Node3D
+	_check(board_node != null and not board_node.visible, "판자를 대기 전에는 판자가 없다")
+	await _teleport(house.position + Basis(Vector3.UP, house.yaw) * Vector3(-4.2, 0.3, 1.6), house.yaw + PI * 0.5)
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.SURVIVE and interaction.target_id == "board:h01:w4", 2.0), "깨진 창 앞 상황 버튼 '%s' (%s)" % [survival.target_label("board:h01:w4"), interaction.target_id])
+	_check(survival.target_label("board:h01:w4").begins_with("판자 대기 · 창"), "판자 값이 보인다")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return int(Net.boards.get("h01:w4", 0)) == rules.breaches["h01:w4"].max_hp, 3.0), "판자를 댔다 (%d)" % int(Net.boards.get("h01:w4", 0)))
+	_check(board_node.visible and _count("wood") == 0 and _count("nails") == 0, "판자가 보이고 목재 · 못을 썼다")
+	_check(await _wait_until(func() -> bool: return interaction.target_id != "board:h01:w4", 1.0), "멀쩡한 판자에는 '판자 대기'가 없다")
+	await _shot("surv_boarded")
 
 	# ---- 밤 크리처 ----
 	await _teleport(Vector3(-150.0, 0.1, 140.0))

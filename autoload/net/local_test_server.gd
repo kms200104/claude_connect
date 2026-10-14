@@ -314,6 +314,16 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send(peer, {"t": "container", "c": cid, "until": 1.0e15})
 		"attack":
 			_send(peer, {"t": "swing", "rid": rid, "hit": ""})
+		"board":
+			# v0.24 오프라인: 재료 없이 판자만 댄다 (진짜 서버는 목재 · 못을 쓴다, 크리처도 없다).
+			var br: SurvivalRules.Breach = GameData.survival.breaches.get("%s:%s" % [str(msg.get("h", "")), str(msg.get("o", ""))])
+			if br == null:
+				fail.call(NetProtocol.ERR_BAD_ITEM)
+				return
+			_send(peer, {"t": "boarded", "rid": rid, "h": br.house, "o": br.id, "hp": br.max_hp, "max": br.max_hp, "repaired": false})
+			_send(peer, {"t": "board", "h": br.house, "o": br.id, "hp": br.max_hp, "max": br.max_hp, "by": 1})
+		"revive", "give_up":
+			fail.call(NetProtocol.ERR_NOT_DOWNED)
 		"use":
 			var uslot: int = int(msg.get("slot", -1))
 			var heal: int = GameData.survival.heal_of(str(_slots[uslot]["id"])) if uslot >= 0 and uslot < _slots.size() and _slots[uslot] != null else 0

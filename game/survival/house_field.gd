@@ -4,6 +4,8 @@ extends Node3D
 ## 집마다: 마루 바닥 · 바깥벽 · 방 칸막이(문틈) · 창(판자로 막힌 집도) · 쓰러진 현관문 · 함석 박공지붕(안에 들어가면 지붕을 걷는다) ·
 ## 마당의 무성한 풀 · 기운 울타리, 안에는 뒤질 수 있는 가구(신발장 · 냉장고 · 싱크대 · 서랍장 · 옷장 · 욕실 약장)와
 ## 그냥 놓인 가구(밥상 · 넘어진 의자 · 침대 · 변기 · 욕조). 뒤진 가구는 문이 열리고 서랍이 빠진 모습이 된다 (다시 차면 닫힌다).
+## v0.24 거점: 깨진 창(검은 구멍 · 유리 조각)과 떨어진 현관문 자리에 판자를 대면 판자(안팎) · 판자문이 보인다.
+## 반쯤 부서지면 금 간 판자, 크리처가 두드리면 흔들린다. 판자문은 사람이 다가가면 열린다 (사람은 지나가고 크리처는 못 지나간다).
 
 @export var clay_material: Material
 @export var window_material: Material
@@ -20,6 +22,11 @@ const WHITE: Color = Color("#ECEAE4")
 var _roofs: Dictionary[String, MeshInstance3D] = {}
 ## 가구 id → [닫힌 모습, 열린 모습] 메시.
 var _boxes: Dictionary[String, Array] = {}
+## 뚫린 곳 key ("집:자리") → [판자 노드, 멀쩡한 판자 메시, 금 간 판자 메시].
+var _boards: Dictionary[String, Array] = {}
+## 현관 key → 판자문 경첩 · 떨어진 옛 문.
+var _door_hinges: Dictionary[String, Node3D] = {}
+var _fallen_doors: Dictionary[String, Node3D] = {}
 
 
 func _ready() -> void:
@@ -28,16 +35,62 @@ func _ready() -> void:
 		_build_house(h, rules)
 	Net.container_changed.connect(func(_id: String, _until: float) -> void: _refresh_boxes())
 	Net.welcomed.connect(_refresh_boxes.unbind(3))
+	Net.welcomed.connect(_refresh_boards.unbind(3))
+	Net.board_changed.connect(_on_board_changed)
 	_refresh_boxes()
+	_refresh_boards()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if player == null:
 		return
 	for h: SurvivalRules.House in GameData.survival.houses:
 		var roof: MeshInstance3D = _roofs.get(h.id)
 		if roof != null:
 			roof.visible = not h.contains(player.global_position, 0.6)
+	# 판자문: 사람이 곁에 오면 안으로 열린다.
+	var people: Array[Vector3] = [player.global_position]
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	if replicator != null:
+		people.append_array(replicator.remote_positions())
+	for key: String in _door_hinges:
+		var hinge: Node3D = _door_hinges[key]
+		if not hinge.visible:
+			continue
+		var at: Vector3 = GameData.survival.breaches[key].position
+		var near: bool = false
+		for p: Vector3 in people:
+			if Vector2(p.x - at.x, p.z - at.z).length() < 1.9:
+				near = true
+				break
+		hinge.rotation.y = move_toward(hinge.rotation.y, 1.5 if near else 0.0, delta * 5.0)
+
+
+func _on_board_changed(key: String, _hp: int, info: Dictionary) -> void:
+	_refresh_boards()
+	# 크리처가 두드리면 흔들린다.
+	var parts: Array = _boards.get(key, [])
+	if parts.is_empty() or int(info.get("by", -1)) != 0:
+		return
+	var node: Node3D = parts[0]
+	var rest: Vector3 = node.get_meta(&"rest", node.position)
+	node.set_meta(&"rest", rest)
+	var tween: Tween = node.create_tween()
+	tween.tween_property(node, "position", rest + Vector3(0.0, 0.0, 0.06), 0.05)
+	tween.tween_property(node, "position", rest, 0.12)
+
+
+## 판자 hp 에 맞게: 없음 · 멀쩡함 · 금 감 (절반 이하).
+func _refresh_boards() -> void:
+	for key: String in _boards:
+		var hp: int = int(Net.boards.get(key, 0))
+		var br: SurvivalRules.Breach = GameData.survival.breaches[key]
+		var parts: Array = _boards[key]
+		(parts[0] as Node3D).visible = hp > 0
+		(parts[1] as Node3D).visible = hp * 2 > br.max_hp
+		(parts[2] as Node3D).visible = hp > 0 and hp * 2 <= br.max_hp
+		if _fallen_doors.has(key):
+			_fallen_doors[key].visible = hp <= 0
 
 
 ## 뒤진 가구는 열린 모습으로.
@@ -82,25 +135,36 @@ func _build_house(h: SurvivalRules.House, rules: SurvivalRules) -> void:
 		if outer:
 			clay.box(Vector3(mid.x, 0.55, mid.y), size * Vector3(1.0, 0.0, 1.0) + Vector3(0.02, 0.5, 0.02), h.wall.darkened(0.22))
 		_collider(body, Vector3(mid.x, 1.4, mid.y), size)
-	# 창: 앞 · 뒤 · 옆 (판자로 막힌 집은 엇갈린 판자).
-	for win: Array in [[Vector3(1.6, 1.6, hd), true], [Vector3(-2.0, 1.6, -hd), true], [Vector3(2.8, 1.6, -hd), true], [Vector3(-hw, 1.6, 2.0), false], [Vector3(hw, 1.6, -2.0), false]]:
-		var at: Vector3 = win[0]
-		var along_x: bool = win[1]
-		var face: float = signf(at.z) if along_x else signf(at.x)
-		var out: Vector3 = (Vector3(0, 0, 0.13 * face) if along_x else Vector3(0.13 * face, 0, 0))
+	# 창 (houses.json openings): 멀쩡한 창은 유리, 깨진 창은 검은 구멍 · 유리 조각 (판자를 댈 수 있다).
+	for o: Dictionary in rules.openings:
+		var oid: String = str(o.get("id", ""))
+		var normal: Vector2 = Vector2(float(o.get("nx", 0.0)), float(o.get("nz", 0.0)))
+		var center: Vector3 = Vector3(float(o.get("lx", 0.0)), 1.6, float(o.get("lz", 0.0)))
+		if str(o.get("kind", "")) == "door":
+			_build_door(root, "%s:%s" % [h.id, oid], center, hd)
+			continue
+		var along_x: bool = absf(normal.y) > 0.5
+		var out: Vector3 = Vector3(normal.x, 0.0, normal.y) * 0.13
 		var pane: Vector3 = Vector3(1.4, 1.0, 0.04) if along_x else Vector3(0.04, 1.0, 1.4)
-		glass.box(at + out, pane, Color.WHITE)
 		var frame: Vector3 = Vector3(1.6, 0.1, 0.1) if along_x else Vector3(0.1, 0.1, 1.6)
-		clay.box(at + out + Vector3(0, -0.55, 0), frame, Color("#6E5A44"))
-		clay.box(at + out + Vector3(0, 0.55, 0), frame, Color("#6E5A44"))
-		if h.boarded:
-			for k: int in 2:
-				var plank: Vector3 = Vector3(1.8, 0.18, 0.06) if along_x else Vector3(0.06, 0.18, 1.8)
-				var tilt: Basis = Basis(Vector3.BACK if along_x else Vector3.RIGHT, (0.35 if k == 0 else -0.3))
-				clay.box(at + out * 1.6, plank, PLANK.darkened(0.1 * k), tilt)
-	# 현관: 문틀 + 떨어져 기운 문.
+		var broken: bool = h.broken.has(oid)
+		var tip: Vector3 = Vector3(0.5, 0.0, 0.0) if along_x else Vector3(0.0, 0.0, 0.5)
+		var spin: Vector3 = Vector3(normal.x, 0.0, normal.y)
+		for face: float in ([1.0, -1.0] if broken else [1.0]):
+			var at: Vector3 = center + out * face
+			if broken:
+				clay.box(at, pane, Color("#24201C"))
+				# 남은 유리 조각.
+				glass.box(at + tip + Vector3(0, 0.3, 0) + out * (0.1 * face), pane * Vector3(0.25, 0.35, 1.0) + Vector3(0, 0, 0.01), Color.WHITE, Basis(spin, 0.5))
+				glass.box(at - tip - Vector3(0, 0.32, 0) + out * (0.1 * face), pane * Vector3(0.2, 0.3, 1.0) + Vector3(0, 0, 0.01), Color.WHITE, Basis(spin, -0.4))
+			else:
+				glass.box(at, pane, Color.WHITE)
+			clay.box(at + Vector3(0, -0.55, 0), frame, Color("#6E5A44"))
+			clay.box(at + Vector3(0, 0.55, 0), frame, Color("#6E5A44"))
+		if broken:
+			_build_window_boards(root, "%s:%s" % [h.id, oid], center, normal, along_x)
+	# 현관 문틀 (떨어진 옛 문 · 판자문은 _build_door).
 	clay.box(Vector3(-3.0, 0.2 + 2.2, hd), Vector3(1.4, 0.15, 0.3), Color("#6E5A44"))
-	clay.box(Vector3(-1.7, 0.2 + 0.9, hd + 0.7), Vector3(0.9, 1.9, 0.06), Color("#5E7A8A"), Basis(Vector3.UP, 1.1) * Basis(Vector3.BACK, 0.12))
 	# 지붕 (따로: 안에 들어가면 숨긴다) — 함석 박공 두 장 + 박공 벽.
 	var roof_batch: BoxBatch = BoxBatch.new()
 	var slope: float = 0.42
@@ -149,6 +213,70 @@ func _build_house(h: SurvivalRules.House, rules: SurvivalRules) -> void:
 	var mi: MeshInstance3D = _mesh(clay, clay_material, "Body")
 	root.add_child(mi)
 	root.add_child(_mesh(glass, window_material, "Glass"))
+
+
+## 깨진 창 판자: 바깥 · 안쪽에 엇갈린 판자 셋 (멀쩡함) / 둘 + 늘어진 하나 (금 감).
+func _build_window_boards(root: Node3D, key: String, center: Vector3, normal: Vector2, along_x: bool) -> void:
+	var node: Node3D = Node3D.new()
+	node.name = "Boards_%s" % key.replace(":", "_")
+	root.add_child(node)
+	node.position = center
+	var whole: BoxBatch = BoxBatch.new()
+	var cracked: BoxBatch = BoxBatch.new()
+	var axis: Vector3 = Vector3.BACK if along_x else Vector3.RIGHT
+	var plank: Vector3 = Vector3(1.8, 0.2, 0.05) if along_x else Vector3(0.05, 0.2, 1.8)
+	var tip: Vector3 = Vector3(0.75, 0, 0) if along_x else Vector3(0, 0, 0.75)
+	var tilts: Array[float] = [0.18, -0.12, 0.08]
+	for face: float in [1.0, -1.0]:
+		var out: Vector3 = Vector3(normal.x, 0.0, normal.y) * (0.2 * face)
+		for k: int in 3:
+			var y: float = -0.35 + 0.35 * float(k)
+			whole.box(out + Vector3(0, y, 0), plank, PLANK.darkened(0.08 * float(k)), Basis(axis, tilts[k]))
+			if k < 2:
+				cracked.box(out + Vector3(0, y, 0), plank, PLANK.darkened(0.2 + 0.08 * float(k)), Basis(axis, tilts[k]))
+			else:
+				cracked.box(out + Vector3(0, y - 0.25, 0), plank * Vector3(0.6, 1.0, 0.6) + Vector3(0.02, 0.0, 0.02), PLANK.darkened(0.3), Basis(axis, 0.7))
+		# 못 대가리.
+		for sgn: float in [1.0, -1.0]:
+			whole.box(out * 1.15 + tip * sgn, Vector3(0.05, 0.05, 0.05), DARK)
+	var a: MeshInstance3D = _mesh(whole, clay_material, "Whole")
+	var b: MeshInstance3D = _mesh(cracked, clay_material, "Cracked")
+	node.add_child(a)
+	node.add_child(b)
+	node.visible = false
+	_boards[key] = [node, a, b]
+
+
+## 현관: 판자를 대지 않았으면 떨어져 기운 옛 문, 대면 경첩에 달린 판자문 (사람이 다가가면 열린다, 부딪힘 없음).
+func _build_door(root: Node3D, key: String, center: Vector3, hd: float) -> void:
+	var fallen: BoxBatch = BoxBatch.new()
+	fallen.box(Vector3(-1.7, 0.2 + 0.9, hd + 0.7), Vector3(0.9, 1.9, 0.06), Color("#5E7A8A"), Basis(Vector3.UP, 1.1) * Basis(Vector3.BACK, 0.12))
+	var old: MeshInstance3D = _mesh(fallen, clay_material, "FallenDoor")
+	root.add_child(old)
+	_fallen_doors[key] = old
+	var hinge: Node3D = Node3D.new()
+	hinge.name = "Door_%s" % key.replace(":", "_")
+	root.add_child(hinge)
+	hinge.position = Vector3(center.x - 0.6, 0.2, hd)
+	var whole: BoxBatch = BoxBatch.new()
+	var cracked: BoxBatch = BoxBatch.new()
+	for batch: BoxBatch in [whole, cracked]:
+		var worn: bool = batch == cracked
+		var dark: float = 0.22 if worn else 0.0
+		for k: int in 4:
+			var tall: float = 2.1 - (0.3 if worn and k == 3 else 0.0)
+			batch.box(Vector3(0.15 + 0.3 * float(k), tall * 0.5, 0.0), Vector3(0.28, tall, 0.06), PLANK.darkened(dark + 0.05 * float(k % 2)))
+		# 가로대 · 손잡이.
+		batch.box(Vector3(0.6, 1.6, 0.06), Vector3(1.15, 0.14, 0.05), PLANK.darkened(0.25 + dark))
+		batch.box(Vector3(0.6, 0.5, 0.06), Vector3(1.15, 0.14, 0.05), PLANK.darkened(0.25 + dark), Basis(Vector3.BACK, 0.15 if worn else 0.0))
+		batch.box(Vector3(1.0, 1.05, 0.1), Vector3(0.08, 0.08, 0.08), DARK)
+	var a: MeshInstance3D = _mesh(whole, clay_material, "Whole")
+	var b: MeshInstance3D = _mesh(cracked, clay_material, "Cracked")
+	hinge.add_child(a)
+	hinge.add_child(b)
+	hinge.visible = false
+	_boards[key] = [hinge, a, b]
+	_door_hinges[key] = hinge
 
 
 func _build_box(root: Node3D, body: StaticBody3D, c: SurvivalRules.LootBox) -> void:

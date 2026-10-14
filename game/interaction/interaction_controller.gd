@@ -174,10 +174,10 @@ func _pick_target() -> void:
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
 	var pos: Vector3 = player.global_position
-	# v0.23 밤에 크리처가 곁이면 무엇보다 "공격"이 먼저 (빈집 가구 "뒤지기"도 여기서).
+	# v0.23 밤에 크리처가 곁이면 무엇보다 "공격"이 먼저 (빈집 가구 "뒤지기"도 여기서). v0.24 쓰러진 동료 "일으키기"도.
 	if survival != null and not Home.is_inside() and not (shop != null and shop.is_inside(pos)):
 		var surv_target: String = survival.pick_target(pos, safety_margin)
-		if surv_target.begins_with(SurvivalController.TARGET_ATTACK):
+		if surv_target.begins_with(SurvivalController.TARGET_ATTACK) or surv_target.begins_with(SurvivalController.TARGET_REVIVE):
 			target = Target.SURVIVE
 			target_id = surv_target
 			return
@@ -227,7 +227,7 @@ func _pick_target() -> void:
 			return
 	if survival != null and not (shop != null and shop.is_inside(pos)):
 		var loot_target: String = survival.pick_target(pos, safety_margin)
-		if loot_target.begins_with(SurvivalController.TARGET_LOOT):
+		if loot_target.begins_with(SurvivalController.TARGET_LOOT) or loot_target.begins_with(SurvivalController.TARGET_BOARD):
 			target = Target.SURVIVE
 			target_id = loot_target
 			return
