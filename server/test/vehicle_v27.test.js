@@ -109,4 +109,33 @@ describe('v0.27 탈것 배터리 · 짐칸 · 개조', () => {
     // ATV 는 4칸.
     assert.equal(data.garage.models.get('car_atv').cargo, 4);
   });
+
+  it('개조: 스파이크 범퍼는 들이받는 피해를 키우고 차는 덜 닳고, 철판 장갑은 내구도를 늘리고 벽 충돌을 덜 받는다', async () => {
+    const spot = { x: -150, z: 140 };
+    const { c, v, veh, room, me } = await drive('car_truck', spot, { startItems: 'bumper_spikes:1,armor_plate:1', clockOffsetMin: 0, worldTimeScale: 1 });
+    const base = data.garage.models.get('car_truck').durability;
+    assert.equal((await ask(c, { t: 'veh_mod', v, item: 'wood' })).code, 'bad_part');
+    const plate = await ask(c, { t: 'veh_mod', v, item: 'armor_plate' });
+    assert.equal(plate.kind, 'mod');
+    assert.equal(plate.max, Math.round(base * data.garage.mods.armor_plate.durability));
+    assert.equal(plate.hp, plate.max, '늘어난 만큼 채운다');
+    assert.equal((await ask(c, { t: 'veh_mod', v, item: 'armor_plate' })).code, 'already_boarded', '이미 달았다');
+    const spikes = await ask(c, { t: 'veh_mod', v, item: 'bumper_spikes' });
+    assert.deepEqual(spikes.mods, ['armor_plate', 'bumper_spikes']);
+    const snap = await c.next((m) => m.t === 'snap' && m.p.some((p) => p.mount?.mx?.length === 2), 2000);
+    assert.ok(snap);
+    // 벽 충돌: 장갑이면 덜 닳는다.
+    c.send({ t: 'veh_crash', s: 10, rid: 'm-crash' });
+    const hp = await c.next((m) => m.t === 'veh_hp' && m.why === 'crash', 2000);
+    assert.equal(hp.max - hp.hp, Math.ceil((10 - data.garage.repair.crash_min) * data.garage.repair.crash_k * data.garage.mods.armor_plate.crash));
+    // 들이받기: 스파이크면 피해가 크다.
+    room.creatures ??= new Map();
+    room.creatures.set('zm1', { id: 'zm1', k: 'bloated', x: me.x, z: me.z - 2, yaw: 0, hp: 50, target: 0, nextAttack: 0, attackAt: 0, trapAt: {} });
+    const hit = await ask(c, { t: 'ram', c: 'zm1', s: 10, dx: 0, dz: -1 });
+    const M = data.garage.models.get('car_truck').mass + data.garage.mods.armor_plate.mass;
+    const m = data.survival.creatures.kinds.bloated.mass;
+    const u = ((1 + data.survival.ram.restitution) * M) / (M + m) * 10;
+    assert.equal(hit.dmg, Math.ceil(u * u * data.survival.ram.dmg_k * data.garage.mods.bumper_spikes.ram_dmg));
+    void veh;
+  });
 });

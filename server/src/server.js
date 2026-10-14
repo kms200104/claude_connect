@@ -1881,6 +1881,7 @@ export function createServer(overrides = {}) {
       case 'veh_unboard':
       case 'veh_refuel':
       case 'veh_cargo':
+      case 'veh_mod':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       case 'steps':
         return safety.handleSteps(ctx, msg, fail);
@@ -2112,6 +2113,7 @@ export function createServer(overrides = {}) {
       case 'veh_unboard':
       case 'veh_refuel':
       case 'veh_cargo':
+      case 'veh_mod':
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':

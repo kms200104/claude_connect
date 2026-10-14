@@ -60,6 +60,9 @@ var _wheel_turn: float = 1.0
 ## v0.27 짐칸에 실은 상자 (칸 수만큼 보인다).
 var _cargo_node: Node3D = null
 var _cargo_count: int = -1
+## v0.27 개조 (스파이크 범퍼 · 철판 장갑) 모양.
+var _mods_node: Node3D = null
+var _mods_key: String = "-"
 
 static var _glow_materials: Dictionary[String, Material] = {}
 static var _clay_material: Material = null
@@ -98,6 +101,9 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 	_cargo_node = null
 	var cargo_was: int = _cargo_count
 	_cargo_count = -1
+	_mods_node = null
+	var mods_was: String = _mods_key
+	_mods_key = "-"
 	if info == null:
 		return
 	if _clay_material == null:
@@ -113,6 +119,8 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 		_build_moto()
 	if cargo_was > 0:
 		set_cargo(cargo_was)
+	if mods_was != "-" and not mods_was.is_empty():
+		set_mods(Array(mods_was.split(",")))
 
 
 ## 바퀴(속도 m/s)를 굴리고 핸들을 조향 각도(rad, + = 왼쪽)로 돌린다. 크랭크는 set_pedal (리그 위상).
@@ -326,6 +334,49 @@ func _build_bike() -> void:
 		Shapes.sweep(gs, PackedVector3Array([head_bottom + Vector3(0.024, 0.0, 0.0), bb + Vector3(0.024, 0.03, 0.0)]), 0.006, LENS, 6, true)
 		Shapes.sweep(gs, PackedVector3Array([bb + Vector3(0.05, 0.0, 0.0), axle_r + Vector3(0.06, 0.0, 0.0)]), 0.005, LENS, 6, true)
 		_add_glow_mesh("FrameGlow", ClayMesh.commit(gs), self, Color.html(str(glow.get("c", "#FFFFFF"))), 1.1)
+
+
+## 단 개조를 보인다: 스파이크 범퍼 (앞 범퍼의 쇠 가시) · 철판 장갑 (옆 · 앞을 덮은 철판과 리벳).
+func set_mods(mods: Array) -> void:
+	var key: String = ",".join(PackedStringArray(mods.map(func(x: Variant) -> String: return str(x))))
+	if info == null or info.kind != "car" or key == _mods_key:
+		return
+	_mods_key = key
+	if _mods_node != null:
+		_mods_node.queue_free()
+		_mods_node = null
+	if mods.is_empty():
+		return
+	var truck: bool = info.style == "truck"
+	var st: SurfaceTool = ClayMesh.begin()
+	var steel: Color = Color("#8A9098")
+	var dark: Color = Color("#4A4E54")
+	if mods.has("bumper_spikes"):
+		var z: float = -1.9 if truck else -1.08
+		var y: float = 0.55 if truck else 0.52
+		var half: float = 0.72 if truck else 0.42
+		for i: int in 5:
+			var x: float = -half + 2.0 * half * float(i) / 4.0
+			ClayMesh.add_rod(st, Vector3(x, y, z + 0.02), Vector3(x, y + 0.02, z - 0.32), 0.05, 0.004, steel, 6)
+			ClayMesh.add_rod(st, Vector3(x, y + 0.2, z + 0.06), Vector3(x, y + 0.24, z - 0.2), 0.035, 0.003, steel, 6)
+		ClayMesh.add_rounded_box(st, Vector3(0.0, y, z + 0.05), Vector3(half * 2.0 + 0.1, 0.12, 0.08), 0.4, dark, Basis(), 12, 4)
+	if mods.has("armor_plate"):
+		for side: float in [-1.0, 1.0]:
+			if truck:
+				ClayMesh.add_rounded_box(st, Vector3(side * 0.82, 1.0, -0.58), Vector3(0.04, 0.5, 0.95), 0.2, steel, Basis(), 12, 4)
+				ClayMesh.add_rounded_box(st, Vector3(side * 0.81, 1.05, 0.92), Vector3(0.04, 0.42, 1.7), 0.2, steel.darkened(0.08), Basis(), 12, 4)
+			else:
+				ClayMesh.add_rounded_box(st, Vector3(side * 0.6, 0.62, 0.0), Vector3(0.04, 0.26, 1.2), 0.2, steel, Basis(), 12, 4)
+			for k: int in 3:
+				var rz: float = (-0.9 + 0.35 * float(k)) if truck else (-0.4 + 0.4 * float(k))
+				ClayMesh.add_ellipsoid(st, Vector3(side * (0.85 if truck else 0.63), 1.15 if truck else 0.7, rz), Vector3(0.025, 0.025, 0.025), dark, 6, 3)
+		# 앞 유리 · 앞쪽 철망.
+		if truck:
+			for k: int in 4:
+				ClayMesh.add_rod(st, Vector3(-0.66, 1.25 + 0.14 * float(k), -1.14 + 0.05 * float(k)), Vector3(0.66, 1.25 + 0.14 * float(k), -1.14 + 0.05 * float(k)), 0.02, 0.02, dark, 6)
+		else:
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 0.74, -0.92), Vector3(0.7, 0.2, 0.04), 0.2, steel, Basis(Vector3.RIGHT, -0.3), 12, 4)
+	_mods_node = _add_mesh("Mods", ClayMesh.commit(st), self)
 
 
 ## 짐칸에 실은 칸 수만큼 나무 상자를 쌓아 보인다 (짐칸이 있는 차량만).

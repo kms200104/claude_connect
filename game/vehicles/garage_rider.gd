@@ -279,6 +279,10 @@ func _default_vehicle() -> String:
 
 
 func _on_vehicle_done(result: Dictionary) -> void:
+	if str(result.get("kind", "")) == "mod":
+		_toast("%s 을(를) 달았어요! 내구도 %d/%d" % [GameData.item_name(str(result.get("item", ""))), int(result.get("hp", 0)), int(result.get("max", 0))], true)
+		Audio.play_sfx("chop", -4.0, 0.7)
+		return
 	if str(result.get("kind", "")) == "refuel":
 		_toast("%s 배터리 %d%%" % ["공구 창고 충전기로 가득 충전했어요!" if str(result.get("how", "")) == "station" else "배터리 팩으로 충전했어요!", roundi(float(result.get("charge", 0)) / maxf(1.0, float(result.get("max", 1))) * 100.0)], true)
 		Audio.play_sfx("kick_latch", -6.0, 1.4)
@@ -310,6 +314,9 @@ func _on_mount_changed(mount_wire: Dictionary) -> void:
 func _on_failed(kind: String, code: String) -> void:
 	if kind == "veh_repair":
 		_toast("고칠 재료가 모자라요 (%s)." % kit_text() if code == NetProtocol.ERR_NOT_ENOUGH_ITEMS else ("솔이 모자라요." if code == NetProtocol.ERR_NOT_ENOUGH_SOL else "고칠 수 없어요."), false)
+		return
+	if kind == "veh_mod":
+		_toast("이미 달려 있어요." if code == NetProtocol.ERR_ALREADY_BOARDED else ("차량(ATV · 트럭)에만 달 수 있어요." if code == NetProtocol.ERR_BAD_PART else "달 수 없어요 (차량 곁에서)."), false)
 		return
 	if kind == "veh_refuel":
 		if code == NetProtocol.ERR_NOT_ENOUGH_ITEMS:
@@ -592,6 +599,7 @@ func _on_vehicles_changed() -> void:
 	if v.is_empty():
 		return
 	model.set_cargo((v.get("cargo", []) as Array).size() if v.get("cargo") is Array else 0)
+	model.set_mods(v.get("mods", []) as Array if v.get("mods") is Array else [])
 	var fit: Dictionary = v.get("fit", {}) as Dictionary
 	if fit != _fit:
 		_fit = fit.duplicate()
@@ -741,6 +749,15 @@ func _check_station() -> void:
 			_station_at = Time.get_ticks_msec() + 5000
 			Net.request("veh_refuel", {"v": vehicle_id, "how": "station"})
 			return
+
+
+## 가방 "차에 달기": 타는 (아니면 곁에 세워 둔) 내 차량에 개조 아이템 (스파이크 범퍼 · 철판 장갑).
+func install_mod(item_id: String) -> void:
+	var id: String = vehicle_id if state == State.RIDING else (parked.nearest_own(player.global_position, RIDE_RANGE + 1.0) if parked != null else "")
+	if id.is_empty():
+		_toast("달 차량 곁에서 써요 (타고 있거나 세워 둔 곁).", false)
+		return
+	Net.request("veh_mod", {"v": id, "item": item_id})
 
 
 ## 가방 "충전": 타는 탈것 (아니면 곁에 세워 둔 내 탈것) 에 배터리 팩 하나.

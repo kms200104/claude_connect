@@ -28,6 +28,8 @@
     { "id": "barricade", "out": "barricade", "n": 1, "tier": 1, "cat": "defense", "needs": [{ "item": "wood", "n": 4 }, { "item": "nails", "n": 1 }] },
     { "id": "campfire", "out": "campfire", "n": 1, "tier": 1, "cat": "defense", "needs": [{ "item": "branch", "n": 3 }, { "item": "round_pebble", "n": 4 }] },
     { "id": "nails", "out": "nails", "n": 2, "tier": 2, "cat": "basic", "needs": [{ "item": "scrap_metal", "n": 1 }] },
+    { "id": "bumper_spikes", "out": "bumper_spikes", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "scrap_metal", "n": 3 }, { "item": "nails", "n": 4 }] },
+    { "id": "armor_plate", "out": "armor_plate", "n": 1, "tier": 2, "cat": "defense", "needs": [{ "item": "scrap_metal", "n": 5 }, { "item": "nails", "n": 2 }] },
     { "id": "battery_pack", "out": "battery_pack", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "battery", "n": 4 }, { "item": "scrap_metal", "n": 1 }, { "item": "plastic", "n": 1 }] },
     { "id": "pipe_spear", "out": "pipe_spear", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "scrap_metal", "n": 2 }, { "item": "rope", "n": 1 }] },
     { "id": "flashlight", "out": "flashlight", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "scrap_metal", "n": 1 }, { "item": "plastic", "n": 2 }, { "item": "battery", "n": 1 }] },

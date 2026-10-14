@@ -54,6 +54,23 @@
   "pack_fix": 0.45,
   "station_range": 8.0
  },
+ "mods": {
+  "bumper_spikes": {
+   "kinds": [
+    "car"
+   ],
+   "ram_dmg": 1.6,
+   "ram_wear": 0.5
+  },
+  "armor_plate": {
+   "kinds": [
+    "car"
+   ],
+   "durability": 1.6,
+   "crash": 0.6,
+   "mass": 80
+  }
+ },
  "repair": {
   "kit": [
    {

@@ -987,14 +987,14 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     c.target = player.id;
     if (v >= RAM.fast) {
       const u = ((1 + RAM.restitution) * M) / (M + m) * v;
-      const dmg = Math.ceil(u * u * RAM.dmg_k);
+      const dmg = Math.ceil(u * u * RAM.dmg_k * (ride.ramDmg ?? 1));
       c.hp -= dmg;
       c.kb = { vx: dx * u, vz: dz * u, by: player.id };
       c.yaw = Math.atan2(-dx, -dz);
       const slow = ((1 + RAM.restitution) * m) / (M + m);
       send(ctx.ws, { t: 'rammed', rid: msg.rid, c: c.id, hard: true, u: round(u), dmg, slow: round(slow) });
       room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ram: round(u), dx: round(dx), dz: round(dz) });
-      garage.damage(player, room, m * u * RAM.veh_k, 'ram');
+      garage.damage(player, room, m * u * RAM.veh_k * (ride.ramWear ?? 1), 'ram');
     } else {
       // 느리면 넘어진다 (조금 밀려나고, 탈것은 확 느려진다).
       const push = 0.4 + v * 0.15;

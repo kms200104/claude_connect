@@ -69,6 +69,7 @@ func _sync() -> void:
 		e.at = at
 		if e.model != null:
 			e.model.set_cargo(int(d.get("c", 0)))
+			e.model.set_mods(d.get("mx", []) as Array if d.get("mx") is Array else [])
 		e.yaw = yaw
 		e.arrive_ms = arrive
 		if e.model == null and e.courier == null:

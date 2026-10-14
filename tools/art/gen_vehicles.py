@@ -358,6 +358,10 @@ data = {
     # v0.27 충전: 배터리가 바닥나면 crawl m/s 로만 (밀고 가듯) 간다. pack = 배터리 팩 하나로 pack_fix 만큼, 공구 창고(공용 작업대) station_range m 안에 서면
     # 공짜로 가득.
     'charge': {'crawl': 1.4, 'pack_fix': 0.45, 'station_range': 8.0},
+    # v0.27 개조 (고철로 만든 아이템을 차량에 단다, veh_mod): 스파이크 범퍼 = 들이받는 피해 × ram_dmg, 들이받을 때 차가 닳는 양 × ram_wear.
+    # 철판 장갑 = 내구도 최대 × durability, 벽 충돌로 닳는 양 × crash, 무게 + mass.
+    'mods': {'bumper_spikes': {'kinds': ['car'], 'ram_dmg': 1.6, 'ram_wear': 0.5},
+             'armor_plate': {'kinds': ['car'], 'durability': 1.6, 'crash': 0.6, 'mass': 80}},
     'repair': {'kit': [{'id': 'scrap_metal', 'n': 1}, {'id': 'nails', 'n': 1}], 'kit_fix': 0.4, 'shop_rate': 0.08, 'crash_min': 3.0, 'crash_k': 2.5},
     'slots': SLOTS,
     'models': MODELS,

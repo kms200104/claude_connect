@@ -162,6 +162,7 @@ func set_mount(mount: Dictionary) -> void:
 		rig.add_child(_mount)
 	_mount_info = info
 	_mount.build(info.id, mount.get("f", {}) as Dictionary)
+	_mount.set_mods(mount.get("mx", []) as Array if mount.get("mx") is Array else [])
 	if fresh:
 		_mount_speed = 0.0
 		_mount_yaw = body.rotation.y
