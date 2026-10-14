@@ -57,6 +57,30 @@ func _stick_toward(dir: Vector3) -> Vector2:
 	return Vector2(dir.dot(right), -dir.dot(fwd)).normalized()
 
 
+## 20m 앞이 트인 방향 (8방향 가운데, 크리처에서 먼 쪽 먼저).
+func _open_yaw(player: Player) -> float:
+	var space: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	var best: float = 0.0
+	var best_score: float = -INF
+	for i: int in 8:
+		var yaw: float = TAU * float(i) / 8.0
+		var dir: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+		var from: Vector3 = player.global_position + Vector3(0, 0.7, 0)
+		var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + dir * 22.0)
+		q.exclude = [player.get_rid()]
+		var hit: Dictionary = space.intersect_ray(q)
+		var free: float = 22.0 if hit.is_empty() else from.distance_to(hit["position"])
+		var away: float = 0.0
+		for id: String in Net.creatures:
+			var c: Dictionary = Net.creatures[id]
+			away -= dir.dot(Vector3(float(c["x"]), 0, float(c["z"])) - player.global_position)
+		var score: float = free * 10.0 + away * 0.1
+		if score > best_score:
+			best_score = score
+			best = yaw
+	return best
+
+
 func _nearest_creature(at: Vector3, skip: Dictionary) -> String:
 	var best: String = ""
 	var best_d: float = INF
@@ -78,18 +102,35 @@ func _drive_into(player: Player, amount: float, timeout_s: float, skip: Dictiona
 	var on_ram: Callable = func(info: Dictionary) -> void: got[0] = info
 	Net.rammed.connect(on_ram)
 	var waited: float = 0.0
+	var stuck: float = 0.0
 	var field: CreatureField = _village.get_node("Survival").creatures
 	while (got[0] as Dictionary).is_empty() and waited < timeout_s:
+		# 벽에 막혀 못 나아가면 조금 물러선다.
+		var ds: VehicleDrive = player.garage_ride.drive_state
+		stuck = stuck + get_process_delta_time() if absf(ds.speed) < 0.6 and player.joystick.output.length() > 0.3 else 0.0
+		if stuck > 1.5:
+			player.joystick.output = _stick_toward(-ds.forward())
+			await get_tree().create_timer(1.2).timeout
+			ds.yaw = _open_yaw(player)
+			stuck = 0.0
 		var id: String = _nearest_creature(player.global_position, skip)
 		if not id.is_empty():
 			var at: Vector3 = field.actor_position(id)
 			var dir: Vector3 = ((at if at != Vector3.INF else player.global_position) - player.global_position) * Vector3(1, 0, 1)
 			if dir.length() > 0.1:
-				var too_fast: bool = absf(player.garage_ride.drive_state.speed) > max_speed
-				player.joystick.output = Vector2.ZERO if too_fast else _stick_toward(dir.normalized()) * amount
+				var drive: VehicleDrive = player.garage_ride.drive_state
+				var too_fast: bool = absf(drive.speed) > max_speed
+				# 빠르게 들이받기: 가까운데 아직 느리면 곧장 앞으로 달려 빠르기를 붙인 뒤 돌아 달려든다.
+				var build_up: bool = max_speed == INF and drive.speed < float(GameData.survival.ram.get("fast", 4.2)) + 1.0 and dir.length() < 9.0
+				if too_fast:
+					player.joystick.output = Vector2.ZERO
+				elif build_up:
+					player.joystick.output = _stick_toward(drive.forward())
+				else:
+					player.joystick.output = _stick_toward(dir.normalized()) * amount
 		await get_tree().process_frame
 		waited += get_process_delta_time()
-		if OS.has_environment("RAM_DEBUG") and Engine.get_process_frames() % 30 == 0:
+		if not OS.get_environment("RAM_DEBUG").is_empty() and Engine.get_process_frames() % 30 == 0:
 			var nid: String = _nearest_creature(player.global_position, skip)
 			print("[dbg] speed=%.2f n=%d near=%s d=%.2f" % [_village.get_node("Player").garage_ride.drive_state.speed, Net.creatures.size(), nid, field.actor_position(nid).distance_to(player.global_position) if not nid.is_empty() else -1.0])
 	player.joystick.output = Vector2.ZERO
@@ -113,6 +154,7 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return not Net.vehicles.is_empty(), 3.0), "미니트럭을 샀다")
 	var id: String = str(Net.vehicles[0].get("id", ""))
 	_check(is_equal_approx(Net.vehicle_health(id), 1.0), "내구도 가득")
+
 
 	# ---- 헬기 보급 낙하 ----
 	var sol0: int = Net.sol
@@ -146,20 +188,24 @@ func _run() -> void:
 		rider.mount(id)
 	_check(await _wait_until(func() -> bool: return rider.is_riding(), 4.0), "트럭에 올라탔다")
 	_check(rider.info != null and rider.info.kind == "car" and rider.model != null, "차량 모형")
+	# 기다리는 동안 맞았으면 구급상자로 채운다.
+	for i: int in Net.inventory.size():
+		if Net.hp < 7 and Net.inventory[i] != null and Net.inventory[i].id == "first_aid_kit":
+			Net.use_item(i)
+			break
 
 	# ---- 빠르게 들이받기 ----
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty(), 15.0), "크리처가 나타났다 (%d)" % Net.creatures.size())
 	# 먼저 크리처 떼에서 빠져나간다 (달리는 동안은 붙잡히지 않는다) → 멀리서 돌아 달려든다.
-	var cam: Camera3D = get_viewport().get_camera_3d()
-	rider.drive_state.yaw = atan2(cam.global_basis.z.x, cam.global_basis.z.z)
+	rider.drive_state.yaw = _open_yaw(player)
 	player.joystick.output = _stick_toward(rider.drive_state.forward())
 	await get_tree().create_timer(3.0).timeout
 	player.joystick.output = Vector2.ZERO
 	var skip: Dictionary = {}
 	var hard: Dictionary = {}
 	var before_speed: float = 0.0
-	for attempt: int in 4:
-		hard = await _drive_into(player, 1.0, 12.0, skip)
+	for attempt: int in 6:
+		hard = await _drive_into(player, 1.0, 10.0, skip)
 		if not hard.is_empty() and bool(hard.get("hard", false)):
 			break
 		if not hard.is_empty():

@@ -670,7 +670,9 @@ func _ram_check(delta: float) -> bool:
 		var c: Dictionary = Net.creatures[id]
 		if int(c.get("f", 0)) == 1:
 			continue
-		touching = true
+		# 빨라지기 어렵게 하는 건 앞을 막은 크리처 · 차 밑에 넘어진 크리처 (옆에 붙은 건 아니다).
+		if int(c.get("f", 0)) == 2 or along > front * 0.45:
+			touching = true
 		var speed: float = absf(drive_state.speed)
 		if speed < 0.4 or now_ms < int(_rammed_at.get(id, 0)):
 			continue

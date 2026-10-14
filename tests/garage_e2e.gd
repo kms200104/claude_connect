@@ -212,7 +212,7 @@ func _run() -> void:
 	for m: VehicleCatalog.Model in GameData.garage.models:
 		if app.find_child("Model_%s" % m.id, true, false) != null:
 			models += 1
-	_check(models == 10, "매장에 자전거 4 · 전기오토바이 3 · 보트 3 (%d)" % models)
+	_check(models == 12, "매장에 자전거 4 · 전기오토바이 3 · 차량 2 · 보트 3 (%d)" % models)
 	_check(_press(app, "Model_bike_city"), "생활 자전거 고르기")
 	await get_tree().create_timer(0.1).timeout
 	_check(phone.find_child("Preview", true, false) is SubViewportContainer, "3D 미리보기가 돈다")
