@@ -50,6 +50,10 @@ MOTOR_ANCHORS = {'seat': [0.0, 0.42, 0.55], 'bar': [0.0, 0.86, 0.12], 'front': [
                  'frame': [0.0, 0.36, 0.0], 'head': [0.0, 0.62, -1.95], 'tail': [0.0, 0.55, 2.05], 'axle_f': [0.0, 0.0, -1.9], 'axle_r': [0.0, 0.0, 1.9]}
 JET_ANCHORS = {'seat': [0.0, 0.58, 0.22], 'bar': [0.0, 0.93, -0.42], 'front': [0.0, 0.72, -0.7], 'rear': [0.0, 0.62, 0.85],
                'frame': [0.0, 0.42, 0.0], 'head': [0.0, 0.6, -1.12], 'tail': [0.0, 0.52, 1.2], 'axle_f': [0.0, 0.0, -1.2], 'axle_r': [0.0, 0.0, 1.2]}
+ATV_ANCHORS = {'bar': [0.0, 1.0, -0.32], 'seat': [0.0, 0.72, 0.18], 'head': [0.0, 0.62, -0.98], 'tail': [0.0, 0.6, 0.9],
+               'axle_f': [0.0, 0.3, -0.62], 'axle_r': [0.0, 0.3, 0.6], 'front': [0.0, 0.7, -0.8], 'rear': [0.0, 0.72, 0.72]}
+TRUCK_ANCHORS = {'bar': [0.0, 1.18, -0.62], 'seat': [0.0, 0.92, -0.15], 'head': [0.0, 0.72, -1.62], 'tail': [0.0, 0.72, 1.72],
+                 'axle_f': [0.0, 0.34, -1.12], 'axle_r': [0.0, 0.34, 1.05], 'front': [0.0, 0.9, -1.4], 'rear': [0.0, 0.9, 1.2]}
 
 # ---- 모델 ----
 # style: 몸체 모양 (VehicleModel 이 빚는다) · wheel: 바퀴 반지름(m) · lift: 타는 동안 캐릭터를 올리는 높이.
@@ -96,7 +100,21 @@ MODELS = [
          spec='90마력 · 최고 80km/h · 2인승 · 후진 기어', desc='물보라를 일으키며 바다를 가르는 수상오토바이. 급회전하면 물이 튄다.',
          top=16.0, accel=4.0, brake=3.2, coast=0.5, turn=1.9, wheel=0.3, gear=1.0, lift=0.16,
          paint='#F5D547', trim='#232326', seat='#232326', anchors=JET_ANCHORS),
+    # ---- 차량 (v0.26): 네 바퀴. 무겁고 튼튼해 크리처를 들이받기 좋다 (survival.json ram). 캐빈이 열려 있어 타는 모습이 보인다. ----
+    dict(id='car_atv', kind='car', style='atv', pose='moto', name='솔바람 ATV', type='사륜 바이크 (농업용 ATV)', price=5900000,
+         spec='전기 사륜 · 최고 45km/h · 철제 범퍼', desc='네 바퀴로 흙길도 거침없이. 앞 범퍼가 튼튼해 크리처를 밀어내기 좋다.',
+         top=12.5, accel=3.0, brake=6.2, coast=0.4, turn=1.9, wheel=0.3, lift=0.32, regen=1.2, wade=0.75, mass=380, durability=150,
+         paint='#5E7A3A', trim='#2A2A2E', seat='#232326', anchors=ATV_ANCHORS),
+    dict(id='car_truck', kind='car', style='truck', pose='moto', name='솔바람 미니트럭', type='경트럭 (1톤 짐칸 · 오픈 캐빈)', price=14900000,
+         spec='전기 경트럭 · 최고 60km/h · 짐칸 · 통뼈 범퍼', desc='지붕이 열린 작은 트럭. 무겁고 튼튼해서 크리처를 들이받아도 끄떡없다. 대신 둔하다.',
+         top=16.5, accel=2.4, brake=6.6, coast=0.45, turn=1.45, wheel=0.34, lift=0.5, regen=1.0, wade=0.8, mass=1300, durability=280,
+         paint='#2F6FB0', trim='#E8E4DA', seat='#3A3632', anchors=TRUCK_ANCHORS),
 ]
+# v0.26 무게(kg, 타는 사람 포함 — 들이받을 때 크리처가 날아가는 정도) · 내구도 (0 이면 고장).
+for _m in MODELS:
+    if 'mass' not in _m:
+        _m['mass'] = {'bike': 90, 'moto': 190, 'boat': 400}[_m['kind']]
+        _m['durability'] = {'bike': 40, 'moto': 90, 'boat': 120}[_m['kind']]
 
 # ---- 부품 ----
 PAINTS = [
@@ -118,11 +136,13 @@ def add(**kw):
 
 
 for pid, name, color, premium in PAINTS:
-    add(id='paint_' + pid, slot='paint', name=name + (' (특수 도장)' if premium else ''), c=color, kinds=['bike', 'moto', 'boat'],
-        price={'bike': 69000 if premium else 39000, 'moto': 390000 if premium else 180000, 'boat': 590000 if premium else 290000},
+    add(id='paint_' + pid, slot='paint', name=name + (' (특수 도장)' if premium else ''), c=color, kinds=['bike', 'moto', 'boat', 'car'],
+        price={'bike': 69000 if premium else 39000, 'moto': 390000 if premium else 180000, 'boat': 590000 if premium else 290000,
+               'car': 890000 if premium else 420000},
         desc='프레임 전체를 다시 칠한다.' if not premium else '광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다.')
 for pid, name, color in TRIMS:
-    add(id='trim_' + pid, slot='trim', name=name + ' 포인트', c=color, kinds=['bike', 'moto', 'boat'], price={'bike': 15000, 'moto': 60000, 'boat': 90000},
+    add(id='trim_' + pid, slot='trim', name=name + ' 포인트', c=color, kinds=['bike', 'moto', 'boat', 'car'],
+        price={'bike': 15000, 'moto': 60000, 'boat': 90000, 'car': 130000},
         desc='림 · 핸들 · 포크 같은 포인트 부분의 색.')
 
 # 조명: light = { range(m), energy, angle(°), color, lens(렌즈 반지름 배율), drl(주간주행등 고리) }. 밤에 SpotLight 로 앞을 비춘다.
@@ -311,7 +331,9 @@ data = {
     'max_owned': 6,
     'resale': 0.55,
     # 호출 (v19.1): 주민이 탈것을 타고 와서 곁(park_range 안)에 세워 두고 간다. 오는 데 걸리는 시간 · 올라탈 수 있는 거리.
-    'delivery': {'eta_ms': 6500, 'park_range': 4.0, 'ride_range': 3.0, 'speed_grace_ms': 1500},
+    'delivery': {'eta_ms': 6500, 'park_range': 4.0, 'ride_range': 3.0, 'speed_grace_ms': 1500,
+                 # v0.26 보급 낙하: 헬기가 지나가며 낙하산 상자로 떨어뜨린다 (솔을 낸다 · 도착까지).
+                 'air_cost': 50000, 'air_eta_ms': 9000},
     'kinds': {
         'bike': {'name': '자전거', 'pose': 'bike', 'turn_speed': 0.55},
         'moto': {'name': '전기오토바이', 'pose': 'moto', 'turn_speed': 0.4,
@@ -319,7 +341,14 @@ data = {
         # 보트 (v20): 물 위에서만 · 스로틀은 천천히 열리고 놓으면 물 저항으로 미끄러지듯 선다. ▼ 는 역추진(브레이크).
         'boat': {'name': '보트', 'pose': 'boat', 'turn_speed': 0.55, 'water': True,
                  'throttle_rise': 1.1, 'throttle_fall': 1.4, 'brake_rise': 2.2, 'jerk': 3.5, 'ride_range': 4.6, 'park_range': 7.0},
+        # 차량 (v0.26): 무거워서 스로틀이 천천히 열리고 거의 눕지 않는다.
+        'car': {'name': '차량', 'pose': 'moto', 'turn_speed': 0.45, 'throttle_rise': 1.2, 'throttle_fall': 2.4, 'brake_rise': 3.5, 'jerk': 4.5,
+                'ride_range': 3.6, 'park_range': 5.0},
     },
+    # v0.26 내구도: 크리처를 들이받거나 벽에 세게 부딪치면 준다 (0 이면 고장 — 탈 수 없다). kit = 세워 둔 곁(또는 타는 중)에서 재료로
+    # kit_fix 만큼 고치기, shop = 휴대폰 탈것 앱에서 솔로 다 고치기 (값 × shop_rate × 닳은 몫). 벽: 속도가 crash_min m/s 넘게 갑자기 줄면
+    # (줄어든 속도 − crash_min) × crash_k.
+    'repair': {'kit': [{'id': 'scrap_metal', 'n': 1}, {'id': 'nails', 'n': 1}], 'kit_fix': 0.4, 'shop_rate': 0.08, 'crash_min': 3.0, 'crash_k': 2.5},
     'slots': SLOTS,
     'models': MODELS,
     'parts': parts,

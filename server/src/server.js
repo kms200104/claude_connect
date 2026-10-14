@@ -138,7 +138,7 @@ export function createServer(overrides = {}) {
   };
   const messenger = createMessenger({ data, cfg, random, sendTo, clock });
   const economy = createEconomy({ data, cfg, clock, random, now, market, send, sendTo, sendProfile, sendInventory, rooms, nearDesk, onWeekReport: messenger.weekly });
-  const garage = createGarage({ data, send, sendProfile, rooms, now, random, etaMs: cfg.vehicleEtaMs });
+  const garage = createGarage({ data, cfg, send, sendTo, sendProfile, sendInventory, rooms, now, random, etaMs: cfg.vehicleEtaMs });
   const safety = createSafety({ data, cfg, clock, now, send, sendTo });
   const jobs = createJobs({ data, random, now, clock, send, sendTo, sendProfile, act: (...a) => act(...a) });
   const kitchen = createKitchen({ data, cfg, random, now, send, sendTo, sendProfile, sendInventory, when: () => ({ season: environment(null).season, hour: clock.hour() }) });
@@ -156,7 +156,7 @@ export function createServer(overrides = {}) {
     room.broadcast({ t: 'drop', d: dropWire(d) });
     return d;
   };
-  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a) });
+  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage });
   // v0.22 제작대.
   const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
@@ -1846,6 +1846,8 @@ export function createServer(overrides = {}) {
         return survival.handleStash(ctx, msg, fail);
       case 'sleep':
         return survival.handleSleep(ctx, msg, fail);
+      case 'ram':
+        return survival.handleRam(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -1872,6 +1874,8 @@ export function createServer(overrides = {}) {
       case 'veh_sell':
       case 'veh_ride':
       case 'veh_call':
+      case 'veh_repair':
+      case 'veh_crash':
         return garage.handle(ctx, msg, fail, { blocked: rideBlocked });
       case 'steps':
         return safety.handleSteps(ctx, msg, fail);
@@ -2068,6 +2072,7 @@ export function createServer(overrides = {}) {
       case 'give_up':
       case 'stash':
       case 'sleep':
+      case 'ram':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2086,6 +2091,8 @@ export function createServer(overrides = {}) {
       case 'veh_sell':
       case 'veh_ride':
       case 'veh_call':
+      case 'veh_repair':
+      case 'veh_crash':
       case 'aqua_join':
       case 'aqua_leave':
       case 'aqua_hold':

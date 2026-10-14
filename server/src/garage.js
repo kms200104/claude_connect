@@ -9,8 +9,12 @@
 // 집 · 상점 안, 문을 지날 때, 낚싯대를 던질 때는 내린다.
 // 보트 (v20, kinds.boat.water): 물 위(water.js — 호수 안쪽 · 섬 둘레 바다)에서만. 부를 때 세울 자리 · 타는 동안의 자리 모두 물이어야 하고,
 //   내릴 때는 veh_ride { v: '', lx, lz } 로 내릴 땅을 알려 준다 (보트 곁 land_range 안의 땅 — 그 자리로 옮겨 서고 보트는 물에 남는다).
+// v0.26 차량(car: ATV · 미니트럭) · 내구도(durability — 크리처를 들이받거나 벽에 세게 부딪치면 준다, 0 이면 고장) ·
+//   veh_repair { v, how: kit (고철 · 못, 곁에서) | shop (솔, 어디서나) } · veh_crash { s } (클라이언트가 느낀 갑작스러운 감속 m/s) ·
+//   veh_call { mode: 'air' } 보급 낙하 (헬기가 지나가며 낙하산 상자로, air_cost 솔 · air_eta_ms 뒤 도착, npc 'heli').
 import { ErrorCode } from './protocol.js';
 import { isLand, waterAt } from './water.js';
+import { countWhere, removeWhere } from './inventory.js';
 
 /** garage.json 검사 + 찾기 Map. */
 export function loadGarage(raw) {
@@ -27,6 +31,11 @@ export function loadGarage(raw) {
     for (const k of p.kinds) if (!(p.price?.[k] > 0)) throw new Error(`vehicles: ${p.id} 의 ${k} 값이 없음`);
   }
   return { ...raw, models, parts, slotIds: [...slots] };
+}
+
+/** 그 탈것의 내구도 최대값. */
+export function durabilityOf(rules, vehicle) {
+  return rules?.models.get(vehicle?.model)?.durability ?? 60;
 }
 
 /** 끼운 부품의 성능 배율을 곱한 탈것 성능 { top, accel, brake, turn, wade }. 클라이언트 VehicleCatalog.stats 와 같다. */
@@ -70,7 +79,8 @@ export function sanitizeVehicles(raw, rules) {
     }
     // 세워 둔 자리 (다시 켜면 이미 도착한 것으로).
     const at = v.at && [v.at.x, v.at.z].every(Number.isFinite) ? { x: v.at.x, z: v.at.z, yaw: Number.isFinite(v.at.yaw) ? v.at.yaw : 0, t: 0, npc: '' } : null;
-    out.push({ id: v.id, model: m.id, owned, fit, at });
+    const max = m.durability ?? 60;
+    out.push({ id: v.id, model: m.id, owned, fit, at, hp: Number.isFinite(v.hp) ? Math.max(0, Math.min(max, Math.round(v.hp))) : max });
     if (out.length >= rules.max_owned) break;
   }
   return out;
@@ -93,7 +103,7 @@ export function parkedWire(room) {
   return out;
 }
 
-export function createGarage({ data, send, sendProfile, rooms, now = () => performance.now(), random = Math.random, etaMs }) {
+export function createGarage({ data, cfg, send, sendTo, sendProfile, sendInventory, rooms, now = () => performance.now(), random = Math.random, etaMs }) {
   const rules = data.garage;
   const delivery = { eta_ms: 6500, park_range: 4, ride_range: 3, speed_grace_ms: 1500, ...(rules?.delivery ?? {}) };
   // 테스트는 배달을 빨리 (config.vehicleEtaMs, VEHICLE_ETA_MS).
@@ -107,6 +117,28 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
   const rideRange = (kind) => rules?.kinds[kind]?.ride_range ?? delivery.ride_range;
   const parkRange = (kind) => rules?.kinds[kind]?.park_range ?? delivery.park_range;
   const mountedVehicle = (player) => (player.mount ? player.profile.vehicles.find((x) => x.id === player.mount) : null);
+  const R = rules?.repair ?? {};
+  const hpOf = (v) => (Number.isFinite(v.hp) ? v.hp : durabilityOf(rules, v));
+  const hpWire = (v) => ({ v: v.id, hp: hpOf(v), max: durabilityOf(rules, v) });
+
+  /** 타고 있는 탈것 (들이받기 판정용): { vehicle, model, kind, stats, mass } 또는 null. */
+  function mounted(player) {
+    const v = mountedVehicle(player);
+    if (!v || !rules) return null;
+    const m = rules.models.get(v.model);
+    return { vehicle: v, model: m, kind: m.kind, stats: vehicleStats(rules, v), mass: m.mass ?? 150 };
+  }
+
+  /** 타고 있는 탈것이 다친다 (0 이면 고장 — 내린다). */
+  function damage(player, room, amount, why = '') {
+    const v = mountedVehicle(player);
+    if (!v || !(amount > 0)) return;
+    v.hp = Math.max(0, hpOf(v) - Math.ceil(amount));
+    const broken = v.hp <= 0;
+    sendTo(player, { t: 'veh_hp', ...hpWire(v), why, broken });
+    if (broken) dismount(player, room);
+    if (room) room.saveDirty = true;
+  }
 
   /** 보트를 타고 있는지 (v21: 보트 위에서는 내리지 않고 낚시한다). */
   function onBoat(player) {
@@ -219,6 +251,7 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
           const why = blocked(player);
           if (why) return fail(why);
           if (player.mount === vehicle.id) return send(ctx.ws, { t: 'veh_ride', rid: msg.rid, id: player.id, mount: mountWire(player) });
+          if (hpOf(vehicle) <= 0) return fail(ErrorCode.vehicleBroken);
           // 세워 둔(도착한) 그 탈것 곁에서만 탄다.
           const at = vehicle.at;
           if (!at || (at.t ?? 0) > now() || Math.hypot(player.x - at.x, player.z - at.z) > rideRange(kindOf(vehicle)) + 0.5) return fail(ErrorCode.notNearVehicle);
@@ -249,13 +282,54 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
           x = player.x;
           z = player.z;
         }
-        const npc = couriers.length ? couriers[Math.floor(random() * couriers.length)] : '';
-        const arrive = now() + delivery.eta_ms;
+        // v0.26 보급 낙하: 헬기가 떨어뜨린다 (솔을 낸다, 물 위는 안 된다).
+        const air = msg.mode === 'air';
+        if (air) {
+          if (isWaterKind(kind)) return fail(ErrorCode.badVehicle);
+          if (p.sol < (delivery.air_cost ?? 0)) return fail(ErrorCode.notEnoughSol);
+          p.sol -= delivery.air_cost ?? 0;
+        }
+        const npc = air ? 'heli' : couriers.length ? couriers[Math.floor(random() * couriers.length)] : '';
+        const arrive = now() + (air && !Number.isFinite(etaMs) ? delivery.air_eta_ms ?? 9000 : delivery.eta_ms);
         vehicle.at = { x, z, yaw: Number.isFinite(msg.yaw) ? msg.yaw : player.yaw, t: arrive, npc };
-        send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'call', v: vehicle.id, npc, at: arrive, cost: 0, sol: p.sol });
+        send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'call', v: vehicle.id, npc, at: arrive, cost: air ? delivery.air_cost ?? 0 : 0, sol: p.sol });
         sendProfile(player);
         broadcastParked(room);
         rooms.save(room);
+        return;
+      }
+      case 'veh_repair': {
+        // v0.26 고치기: kit = 세워 둔 곁(또는 타는 중)에서 재료로 kit_fix 만큼, shop = 솔로 다.
+        if (!vehicle) return fail(ErrorCode.badVehicle);
+        const max = durabilityOf(rules, vehicle);
+        if (hpOf(vehicle) >= max) return fail(ErrorCode.badPart);
+        let cost = 0;
+        if (msg.how === 'shop') {
+          const m = rules.models.get(vehicle.model);
+          cost = Math.max(1000, Math.round((m.price * (R.shop_rate ?? 0.08) * (1 - hpOf(vehicle) / max)) / 100) * 100);
+          if (p.sol < cost) return fail(ErrorCode.notEnoughSol);
+          p.sol -= cost;
+          vehicle.hp = max;
+        } else {
+          const at = vehicle.at;
+          const near = player.mount === vehicle.id || (at && (at.t ?? 0) <= now() && Math.hypot(player.x - at.x, player.z - at.z) <= rideRange(kindOf(vehicle)) + 0.8);
+          if (!near) return fail(ErrorCode.notNearVehicle);
+          for (const need of R.kit ?? []) if (countWhere(player.slots, (id) => id === need.id) < need.n) return fail(ErrorCode.notEnoughItems);
+          for (const need of R.kit ?? []) removeWhere(player.slots, (id) => id === need.id, need.n);
+          vehicle.hp = Math.min(max, hpOf(vehicle) + Math.ceil(max * (R.kit_fix ?? 0.4)));
+          sendInventory(player);
+        }
+        send(ctx.ws, { t: 'veh_result', rid: msg.rid, kind: 'repair', v: vehicle.id, how: msg.how === 'shop' ? 'shop' : 'kit', ...hpWire(vehicle), cost, sol: p.sol });
+        break;
+      }
+      case 'veh_crash': {
+        // v0.26 벽 · 나무에 세게 부딪쳤다 (클라이언트가 느낀 갑작스러운 감속, 그 탈것 최고 속도까지만 믿는다).
+        const mv = mountedVehicle(player);
+        const t = now();
+        if (!mv || isWaterKind(kindOf(mv)) || t < (player.crashAt ?? 0)) return;
+        player.crashAt = t + 400;
+        const dv = Math.min(Number(msg.s) || 0, vehicleStats(rules, mv).top + 1);
+        if (dv > (R.crash_min ?? 3)) damage(player, room, (dv - (R.crash_min ?? 3)) * (R.crash_k ?? 2.5), 'crash');
         return;
       }
       default:
@@ -271,8 +345,8 @@ export function createGarage({ data, send, sendProfile, rooms, now = () => perfo
 
   /** 프로필에 싣는 차고. */
   function profileWire(profile) {
-    return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null })) };
+    return { vehicles: (profile.vehicles ?? []).map((v) => ({ id: v.id, model: v.model, owned: [...v.owned], fit: { ...v.fit }, at: v.at ? { x: v.at.x, z: v.at.z, t: v.at.t ?? 0 } : null, hp: hpOf(v), max: durabilityOf(rules, v) })) };
   }
 
-  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat };
+  return { handle, topSpeed, dismount, profileWire, parkedWire, broadcastParked, moveOk, onBoat, mounted, damage };
 }

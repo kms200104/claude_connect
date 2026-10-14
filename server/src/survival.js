@@ -3,7 +3,8 @@
 //        쓰러짐 (동료가 곁에서 일으키면 기절하지 않는다).
 // v0.25: 소리(휘두르기 · 달리기 · 망치질)가 크리처를 부른다 · 판자는 시간 들여 대고 함께 대면 빨라진다 ·
 //        거점(다 막은 빈집)의 상자 · 침대.
-// v0.26: 피 냄새 — 다치면 핏자국을 남기고, 크리처가 더 멀리서 알아채고 핏자국을 따라온다 (붕대로 멈춘다).
+// v0.26: 피 냄새 — 다치면 핏자국을 남기고, 크리처가 더 멀리서 알아채고 핏자국을 따라온다 (붕대로 멈춘다) ·
+//        탈것으로 들이받기 ram { c, s, dx, dz } — 빠르면 날아가고(빠를수록 멀리 · 세게, 벽에 부딪히면 더), 느리면 넘어진다.
 // data/survival/survival.json (규칙) · data/survival/houses.json (빈집촌 · 가구 자리). 시각은 세상 시각(clock.hour · worldMs, 60배).
 //   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {} ·
 //   stash { h, op: put|take, slot|id, n? } · sleep { on }.
@@ -104,7 +105,7 @@ export function rollLoot(table, random) {
   return out;
 }
 
-export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act }) {
+export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act, garage }) {
   const S = data.survival;
   const worldMs = () => (clock.worldMs ? clock.worldMs() : clock.gameMs());
   const maxHp = S?.player?.max_hp ?? 10;
@@ -644,7 +645,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   // ---- 크리처 ----
 
-  const creatureWire = (c) => ({ id: c.id, k: c.k, x: round(c.x), z: round(c.z), yaw: round(c.yaw), hp: c.hp, a: c.attackAt > now() - 350 ? 1 : 0 });
+  // f: 1 = 날아가는 중 (들이받혀서), 2 = 넘어져 있음.
+  const creatureWire = (c) => ({ id: c.id, k: c.k, x: round(c.x), z: round(c.z), yaw: round(c.yaw), hp: c.hp, a: c.attackAt > now() - 350 ? 1 : 0, f: c.kb ? 1 : (c.downUntil ?? 0) > now() ? 2 : 0 });
 
   /** 놓인 가구로 막힌 곳 (바리케이드) · 불빛 (모닥불 · 든 횃불 · 손전등). */
   function defenses(room) {
@@ -766,6 +768,17 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     }
     for (const c of [...room.creatures.values()]) {
       const kind = S.creatures.kinds[c.k];
+      // 들이받혀 날아가는 중 · 넘어져 있는 동안은 움직이지도 때리지도 못한다.
+      if (c.kb) {
+        stepKnock(room, c, dt, t, def);
+        changed = true;
+        continue;
+      }
+      if ((c.downUntil ?? 0) > t) continue;
+      if (c.wasDown) {
+        c.wasDown = false;
+        changed = true;
+      }
       // 아무도 가까이 없으면 사라진다.
       let best = null;
       let bestD = Infinity;
@@ -901,6 +914,100 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (changed) room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
   }
 
+  // ---- 탈것으로 들이받기 (v0.26) ----
+
+  const RAM = S?.ram;
+
+  /** 날아가는 크리처를 지면에서 미끄러뜨린다. 벽에 부딪히면 추가 피해, 멈추면 쓰러져 있다. 죽었으면 멈춘 뒤에 쓰러뜨린다. */
+  function stepKnock(room, c, dt, t, def) {
+    const kb = c.kb;
+    const sp = Math.hypot(kb.vx, kb.vz);
+    const nx = c.x + kb.vx * dt;
+    const nz = c.z + kb.vz * dt;
+    const h = c.inside ? S.houseById.get(c.inside) : null;
+    const solid = h ? !standInside(h, nx, nz, { lights: [] }) : !isLand(data, nx, nz) || groundProblem(data, nx, nz) === 'building' || def.blocks.some((b) => Math.hypot(nx - b.x, nz - b.z) < b.r);
+    let stop = false;
+    if (solid) {
+      // 벽 · 건물 · 바리케이드에 쾅.
+      const dmg = Math.ceil(sp * sp * RAM.wall_k);
+      c.hp -= dmg;
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: kb.by, wall: dmg, x: round(c.x), z: round(c.z) });
+      stop = true;
+    } else {
+      c.x = nx;
+      c.z = nz;
+      const ns = Math.max(0, sp - RAM.slide_decel * dt);
+      kb.vx *= sp > 0 ? ns / sp : 0;
+      kb.vz *= sp > 0 ? ns / sp : 0;
+      stop = ns <= 0.05;
+    }
+    if (!stop) return;
+    c.kb = null;
+    if (c.hp <= 0) return kill(room, c, kb.by);
+    c.downUntil = t + RAM.down_ms;
+    c.wasDown = true;
+    c.target = 0;
+  }
+
+  function handleRam(ctx, msg, fail) {
+    const { player, room } = ctx;
+    const t = now();
+    const ride = garage?.mounted(player);
+    if (!RAM || !ride || ride.kind === 'boat') return fail(ErrorCode.badVehicle);
+    const c = room.creatures?.get(msg.c);
+    if (!c || c.kb) return;
+    const reach = Math.max(Math.abs(ride.model.anchors?.axle_f?.[2] ?? 0.7), Math.abs(ride.model.anchors?.axle_r?.[2] ?? 0.6)) + RAM.reach + 0.6;
+    if (Math.hypot(c.x - player.x, c.z - player.z) > reach) return fail(ErrorCode.tooFar);
+    c.ramAt ??= {};
+    if (t < (c.ramAt[player.id] ?? 0)) return;
+    c.ramAt[player.id] = t + RAM.cooldown_ms;
+    // 빠르기는 그 탈것 최고 속도까지만 믿는다. 방향은 진행 방향 + 차에서 밀려나는 쪽.
+    const v = Math.max(0, Math.min(Number(msg.s) || 0, ride.stats.top * 1.1));
+    let hx = Number(msg.dx) || 0;
+    let hz = Number(msg.dz) || 0;
+    const hl = Math.hypot(hx, hz) || 1;
+    hx /= hl;
+    hz /= hl;
+    const ax = c.x - player.x;
+    const az = c.z - player.z;
+    const al = Math.hypot(ax, az) || 1;
+    let dx = hx * 0.8 + (ax / al) * 0.5;
+    let dz = hz * 0.8 + (az / al) * 0.5;
+    const dl = Math.hypot(dx, dz) || 1;
+    dx /= dl;
+    dz /= dl;
+    const kind = S.creatures.kinds[c.k];
+    const m = kind.mass ?? 70;
+    const M = ride.mass;
+    c.target = player.id;
+    if (v >= RAM.fast) {
+      const u = ((1 + RAM.restitution) * M) / (M + m) * v;
+      const dmg = Math.ceil(u * u * RAM.dmg_k);
+      c.hp -= dmg;
+      c.kb = { vx: dx * u, vz: dz * u, by: player.id };
+      c.yaw = Math.atan2(-dx, -dz);
+      const slow = ((1 + RAM.restitution) * m) / (M + m);
+      send(ctx.ws, { t: 'rammed', rid: msg.rid, c: c.id, hard: true, u: round(u), dmg, slow: round(slow) });
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ram: round(u), dx: round(dx), dz: round(dz) });
+      garage.damage(player, room, m * u * RAM.veh_k, 'ram');
+    } else {
+      // 느리면 넘어진다 (조금 밀려나고, 탈것은 확 느려진다).
+      const push = 0.4 + v * 0.15;
+      const nx = c.x + dx * push;
+      const nz = c.z + dz * push;
+      if (isLand(data, nx, nz) && (c.inside || groundProblem(data, nx, nz) !== 'building')) {
+        c.x = nx;
+        c.z = nz;
+      }
+      c.downUntil = t + RAM.slow_down_ms;
+      c.wasDown = true;
+      send(ctx.ws, { t: 'rammed', rid: msg.rid, c: c.id, hard: false, u: 0, dmg: 0, slow: round(1 - RAM.slow_keep) });
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: c.hp, by: player.id, ram: 0 });
+    }
+    noise(room, player, 'swing');
+    room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
+  }
+
   function handleAttack(ctx, msg, fail) {
     const { player, room } = ctx;
     if (!player.acceptRid(msg.rid)) return;
@@ -953,5 +1060,5 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }

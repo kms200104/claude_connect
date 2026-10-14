@@ -50,6 +50,22 @@
     "spawn_every_ms": 20000
   },
 
+  "ram": {
+    "_comment": "v0.26 탈것으로 들이받기 (보트 빼고, 탈것 질량 garage.json mass · 크리처 질량 kinds.mass). fast(m/s) 이상이면 크리처가 날아간다: 날아가는 빠르기 u = (1+restitution)·M/(M+m)·v, 피해 ceil(u²·dmg_k), 바닥을 slide_decel 로 미끄러지다 (거리 u²/2a) 멈춰 down_ms 동안 쓰러져 있다. 날아가다 벽 · 건물 · 바리케이드에 부딪히면 ceil(그때 빠르기²·wall_k) 더. 탈것은 ceil(m·u·veh_k) 만큼 닳고 (1+restitution)·m/(M+m) 만큼 느려진다. fast 보다 느리면 크리처가 넘어지고 (slow_down_ms) 탈것은 slow_keep 만큼만 빠르기가 남으며, 닿아 있는 동안은 contact_top(m/s) 넘게 빨라지지 못한다 (클라이언트). 한 크리처는 cooldown_ms 에 한 번.",
+    "fast": 4.2,
+    "restitution": 0.5,
+    "dmg_k": 0.05,
+    "wall_k": 0.06,
+    "slide_decel": 9.0,
+    "down_ms": 1800,
+    "slow_down_ms": 1600,
+    "veh_k": 0.004,
+    "slow_keep": 0.45,
+    "contact_top": 1.6,
+    "cooldown_ms": 500,
+    "reach": 1.1
+  },
+
   "scent": {
     "_comment": "v0.26 피 냄새: 크리처에게 맞아 다치면 피를 흘린다 (bleeding). 흘리는 동안 크리처가 aggro × aggro_mult 거리에서 알아채고, drop_every_ms 마다 발밑에 핏자국(냄새)을 남긴다 (trail_ms 동안). 아무도 쫓지 않는 크리처는 follow_range 안의 가장 새 핏자국을 따라온다. stops 를 쓰거나 체력이 가득 차거나 기절하면 멈춘다.",
     "aggro_mult": 1.8,
@@ -123,11 +139,11 @@
     "despawn_far": 60,
     "safe_radius": 12,
     "kinds": {
-      "shambler": { "name": "어슬렁이", "weight": 60, "hp": 5, "speed": 1.5, "aggro": 16, "reach": 1.1, "damage": 1, "attack_ms": 1300,
+      "shambler": { "name": "어슬렁이", "weight": 60, "mass": 70, "hp": 5, "speed": 1.5, "aggro": 16, "reach": 1.1, "damage": 1, "attack_ms": 1300,
         "drop_chance": 1.0, "drops": [ { "id": "cloth", "w": 35, "n": [1, 2] }, { "id": "scrap_metal", "w": 25, "n": [1, 1] }, { "id": "plastic", "w": 22, "n": [1, 2] }, { "id": "battery", "w": 10, "n": [1, 1] }, { "id": "bandage", "w": 8, "n": [1, 1] } ] },
-      "runner": { "name": "달리미", "weight": 25, "hp": 3, "speed": 3.4, "aggro": 20, "reach": 1.0, "damage": 1, "attack_ms": 900,
+      "runner": { "name": "달리미", "weight": 25, "mass": 55, "hp": 3, "speed": 3.4, "aggro": 20, "reach": 1.0, "damage": 1, "attack_ms": 900,
         "drop_chance": 1.0, "drops": [ { "id": "battery", "w": 30, "n": [1, 1] }, { "id": "nails", "w": 30, "n": [1, 2] }, { "id": "cloth", "w": 25, "n": [1, 1] }, { "id": "rope", "w": 15, "n": [1, 1] } ] },
-      "bloated": { "name": "퉁퉁이", "weight": 15, "hp": 10, "speed": 1.0, "aggro": 12, "reach": 1.3, "damage": 2, "attack_ms": 1600,
+      "bloated": { "name": "퉁퉁이", "weight": 15, "mass": 140, "hp": 10, "speed": 1.0, "aggro": 12, "reach": 1.3, "damage": 2, "attack_ms": 1600,
         "drop_chance": 1.0, "drops": [ { "id": "canned_food", "w": 35, "n": [1, 2] }, { "id": "scrap_metal", "w": 30, "n": [2, 3] }, { "id": "first_aid_kit", "w": 15, "n": [1, 1] }, { "id": "battery", "w": 20, "n": [1, 2] } ] }
     }
   }

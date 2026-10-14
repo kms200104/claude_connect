@@ -6,7 +6,9 @@
   "eta_ms": 6500,
   "park_range": 4.0,
   "ride_range": 3.0,
-  "speed_grace_ms": 1500
+  "speed_grace_ms": 1500,
+  "air_cost": 50000,
+  "air_eta_ms": 9000
  },
  "kinds": {
   "bike": {
@@ -34,7 +36,34 @@
    "jerk": 3.5,
    "ride_range": 4.6,
    "park_range": 7.0
+  },
+  "car": {
+   "name": "차량",
+   "pose": "moto",
+   "turn_speed": 0.45,
+   "throttle_rise": 1.2,
+   "throttle_fall": 2.4,
+   "brake_rise": 3.5,
+   "jerk": 4.5,
+   "ride_range": 3.6,
+   "park_range": 5.0
   }
+ },
+ "repair": {
+  "kit": [
+   {
+    "id": "scrap_metal",
+    "n": 1
+   },
+   {
+    "id": "nails",
+    "n": 1
+   }
+  ],
+  "kit_fix": 0.4,
+  "shop_rate": 0.08,
+  "crash_min": 3.0,
+  "crash_k": 2.5
  },
  "slots": [
   {
@@ -153,7 +182,9 @@
      0.28,
      0.42
     ]
-   }
+   },
+   "mass": 90,
+   "durability": 40
   },
   {
    "id": "bike_mini",
@@ -221,7 +252,9 @@
      0.22,
      0.38
     ]
-   }
+   },
+   "mass": 90,
+   "durability": 40
   },
   {
    "id": "bike_mtb",
@@ -290,7 +323,9 @@
      0.28,
      0.42
     ]
-   }
+   },
+   "mass": 90,
+   "durability": 40
   },
   {
    "id": "bike_road",
@@ -358,7 +393,9 @@
      0.28,
      0.42
     ]
-   }
+   },
+   "mass": 90,
+   "durability": 40
   },
   {
    "id": "moto_scooter",
@@ -431,7 +468,9 @@
      0.2,
      -0.1
     ]
-   }
+   },
+   "mass": 190,
+   "durability": 90
   },
   {
    "id": "moto_classic",
@@ -504,7 +543,9 @@
      0.22,
      -0.1
     ]
-   }
+   },
+   "mass": 190,
+   "durability": 90
   },
   {
    "id": "moto_sport",
@@ -577,7 +618,9 @@
      0.22,
      -0.1
     ]
-   }
+   },
+   "mass": 190,
+   "durability": 90
   },
   {
    "id": "boat_kayak",
@@ -646,7 +689,9 @@
      0.0,
      1.4
     ]
-   }
+   },
+   "mass": 400,
+   "durability": 120
   },
   {
    "id": "boat_motor",
@@ -715,7 +760,9 @@
      0.0,
      1.9
     ]
-   }
+   },
+   "mass": 400,
+   "durability": 120
   },
   {
    "id": "boat_jetski",
@@ -784,6 +831,142 @@
      0.0,
      1.2
     ]
+   },
+   "mass": 400,
+   "durability": 120
+  },
+  {
+   "id": "car_atv",
+   "kind": "car",
+   "style": "atv",
+   "pose": "moto",
+   "name": "솔바람 ATV",
+   "type": "사륜 바이크 (농업용 ATV)",
+   "price": 5900000,
+   "spec": "전기 사륜 · 최고 45km/h · 철제 범퍼",
+   "desc": "네 바퀴로 흙길도 거침없이. 앞 범퍼가 튼튼해 크리처를 밀어내기 좋다.",
+   "top": 12.5,
+   "accel": 3.0,
+   "brake": 6.2,
+   "coast": 0.4,
+   "turn": 1.9,
+   "wheel": 0.3,
+   "lift": 0.32,
+   "regen": 1.2,
+   "wade": 0.75,
+   "mass": 380,
+   "durability": 150,
+   "paint": "#5E7A3A",
+   "trim": "#2A2A2E",
+   "seat": "#232326",
+   "anchors": {
+    "bar": [
+     0.0,
+     1.0,
+     -0.32
+    ],
+    "seat": [
+     0.0,
+     0.72,
+     0.18
+    ],
+    "head": [
+     0.0,
+     0.62,
+     -0.98
+    ],
+    "tail": [
+     0.0,
+     0.6,
+     0.9
+    ],
+    "axle_f": [
+     0.0,
+     0.3,
+     -0.62
+    ],
+    "axle_r": [
+     0.0,
+     0.3,
+     0.6
+    ],
+    "front": [
+     0.0,
+     0.7,
+     -0.8
+    ],
+    "rear": [
+     0.0,
+     0.72,
+     0.72
+    ]
+   }
+  },
+  {
+   "id": "car_truck",
+   "kind": "car",
+   "style": "truck",
+   "pose": "moto",
+   "name": "솔바람 미니트럭",
+   "type": "경트럭 (1톤 짐칸 · 오픈 캐빈)",
+   "price": 14900000,
+   "spec": "전기 경트럭 · 최고 60km/h · 짐칸 · 통뼈 범퍼",
+   "desc": "지붕이 열린 작은 트럭. 무겁고 튼튼해서 크리처를 들이받아도 끄떡없다. 대신 둔하다.",
+   "top": 16.5,
+   "accel": 2.4,
+   "brake": 6.6,
+   "coast": 0.45,
+   "turn": 1.45,
+   "wheel": 0.34,
+   "lift": 0.5,
+   "regen": 1.0,
+   "wade": 0.8,
+   "mass": 1300,
+   "durability": 280,
+   "paint": "#2F6FB0",
+   "trim": "#E8E4DA",
+   "seat": "#3A3632",
+   "anchors": {
+    "bar": [
+     0.0,
+     1.18,
+     -0.62
+    ],
+    "seat": [
+     0.0,
+     0.92,
+     -0.15
+    ],
+    "head": [
+     0.0,
+     0.72,
+     -1.62
+    ],
+    "tail": [
+     0.0,
+     0.72,
+     1.72
+    ],
+    "axle_f": [
+     0.0,
+     0.34,
+     -1.12
+    ],
+    "axle_r": [
+     0.0,
+     0.34,
+     1.05
+    ],
+    "front": [
+     0.0,
+     0.9,
+     -1.4
+    ],
+    "rear": [
+     0.0,
+     0.9,
+     1.2
+    ]
    }
   }
  ],
@@ -796,12 +979,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -813,12 +998,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -830,12 +1017,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -847,12 +1036,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -864,12 +1055,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -881,12 +1074,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -898,12 +1093,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -915,12 +1112,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -932,12 +1131,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -949,12 +1150,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -966,12 +1169,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -983,12 +1188,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 39000,
     "moto": 180000,
-    "boat": 290000
+    "boat": 290000,
+    "car": 420000
    },
    "desc": "프레임 전체를 다시 칠한다."
   },
@@ -1000,12 +1207,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 69000,
     "moto": 390000,
-    "boat": 590000
+    "boat": 590000,
+    "car": 890000
    },
    "desc": "광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다."
   },
@@ -1017,12 +1226,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 69000,
     "moto": 390000,
-    "boat": 590000
+    "boat": 590000,
+    "car": 890000
    },
    "desc": "광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다."
   },
@@ -1034,12 +1245,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 69000,
     "moto": 390000,
-    "boat": 590000
+    "boat": 590000,
+    "car": 890000
    },
    "desc": "광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다."
   },
@@ -1051,12 +1264,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 69000,
     "moto": 390000,
-    "boat": 590000
+    "boat": 590000,
+    "car": 890000
    },
    "desc": "광택·무광 특수 도장. 빛을 받으면 결이 달라 보인다."
   },
@@ -1068,12 +1283,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1085,12 +1302,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1102,12 +1321,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1119,12 +1340,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1136,12 +1359,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1153,12 +1378,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1170,12 +1397,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },
@@ -1187,12 +1416,14 @@
    "kinds": [
     "bike",
     "moto",
-    "boat"
+    "boat",
+    "car"
    ],
    "price": {
     "bike": 15000,
     "moto": 60000,
-    "boat": 90000
+    "boat": 90000,
+    "car": 130000
    },
    "desc": "림 · 핸들 · 포크 같은 포인트 부분의 색."
   },

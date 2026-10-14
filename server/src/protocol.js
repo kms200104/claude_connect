@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -136,6 +136,7 @@ export const ErrorCode = Object.freeze({
   garageFull: 'garage_full', // 차고가 꽉 찼다 (max_owned)
   cantRide: 'cant_ride', // 집 · 상점 안이거나 낚시 중이라 탈 수 없다
   notNearVehicle: 'not_near_vehicle', // v19.1: 세워 둔 그 탈것 곁이 아니다 (아직 오는 중 포함)
+  vehicleBroken: 'vehicle_broken', // v0.26 고장난 탈것 (고쳐야 탄다)
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다
