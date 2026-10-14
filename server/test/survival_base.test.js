@@ -81,8 +81,10 @@ describe('v0.24 판자 대기 · 크리처 · 쓰러짐', () => {
     assert.equal((await ask(c, { t: 'board', h: 'h01', o: 'door' })).code, 'too_far');
     await moveTo(c, { x: door.outX, z: door.outZ });
     const ok = await ask(c, { t: 'board', h: 'h01', o: 'door' });
-    assert.equal(ok.t, 'boarded');
-    assert.equal(ok.hp, S.fortify.hp.door);
+    assert.equal(ok.t, 'boarding');
+    assert.equal(ok.need, S.fortify.board_ms);
+    const done = await c.next((m) => m.t === 'boarded' && m.o === 'door', S.fortify.board_ms + 2000);
+    assert.equal(done.hp, S.fortify.hp.door);
     const inv = await c.type('inventory');
     assert.equal(count(inv, 'wood'), 2);
     assert.equal(count(inv, 'nails'), 1);
@@ -92,7 +94,8 @@ describe('v0.24 판자 대기 · 크리처 · 쓰러짐', () => {
     assert.equal((await ask(c, { t: 'board', h: 'h01', o: intact })).code, 'bad_item');
     const win = H.breaches.find((b) => b.kind === 'window');
     await moveTo(c, { x: win.inX, z: win.inZ });
-    assert.equal((await ask(c, { t: 'board', h: 'h01', o: win.id })).t, 'boarded');
+    assert.equal((await ask(c, { t: 'board', h: 'h01', o: win.id })).t, 'boarding');
+    await c.next((m) => m.t === 'boarded' && m.o === win.id, S.fortify.board_ms + 2000);
     assert.equal((await ask(c, { t: 'board', h: 'h01', o: H.breaches.find((b) => b.kind === 'window' && b !== win).id })).code, 'too_far');
     assert.deepEqual(roomOf(server).boards, { [door.key]: S.fortify.hp.door, [win.key]: S.fortify.hp.window });
   });

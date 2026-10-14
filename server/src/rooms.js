@@ -440,6 +440,9 @@ export class Room {
     room.looted = Object.fromEntries(Object.entries(world.looted ?? {}).filter(([id, until]) => data.survival?.containers.has(id) && Number.isFinite(until)));
     room.boards = Object.fromEntries(Object.entries(world.boards ?? {}).filter(([key, hp]) => data.survival?.breaches.has(key) && Number.isInteger(hp) && hp > 0)
       .map(([key, hp]) => [key, Math.min(hp, data.survival.breaches.get(key).max)]));
+    // v0.25 거점 상자 (집 → [{ id, n }]).
+    room.stash = Object.fromEntries(Object.entries(world.stash ?? {}).filter(([h, box]) => data.survival?.houseById.has(h) && Array.isArray(box))
+      .map(([h, box]) => [h, box.filter((e) => typeof e?.id === 'string' && data.items.has(e.id) && Number.isInteger(e.n) && e.n > 0)]));
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
     for (const h of Array.isArray(world.households) ? world.households : []) {
       const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
@@ -501,6 +504,7 @@ export class Room {
         looted: { ...(this.looted ?? {}) },
         // v0.24 빈집 현관 · 깨진 창에 댄 판자 ("집:자리" → 남은 hp).
         boards: { ...(this.boards ?? {}) },
+        stash: structuredClone(this.stash ?? {}),
       },
       profiles,
     };

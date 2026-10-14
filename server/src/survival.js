@@ -1,8 +1,11 @@
 // 생존 (v0.23, 서버 권위): 빈집 가구 뒤지기 · 체력 · 밤 크리처 · 맞서 싸우기 · 회복 · 쓰러뜨리면 떨어지는 아이템.
 // v0.24: 빈집 현관 · 깨진 창에 판자 대기 (거점) — 크리처는 뚫린 곳으로 들어오고 막힌 곳은 두드려 부순다 ·
 //        쓰러짐 (동료가 곁에서 일으키면 기절하지 않는다).
+// v0.25: 소리(휘두르기 · 달리기 · 망치질)가 크리처를 부른다 · 판자는 시간 들여 대고 함께 대면 빨라진다 ·
+//        거점(다 막은 빈집)의 상자 · 침대.
 // data/survival/survival.json (규칙) · data/survival/houses.json (빈집촌 · 가구 자리). 시각은 세상 시각(clock.hour · worldMs, 60배).
-//   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {}.
+//   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {} ·
+//   stash { h, op: put|take, slot|id, n? } · sleep { on }.
 //   거리 · 쿨다운 · 확률 · 피해는 모두 여기서.
 import { ErrorCode } from './protocol.js';
 import { addItem, countWhere, removeAt, removeWhere } from './inventory.js';
@@ -188,24 +191,219 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     return { ...(room.boards ?? {}) };
   }
 
+  const F = S?.fortify;
+  const jobWire = (j) => ({ h: j.b.house, o: j.b.id, progress: Math.round(j.progress), need: j.need, helpers: [...j.helpers] });
+
+  /** 판자 대기 시작 (v0.25: board_ms 동안 망치질) · 이미 누가 대는 중이면 함께 (빨라지고 재료는 안 낸다). */
   function handleBoard(ctx, msg, fail) {
     const { player, room } = ctx;
     if (!player.acceptRid(msg.rid)) return;
     if (player.downed) return fail(ErrorCode.downed);
     const b = S?.breaches.get(`${msg.h}:${msg.o}`);
     if (!b) return fail(ErrorCode.badItem);
-    if (player.home || inShop(player) || Math.hypot(player.x - b.x, player.z - b.z) > S.fortify.range + 0.3) return fail(ErrorCode.tooFar);
+    if (player.home || inShop(player) || Math.hypot(player.x - b.x, player.z - b.z) > F.range + 0.3) return fail(ErrorCode.tooFar);
     room.boards ??= {};
     if (boardHp(room, b) >= b.max) return fail(ErrorCode.alreadyBoarded);
-    for (const need of S.fortify.cost) if (countWhere(player.slots, (id) => id === need.id) < need.n) return fail(ErrorCode.notEnoughItems);
-    for (const need of S.fortify.cost) removeWhere(player.slots, (id) => id === need.id, need.n);
-    const repaired = boardHp(room, b) > 0;
-    room.boards[b.key] = b.max;
+    room.boardJobs ??= new Map();
+    const job = room.boardJobs.get(b.key);
+    if (job) {
+      if (!job.helpers.includes(player.id)) job.helpers.push(player.id);
+      wake(room, player);
+      send(ctx.ws, { t: 'boarding', rid: msg.rid, ...jobWire(job), joined: true });
+      room.broadcast({ t: 'board_job', ...jobWire(job) });
+      return;
+    }
+    for (const need of F.cost) if (countWhere(player.slots, (id) => id === need.id) < need.n) return fail(ErrorCode.notEnoughItems);
+    for (const need of F.cost) removeWhere(player.slots, (id) => id === need.id, need.n);
     sendInventory(player);
-    send(ctx.ws, { t: 'boarded', rid: msg.rid, h: b.house, o: b.id, hp: b.max, max: b.max, repaired });
-    room.broadcast({ t: 'board', h: b.house, o: b.id, hp: b.max, max: b.max, by: player.id });
-    act(room, player, 'board', b.key);
+    wake(room, player);
+    const j = { b, helpers: [player.id], payer: player.id, progress: 0, need: F.board_ms ?? 0, repaired: boardHp(room, b) > 0, nextNoise: 0, nextWire: 0 };
+    send(ctx.ws, { t: 'boarding', rid: msg.rid, ...jobWire(j), joined: false });
+    if (j.need <= 0) return finishJob(room, j);
+    room.boardJobs.set(b.key, j);
+    room.broadcast({ t: 'board_job', ...jobWire(j) });
+  }
+
+  function finishJob(room, j) {
+    const b = j.b;
+    room.boards[b.key] = b.max;
+    for (const id of j.helpers) {
+      const p = room.players.get(id);
+      if (p) sendTo(p, { t: 'boarded', h: b.house, o: b.id, hp: b.max, max: b.max, repaired: j.repaired, helpers: j.helpers.length });
+    }
+    room.broadcast({ t: 'board_job', h: b.house, o: b.id, done: true });
+    room.broadcast({ t: 'board', h: b.house, o: b.id, hp: b.max, max: b.max, by: j.payer, helpers: j.helpers.length });
+    const payer = room.players.get(j.payer);
+    if (payer) act(room, payer, 'board', b.key);
     saveRoom(room);
+  }
+
+  /** 망치질: 곁에 남은 사람 수만큼 빨리, 소리를 낸다. 모두 떠나면 그만두고 재료를 돌려준다 (낮에도). */
+  function tickJobs(room, dtMs, t) {
+    for (const [key, j] of room.boardJobs ?? []) {
+      const before = j.helpers.length;
+      j.helpers = j.helpers.filter((id) => {
+        const p = room.players.get(id);
+        return p && p.online && !p.downed && !p.home && Math.hypot(p.x - j.b.x, p.z - j.b.z) <= F.range + 0.6;
+      });
+      if (j.helpers.length === 0) {
+        room.boardJobs.delete(key);
+        const payer = room.players.get(j.payer);
+        if (payer) {
+          for (const need of F.cost) addItem(payer.slots, need.id, need.n, cfg, data.limitOf);
+          sendInventory(payer);
+        }
+        room.broadcast({ t: 'board_job', h: j.b.house, o: j.b.id, cancel: true });
+        continue;
+      }
+      j.progress += dtMs * j.helpers.length;
+      if (t >= j.nextNoise) {
+        j.nextNoise = t + 1500;
+        noise(room, room.players.get(j.helpers[0]), 'board', j.b.x, j.b.z);
+      }
+      if (j.progress >= j.need) {
+        room.boardJobs.delete(key);
+        finishJob(room, j);
+        continue;
+      }
+      if (t >= j.nextWire || j.helpers.length !== before) {
+        j.nextWire = t + 400;
+        room.broadcast({ t: 'board_job', ...jobWire(j) });
+      }
+    }
+  }
+
+  // ---- 소리 (v0.25) ----
+
+  const N = S?.noise;
+
+  /** 밤에 (x, z) 에서 소리: 반경 안 크리처가 소리 낸 사람을 쫓는다. 망치질은 가끔 한 마리를 더 부른다. */
+  function noise(room, player, kind, x = player.x, z = player.z) {
+    if (!N || !player || !night()) return;
+    const r = N[kind];
+    if (!r) return;
+    const t = now();
+    let heard = 0;
+    for (const c of room.creatures?.values() ?? []) {
+      if (Math.hypot(c.x - x, c.z - z) > r) continue;
+      c.alertUntil = t + N.alert_ms;
+      c.alertBy = player.id;
+      heard++;
+    }
+    if (kind === 'board' && t >= (room.noiseSpawnAt ?? 0) && outdoors(player) && !player.downed) {
+      room.noiseSpawnAt = t + N.spawn_every_ms;
+      room.creatures ??= new Map();
+      if (room.creatures.size < S.creatures.max_per_room) {
+        const c = spawnNear(room, player, defenses(room), t);
+        if (c) {
+          c.alertUntil = t + N.alert_ms;
+          c.alertBy = player.id;
+          heard++;
+        }
+      }
+    }
+    sendTo(player, { t: 'noise', k: kind, r, n: heard });
+  }
+
+  /** 이동 요청마다 (server.js): 달리면 소리, 움직이면 잠에서 깬다. */
+  function moved(room, player, speed) {
+    if (speed > 0.6) wake(room, player);
+    if (speed <= (N?.run_speed ?? 5.5)) return;
+    const t = now();
+    if (t < (player.runNoiseAt ?? 0)) return;
+    player.runNoiseAt = t + 1000;
+    noise(room, player, 'run');
+  }
+
+  // ---- 거점: 상자 · 침대 (v0.25) ----
+
+  const B = S?.base;
+  /** 뚫린 곳을 모두 막은 빈집. */
+  const isBase = (room, h) => h.breaches.length > 0 && h.breaches.every((b) => boardHp(room, b) > 0);
+  const stashAt = (h) => toWorld(h, B.stash[0], B.stash[1]);
+  const bedAt = (h) => toWorld(h, B.bed[0], B.bed[1]);
+
+  function handleStash(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (player.downed) return fail(ErrorCode.downed);
+    const h = S?.houseById.get(msg.h);
+    if (!h || !B) return fail(ErrorCode.badItem);
+    const at = stashAt(h);
+    if (player.home || Math.hypot(player.x - at.x, player.z - at.z) > B.range + 0.3) return fail(ErrorCode.tooFar);
+    if (!isBase(room, h)) return fail(ErrorCode.notBase);
+    room.stash ??= {};
+    const box = (room.stash[h.id] ??= []);
+    if (msg.op === 'put') {
+      const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+      if (!slot) return fail(ErrorCode.badItem);
+      const id = slot.id;
+      const entry = box.find((e) => e.id === id);
+      if (!entry && box.length >= B.slots) return fail(ErrorCode.stashFull);
+      const n = Math.min(Number.isInteger(msg.n) && msg.n > 0 ? msg.n : slot.n, slot.n, B.max - (entry?.n ?? 0));
+      if (n <= 0) return fail(ErrorCode.stashFull);
+      removeAt(player.slots, msg.slot, n);
+      if (entry) entry.n += n;
+      else box.push({ id, n });
+    } else if (msg.op === 'take') {
+      const entry = box.find((e) => e.id === msg.id);
+      if (!entry) return fail(ErrorCode.badItem);
+      const want = Math.min(Number.isInteger(msg.n) && msg.n > 0 ? msg.n : entry.n, entry.n);
+      let got = 0;
+      while (got < want && addItem(player.slots, entry.id, 1, cfg, data.limitOf)) got++;
+      if (got === 0) return fail(ErrorCode.inventoryFull);
+      entry.n -= got;
+      if (entry.n <= 0) box.splice(box.indexOf(entry), 1);
+    } else {
+      return fail(ErrorCode.badMessage);
+    }
+    sendInventory(player);
+    send(ctx.ws, { t: 'stash', rid: msg.rid, h: h.id, items: box.map((e) => ({ ...e })) });
+    room.broadcast({ t: 'stash', h: h.id, items: box.map((e) => ({ ...e })) }, player.id);
+    act(room, player, 'stash', h.id);
+    saveRoom(room);
+  }
+
+  function handleSleep(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (!msg.on) {
+      wake(room, player);
+      return send(ctx.ws, { t: 'slept', rid: msg.rid, on: false });
+    }
+    if (player.downed) return fail(ErrorCode.downed);
+    const h = B ? houseAt(player.x, player.z) : null;
+    const bed = h ? bedAt(h) : null;
+    if (!h || Math.hypot(player.x - bed.x, player.z - bed.z) > B.range + 0.3) return fail(ErrorCode.tooFar);
+    if (!isBase(room, h)) return fail(ErrorCode.notBase);
+    if (hpOf(player) >= maxHp) return fail(ErrorCode.hpFull);
+    player.sleeping = { h: h.id, next: now() + B.sleep_regen_ms };
+    send(ctx.ws, { t: 'slept', rid: msg.rid, on: true });
+    room.broadcast({ t: 'sleep', id: player.id, on: true });
+  }
+
+  function wake(room, player) {
+    if (!player.sleeping) return;
+    delete player.sleeping;
+    room.broadcast({ t: 'sleep', id: player.id, on: false });
+  }
+
+  /** 자는 사람: sleep_regen_ms 마다 체력 1, 가득 차거나 거점이 뚫리면 깬다 (낮 · 밤). */
+  function tickSleep(room, t) {
+    for (const p of room.players.values()) {
+      const sl = p.sleeping;
+      if (!sl) continue;
+      const h = S.houseById.get(sl.h);
+      if (!p.online || !h || !isBase(room, h)) {
+        wake(room, p);
+        continue;
+      }
+      if (t < sl.next) continue;
+      sl.next = t + B.sleep_regen_ms;
+      setHp(p, hpOf(p) + 1);
+      sendTo(p, { t: 'hp', ...hpWire(p) });
+      if (hpOf(p) >= maxHp) wake(room, p);
+    }
   }
 
   /** 크리처가 판자를 두드린다 (0 이 되면 부서져 다시 뚫린다). */
@@ -295,6 +493,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const t = now();
     if (player.downed || t < (player.hurtUntil ?? 0)) return;
     player.hurtUntil = t + (S.player.hurt_grace_ms ?? 700);
+    wake(room, player);
     setHp(player, hpOf(player) - damage);
     sendTo(player, { t: 'hurt', ...hpWire(player), by });
     if (hpOf(player) > 0) return;
@@ -487,6 +686,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (!S) return;
     room.creatures ??= new Map();
     tickDowned(room, t);
+    tickJobs(room, dtMs, t);
+    tickSleep(room, t);
     const dt = dtMs / 1000;
     let changed = false;
     if (!night()) {
@@ -528,8 +729,14 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
         continue;
       }
+      // 소리를 들었으면 소리 낸 사람을 쫓는다 (aggro 밖이라도).
+      const alerted = (c.alertUntil ?? 0) > t ? people.find((p) => p.id === c.alertBy) : null;
+      if (alerted) {
+        best = alerted;
+        bestD = Math.hypot(alerted.x - c.x, alerted.z - c.z);
+      }
       const aggro = c.target === best.id ? kind.aggro * 1.5 : kind.aggro;
-      c.target = bestD <= aggro && !safeAt(best.x, best.z) ? best.id : 0;
+      c.target = (bestD <= aggro || alerted) && !safeAt(best.x, best.z) ? best.id : 0;
       // 아직 알아채지 못했어도 사람 냄새를 따라 천천히 (wander) 다가온다.
       const step = (c.target ? kind.speed : kind.speed * (S.creatures.wander ?? 0.45)) * dt;
       if (safeAt(best.x, best.z)) continue;
@@ -648,6 +855,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (t < (player.attackReadyAt ?? 0)) return fail(ErrorCode.tooFast);
     player.attackReadyAt = t + w.cooldown_ms - 60;
     act(room, player, 'swing', player.heldItem ?? '');
+    wake(room, player);
+    noise(room, player, 'swing');
     let target = null;
     let bestD = w.range + 0.3;
     for (const c of room.creatures?.values() ?? []) {
@@ -679,10 +888,13 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     return {
       ...hpWire(player), looted: lootedWire(room), creatures: [...(room.creatures?.values() ?? [])].map(creatureWire), night: night(),
       boards: boardsWire(room), downed: downedWire(room),
+      jobs: [...(room.boardJobs?.values() ?? [])].map(jobWire),
+      stash: Object.fromEntries(Object.entries(room.stash ?? {}).map(([h, box]) => [h, box.map((e) => ({ ...e }))])),
+      sleeping: [...room.players.values()].filter((p) => p.sleeping).map((p) => p.id),
     };
   }
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }
