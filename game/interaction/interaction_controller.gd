@@ -106,7 +106,10 @@ func _process(_delta: float) -> void:
 		Target.RIDE_OFF:
 			action_hud.show_action("내리기")
 		Target.VEHICLE:
-			action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
+			if Net.vehicle_health(target_id) <= 0.0 and not player.is_riding():
+				action_hud.show_action("고치기 · %s" % GarageRider.kit_text())
+			else:
+				action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
 		Target.AQUA:
 			action_hud.show_action("물놀이")
 		Target.CRAFT:
@@ -346,7 +349,10 @@ func _on_action_pressed() -> void:
 		Target.SURVIVE:
 			survival.activate(target_id)
 		Target.VEHICLE:
-			if player.garage_ride != null:
+			if player.garage_ride != null and Net.vehicle_health(target_id) <= 0.0 and not player.is_riding():
+				player.play_chop()
+				player.garage_ride.repair_kit(target_id)
+			elif player.garage_ride != null:
 				player.garage_ride.mount(target_id)
 		Target.MIRROR:
 			if mirror_window != null:

@@ -175,7 +175,7 @@ func _update_mount(delta: float, before: Vector3) -> void:
 	_mount_speed = lerpf(_mount_speed, moved, 1.0 - exp(-6.0 * delta))
 	var rate: float = wrapf(body.rotation.y - _mount_yaw, -PI, PI) / delta
 	_mount_yaw = body.rotation.y
-	var max_lean: float = 0.5 if _mount_info.kind == "moto" else (0.12 if _mount_info.kind == "boat" else 0.36)
+	var max_lean: float = 0.5 if _mount_info.kind == "moto" else (0.12 if _mount_info.kind == "boat" else (0.04 if _mount_info.kind == "car" else 0.36))
 	_mount_lean = lerpf(_mount_lean, clampf(atan(_mount_speed * rate / VehicleDrive.GRAVITY), -max_lean, max_lean), 1.0 - exp(-6.0 * delta))
 	var base: float = absf(_mount_info.anchor("axle_r").z - _mount_info.anchor("axle_f").z)
 	_mount_steer = clampf(atan(base * rate / maxf(_mount_speed, 0.8)), -0.5, 0.5)

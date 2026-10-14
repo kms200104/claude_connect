@@ -51,7 +51,7 @@
   },
 
   "ram": {
-    "_comment": "v0.26 탈것으로 들이받기 (보트 빼고, 탈것 질량 garage.json mass · 크리처 질량 kinds.mass). fast(m/s) 이상이면 크리처가 날아간다: 날아가는 빠르기 u = (1+restitution)·M/(M+m)·v, 피해 ceil(u²·dmg_k), 바닥을 slide_decel 로 미끄러지다 (거리 u²/2a) 멈춰 down_ms 동안 쓰러져 있다. 날아가다 벽 · 건물 · 바리케이드에 부딪히면 ceil(그때 빠르기²·wall_k) 더. 탈것은 ceil(m·u·veh_k) 만큼 닳고 (1+restitution)·m/(M+m) 만큼 느려진다. fast 보다 느리면 크리처가 넘어지고 (slow_down_ms) 탈것은 slow_keep 만큼만 빠르기가 남으며, 닿아 있는 동안은 contact_top(m/s) 넘게 빨라지지 못한다 (클라이언트). 한 크리처는 cooldown_ms 에 한 번.",
+    "_comment": "v0.26 탈것으로 들이받기 (보트 빼고, 탈것 질량 garage.json mass · 크리처 질량 kinds.mass). fast(m/s) 이상이면 크리처가 날아간다: 날아가는 빠르기 u = (1+restitution)·M/(M+m)·v, 피해 ceil(u²·dmg_k), 바닥을 slide_decel 로 미끄러지다 (거리 u²/2a) 멈춰 down_ms 동안 쓰러져 있다. 날아가다 벽 · 건물 · 바리케이드에 부딪히면 ceil(그때 빠르기²·wall_k) 더. 탈것은 ceil(m·u·veh_k) 만큼 닳고 (1+restitution)·m/(M+m) 만큼 느려진다. fast 보다 느리면 크리처가 넘어지고 (slow_down_ms) 탈것은 slow_keep 만큼만 빠르기가 남으며, 닿아 있는 동안은 contact_top(m/s) 넘게 빨라지지 못한다 (클라이언트). 한 크리처는 cooldown_ms 에 한 번. 탈것을 타고 immune_speed(m/s) 넘게 달리는 사람은 크리처가 때리지 못한다.",
     "fast": 4.2,
     "restitution": 0.5,
     "dmg_k": 0.05,
@@ -63,7 +63,8 @@
     "slow_keep": 0.45,
     "contact_top": 1.6,
     "cooldown_ms": 500,
-    "reach": 1.1
+    "reach": 1.1,
+    "immune_speed": 2.0
   },
 
   "scent": {

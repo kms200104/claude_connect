@@ -150,6 +150,11 @@ func _on_done(result: Dictionary) -> void:
 		"sell":
 			_note = "중고로 팔았어요 (+%s)." % Money.short(-cost)
 			_mode = Mode.GARAGE
+		"repair":
+			if str(result.get("how", "")) != "shop":
+				return
+			_note = "정비소에서 다 고쳤어요 (%s)." % Money.short(cost)
+			_mode = Mode.GARAGE
 	_note_good = true
 	_confirm = ""
 	_rebuild()
@@ -208,9 +213,9 @@ func _build() -> void:
 func _build_shop() -> void:
 	var head: VBoxContainer = card()
 	head.add_child(label("솔바람 모빌리티", 34, INK))
-	head.add_child(label("자전거 · 전기오토바이 · 보트를 실제 시세에 가깝게 팔아요. 사면 차고에 들어가고, HUD 의 탈것 단추로 부를 수 있어요. 보트는 물가에서 부르면 물 위에 띄워 줘요.", 24, SOFT))
+	head.add_child(label("자전거 · 전기오토바이 · 차량(ATV · 미니트럭) · 보트를 실제 시세에 가깝게 팔아요. 사면 차고에 들어가고, HUD 의 탈것 단추로 부를 수 있어요. 보트는 물가에서 부르면 물 위에 띄워 줘요.", 24, SOFT))
 	head.add_child(label("가진 솔 %s · 차고 %d / %d" % [Money.short(Net.sol), Net.vehicles.size(), GameData.garage.max_owned], 26, INK))
-	for kind: String in ["bike", "moto", "boat"]:
+	for kind: String in ["bike", "moto", "car", "boat"]:
 		add_child(label(GameData.garage.kind_name(kind), 30, INK))
 		for m: VehicleCatalog.Model in GameData.garage.models:
 			if m.kind != kind:
@@ -296,6 +301,24 @@ func _build_garage() -> void:
 		c.add_child(label("꾸밈: %s" % (", ".join(parts) if not parts.is_empty() else "기본 그대로"), 22, SOFT))
 		var s: VehicleCatalog.Stats = GameData.garage.stats(m.id, fit)
 		c.add_child(label("최고 %d km/h · 가속 %.1f · 브레이크 %.1f" % [roundi(s.top * 3.6), s.accel, s.brake], 22, SOFT))
+		# v0.26 내구도 · 정비 (솔로 다 고친다).
+		var health: float = Net.vehicle_health(id)
+		var hp_row: HBoxContainer = HBoxContainer.new()
+		hp_row.add_theme_constant_override("separation", 10)
+		c.add_child(hp_row)
+		var hp_label: Label = label("내구도 %d%%%s" % [roundi(health * 100.0), " · 고장" if health <= 0.0 else ""], 24, GOOD if health > 0.6 else WARN, false)
+		hp_label.name = "Health_%s" % id
+		hp_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hp_row.add_child(hp_label)
+		if health < 1.0:
+			var cost: int = GameData.garage.repair_cost(m.id, health)
+			var fix: Button = button("정비 %s" % Money.short(cost), 24, INK, Net.sol < cost)
+			fix.name = "Repair_%s" % id
+			fix.disabled = Net.sol < cost
+			fix.pressed.connect(func() -> void:
+				Audio.play_ui(Audio.SFX_CLICK)
+				Net.request("veh_repair", {"v": id, "how": "shop"}))
+			hp_row.add_child(fix)
 		var row: HBoxContainer = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		c.add_child(row)
@@ -305,6 +328,8 @@ func _build_garage() -> void:
 		var where: String = "차고에 있어요"
 		if riding:
 			where = "타는 중"
+		elif coming and str(spot.get("npc", "")) == "heli":
+			where = "보급 헬기가 떨어뜨리는 중"
 		elif coming:
 			where = "배달 로봇 솔봇이 가져오는 중"
 		elif not spot.is_empty() and phone != null and phone.player != null:
@@ -325,6 +350,19 @@ func _build_garage() -> void:
 				_note_good = false
 				_build())
 		row.add_child(call)
+		if not GameData.garage.is_water_kind(m.kind) and not riding and not coming:
+			# v0.26 헬기 보급 낙하 (솔을 낸다).
+			var air_cost: int = int(GameData.garage.delivery.get("air_cost", 0))
+			var air: Button = button("헬기 %s" % Money.short(air_cost), 24, INK, Net.sol < air_cost)
+			air.name = "AirCall_%s" % id
+			air.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			air.disabled = Net.sol < air_cost
+			air.pressed.connect(func() -> void:
+				Audio.play_ui(Audio.SFX_CLICK)
+				var r: GarageRider = _rider()
+				if r != null and r.call_vehicle(id, true) and phone != null:
+					phone.close())
+			row.add_child(air)
 		var custom: Button = button("꾸미기", 28)
 		custom.name = "Custom_%s" % id
 		custom.size_flags_horizontal = Control.SIZE_EXPAND_FILL

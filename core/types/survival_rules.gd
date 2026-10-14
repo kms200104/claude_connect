@@ -61,6 +61,8 @@ class CreatureKind:
 	var name: String = ""
 	var hp: int = 5
 	var speed: float = 1.5
+	## v0.26 무게 (kg) — 탈것에 들이받힐 때.
+	var mass: float = 70.0
 
 
 var houses: Array[House] = []
@@ -89,6 +91,8 @@ var stash_local: Vector2 = Vector2(2.9, 3.45)
 var bed_local: Vector2 = Vector2(-3.2, -2.5)
 var base_range: float = 1.6
 var stash_slots: int = 12
+## v0.26 들이받기 { fast, restitution, slow_keep, contact_top, reach, … } (서버 survival.json ram 과 같은 값).
+var ram: Dictionary = {}
 
 
 static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRules:
@@ -129,6 +133,7 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		kind.name = str(c.get("name", id))
 		kind.hp = int(c.get("hp", 5))
 		kind.speed = float(c.get("speed", 1.5))
+		kind.mass = float(c.get("mass", 70.0))
 		r.creature_kinds[kind.id] = kind
 	var fortify: Dictionary = rules.get("fortify", {})
 	r.fortify_range = float(fortify.get("range", r.fortify_range))
@@ -137,6 +142,9 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 			r.fortify_cost.append({"id": str(c.get("id", "")), "n": int(c.get("n", 1))})
 	var hp_of: Dictionary = fortify.get("hp", {})
 	r.board_ms = int(fortify.get("board_ms", r.board_ms))
+	var ram_rules: Variant = rules.get("ram", {})
+	if ram_rules is Dictionary:
+		r.ram = ram_rules
 	var base: Dictionary = rules.get("base", {})
 	var st: Array = base.get("stash", [r.stash_local.x, r.stash_local.y])
 	var bd: Array = base.get("bed", [r.bed_local.x, r.bed_local.y])

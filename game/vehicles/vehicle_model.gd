@@ -1,6 +1,6 @@
 class_name VehicleModel
 extends Node3D
-## 차고 탈것 모형 (v19): 자전거 · 전기오토바이 · 보트를 모델(style)과 끼운 부품(fit)대로 빚는다.
+## 차고 탈것 모형 (v19): 자전거 · 전기오토바이 · 보트 · 차량(v0.26 ATV · 미니트럭)을 모델(style)과 끼운 부품(fit)대로 빚는다.
 ## v21: 실제 제품 모양을 따라 매끈한 곡면(로프트 · 스윕 · 회전체)으로 — bike_parts · moto_parts · boat_parts (도구는 vehicle_shapes).
 ## 원점 = 바닥(두 바퀴 사이), 앞 = -Z. 타는 캐릭터의 리그 자세(ride_bike · ride_moto)에 맞춘 자리(anchors)를 쓴다.
 ## 나뉜 마디: 몸체(Frame) · 앞바퀴와 핸들(Steer, 조향축으로 돈다) · 뒷바퀴 · 크랭크와 페달(자전거) · 빛나는 렌즈와 장식.
@@ -9,6 +9,7 @@ const Shapes := preload("res://game/vehicles/vehicle_shapes.gd")
 const BikeKit := preload("res://game/vehicles/bike_parts.gd")
 const MotoKit := preload("res://game/vehicles/moto_parts.gd")
 const BoatKit := preload("res://game/vehicles/boat_parts.gd")
+const CarKit := preload("res://game/vehicles/car_parts.gd")
 
 const DARK: Color = Color("#2A2A2E")
 const LENS: Color = Color("#F4F1E6")
@@ -52,6 +53,10 @@ var _motor: Node3D = null
 var _steer_head: Vector3 = Vector3.ZERO
 var _bob_t: float = 0.0
 var _wake_left: float = 0.0
+## 차량 (v0.26): 네 바퀴 (도는 마디) · 앞바퀴 꺾는 마디 · 운전대 돌리는 배율.
+var _car_spins: Array[Node3D] = []
+var _car_pivots: Array[Node3D] = []
+var _wheel_turn: float = 1.0
 
 static var _glow_materials: Dictionary[String, Material] = {}
 static var _clay_material: Material = null
@@ -85,6 +90,8 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 	_steer = null
 	_front_spin = null
 	_rear_spin = null
+	_car_spins.clear()
+	_car_pivots.clear()
 	if info == null:
 		return
 	if _clay_material == null:
@@ -94,6 +101,8 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 		_build_bike()
 	elif info.kind == "boat":
 		_build_boat()
+	elif info.kind == "car":
+		_build_car()
 	else:
 		_build_moto()
 
@@ -104,6 +113,16 @@ func animate(speed: float, steer: float, delta: float) -> void:
 		return
 	if info.kind == "boat":
 		_animate_boat(speed, steer, delta)
+		return
+	if info.kind == "car":
+		_wheel_angle = fmod(_wheel_angle + speed * delta / maxf(info.wheel, 0.05), TAU)
+		for spin: Node3D in _car_spins:
+			spin.rotation.x = -_wheel_angle
+		_steer_angle = lerpf(_steer_angle, clampf(steer, -0.5, 0.5), 1.0 - exp(-12.0 * delta))
+		for pivot: Node3D in _car_pivots:
+			pivot.rotation.y = _steer_angle * 1.2
+		if _steer != null:
+			_steer.basis = Basis(_steer_axis, _steer_angle * _wheel_turn)
 		return
 	var turn: float = speed * delta / maxf(info.wheel, 0.05)
 	_wheel_angle = fmod(_wheel_angle + turn, TAU)
@@ -299,6 +318,56 @@ func _build_bike() -> void:
 		Shapes.sweep(gs, PackedVector3Array([head_bottom + Vector3(0.024, 0.0, 0.0), bb + Vector3(0.024, 0.03, 0.0)]), 0.006, LENS, 6, true)
 		Shapes.sweep(gs, PackedVector3Array([bb + Vector3(0.05, 0.0, 0.0), axle_r + Vector3(0.06, 0.0, 0.0)]), 0.005, LENS, 6, true)
 		_add_glow_mesh("FrameGlow", ClayMesh.commit(gs), self, Color.html(str(glow.get("c", "#FFFFFF"))), 1.1)
+
+
+# ---- 차량 (v0.26) ----
+
+func _build_car() -> void:
+	var paint: Color = _paint()
+	var trim: Color = _trim()
+	var truck: bool = info.style == "truck"
+	_frame = _add_mesh("Frame", _cached("frame", func() -> ArrayMesh:
+		var st: SurfaceTool = ClayMesh.begin()
+		CarKit.body(st, info.style, paint, trim, _seat_color(), _seg(6))
+		return ClayMesh.commit(st)), self)
+	# 네 바퀴: 앞바퀴는 꺾는 마디 안에서 돈다.
+	var track: float = 0.7 if truck else 0.54
+	var width: float = 0.24 if truck else 0.27
+	var wheel: ArrayMesh = _cached("wheel", func() -> ArrayMesh:
+		var ws: SurfaceTool = ClayMesh.begin()
+		CarKit.wheel(ws, info.wheel, width, trim, _seg(10))
+		return ClayMesh.commit(ws))
+	for axle: String in ["axle_f", "axle_r"]:
+		var at: Vector3 = info.anchor(axle)
+		for side: float in [-1.0, 1.0]:
+			var pivot: Node3D = Node3D.new()
+			pivot.name = "Wheel%s%s" % ["F" if axle == "axle_f" else "R", "L" if side < 0.0 else "R"]
+			pivot.position = Vector3(side * track, at.y, at.z)
+			add_child(pivot)
+			var spin: Node3D = Node3D.new()
+			spin.name = "Spin"
+			pivot.add_child(spin)
+			_add_mesh("Mesh", wheel, spin)
+			_car_spins.append(spin)
+			if axle == "axle_f":
+				_car_pivots.append(pivot)
+	# 운전대 · 핸들 (조향 마디 — 배달 로봇 · 타는 사람의 손이 잡는다).
+	_steer = Node3D.new()
+	_steer.name = "Steer"
+	_steer.position = info.anchor("bar")
+	_steer_axis = Vector3(0.0, cos(PI * 0.5 - 0.5), sin(PI * 0.5 - 0.5)).normalized() if truck else Vector3.UP
+	_wheel_turn = 4.0 if truck else 1.0
+	add_child(_steer)
+	_add_mesh("Mesh", _cached("steer", func() -> ArrayMesh:
+		var ss: SurfaceTool = ClayMesh.begin()
+		CarKit.steer(ss, info.style, trim)
+		return ClayMesh.commit(ss)), _steer)
+	var head: Vector3 = info.anchor("head")
+	var spread: float = 0.55 if truck else 0.22
+	_add_head_glow(head, 0.05, self, [head + Vector3(-spread, 0.0, 0.0), head + Vector3(spread, 0.0, 0.0)])
+	var tail: Vector3 = info.anchor("tail")
+	for side: float in [-1.0, 1.0]:
+		_add_tail(tail + Vector3(side * (0.62 if truck else 0.36), 0.0, 0.0), 0.05)
 
 
 # ---- 전기오토바이 ----

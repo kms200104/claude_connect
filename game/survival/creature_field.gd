@@ -4,6 +4,8 @@ extends Node3D
 ##   어슬렁이(회녹색 피부 · 해진 셔츠, 두 팔을 앞으로) · 달리미(마르고 앞으로 숙인 빨간 후드) · 퉁퉁이(불룩한 배 · 러닝셔츠).
 ## 서버 자리로 부드럽게 따라가며 걸음마다 다리를 흔들고, 덮치면(a) 팔을 내지른다. 맞으면 움찔 · "퍽!", 쓰러지면 땅으로 꺼지며 연기.
 ## 머리 위 이름 · 체력 칸 (가까울 때만).
+## v0.26 탈것에 들이받히면 빠르기만큼 높이 · 멀리 빙글빙글 날아가 (서버가 미끄러지는 자리를 정한다) 뒤로 벌러덩 눕고,
+## 느리게 닿으면 털썩 넘어진다 (f: 1 날아감 · 2 넘어짐). 벽에 부딪히면 "쿵!".
 
 @export var material: Material
 @export_range(1.0, 20.0, 0.5) var follow: float = 8.0
@@ -20,12 +22,20 @@ class Actor:
 	var phase: float = 0.0
 	var punch: float = 0.0
 	var lunge: float = 0.0
+	## 0 서 있음 · 1 날아가는 중 · 2 넘어져 있음 (서버 f).
+	var flag: int = 0
+	## 들이받혀 공중에 뜬 시간 · 전체 · 높이 · 도는 빠르기 (rad/s).
+	var air_t: float = 0.0
+	var air_total: float = 0.0
+	var air_h: float = 0.0
+	var spin: float = 0.0
 
 var _actors: Dictionary[String, Actor] = {}
 var _meshes: Dictionary[String, Array] = {}
 
 
 func _ready() -> void:
+	add_to_group(&"creature_field")
 	Net.creatures_updated.connect(_sync)
 	Net.creature_hit.connect(_on_hit)
 	Net.creature_dead.connect(_on_dead)
@@ -60,6 +70,7 @@ func _sync() -> void:
 		a.yaw = float(c.get("yaw", 0.0))
 		if int(c.get("a", 0)) == 1:
 			a.lunge = 1.0
+		a.flag = int(c.get("f", 0))
 		_update_tag(a, int(c.get("hp", 1)))
 	for id: String in _actors.keys():
 		if not Net.creatures.has(id) and is_instance_valid(_actors[id].root) and not _actors[id].root.has_meta(&"dying"):
@@ -72,8 +83,11 @@ func _process(delta: float) -> void:
 		if not is_instance_valid(a.root) or a.root.has_meta(&"dying"):
 			continue
 		var before: Vector3 = a.root.position
-		a.root.position = before.lerp(a.target, minf(1.0, delta * follow))
+		a.root.position = before.lerp(a.target, minf(1.0, delta * (follow * 2.0 if a.flag != 0 else follow)))
 		var moved: float = before.distance_to(a.root.position) / maxf(delta, 0.001)
+		if a.air_total > 0.0 or a.flag != 0:
+			_tumble(a, delta)
+			continue
 		# 모형은 -Z 를 본다 (서버 yaw 는 +Z 기준 방향).
 		a.root.rotation.y = lerp_angle(a.root.rotation.y, a.yaw + PI, minf(1.0, delta * 8.0))
 		a.phase += delta * clampf(moved * 3.2, 0.0, 14.0)
@@ -92,6 +106,27 @@ func _process(delta: float) -> void:
 			a.tag.visible = player_near(a.root.global_position, 14.0)
 
 
+## 들이받혀 날아가는 동안 빙글빙글 (포물선), 내려앉으면 뒤로 누워 있다가 일어난다.
+func _tumble(a: Actor, delta: float) -> void:
+	if a.air_total > 0.0:
+		a.air_t += delta
+		var k: float = clampf(a.air_t / a.air_total, 0.0, 1.0)
+		a.body.position.y = 4.0 * a.air_h * k * (1.0 - k)
+		a.body.rotation.x += a.spin * delta
+		if k >= 1.0:
+			a.air_total = 0.0
+			a.body.rotation.x = wrapf(a.body.rotation.x, -PI, PI)
+			Puff.burst(self, a.root.global_position + Vector3(0.0, 0.1, 0.0), Color(0.75, 0.68, 0.55, 0.8), 8, 0.8, 0.2, 0.1, 0.5)
+		return
+	# 누워 있다 (f 2 · 미끄러지는 중 f 1), 일어나면 다시 선다.
+	var lying: bool = a.flag != 0
+	a.body.rotation.x = move_toward(a.body.rotation.x, -1.45 if lying else 0.0, delta * (6.0 if lying else 2.5))
+	a.body.position.y = move_toward(a.body.position.y, 0.15 if lying else 0.0, delta * 2.0)
+	a.body.rotation.z = move_toward(a.body.rotation.z, 0.0, delta * 2.0)
+	if a.tag != null:
+		a.tag.visible = player_near(a.root.global_position, 14.0)
+
+
 func player_near(p: Vector3, d: float) -> bool:
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	return cam != null and cam.global_position.distance_to(p) < d + 10.0
@@ -103,6 +138,29 @@ func _on_hit(info: Dictionary) -> void:
 		return
 	a.punch = 1.0
 	_update_tag(a, int(info.get("hp", 0)))
+	if info.has("ram"):
+		var u: float = float(info.get("ram", 0.0))
+		if u > 0.0:
+			# 빠를수록 높이 · 오래 날고 빨리 돈다.
+			a.flag = 1
+			a.air_t = 0.0
+			a.air_total = clampf(0.25 + u * 0.06, 0.3, 1.4)
+			a.air_h = clampf(u * u / 70.0, 0.2, 3.6)
+			a.spin = -u * 0.9
+			_float_text(a.root.global_position + Vector3(0.0, 2.2, 0.0), "쾅!", Color("#FF9A5A"))
+			Puff.burst(self, a.root.global_position + Vector3(0.0, 0.8, 0.0), Color(0.9, 0.85, 0.7, 0.9), 10, 0.9, 0.4, 0.12, 0.5)
+			Audio.play_sfx("chop", -2.0, 0.5)
+			Prefs.vibrate(90, 0.7)
+		else:
+			a.flag = 2
+			_float_text(a.root.global_position + Vector3(0.0, 1.8, 0.0), "털썩", Color("#E8E0C8"))
+			Audio.play_sfx("chop", -10.0, 0.6)
+		return
+	if int(info.get("wall", 0)) > 0:
+		_float_text(a.root.global_position + Vector3(0.0, 1.6, 0.0), "쿵! -%d" % int(info.get("wall", 0)), Color("#FF6A5A"))
+		Audio.play_sfx("chop", -3.0, 0.45)
+		Puff.burst(self, a.root.global_position + Vector3(0.0, 0.6, 0.0), Color(0.8, 0.8, 0.8, 0.9), 12, 1.0, 0.3, 0.12, 0.5)
+		return
 	_float_text(a.root.global_position + Vector3(0.0, 2.0, 0.0), "퍽!", Color("#FFE08A"))
 	Audio.play_sfx("chop", -6.0, 0.7)
 

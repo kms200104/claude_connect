@@ -837,7 +837,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         }
         if (moveToward(c, aim, stop, step, stand)) changed = true;
         c.yaw = Math.atan2(best.x - c.x, best.z - c.z);
-        if (c.target && sameRoom && Math.hypot(best.x - c.x, best.z - c.z) <= kind.reach && t >= c.nextAttack) {
+        // 탈것을 타고 달리는 사람(ram.immune_speed 넘게)은 붙잡지 못한다.
+        const driving = best.mount && Math.hypot(best.vx ?? 0, best.vz ?? 0) > (RAM?.immune_speed ?? 2.0);
+        if (c.target && sameRoom && !driving && Math.hypot(best.x - c.x, best.z - c.z) <= kind.reach && t >= c.nextAttack) {
           c.nextAttack = t + kind.attack_ms;
           c.attackAt = t;
           hurt(room, best, kind.damage, c.k);

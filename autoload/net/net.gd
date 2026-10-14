@@ -22,6 +22,9 @@ signal profile_updated
 ## v19 차고: 차고(vehicles)가 바뀜 · 사기/꾸미기/팔기 결과 (veh_result: kind, v, model, part, slot, cost, sol) · 내가 차고 탈것에 타고 내림 (mount: { v, m, f }, 빈 사전 = 내림).
 signal vehicles_changed
 signal vehicle_done(result: Dictionary)
+## v0.26 타는 탈것 내구도가 바뀜 { v, hp, max, why, broken } · 들이받기 결과 { c, hard, u, dmg, slow }.
+signal vehicle_hp(info: Dictionary)
+signal rammed(info: Dictionary)
 ## v0.20 폰다운 기능: 솔걸음 보상 결과 (steps_ok: today, got, reward, sol) · 재난문자 (alert: id, level, sender, text, at, late) ·
 ## 민방위 훈련 (drill: on, shelter{name,x,z,r}, until, done) · 대피 보상 (drill_done: reward, sol).
 signal steps_updated(info: Dictionary)
@@ -929,7 +932,14 @@ func _handle_text(text: String) -> void:
 			_apply_profile(msg)
 		"veh_result":
 			sol = int(msg.get("sol", sol))
+			if msg.has("hp"):
+				_set_vehicle_hp(msg)
 			vehicle_done.emit(msg)
+		"veh_hp":
+			_set_vehicle_hp(msg)
+			vehicle_hp.emit(msg)
+		"rammed":
+			rammed.emit(msg)
 		"steps_ok":
 			sol = int(msg.get("sol", sol))
 			_apply_steps(msg)
@@ -1731,6 +1741,30 @@ func _forget_session() -> void:
 	if cfg.has_section("session"):
 		cfg.erase_section("session")
 		cfg.save(_settings_path())
+
+
+func _set_vehicle_hp(msg: Dictionary) -> void:
+	var v: Dictionary = vehicle(str(msg.get("v", "")))
+	if not v.is_empty():
+		v["hp"] = int(msg.get("hp", 0))
+		v["max"] = int(msg.get("max", 1))
+
+
+## v0.26 탈것으로 크리처를 들이받았다 (빠르기 m/s · 진행 방향) · 벽에 세게 부딪쳤다 (갑자기 줄어든 빠르기 m/s).
+func ram(creature_id: String, speed: float, heading: Vector3) -> void:
+	if state == State.ONLINE:
+		_request("ram", {"c": creature_id, "s": snappedf(speed, 0.01), "dx": snappedf(heading.x, 0.01), "dz": snappedf(heading.z, 0.01)})
+
+
+func vehicle_crash(drop: float) -> void:
+	if state == State.ONLINE:
+		_request("veh_crash", {"s": snappedf(drop, 0.01)})
+
+
+## 탈것 내구도 (없으면 가득 = 1.0).
+func vehicle_health(id: String) -> float:
+	var v: Dictionary = vehicle(id)
+	return float(v.get("hp", 1)) / maxf(1.0, float(v.get("max", 1))) if v.has("hp") else 1.0
 
 
 ## v19 내 차고 탈것 하나 (차고에 없으면 빈 사전).

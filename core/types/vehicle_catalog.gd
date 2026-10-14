@@ -35,6 +35,9 @@ class Model:
 	var paint: Color = Color.WHITE
 	var trim: Color = Color.WHITE
 	var seat: Color = Color.BLACK
+	## v0.26 무게 (kg, 타는 사람 포함 — 들이받기) · 내구도 최대값.
+	var mass: float = 150.0
+	var durability: int = 60
 	## 자리 이름 → 탈것 좌표 (바닥 y = 0, 앞 = -z).
 	var anchors: Dictionary[String, Vector3] = {}
 
@@ -79,6 +82,8 @@ var resale: float = 0.55
 var delivery: Dictionary = {}
 ## 종류 → { name, pose, turn_speed, throttle_rise, throttle_fall, brake_rise, jerk }
 var kinds: Dictionary[String, Dictionary] = {}
+## v0.26 고치기 { kit: [{id, n}], kit_fix, shop_rate, crash_min, crash_k }.
+var repair: Dictionary = {}
 ## 칸 [{ id, name }] (보여 주는 순서).
 var slots: Array[Dictionary] = []
 var models: Array[Model] = []
@@ -93,6 +98,9 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 	var delivery: Variant = d.get("delivery", {})
 	if delivery is Dictionary:
 		c.delivery = delivery
+	var rep: Variant = d.get("repair", {})
+	if rep is Dictionary:
+		c.repair = rep
 	var k: Variant = d.get("kinds", {})
 	if k is Dictionary:
 		for key: Variant in k:
@@ -126,6 +134,8 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 		m.paint = Color.html(str(raw.get("paint", "#FFFFFF")))
 		m.trim = Color.html(str(raw.get("trim", "#FFFFFF")))
 		m.seat = Color.html(str(raw.get("seat", "#232326")))
+		m.mass = float(raw.get("mass", 150.0))
+		m.durability = int(raw.get("durability", 60))
 		var anchors: Variant = raw.get("anchors", {})
 		if anchors is Dictionary:
 			for key: Variant in anchors:
@@ -175,6 +185,14 @@ func part(id: String) -> Part:
 
 func kind_name(kind: String) -> String:
 	return str(kinds.get(kind, {}).get("name", kind))
+
+
+## 정비소 수리 값 (서버 veh_repair shop 과 같다).
+func repair_cost(model_id: String, health: float) -> int:
+	var m: Model = model(model_id)
+	if m == null:
+		return 0
+	return maxi(1000, roundi(float(m.price) * float(repair.get("shop_rate", 0.08)) * (1.0 - health) / 100.0) * 100)
 
 
 ## 물 위에서만 타는 종류인지 (보트).

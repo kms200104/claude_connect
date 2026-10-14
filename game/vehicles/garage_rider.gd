@@ -10,6 +10,11 @@ extends Node
 ## 보트(v20): 물가에서 부르면 배달 로봇이 물길로 몰고 와 곁의 물 위에 띄워 둔다 (WaterRules). 타는 동안은 물 위에서만 움직이고(땅 · 해안 벽과
 ##   부딪치지 않고 수면 높이에 뜬다), 세우기(P)는 곁의 땅으로 폴짝 내려서기 — 서버가 그 땅을 받아 주면(veh_ride lx, lz) 내린다. 보트는 물에 남는다.
 
+## v0.26 차량 · 내구도 · 들이받기: 타는 동안 크리처가 차 앞 · 옆(차체 크기)에 닿으면 Net.ram — 빠르면(ram.fast) 날아가고 차는
+##   무게 비만큼 조금 느려지고, 느리면 크리처가 넘어지며 차가 확 느려진다. 넘어진 크리처에 닿아 있는 동안은 contact_top 넘게
+##   빨라지지 못한다 (좀보이드처럼 밟고 넘어가기 어렵다). 벽 · 나무에 세게 부딪치면(갑자기 crash_min 넘게 느려짐) Net.vehicle_crash.
+##   속도계 아래 내구도, 0 이면 고장 — 내려서 "고치기"(고철 · 못) 또는 탈것 앱 정비. 부르기는 배달 로봇 또는 헬기 보급 낙하 (air).
+
 signal changed(riding: bool)
 
 enum State { OFF, WAITING, MOUNTING, RIDING, DISMOUNTING }
@@ -61,6 +66,10 @@ var fishing: bool = false
 var _saved_mask: int = -1
 var _landing: Vector2 = Vector2.INF
 var _bob_t: float = 0.0
+## v0.26 내구도 표시 · 크리처별 다시 들이받을 수 있는 시각 · 벽 충돌 알림 간격.
+var _hp_label: Label = null
+var _rammed_at: Dictionary[String, int] = {}
+var _crash_at: int = 0
 
 
 func _ready() -> void:
@@ -71,6 +80,7 @@ func _ready() -> void:
 	Net.request_failed.connect(_on_failed)
 	Net.vehicles_changed.connect(_on_vehicles_changed)
 	Net.vehicle_done.connect(_on_vehicle_done)
+	Net.vehicle_hp.connect(_on_vehicle_hp)
 	if hud != null:
 		_build_hud()
 
@@ -103,6 +113,8 @@ func mount_problem(id: String) -> String:
 		return "먼저 탈것을 불러요 (휴대폰 탈것 앱 · 탈것 단추)."
 	if not bool(spot.get("arrived", false)):
 		return "배달 로봇 솔봇이 가져오는 중이에요."
+	if Net.vehicle_health(id) <= 0.0:
+		return "고장났어요 — 곁에서 '고치기' (%s) 또는 탈것 앱에서 정비해요." % kit_text()
 	if _flat(player.global_position, spot["at"]) > ride_range_of(id):
 		return "세워 둔 곳 곁에서 탈 수 있어요."
 	return ""
@@ -157,8 +169,21 @@ func mount(id: String) -> bool:
 	return true
 
 
-## 배달 로봇에게 그 탈것을 가져다 달라고 한다 (내 곁 트인 자리에 세워 두고 간다).
-func call_vehicle(id: String) -> bool:
+## 고치기 재료 글자 ("고철 ×1 · 못 한 줌 ×1").
+static func kit_text() -> String:
+	var parts: PackedStringArray = []
+	for k: Variant in GameData.garage.repair.get("kit", []):
+		parts.append("%s ×%d" % [GameData.item_name(str(k.get("id", ""))), int(k.get("n", 1))])
+	return " · ".join(parts)
+
+
+## 세워 둔 고장난 탈것을 곁에서 재료로 고친다.
+func repair_kit(id: String) -> void:
+	Net.request("veh_repair", {"v": id, "how": "kit"})
+
+
+## 배달 로봇(또는 air = 헬기 보급 낙하)에게 그 탈것을 가져다 달라고 한다 (내 곁 트인 자리에 세워 두고 간다).
+func call_vehicle(id: String, air: bool = false) -> bool:
 	var v: Dictionary = Net.vehicle(id)
 	if v.is_empty():
 		_toast("차고에 없는 탈것이에요.", false)
@@ -183,7 +208,13 @@ func call_vehicle(id: String) -> bool:
 		var out: Vector2 = (water - here)
 		yaw = atan2(-out.x, -out.y) if out.length() > 0.1 else yaw
 		at = Vector3(water.x, 0.0, water.y)
-	Net.request("veh_call", {"v": id, "x": at.x, "z": at.z, "yaw": yaw})
+	if air and m != null and GameData.garage.is_water_kind(m.kind):
+		_toast("보트는 헬기로 떨어뜨릴 수 없어요.", false)
+		return false
+	var msg: Dictionary = {"v": id, "x": at.x, "z": at.z, "yaw": yaw}
+	if air:
+		msg["mode"] = "air"
+	Net.request("veh_call", msg)
 	return true
 
 
@@ -236,10 +267,17 @@ func _default_vehicle() -> String:
 
 
 func _on_vehicle_done(result: Dictionary) -> void:
+	if str(result.get("kind", "")) == "repair":
+		_toast("고쳤어요! 내구도 %d%%%s" % [roundi(float(result.get("hp", 0)) / maxf(1.0, float(result.get("max", 1))) * 100.0), " (%s)" % Money.delta(-int(result.get("cost", 0))) if int(result.get("cost", 0)) > 0 else ""], true)
+		Audio.play_sfx("chop", -6.0, 1.2)
+		return
 	if str(result.get("kind", "")) != "call":
 		return
 	var v: Dictionary = Net.vehicle(str(result.get("v", "")))
 	var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
+	if str(result.get("npc", "")) == "heli":
+		_toast("보급 헬기가 %s 을(를) 떨어뜨려 줄게요! 하늘을 봐요 (%s)" % [m.name if m != null else "탈것", Money.delta(-int(result.get("cost", 0)))], true)
+		return
 	_toast("배달 로봇 솔봇이 %s 을(를) 가져다줄게요!" % (m.name if m != null else "탈것"), true)
 
 
@@ -254,6 +292,12 @@ func _on_mount_changed(mount_wire: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
+	if kind == "veh_repair":
+		_toast("고칠 재료가 모자라요 (%s)." % kit_text() if code == NetProtocol.ERR_NOT_ENOUGH_ITEMS else ("솔이 모자라요." if code == NetProtocol.ERR_NOT_ENOUGH_SOL else "고칠 수 없어요."), false)
+		return
+	if kind == "veh_call" and code == NetProtocol.ERR_NOT_ENOUGH_SOL:
+		_toast("헬기 보급은 %s 이 들어요." % Money.short(int(GameData.garage.delivery.get("air_cost", 0))), false)
+		return
 	if kind == "veh_call":
 		_toast("부를 수 없어요." if code != NetProtocol.ERR_CANT_RIDE else "실내 · 낚시 중에는 부를 수 없어요.", false)
 		return
@@ -269,6 +313,9 @@ func _on_failed(kind: String, code: String) -> void:
 	if kind != "veh_ride" or state != State.WAITING:
 		return
 	_give_back()
+	if code == NetProtocol.ERR_VEHICLE_BROKEN:
+		_toast("고장났어요 — 곁에서 '고치기' (%s) 또는 탈것 앱에서 정비해요." % kit_text(), false)
+		return
 	_toast("지금은 탈 수 없어요." if code == NetProtocol.ERR_CANT_RIDE else ("세워 둔 곳 곁에서 탈 수 있어요." if code == NetProtocol.ERR_NOT_NEAR_VEHICLE else "탈 수 없어요 (%s)." % code), false)
 
 
@@ -508,6 +555,9 @@ func _process(delta: float) -> void:
 		model.set_pedal(player.rig.pedal_phase())
 	if state == State.RIDING and _gauge != null:
 		_gauge.text = ("R · %d km/h" if drive_state.speed < -0.05 else "%d km/h") % roundi(speed_kmh())
+		var health: float = Net.vehicle_health(vehicle_id)
+		_hp_label.text = "내구도 %d%%" % roundi(health * 100.0)
+		_hp_label.add_theme_color_override("font_color", Color("#7EE08A") if health > 0.6 else (Color("#F2D05A") if health > 0.3 else Color("#FF6A5A")))
 
 
 ## 차고가 바뀌었다 (부품을 바꿨으면 타고 있는 모양도 바꾼다).
@@ -534,6 +584,8 @@ func drive(delta: float, move_dir: Vector3, amount: float) -> void:
 	var v: Vector3 = drive_state.step(move_dir, amount, 1.0 if boat else (drive_state.stats.wade if player.wading else 1.0), delta)
 	if boat:
 		v = _keep_on_water(v, delta)
+	elif _ram_check(delta):
+		v = drive_state.forward() * drive_state.speed
 	player.velocity.x = v.x
 	player.velocity.z = v.z
 	var speed: float = drive_state.speed
@@ -576,9 +628,84 @@ func after_move(delta: float, before: Vector3) -> void:
 		player.global_position.y = WaterRules.level_at(Vector2(player.global_position.x, player.global_position.z))
 		player.velocity.y = 0.0
 	if delta > 0.0:
+		var was: float = absf(drive_state.speed)
 		drive_state.after_move((player.global_position - before) / delta)
+		# 벽 · 나무에 세게 부딪쳤다 → 탈것이 닳는다 (서버가 그 탈것 최고 속도까지만 믿는다).
+		var drop: float = was - absf(drive_state.speed)
+		var now_ms: int = Time.get_ticks_msec()
+		if not is_boat() and drop > float(GameData.garage.repair.get("crash_min", 3.0)) and now_ms >= _crash_at:
+			_crash_at = now_ms + 500
+			Net.vehicle_crash(drop)
+			Prefs.vibrate(120, 0.8)
+			Audio.play_sfx("chop", -2.0, 0.4)
 	_last_pos = player.global_position
 	_last_yaw = drive_state.yaw
+
+
+## 크리처와 닿았는지 보고 들이받는다 (빠르기를 바꿨으면 true). 차체 크기 = 바퀴 자리 + 바퀴 + 여유.
+func _ram_check(delta: float) -> bool:
+	if Net.creatures.is_empty() or info == null:
+		return false
+	var field: CreatureField = get_tree().get_first_node_in_group(&"creature_field") as CreatureField
+	if field == null:
+		return false
+	var rules: Dictionary = GameData.survival.ram
+	var fast: float = float(rules.get("fast", 4.2))
+	var f: Vector3 = drive_state.forward()
+	var right: Vector3 = Vector3(-f.z, 0.0, f.x)
+	var front: float = absf(info.anchor("axle_f").z) + info.wheel + 0.3
+	var back: float = absf(info.anchor("axle_r").z) + info.wheel
+	var half: float = (0.85 if info.style == "truck" else 0.66) if info.kind == "car" else 0.35
+	var now_ms: int = Time.get_ticks_msec()
+	var touching: bool = false
+	var changed: bool = false
+	for id: String in Net.creatures:
+		var at: Vector3 = field.actor_position(id)
+		if at == Vector3.INF:
+			continue
+		var rel: Vector3 = (at - player.global_position) * Vector3(1, 0, 1)
+		var along: float = rel.dot(f) * signf(drive_state.speed if absf(drive_state.speed) > 0.05 else 1.0)
+		if absf(rel.dot(right)) > half + 0.3 or along < -0.2 or along > front + 0.3:
+			continue
+		var c: Dictionary = Net.creatures[id]
+		if int(c.get("f", 0)) == 1:
+			continue
+		touching = true
+		var speed: float = absf(drive_state.speed)
+		if speed < 0.4 or now_ms < int(_rammed_at.get(id, 0)):
+			continue
+		_rammed_at[id] = now_ms + 650
+		Net.ram(id, speed, f * signf(drive_state.speed))
+		var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(str(c.get("k", "")))
+		var m: float = kind.mass if kind != null else 70.0
+		if speed >= fast:
+			# 무거운 탈것일수록 덜 느려진다 (운동량).
+			drive_state.speed *= 1.0 - (1.0 + float(rules.get("restitution", 0.5))) * m / (info.mass + m)
+			Prefs.vibrate(70, 0.6)
+		else:
+			# 느리게 닿았다: 크리처가 넘어지고 차가 확 느려진다 (벽처럼 딱 서지는 않는다).
+			drive_state.speed *= float(rules.get("slow_keep", 0.45))
+			Prefs.vibrate(40, 0.4)
+		changed = true
+	# 넘어진 · 서 있는 크리처에 닿아 있는 동안은 빨라지기 어렵다.
+	var top: float = float(rules.get("contact_top", 1.6))
+	if touching and drive_state.speed > top and drive_state.speed < fast:
+		drive_state.speed = move_toward(drive_state.speed, top, 8.0 * delta)
+		drive_state.accel = minf(drive_state.accel, 0.0)
+		changed = true
+	return changed
+
+
+func _on_vehicle_hp(info_hp: Dictionary) -> void:
+	if str(info_hp.get("v", "")) != vehicle_id:
+		return
+	if bool(info_hp.get("broken", false)):
+		if state == State.RIDING:
+			dismount()
+		_toast("고장났어요! 곁에서 '고치기' (%s) 또는 탈것 앱에서 정비해요." % kit_text(), false)
+		Prefs.vibrate(200, 1.0)
+	elif str(info_hp.get("why", "")) == "crash" and Net.vehicle_health(vehicle_id) < 0.35:
+		_toast("쾅! 많이 상했어요 (내구도 %d%%)" % roundi(Net.vehicle_health(vehicle_id) * 100.0), false)
 
 
 ## 몸 · 탈것: 바닥을 축으로 안쪽으로 눕고(lean) 가속 · 브레이크에 앞뒤로 숙인다(pitch). 몸은 안장 높이(lift)만큼 올라 앉는다.
@@ -657,6 +784,23 @@ func _build_hud() -> void:
 	_gauge.offset_bottom = -410.0
 	_gauge.visible = false
 	hud.add_child.call_deferred(_gauge)
+	_hp_label = Label.new()
+	_hp_label.name = "VehicleHealth"
+	_hp_label.add_theme_font_size_override("font_size", 28)
+	_hp_label.add_theme_color_override("font_outline_color", Color(0.2, 0.16, 0.14))
+	_hp_label.add_theme_constant_override("outline_size", 8)
+	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hp_label.anchor_left = 0.5
+	_hp_label.anchor_right = 0.5
+	_hp_label.anchor_top = 1.0
+	_hp_label.anchor_bottom = 1.0
+	_hp_label.offset_left = -160.0
+	_hp_label.offset_right = 160.0
+	_hp_label.offset_top = -412.0
+	_hp_label.offset_bottom = -372.0
+	_hp_label.visible = false
+	hud.add_child.call_deferred(_hp_label)
 
 
 ## 단추 · 속도계 보이기 (휴대폰을 연 동안 · 집 안 · 탈것이 없으면 숨김). 그림은 상태가 바뀔 때만 다시 그린다.
@@ -674,6 +818,7 @@ func _update_hud(force: bool) -> void:
 		_button.tooltip_text = {"ride": "세우기", "near": "타기", "call": "탈것 부르기"}[icon]
 		_button.queue_redraw()
 	_gauge.visible = state == State.RIDING
+	_hp_label.visible = state == State.RIDING
 
 
 ## 단추 그림: 자전거 (부르기 = 작은 종 · 곁에 있음 = 초록 바탕 · 타는 중 = 주황 바탕에 P).

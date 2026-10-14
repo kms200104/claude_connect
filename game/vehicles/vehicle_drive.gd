@@ -100,7 +100,7 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	var reversing: bool = want_reverse > 0.0 or speed < 0.0
 	if reversing:
 		_step_reverse(want_reverse, want_brake, top, delta)
-	elif kind == "moto" or kind == "boat":
+	elif kind == "moto" or kind == "boat" or kind == "car":
 		var rise: float = float(rules.get("throttle_rise", 1.6))
 		var fall: float = float(rules.get("throttle_fall", 3.5))
 		throttle = move_toward(throttle, want_throttle, (rise if want_throttle > throttle else fall) * delta)
@@ -133,7 +133,7 @@ func step(dir: Vector3, amount: float, wade: float, delta: float) -> Vector3:
 	if speed == 0.0 and accel < 0.0:
 		accel = 0.0
 	# 눕기: 원운동에 필요한 기울기 atan(v·ω/g), 오토바이가 조금 더 눕는다.
-	var max_lean: float = 0.5 if kind == "moto" else (0.12 if kind == "boat" else 0.36)
+	var max_lean: float = 0.5 if kind == "moto" else (0.12 if kind == "boat" else (0.04 if kind == "car" else 0.36))
 	var want_lean: float = clampf(atan(speed * yaw_rate / GRAVITY), -max_lean, max_lean)
 	lean = lerpf(lean, want_lean, 1.0 - exp(-6.0 * delta))
 	if kind == "boat":

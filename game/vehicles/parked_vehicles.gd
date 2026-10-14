@@ -2,6 +2,7 @@ class_name ParkedVehicles
 extends Node3D
 ## 마을에 세워 둔 차고 탈것 (v19.1, 서버 veh_parked · welcome.parked = Net.parked). 내 것 · 친구 것 모두 보인다.
 ## 받침대를 세운 듯 살짝 기울여 바닥에 둔다. 배달 로봇이 가져오는 중(t 가 서버 시각보다 뒤)이면 VehicleCourier 가 몰고 와서 세운다.
+## v0.26 헬기 보급 낙하(npc "heli")면 AirDrop 이 헬기 그림자 · 낙하산 상자로 떨어뜨린다.
 ## 내 캐릭터가 탈 때는 take 로 그 모형을 넘겨주고(같은 물건이 그대로 타진다), 내리면 put 으로 그 자리에 다시 받는다.
 
 ## 세워 둔 탈것의 기울기 (받침대 쪽 = 왼쪽) · 핸들 꺾임.
@@ -17,7 +18,8 @@ class Entry:
 	var yaw: float = 0.0
 	var arrive_ms: float = 0.0
 	var model: VehicleModel = null
-	var courier: VehicleCourier = null
+	## 배달 중 (VehicleCourier · AirDrop — 다 오면 arrived(model)).
+	var courier: Node3D = null
 	## 내가 방금 세워 서버 목록에 아직 없는 것 (목록이 올 때까지 지우지 않는다, 초).
 	var pending: float = 0.0
 
@@ -89,15 +91,23 @@ func _sync() -> void:
 
 
 func _start_courier(e: Entry, npc: String) -> void:
-	var courier: VehicleCourier = VehicleCourier.new()
-	add_child(courier)
-	var exclude: Array[RID] = []
-	for body: Node in get_tree().get_nodes_in_group(&"player"):
-		if body is CollisionObject3D:
-			exclude.append((body as CollisionObject3D).get_rid())
-	courier.setup(npc, e.model, _park_transform(e), e.arrive_ms, exclude)
+	var courier: Node3D = null
+	if npc == "heli":
+		var drop: AirDrop = AirDrop.new()
+		add_child(drop)
+		drop.setup(e.model, _park_transform(e), e.arrive_ms)
+		courier = drop
+	else:
+		var robot: VehicleCourier = VehicleCourier.new()
+		add_child(robot)
+		var exclude: Array[RID] = []
+		for body: Node in get_tree().get_nodes_in_group(&"player"):
+			if body is CollisionObject3D:
+				exclude.append((body as CollisionObject3D).get_rid())
+		robot.setup(npc, e.model, _park_transform(e), e.arrive_ms, exclude)
+		courier = robot
 	e.courier = courier
-	courier.arrived.connect(func(model: VehicleModel) -> void:
+	courier.connect(&"arrived", func(model: VehicleModel) -> void:
 		e.courier = null
 		if not is_instance_valid(model):
 			return
@@ -132,7 +142,9 @@ func _place(e: Entry) -> void:
 		e.model.animate(0.0, 0.0, 1.0)
 		e.model.lights_on = false
 		return
-	e.model.global_transform = Transform3D(Basis(Vector3.UP, e.yaw) * Basis(Vector3.BACK, PARK_LEAN), Vector3(e.at.x, _ground_y(e.at), e.at.z))
+	# 두 바퀴는 받침대 쪽으로 기울여 세우고, 차량(v0.26)은 네 바퀴로 똑바로.
+	var lean: float = 0.0 if e.model.info != null and e.model.info.kind == "car" else PARK_LEAN
+	e.model.global_transform = Transform3D(Basis(Vector3.UP, e.yaw) * Basis(Vector3.BACK, lean), Vector3(e.at.x, _ground_y(e.at), e.at.z))
 	e.model.animate(0.0, PARK_STEER, 1.0)
 	e.model.lights_on = false
 

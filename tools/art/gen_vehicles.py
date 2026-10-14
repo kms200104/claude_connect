@@ -50,9 +50,9 @@ MOTOR_ANCHORS = {'seat': [0.0, 0.42, 0.55], 'bar': [0.0, 0.86, 0.12], 'front': [
                  'frame': [0.0, 0.36, 0.0], 'head': [0.0, 0.62, -1.95], 'tail': [0.0, 0.55, 2.05], 'axle_f': [0.0, 0.0, -1.9], 'axle_r': [0.0, 0.0, 1.9]}
 JET_ANCHORS = {'seat': [0.0, 0.58, 0.22], 'bar': [0.0, 0.93, -0.42], 'front': [0.0, 0.72, -0.7], 'rear': [0.0, 0.62, 0.85],
                'frame': [0.0, 0.42, 0.0], 'head': [0.0, 0.6, -1.12], 'tail': [0.0, 0.52, 1.2], 'axle_f': [0.0, 0.0, -1.2], 'axle_r': [0.0, 0.0, 1.2]}
-ATV_ANCHORS = {'bar': [0.0, 1.0, -0.32], 'seat': [0.0, 0.72, 0.18], 'head': [0.0, 0.62, -0.98], 'tail': [0.0, 0.6, 0.9],
+ATV_ANCHORS = {'bar': [0.0, 1.14, -0.28], 'seat': [0.0, 0.8, 0.18], 'head': [0.0, 0.62, -0.98], 'tail': [0.0, 0.6, 0.9],
                'axle_f': [0.0, 0.3, -0.62], 'axle_r': [0.0, 0.3, 0.6], 'front': [0.0, 0.7, -0.8], 'rear': [0.0, 0.72, 0.72]}
-TRUCK_ANCHORS = {'bar': [0.0, 1.18, -0.62], 'seat': [0.0, 0.92, -0.15], 'head': [0.0, 0.72, -1.62], 'tail': [0.0, 0.72, 1.72],
+TRUCK_ANCHORS = {'bar': [0.0, 1.3, -0.78], 'seat': [0.0, 0.95, -0.32], 'head': [0.0, 0.72, -1.62], 'tail': [0.0, 0.72, 1.72],
                  'axle_f': [0.0, 0.34, -1.12], 'axle_r': [0.0, 0.34, 1.05], 'front': [0.0, 0.9, -1.4], 'rear': [0.0, 0.9, 1.2]}
 
 # ---- 모델 ----
@@ -103,11 +103,11 @@ MODELS = [
     # ---- 차량 (v0.26): 네 바퀴. 무겁고 튼튼해 크리처를 들이받기 좋다 (survival.json ram). 캐빈이 열려 있어 타는 모습이 보인다. ----
     dict(id='car_atv', kind='car', style='atv', pose='moto', name='솔바람 ATV', type='사륜 바이크 (농업용 ATV)', price=5900000,
          spec='전기 사륜 · 최고 45km/h · 철제 범퍼', desc='네 바퀴로 흙길도 거침없이. 앞 범퍼가 튼튼해 크리처를 밀어내기 좋다.',
-         top=12.5, accel=3.0, brake=6.2, coast=0.4, turn=1.9, wheel=0.3, lift=0.32, regen=1.2, wade=0.75, mass=380, durability=150,
+         top=12.5, accel=3.0, brake=6.2, coast=0.4, turn=1.9, wheel=0.3, lift=0.46, regen=1.2, wade=0.75, mass=380, durability=150,
          paint='#5E7A3A', trim='#2A2A2E', seat='#232326', anchors=ATV_ANCHORS),
     dict(id='car_truck', kind='car', style='truck', pose='moto', name='솔바람 미니트럭', type='경트럭 (1톤 짐칸 · 오픈 캐빈)', price=14900000,
          spec='전기 경트럭 · 최고 60km/h · 짐칸 · 통뼈 범퍼', desc='지붕이 열린 작은 트럭. 무겁고 튼튼해서 크리처를 들이받아도 끄떡없다. 대신 둔하다.',
-         top=16.5, accel=2.4, brake=6.6, coast=0.45, turn=1.45, wheel=0.34, lift=0.5, regen=1.0, wade=0.8, mass=1300, durability=280,
+         top=16.5, accel=2.4, brake=6.6, coast=0.45, turn=1.45, wheel=0.34, lift=0.6, regen=1.0, wade=0.8, mass=1300, durability=280,
          paint='#2F6FB0', trim='#E8E4DA', seat='#3A3632', anchors=TRUCK_ANCHORS),
 ]
 # v0.26 무게(kg, 타는 사람 포함 — 들이받을 때 크리처가 날아가는 정도) · 내구도 (0 이면 고장).
