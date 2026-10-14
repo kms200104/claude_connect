@@ -33,6 +33,8 @@ extends Node
 @export var parked: ParkedVehicles
 ## 물놀이 선착장 (v21): 매표소 곁에서 상황 버튼 "물놀이".
 @export var aqua: AquaMarina
+## 제작대 (v0.22, 없어도 된다): 공구 창고 · 작업대 곁에서 상황 버튼 "작업대".
+@export var crafting: CraftController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -49,7 +51,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA, CRAFT }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
 const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE, Target.AQUA]
 ## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리.
@@ -105,6 +107,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action("바꿔 타기" if player.is_riding() else "타기")
 		Target.AQUA:
 			action_hud.show_action("물놀이")
+		Target.CRAFT:
+			action_hud.show_action(crafting.target_label(target_id))
 		Target.TALK:
 			action_hud.show_action("대화")
 		Target.CHOP:
@@ -161,6 +165,8 @@ func _pick_target() -> void:
 		return
 	if home != null and home.is_busy():
 		return
+	if crafting != null and crafting.is_busy():
+		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
 	var pos: Vector3 = player.global_position
@@ -194,14 +200,25 @@ func _pick_target() -> void:
 			target = Target.HOME
 			target_id = home_target
 			return
-		# 집 안에서는 다른 상황 버튼(심기 · 줍기 …)을 띄우지 않는다.
+		# 집 안에서는 다른 상황 버튼(심기 · 줍기 …)을 띄우지 않는다 (작업대를 둔 집이면 "작업대").
 		if Home.is_inside():
+			if crafting != null:
+				var home_craft: String = crafting.pick_target(pos, safety_margin)
+				if not home_craft.is_empty():
+					target = Target.CRAFT
+					target_id = home_craft
 			return
 	if economy != null:
 		var econ_target: String = economy.pick_target(pos, GameData.talk_range - safety_margin)
 		if not econ_target.is_empty():
 			target = Target.ECONOMY
 			target_id = econ_target
+			return
+	if crafting != null and not (shop != null and shop.is_inside(pos)):
+		var craft_target: String = crafting.pick_target(pos, safety_margin)
+		if not craft_target.is_empty():
+			target = Target.CRAFT
+			target_id = craft_target
 			return
 	if shop != null:
 		if shop.is_inside(pos):
@@ -305,6 +322,8 @@ func _on_action_pressed() -> void:
 			player.dismount_ride()
 		Target.AQUA:
 			aqua.open_window()
+		Target.CRAFT:
+			crafting.activate(target_id)
 		Target.VEHICLE:
 			if player.garage_ride != null:
 				player.garage_ride.mount(target_id)

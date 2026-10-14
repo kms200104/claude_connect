@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "_comment": "v0.22 제작 (서버 권위: server/src/crafting.js · 클라이언트 core/types/crafting_rules.gd 가 같은 파일을 읽는다). tier = 필요한 작업대 등급: 0 = 맨손(어디서나), 1 = 작업대(내가 만든 작업대 곁 — 마을에 놓았거나 집 안에 둔 것), 2 = 공용 작업대(공구가 갖춰진 주민 공구 창고). 높은 등급 작업대에서는 낮은 등급 것도 만든다. needs = 재료 (가방에서 빠진다), out × n = 만든 것. 밤에 나오는 크리처(다음 단계)를 대비한 생존용품 위주.",
+  "range": 2.6,
+  "public_benches": [
+    { "id": "downtown", "name": "주민 공구 창고", "x": -74.0, "z": 70.0, "yaw": 1.5708, "tier": 2 },
+    { "id": "riverpark", "name": "리버파크 공구 창고", "x": -150.0, "z": -66.0, "yaw": 0.0, "tier": 2 }
+  ],
+  "bench_items": { "workbench": 1 },
+  "categories": [
+    { "id": "basic", "name": "기본 재료" },
+    { "id": "medical", "name": "치료" },
+    { "id": "food", "name": "식량 · 물" },
+    { "id": "tool", "name": "도구 · 무기" },
+    { "id": "defense", "name": "방어 · 설치" }
+  ],
+  "recipes": [
+    { "id": "rope", "out": "rope", "n": 1, "tier": 0, "cat": "basic", "needs": [{ "item": "cloth", "n": 2 }] },
+    { "id": "bandage", "out": "bandage", "n": 2, "tier": 0, "cat": "medical", "needs": [{ "item": "cloth", "n": 2 }] },
+    { "id": "torch", "out": "torch", "n": 1, "tier": 0, "cat": "tool", "needs": [{ "item": "branch", "n": 2 }, { "item": "cloth", "n": 1 }] },
+    { "id": "herb_salve", "out": "herb_salve", "n": 1, "tier": 0, "cat": "medical", "needs": [{ "item": "mugwort", "n": 2 }, { "item": "wild_greens", "n": 1 }] },
+    { "id": "workbench", "out": "workbench", "n": 1, "tier": 0, "cat": "defense", "needs": [{ "item": "wood", "n": 4 }, { "item": "branch", "n": 2 }] },
+    { "id": "charcoal", "out": "charcoal", "n": 2, "tier": 1, "cat": "basic", "needs": [{ "item": "wood", "n": 2 }] },
+    { "id": "hardtack", "out": "hardtack", "n": 3, "tier": 1, "cat": "food", "needs": [{ "item": "flour", "n": 2 }, { "item": "sugar", "n": 1 }] },
+    { "id": "clean_water", "out": "clean_water", "n": 2, "tier": 1, "cat": "food", "needs": [{ "item": "plastic", "n": 1 }, { "item": "charcoal", "n": 1 }, { "item": "cloth", "n": 1 }] },
+    { "id": "wooden_club", "out": "wooden_club", "n": 1, "tier": 1, "cat": "tool", "needs": [{ "item": "hardwood", "n": 2 }, { "item": "rope", "n": 1 }] },
+    { "id": "first_aid_kit", "out": "first_aid_kit", "n": 1, "tier": 1, "cat": "medical", "needs": [{ "item": "bandage", "n": 2 }, { "item": "herb_salve", "n": 1 }, { "item": "plastic", "n": 1 }] },
+    { "id": "barricade", "out": "barricade", "n": 1, "tier": 1, "cat": "defense", "needs": [{ "item": "wood", "n": 4 }, { "item": "nails", "n": 1 }] },
+    { "id": "campfire", "out": "campfire", "n": 1, "tier": 1, "cat": "defense", "needs": [{ "item": "branch", "n": 3 }, { "item": "round_pebble", "n": 4 }] },
+    { "id": "nails", "out": "nails", "n": 2, "tier": 2, "cat": "basic", "needs": [{ "item": "scrap_metal", "n": 1 }] },
+    { "id": "pipe_spear", "out": "pipe_spear", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "scrap_metal", "n": 2 }, { "item": "rope", "n": 1 }] },
+    { "id": "flashlight", "out": "flashlight", "n": 1, "tier": 2, "cat": "tool", "needs": [{ "item": "scrap_metal", "n": 1 }, { "item": "plastic", "n": 2 }, { "item": "battery", "n": 1 }] },
+    { "id": "spike_trap", "out": "spike_trap", "n": 1, "tier": 2, "cat": "defense", "needs": [{ "item": "hardwood", "n": 2 }, { "item": "nails", "n": 2 }] },
+    { "id": "metal_barricade", "out": "metal_barricade", "n": 1, "tier": 2, "cat": "defense", "needs": [{ "item": "scrap_metal", "n": 4 }, { "item": "nails", "n": 2 }] },
+    { "id": "rain_collector", "out": "rain_collector", "n": 1, "tier": 2, "cat": "food", "needs": [{ "item": "wooden_bucket", "n": 1 }, { "item": "plastic", "n": 2 }, { "item": "rope", "n": 1 }] }
+  ]
+}

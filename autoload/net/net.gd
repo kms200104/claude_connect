@@ -25,6 +25,8 @@ signal vehicle_done(result: Dictionary)
 ## v0.20 폰다운 기능: 솔걸음 보상 결과 (steps_ok: today, got, reward, sol) · 재난문자 (alert: id, level, sender, text, at, late) ·
 ## 민방위 훈련 (drill: on, shelter{name,x,z,r}, until, done) · 대피 보상 (drill_done: reward, sol).
 signal steps_updated(info: Dictionary)
+## v0.22 제작: 만들었다 { recipe, item, n, tier }.
+signal crafted(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -257,6 +259,9 @@ var _pending: Dictionary[String, String] = {}  # rid → 요청 종류 (거부�
 var _clock_game_ms: float = 0.0
 var _clock_scale: float = 1.0
 var _clock_server_ms: float = 0.0
+## v0.22 세상 시각(낮 · 밤): 서버가 보낸 기준값과 배율 (기본 60배 — 현실 1분이 마을 1시간).
+var _clock_world_ms: float = 0.0
+var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
 
@@ -653,7 +658,18 @@ func season() -> String:
 	return _season_force if not _season_force.is_empty() else VillageClock.season_of(game_ms())
 
 
+## v0.22 세상 시각 (ms): 낮과 밤은 달력보다 빨리 흐른다.
+func world_ms() -> float:
+	return _clock_world_ms + (server_time_ms() - _clock_server_ms) * _world_scale
+
+
+## 지금 마을 시각 (낮 · 밤 · 하늘 · 주민 일정 · 물고기 시간대) — 세상 시각.
 func game_hour() -> float:
+	return VillageClock.hour_of(world_ms())
+
+
+## 달력 시각 (날씨 예보 칸 · 훈련 일정처럼 실제 날짜를 따르는 것).
+func calendar_hour() -> float:
 	return VillageClock.hour_of(game_ms())
 
 
@@ -884,6 +900,8 @@ func _handle_text(text: String) -> void:
 		"drill":
 			drill = msg if bool(msg.get("on", false)) else {}
 			drill_changed.emit(msg)
+		"crafted":
+			crafted.emit(msg)
 		"drill_done":
 			sol = int(msg.get("sol", sol))
 			if not drill.is_empty():
@@ -1201,6 +1219,12 @@ func _next_rid() -> String:
 	return "%s-%d" % [uid.left(6), _rid_counter]
 
 
+## v0.22 제작대에서 만들기 (서버가 작업대 거리 · 재료 · 가방을 보고 crafted 또는 request_failed("craft", …)).
+func craft(recipe_id: String, n: int = 1) -> void:
+	if state == State.ONLINE:
+		_request("craft", {"recipe": recipe_id, "n": n})
+
+
 ## 다른 오토로드(Economy)가 쓰는 요청 (rid 를 붙이고, 거부되면 request_failed 로 알린다).
 func request(kind: String, fields: Dictionary = {}) -> void:
 	_request(kind, fields)
@@ -1315,6 +1339,8 @@ func _apply_clock(data: Variant) -> void:
 	_clock_game_ms = float(data.get("g", 0.0))
 	_clock_scale = float(data.get("s", 1.0))
 	_clock_server_ms = float(data.get("st", 0.0))
+	_clock_world_ms = float(data.get("w", _clock_game_ms))
+	_world_scale = float(data.get("ws", _clock_scale))
 	_season_force = str(data.get("se", ""))
 
 

@@ -7,7 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "WORLD_TIME_SCALE=1 node --test \"test/*.test.js\""
   },
   "dependencies": {
     "ws": "^8.18.0"

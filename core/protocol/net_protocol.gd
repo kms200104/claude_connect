@@ -2,7 +2,7 @@ class_name NetProtocol
 extends RefCounted
 ## 서버(server/src/protocol.js)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
 
-const VERSION: int = 22
+const VERSION: int = 23
 
 ## v14 닉네임: 최대 글자 수 (서버 nickname.js NAME_MAX 와 같다).
 const NAME_MAX: int = 10
@@ -179,6 +179,9 @@ const ERR_NOT_IN_SHALLOW: String = "not_in_shallow"
 const ERR_BAD_DIG: String = "bad_dig"
 ## v10: 집 안
 const ERR_NOT_AT_LOBBY: String = "not_at_lobby"
+## v0.22 제작: 그 물건을 만들 작업대 곁이 아님 · 재료가 모자람.
+const ERR_NOT_AT_BENCH: String = "not_at_bench"
+const ERR_NOT_ENOUGH_ITEMS: String = "not_enough_items"
 const ERR_NOT_HOME: String = "not_home"
 const ERR_NOT_EDITABLE: String = "not_editable"
 const ERR_HOME_FULL: String = "home_full"

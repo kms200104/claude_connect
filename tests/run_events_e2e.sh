@@ -13,7 +13,7 @@ trap cleanup EXIT
 # 마을 시각(한국 시간)을 12시로: 지금 한국 시각과의 차이(분)만큼 옮긴다.
 NOW_MIN=$(( ( $(date -u +%-H) * 60 + $(date -u +%-M) + 540 ) % 1440 ))
 OFFSET=$(( (720 - NOW_MIN + 1440) % 1440 ))
-COMMON="CLOCK_OFFSET_MIN=$OFFSET WEATHER_FORCE=clear MOVE_SLACK_M=1500 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0"
+COMMON="CLOCK_OFFSET_MIN=$OFFSET WEATHER_FORCE=clear MOVE_SLACK_M=1500 WORLD_TIME_SCALE=1 CHOP_COOLDOWN_MS=0 DOOR_GRACE_MS=0"
 
 (cd "$ROOT/server" && exec env $COMMON PORT="$PORT_A" SAVE_DIR="$DIR/a" EVENT_FORCE=merchant EVENT_WANTED=wood,hardwood,branch,acorn,wild_mushroom START_SOL=200000 node src/index.js >"$DIR/server_a.log" 2>&1) &
 PID_A=$!

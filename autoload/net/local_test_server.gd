@@ -17,6 +17,8 @@ const ERR_TEST_ONLY: String = "test_server"
 ## 테스트 도구 한 번에 주는 솔 (진짜 서버 config.devGrantSol 과 같다).
 const DEV_GRANT_SOL: int = 200000000000
 ## 마을 시간대 (서버 기본 UTC+9).
+## v0.22 세상 시각 배율 (서버 worldTimeScale 기본값과 같다).
+const WORLD_SCALE: float = 60.0
 const UTC_OFFSET_MS: float = 9.0 * 3600.0 * 1000.0
 ## 나무·꽃이 자라는 빠르기 (진짜 서버의 게임 분 → 실제 초: 1분 = 6초).
 const GROW_MS_PER_MINUTE: float = 6000.0
@@ -293,6 +295,8 @@ func _handle(peer: WebSocketPeer, msg: Dictionary) -> void:
 			_send_inventory(peer)
 			_send(peer, {"t": "unplaced", "rid": rid, "id": f["id"]})
 			_save()
+		"craft":
+			_handle_craft(peer, msg, rid, fail)
 		"home_enter", "home_exit", "home_place", "home_move", "home_pickup":
 			_handle_home(peer, msg, fail)
 		"talk":
@@ -1195,7 +1199,9 @@ func _welcome(resumed: bool) -> Dictionary:
 	# 테스트 서버는 늘 테스트 도구를 켠다 (설정의 "테스트: 2000억 솔 받기").
 	w["dev"] = true
 	w["st"] = _now()
-	w["clock"] = {"g": Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS, "s": 1, "st": _now()}
+	var cal_ms: float = Time.get_unix_time_from_system() * 1000.0 + UTC_OFFSET_MS
+	# v0.22: 낮 · 밤은 진짜 서버처럼 60배 (켠 순간은 달력 시각과 같다).
+	w["clock"] = {"g": cal_ms, "s": 1, "w": cal_ms, "ws": WORLD_SCALE, "st": _now()}
 	w["inv"] = _inventory_wire()
 	var prof: Dictionary = w.get("prof", {})
 	prof["sol"] = _sol
@@ -1232,6 +1238,49 @@ func _welcome(resumed: bool) -> Dictionary:
 		_chats["sys:town"] = {"m": [{"f": "town", "tx": str(GameData.messenger.get("welcome", "")) + " (테스트 서버에서는 주민과만 이야기할 수 있어요.)", "at": Time.get_unix_time_from_system() * 1000.0}], "read": 0}
 	w["chats"] = _chats
 	return w
+
+
+## v0.22 제작 (진짜 서버 crafting.js 와 같은 규칙: 작업대 등급 · 재료 · 가방 자리).
+func _handle_craft(peer: WebSocketPeer, msg: Dictionary, rid: String, fail: Callable) -> void:
+	var rules: CraftingRules = GameData.crafting
+	var r: CraftingRules.Recipe = rules.recipe(str(msg.get("recipe", "")))
+	var n: int = int(msg.get("n", 1))
+	if r == null or n < 1 or n > 10:
+		fail.call(NetProtocol.ERR_BAD_ITEM)
+		return
+	var placed: Array[Array] = []
+	for f: Variant in _placed.values():
+		placed.append([str(f["item"]), Vector3(float(f["x"]), 0.0, float(f["z"]))])
+	var home_items: PackedStringArray = PackedStringArray()
+	if not _home.is_empty():
+		for f: Variant in _home_list(_home, false):
+			home_items.append(str((f as Dictionary).get("item", "")))
+	var tier: int = rules.tier_at(_pos, placed, home_items, not _home.is_empty())
+	if r.tier > tier:
+		fail.call(NetProtocol.ERR_NOT_AT_BENCH)
+		return
+	var have: Dictionary = {}
+	for s: Variant in _slots:
+		if s != null:
+			have[str(s["id"])] = int(have.get(str(s["id"]), 0)) + int(s["n"])
+	if not CraftingRules.can_make(r, have, n):
+		fail.call(NetProtocol.ERR_NOT_ENOUGH_ITEMS)
+		return
+	var backup: Array = _slots.duplicate(true)
+	for need: Array in r.needs:
+		var left: int = int(need[1]) * n
+		for i: int in range(_slots.size() - 1, -1, -1):
+			if left > 0 and _slots[i] != null and str(_slots[i]["id"]) == str(need[0]):
+				var take: int = mini(left, int(_slots[i]["n"]))
+				_remove(i, take)
+				left -= take
+	if not _add(r.out, r.n * n):
+		_slots = backup
+		fail.call(NetProtocol.ERR_INVENTORY_FULL)
+		return
+	_send_inventory(peer)
+	_send(peer, {"t": "crafted", "rid": rid, "recipe": r.id, "item": r.out, "n": r.n * n, "tier": tier})
+	_save()
 
 
 func _inventory_wire() -> Dictionary:

@@ -7,17 +7,24 @@ export const DAY_MS = 24 * HOUR_MS;
 export const DAY_START_HOUR = 5;
 
 /**
- * 게임 시각(ms)은 "마을 시간대의 벽시계"를 epoch ms로 나타낸 값이다.
+ * 게임 시각(ms)은 "마을 시간대의 벽시계"를 epoch ms로 나타낸 값이다 (달력: 날짜 · 주 · 계절 · 경제 · 날씨).
  * clockScale 배로 흐르고, clockOffsetMin 만큼 앞당기거나 늦출 수 있다(테스트·시연용).
+ * v0.22 세상 시각(worldMs): 낮과 밤만 worldTimeScale 배(기본 60배 — 현실 1분 = 마을 1시간, 하루 24분)로 흐른다.
+ *   서버를 켠 순간에는 달력 시각과 같고, 그 뒤로 빨리 흐른다. hour() 는 세상 시각, calHour() 는 달력 시각.
  */
 export function createClock(cfg, realNow = () => Date.now()) {
   const anchor = realNow();
   const shift = (cfg.utcOffsetMin + cfg.clockOffsetMin) * 60000;
+  const worldScale = Number.isFinite(cfg.worldTimeScale) && cfg.worldTimeScale > 0 ? cfg.worldTimeScale : 1;
   const gameMs = (real = realNow()) => anchor + (real - anchor) * cfg.clockScale + shift;
+  const worldMs = (real = realNow()) => anchor + (real - anchor) * cfg.clockScale * worldScale + shift;
   return {
     scale: cfg.clockScale,
+    worldScale: cfg.clockScale * worldScale,
     gameMs,
-    hour: () => hourOf(gameMs()),
+    worldMs,
+    hour: () => hourOf(worldMs()),
+    calHour: () => hourOf(gameMs()),
     day: () => dayIndex(gameMs()),
   };
 }

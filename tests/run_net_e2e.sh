@@ -9,7 +9,7 @@ DIR="$(mktemp -d)"
 cleanup() { kill "${SERVER_PID:-0}" "${HOST_PID:-0}" "${GUEST_PID:-0}" 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
 
-(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" exec node src/index.js >"$DIR/server.log" 2>&1) &
+(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" WORLD_TIME_SCALE=1 exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1
 

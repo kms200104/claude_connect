@@ -80,6 +80,8 @@ export function blockedAreas(data) {
   const civic = data.civic?.building;
   if (civic) rects.push(buildingRect(civic, 1.5));
   for (const m of data.mirrors ?? []) circles.push({ x: m.x, z: m.z, r: 1.3 });
+  // v0.22 공용 작업대 (공구 창고).
+  for (const b of data.crafting?.publicBenches ?? []) circles.push({ x: b.x, z: b.z, r: 2.4 });
   // 성성호수공원: 방문자센터(앞면 가운데 기준, yaw 는 90° 단위)와 정자.
   const park = data.layout?.park;
   if (park?.visitor_center) {

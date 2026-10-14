@@ -7,6 +7,8 @@ extends Control
 ##   - 창 밖(월드)으로 끌어 놓으면 그 칸 전부를 발밑에 내려놓는다. 창 밖을 톡 누르면 닫힌다.
 
 signal closed
+## v0.22: 가방의 "제작" 단추 (맨손 · 곁의 작업대로 만들기 — CraftController 가 연다).
+signal craft_requested
 
 @export var player: Player
 ## 열면 이 카메라를 가방 구도(캐릭터는 아래, 머리 위는 비움)로 옮긴다.
@@ -60,6 +62,17 @@ func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_close.pressed.connect(close)
+	var craft: Button = Button.new()
+	craft.name = "CraftButton"
+	craft.text = "제작"
+	craft.focus_mode = Control.FOCUS_NONE
+	craft.custom_minimum_size = Vector2(130, 78)
+	craft.add_theme_font_size_override("font_size", 34)
+	craft.pressed.connect(func() -> void:
+		close()
+		craft_requested.emit())
+	_close.get_parent().add_child(craft)
+	_close.get_parent().move_child(craft, _close.get_index())
 	_discard.pressed.connect(_on_discard_pressed)
 	_use.pressed.connect(_on_use_pressed)
 	_tail.draw.connect(_draw_tail)

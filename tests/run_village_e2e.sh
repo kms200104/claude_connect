@@ -9,7 +9,7 @@ DIR="$(mktemp -d)"
 cleanup() { kill "${SERVER_PID:-0}" 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
 
-(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=1500 CHOP_COOLDOWN_MS=0 \
+(cd "$ROOT/server" && PORT="$PORT" SAVE_DIR="$DIR/saves" MOVE_SLACK_M=1500 WORLD_TIME_SCALE=1 CHOP_COOLDOWN_MS=0 \
   WEATHER_FORCE=rain EVENT_FORCE=none QUEST_CHANCE=1 QUEST_TEMPLATE=wood exec node src/index.js >"$DIR/server.log" 2>&1) &
 SERVER_PID=$!
 sleep 1

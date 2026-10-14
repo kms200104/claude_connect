@@ -8,7 +8,7 @@ PORT="${PORT:-18091}"
 DIR="$(mktemp -d)"
 cleanup() { kill "${PID:-0}" 2>/dev/null; wait 2>/dev/null; rm -rf "$DIR"; }
 trap cleanup EXIT
-(cd "$ROOT/server" && exec env WEATHER_FORCE=clear MOVE_SLACK_M=1500 DOOR_GRACE_MS=0 QUEST_CHANCE=0 EVENT_FORCE=none START_SOL=2000000000 \
+(cd "$ROOT/server" && exec env WEATHER_FORCE=clear MOVE_SLACK_M=1500 WORLD_TIME_SCALE=1 DOOR_GRACE_MS=0 QUEST_CHANCE=0 EVENT_FORCE=none START_SOL=2000000000 \
   PORT="$PORT" SAVE_DIR="$DIR/saves" node src/index.js >"$DIR/server.log" 2>&1) &
 PID=$!
 sleep 1

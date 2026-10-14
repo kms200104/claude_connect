@@ -40,6 +40,7 @@ import { PHOTO_RULES, createPhotoStore } from './photos.js';
 import { DAY_MS, DAY_START_HOUR } from './clock.js';
 import { createGarage, mountWire } from './garage.js';
 import { createAqua } from './aqua.js';
+import { createCrafting } from './crafting.js';
 import { createSafety } from './safety.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -72,7 +73,7 @@ export function createServer(overrides = {}) {
   const sendTo = (player, message) => player.ws && send(player.ws, message);
   const roomOf = (player) => [...rooms.rooms.values()].find((r) => r.players.get(player.id) === player);
 
-  const weatherOf = (room) => (isWeather(cfg.weatherForce) ? cfg.weatherForce : weatherAt(room.weatherSeed, clock.day(), clock.hour()));
+  const weatherOf = (room) => (isWeather(cfg.weatherForce) ? cfg.weatherForce : weatherAt(room.weatherSeed, clock.day(), clock.calHour?.() ?? clock.hour()));
   const environment = (room) => ({ hour: clock.hour(), weather: room ? weatherOf(room) : 'clear', season: cfg.seasonForce || seasonOf(clock.gameMs()) });
 
   const sendInventory = (player) => sendTo(player, { t: 'inventory', ...inventoryToWire(player.slots, cfg, player.profile.held) });
@@ -125,7 +126,7 @@ export function createServer(overrides = {}) {
       }
     }
   };
-  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, st: now(), se: cfg.seasonForce || '' });
+  const clockWire = () => ({ g: clock.gameMs(), s: cfg.clockScale, w: clock.worldMs?.() ?? clock.gameMs(), ws: clock.worldScale ?? cfg.clockScale, st: now(), se: cfg.seasonForce || '' });
 
   // ---- 경제: 증권 · 아파트 · 은행 · 식당 (economy.js) ----
   const market = overrides.market ?? createMarket(data.market, { saveDir: cfg.saveDir, feedUrl: cfg.marketFeedUrl, random, gameMs: clock.gameMs, day: clock.day, forceHours: cfg.marketHours === 'krx' });
@@ -143,6 +144,8 @@ export function createServer(overrides = {}) {
   const shopLevels = data.shop.levels;
   const roomShopWire = (room) => shopWire(room.shopPoints, shopLevels);
   const inShop = (player) => inInterior(data.shop, player.x, player.z);
+  // v0.22 제작대.
+  const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
   const rideBlocked = (player) => (player.home || inShop(player) || player.fishing !== null || player.aqua ? ErrorCode.cantRide : null);
   const aqua = createAqua({ data, send, sendProfile, now, boardMs: cfg.aquaBoardMs, speedScale: cfg.aquaSpeedScale });
@@ -1810,6 +1813,8 @@ export function createServer(overrides = {}) {
         return handleNet(ctx, msg, fail);
       case 'dig':
         return handleDig(ctx, msg, fail);
+      case 'craft':
+        return crafting.handleCraft(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2019,6 +2024,7 @@ export function createServer(overrides = {}) {
       case 'marry_answer':
       case 'net':
       case 'dig':
+      case 'craft':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

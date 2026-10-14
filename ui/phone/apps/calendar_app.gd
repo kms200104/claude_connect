@@ -89,7 +89,8 @@ func _blocks(d: Dictionary, today: bool, ink: Color, soft: Color) -> HBoxContain
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	var weather: PackedStringArray = d["weather"]
-	var now_block: int = floori(Net.game_hour() / 3.0) if today else -1
+	# 날씨는 달력 시각으로 정한다 (세상 시각은 60배로 빨리 돈다).
+	var now_block: int = floori(Net.calendar_hour() / 3.0) if today else -1
 	for i: int in mini(weather.size(), BLOCK_HOURS.size()):
 		var cell: VBoxContainer = VBoxContainer.new()
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL

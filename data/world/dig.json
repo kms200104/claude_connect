@@ -9,7 +9,7 @@
     "items": [ { "id": "clam_manila", "weight": 50 }, { "id": "surf_clam", "weight": 28 }, { "id": "razor_clam", "weight": 18 }, { "id": "pen_shell", "weight": 4 } ] },
   "lake": { "max_per_spot": 2, "spawn_every_s": 60, "hp": 2,
     "items": [ { "id": "corbicula", "weight": 85 }, { "id": "spiral_shell", "weight": 15 } ] },
-  "hole_finds": { "chance": 0.3, "items": [ { "id": "round_pebble", "weight": 62 }, { "id": "old_coin", "weight": 28 }, { "id": "fossil", "weight": 10 } ] },
+  "hole_finds": { "chance": 0.45, "_comment": "v0.22: 장마에 쓸려 와 묻힌 고철 · 플라스틱 조각도 나온다 (제작 재료).", "items": [ { "id": "round_pebble", "weight": 50 }, { "id": "scrap_metal", "weight": 26 }, { "id": "plastic", "weight": 26 }, { "id": "old_coin", "weight": 18 }, { "id": "fossil", "weight": 6 } ] },
   "max_tiles": 400,
   "net": { "range": 0.9, "radius": 1.1, "coop_radius": 1.45, "cooldown_ms": 650, "max_catch": 3,
     "flee_radius": 3.4, "flee_speed": 3.6, "panic_speed": 2.4, "wander_speed": 0.55, "respawn_s": 14,
