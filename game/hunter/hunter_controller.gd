@@ -169,7 +169,7 @@ func _on_failed(kind: String, code: String) -> void:
 	var text: String = ""
 	match code:
 		NetProtocol.ERR_NOT_AT_OFFICE:
-			text = "헌터 협회 출장소 창구에서 해요 (동사무소 옆)"
+			text = "헌터 협회 출장소 창구에서 해요 (동사무소 대피소 앞)"
 		NetProtocol.ERR_RANK_NOT_READY:
 			text = "아직 재심사 점수가 모자라요"
 		NetProtocol.ERR_BOUNTY_NOT_DONE:

@@ -137,13 +137,13 @@ func _run() -> void:
 	# ---- 홈 화면 앱 15개 ----
 	phone.open()
 	await get_tree().create_timer(0.5).timeout
-	# v0.20: 기본 앱 16개 + 앱 스토어 (스토어에서 받는 앱은 받기 전엔 홈 화면에 없다).
+	# v0.20: 기본 앱 16개 + 앱 스토어 (스토어에서 받는 앱은 받기 전엔 홈 화면에 없다). v0.28 헌터넷이 기본 앱에 더해졌다.
 	var icons: int = 0
 	for kind: String in PhoneWindow.APP_KINDS:
 		var icon: Node = _find(phone, "App_%s" % kind)
 		if icon != null and (icon.get_parent() as Control).visible:
 			icons += 1
-	_check(icons == 17, "홈 화면 앱 아이콘 17개 (기본 16 + 앱 스토어) (%d)" % icons)
+	_check(icons == 18, "홈 화면 앱 아이콘 18개 (기본 17 + 앱 스토어) (%d)" % icons)
 	await _shot("a02_home")
 
 	# ---- 업적 앱: 칭호 달기 → 친구 화면에도 ----

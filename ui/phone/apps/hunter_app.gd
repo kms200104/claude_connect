@@ -142,7 +142,7 @@ func _build_guild() -> void:
 func _build_ranks() -> void:
 	var rules: HunterRules = GameData.hunter
 	var mine: String = str(Net.hunter.get("rank", "E"))
-	add_child(label("점수가 기준을 넘으면 동사무소 옆 협회 출장소 창구에서 재심사를 받아요.", 22, SOFT))
+	add_child(label("점수가 기준을 넘으면 동사무소 앞 협회 출장소 창구에서 재심사를 받아요.", 22, SOFT))
 	for r: HunterRules.Rank in rules.ranks:
 		var c: VBoxContainer = card()
 		var row: HBoxContainer = HBoxContainer.new()

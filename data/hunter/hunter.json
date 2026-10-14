@@ -26,9 +26,9 @@
   },
 
   "office": {
-    "_comment": "헌터 협회 솔바람 출장소 (동사무소 옆 컨테이너 사무소). 창구 = 앞 range m 안. 마석은 여기서만 판다.",
+    "_comment": "헌터 협회 솔바람 출장소 (동사무소 · 대피소 앞 컨테이너 사무소). 창구 = 앞 range m 안. 마석은 여기서만 판다.",
     "name": "헌터 협회 솔바람 출장소",
-    "x": -42.0, "z": 58.0, "yaw": 0.0, "range": 2.6,
+    "x": -58.0, "z": 79.0, "yaw": 0.0, "range": 2.6,
     "sell_items": ["mana_stone_e", "mana_stone_d", "mana_stone_c", "mana_stone_b", "mana_stone_a", "mana_shard"],
     "sell_points": { "mana_stone_e": 0, "mana_stone_d": 1, "mana_stone_c": 3, "mana_stone_b": 10, "mana_stone_a": 30, "mana_shard": 1 }
   },
