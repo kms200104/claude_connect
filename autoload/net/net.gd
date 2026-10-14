@@ -940,6 +940,10 @@ func _handle_text(text: String) -> void:
 			sol = int(msg.get("sol", sol))
 			if msg.has("hp"):
 				_set_vehicle_hp(msg)
+			if str(msg.get("kind", "")) == "cargo":
+				var cv2: Dictionary = vehicle(str(msg.get("v", "")))
+				if not cv2.is_empty():
+					cv2["cargo"] = msg.get("items", [])
 			vehicle_done.emit(msg)
 		"veh_hp":
 			_set_vehicle_hp(msg)

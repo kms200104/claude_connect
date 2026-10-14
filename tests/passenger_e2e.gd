@@ -1,6 +1,7 @@
 extends Node
 ## v0.27 동승 종단 테스트 (서버 1개 + 헤드리스 Godot 2개 · tests/run_passenger_e2e.sh, 낮):
 ##   a: 미니트럭을 사서 불러 운전석에 탄다 → b 가 짐칸에 타면 앞으로 달린다 → 내 화면의 b 가 짐칸 자리에 붙어 따라온다 → 세운다.
+##   a: (v0.27) 세운 트럭 뒤에서 "짐칸 열기" → 목재를 실으면 짐칸에 상자가 보인다.
 ##   b: 트럭 곁에서 상황 버튼 "같이 타기 · 이름" → 짐칸에 앉아 따라간다 (앉은 자세) → "내리기"로 내린다 → 다시 타면 a 가 세울 때 같이 내린다.
 ## 인자: -- --role=a|b --server=ws://… --dir=/tmp/…
 
@@ -152,6 +153,29 @@ func _driver() -> void:
 	await get_tree().create_timer(0.5).timeout
 	rider.dismount()
 	_check(await _wait_until(func() -> bool: return not rider.is_active(), 3.0), "트럭을 세웠다")
+	# ---- v0.27 짐칸: 트럭 뒤에서 "짐칸 열기" → 목재를 싣는다 → 짐칸에 상자가 보인다 ----
+	await get_tree().create_timer(2.5).timeout
+	var interaction: InteractionController = _village.get_node("InteractionController")
+	var parked: ParkedVehicles = interaction.parked
+	var spot: Dictionary = parked.spot_of(id)
+	var info: VehicleCatalog.Model = GameData.garage.model("car_truck")
+	await _teleport((spot["at"] as Vector3) + Basis(Vector3.UP, float(spot["yaw"])) * Vector3(0.0, 0.1, info.anchor("axle_r").z + info.wheel + 1.0))
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.CARGO, 3.0), "트럭 뒤 상황 버튼 '%s'" % interaction.action_hud.current_text())
+	interaction.action_hud.action_pressed.emit()
+	var window: StashWindow = (_village.get_node("Survival") as SurvivalController).stash_window
+	_check(await _wait_until(func() -> bool: return window.is_open() and window.vehicle_id == id, 2.0), "짐칸 창이 열렸다")
+	var wood_slot: int = -1
+	for i: int in Net.inventory.size():
+		if Net.inventory[i] != null and Net.inventory[i].id == "wood":
+			wood_slot = i
+	await get_tree().process_frame
+	var put: Button = window.find_child("Put_%d" % wood_slot, true, false) as Button
+	_check(put != null, "가방 목재 '넣기'")
+	if put != null:
+		put.pressed.emit()
+	_check(await _wait_until(func() -> bool: return (Net.vehicle(id).get("cargo", []) as Array).size() == 1, 3.0), "짐칸에 목재를 실었다 (%s)" % str(Net.vehicle(id).get("cargo", [])))
+	window.close()
+	_check(await _wait_until(func() -> bool: return parked.find_child("Cargo", true, false) != null, 3.0), "짐칸에 상자가 보인다")
 	await _wait_file("b.done", 20.0)
 
 

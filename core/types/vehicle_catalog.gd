@@ -40,6 +40,8 @@ class Model:
 	var durability: int = 60
 	## v0.27 배터리로 갈 수 있는 거리 (m, 0 = 배터리 없음).
 	var range: float = 0.0
+	## v0.27 짐칸 칸 수 (0 = 없음).
+	var cargo: int = 0
 	## v0.27 동승 자리 (탈것 좌표 x, 앉는 높이 y, z).
 	var seats: Array[Vector3] = []
 	## 자리 이름 → 탈것 좌표 (바닥 y = 0, 앞 = -z).
@@ -146,6 +148,7 @@ static func from_dict(d: Dictionary) -> VehicleCatalog:
 		m.mass = float(raw.get("mass", 150.0))
 		m.durability = int(raw.get("durability", 60))
 		m.range = float(raw.get("range", 0.0))
+		m.cargo = int(raw.get("cargo", 0))
 		for st: Variant in raw.get("seats", []):
 			if st is Array and (st as Array).size() >= 3:
 				m.seats.append(Vector3(float(st[0]), float(st[1]), float(st[2])))

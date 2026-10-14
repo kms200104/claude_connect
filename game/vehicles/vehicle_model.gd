@@ -57,6 +57,9 @@ var _wake_left: float = 0.0
 var _car_spins: Array[Node3D] = []
 var _car_pivots: Array[Node3D] = []
 var _wheel_turn: float = 1.0
+## v0.27 짐칸에 실은 상자 (칸 수만큼 보인다).
+var _cargo_node: Node3D = null
+var _cargo_count: int = -1
 
 static var _glow_materials: Dictionary[String, Material] = {}
 static var _clay_material: Material = null
@@ -92,6 +95,9 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 	_rear_spin = null
 	_car_spins.clear()
 	_car_pivots.clear()
+	_cargo_node = null
+	var cargo_was: int = _cargo_count
+	_cargo_count = -1
 	if info == null:
 		return
 	if _clay_material == null:
@@ -105,6 +111,8 @@ func build(new_model: String, new_fit: Dictionary) -> void:
 		_build_car()
 	else:
 		_build_moto()
+	if cargo_was > 0:
+		set_cargo(cargo_was)
 
 
 ## 바퀴(속도 m/s)를 굴리고 핸들을 조향 각도(rad, + = 왼쪽)로 돌린다. 크랭크는 set_pedal (리그 위상).
@@ -318,6 +326,37 @@ func _build_bike() -> void:
 		Shapes.sweep(gs, PackedVector3Array([head_bottom + Vector3(0.024, 0.0, 0.0), bb + Vector3(0.024, 0.03, 0.0)]), 0.006, LENS, 6, true)
 		Shapes.sweep(gs, PackedVector3Array([bb + Vector3(0.05, 0.0, 0.0), axle_r + Vector3(0.06, 0.0, 0.0)]), 0.005, LENS, 6, true)
 		_add_glow_mesh("FrameGlow", ClayMesh.commit(gs), self, Color.html(str(glow.get("c", "#FFFFFF"))), 1.1)
+
+
+## 짐칸에 실은 칸 수만큼 나무 상자를 쌓아 보인다 (짐칸이 있는 차량만).
+func set_cargo(count: int) -> void:
+	if info == null or info.cargo <= 0 or count == _cargo_count:
+		return
+	_cargo_count = count
+	if _cargo_node != null:
+		_cargo_node.queue_free()
+		_cargo_node = null
+	if count <= 0:
+		return
+	var truck: bool = info.style == "truck"
+	var b: BoxBatch = BoxBatch.new()
+	var shown: int = mini(count, 6 if truck else 2)
+	for i: int in shown:
+		var col: int = i % 2
+		var row: int = i / 2
+		var at: Vector3 = Vector3(-0.32 + 0.64 * float(col), 0.0, 0.0)
+		if truck:
+			at += Vector3(0.0, 0.88 + 0.17 + 0.34 * float(row / 2), 0.55 + 0.42 * float(row % 2) + 0.4)
+		else:
+			at = Vector3(-0.2 + 0.4 * float(col), 0.84 + 0.12, 0.74)
+		var size: float = 0.34 if truck else 0.24
+		b.box(at, Vector3(size, size, size), Color("#9A7448").lightened(0.05 * float(i % 3)), Basis(Vector3.UP, 0.1 * float(i % 3)))
+		b.box(at + Vector3(0, size * 0.5 + 0.01, 0), Vector3(size + 0.02, 0.03, 0.06), Color("#6E5232"))
+	_cargo_node = MeshInstance3D.new()
+	_cargo_node.name = "Cargo"
+	(_cargo_node as MeshInstance3D).mesh = b.commit()
+	(_cargo_node as MeshInstance3D).material_override = _clay
+	add_child(_cargo_node)
 
 
 # ---- 차량 (v0.26) ----

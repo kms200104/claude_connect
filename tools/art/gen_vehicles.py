@@ -104,16 +104,17 @@ MODELS = [
     dict(id='car_atv', kind='car', style='atv', pose='moto', name='솔바람 ATV', type='사륜 바이크 (농업용 ATV)', price=5900000,
          spec='전기 사륜 · 최고 45km/h · 철제 범퍼', desc='네 바퀴로 흙길도 거침없이. 앞 범퍼가 튼튼해 크리처를 밀어내기 좋다.',
          top=12.5, accel=3.0, brake=6.2, coast=0.4, turn=1.9, wheel=0.3, lift=0.46, regen=1.2, wade=0.75, mass=380, durability=150,
-         seats=[[0.0, 0.88, 0.62]],
+         seats=[[0.0, 0.88, 0.62]], cargo=4,
          paint='#5E7A3A', trim='#2A2A2E', seat='#232326', anchors=ATV_ANCHORS),
     dict(id='car_truck', kind='car', style='truck', pose='moto', name='솔바람 미니트럭', type='경트럭 (1톤 짐칸 · 오픈 캐빈)', price=14900000,
          spec='전기 경트럭 · 최고 60km/h · 짐칸 · 통뼈 범퍼', desc='지붕이 열린 작은 트럭. 무겁고 튼튼해서 크리처를 들이받아도 끄떡없다. 대신 둔하다.',
          top=16.5, accel=2.4, brake=6.6, coast=0.45, turn=1.45, wheel=0.34, lift=0.6, regen=1.0, wade=0.8, mass=1300, durability=280,
-         seats=[[-0.42, 0.9, 0.7], [0.42, 0.9, 1.25]],
+         seats=[[-0.42, 0.9, 0.7], [0.42, 0.9, 1.25]], cargo=16,
          paint='#2F6FB0', trim='#E8E4DA', seat='#3A3632', anchors=TRUCK_ANCHORS),
 ]
 # v0.26 무게(kg, 타는 사람 포함 — 들이받을 때 크리처가 날아가는 정도) · 내구도 (0 이면 고장).
-# v0.27 seats = 동승 자리 (탈것 좌표 x, 앉는 높이 y, z — 트럭 짐칸 둘 · ATV 뒷자리 하나).
+# v0.27 seats = 동승 자리 (탈것 좌표 x, 앉는 높이 y, z — 트럭 짐칸 둘 · ATV 뒷자리 하나). cargo = 짐칸 칸 수 (한 칸 99개).
+#   가져올 · 세워 둔 곁에서 짐칸 뒤(axle_r 뒤)에 서면 "짐칸" 으로 넣고 꺼낸다 (탈것과 함께 다닌다 — 부르면 실은 채로 온다).
 for _m in MODELS:
     # v0.27 배터리로 갈 수 있는 거리 (m, 0 = 배터리 없음 — 자전거 · 카약).
     _m['range'] = {'moto_scooter': 4000, 'moto_classic': 5000, 'moto_sport': 6000, 'car_atv': 3500, 'car_truck': 4500,

@@ -67,6 +67,8 @@ func _sync() -> void:
 			_entries[key] = e
 		e.pending = 0.0
 		e.at = at
+		if e.model != null:
+			e.model.set_cargo(int(d.get("c", 0)))
 		e.yaw = yaw
 		e.arrive_ms = arrive
 		if e.model == null and e.courier == null:
@@ -196,6 +198,17 @@ func nearest_own(position: Vector3, max_range: float, kind_range: bool = false) 
 			best_d = d
 			best = e.vehicle_id
 	return best
+
+
+## v0.27 짐칸 뒤(뒷바퀴 뒤 1m)가 range 안인 내 차량 (없으면 빈 글자).
+func cargo_near(position: Vector3, range_m: float) -> String:
+	for e: Entry in _entries.values():
+		if e.owner != Net.my_id or e.courier != null or e.model == null or e.model.info == null or e.model.info.cargo <= 0 or not _is_parked(e):
+			continue
+		var back: Vector3 = e.at + Basis(Vector3.UP, e.yaw) * Vector3(0.0, 0.0, e.model.info.anchor("axle_r").z + e.model.info.wheel + 0.9)
+		if Vector2(back.x - position.x, back.z - position.z).length() <= range_m:
+			return e.vehicle_id
+	return ""
 
 
 ## 다 와서 세워(띄워) 둔 모형인지.

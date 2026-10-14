@@ -591,6 +591,7 @@ func _on_vehicles_changed() -> void:
 	var v: Dictionary = Net.vehicle(vehicle_id)
 	if v.is_empty():
 		return
+	model.set_cargo((v.get("cargo", []) as Array).size() if v.get("cargo") is Array else 0)
 	var fit: Dictionary = v.get("fit", {}) as Dictionary
 	if fit != _fit:
 		_fit = fit.duplicate()

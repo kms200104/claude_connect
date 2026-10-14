@@ -3,6 +3,7 @@ extends Control
 ## 거점 상자 창 (v0.25): 다 막은 빈집 앞방 상자 — 그 집을 함께 쓰는 사람 모두의 보관함.
 ## 위: 상자에 든 것 (그림 · 이름 × 개수 · "1개" · "다 꺼내기"), 아래: 가방 (칸마다 "넣기" · 여러 개면 "1개").
 ## 판정은 서버 (Net.stash_put · Net.stash_take → stash), 열린 채로 다른 사람이 넣고 빼도 바로 바뀐다.
+## v0.27 탈것 짐칸도 같은 창 (open_vehicle — veh_cargo, 내 탈것 cargo).
 
 signal closed
 
@@ -11,6 +12,8 @@ const SOFT: Color = Color("#8A7058")
 const CREAM: Color = Color("#FFF8EC")
 
 var house_id: String = ""
+## 탈것 짐칸으로 열었으면 그 탈것 id (아니면 빈 글자 = 거점 상자).
+var vehicle_id: String = ""
 var _title: Label = null
 var _stash_list: VBoxContainer = null
 var _bag_list: VBoxContainer = null
@@ -68,7 +71,13 @@ func _ready() -> void:
 			_bag_list = list
 			list.name = "BagList"
 	Net.stash_changed.connect(func(h: String) -> void:
-		if visible and h == house_id:
+		if visible and vehicle_id.is_empty() and h == house_id:
+			_build.call_deferred())
+	Net.vehicles_changed.connect(func() -> void:
+		if visible and not vehicle_id.is_empty():
+			_build.call_deferred())
+	Net.vehicle_done.connect(func(r: Dictionary) -> void:
+		if visible and str(r.get("kind", "")) == "cargo":
 			_build.call_deferred())
 	Net.inventory_updated.connect(func(_s: Array[InventoryItem], _h: int) -> void:
 		if visible:
@@ -81,6 +90,16 @@ func is_open() -> bool:
 
 func open(house: String) -> void:
 	house_id = house
+	vehicle_id = ""
+	move_to_front()
+	visible = true
+	_build()
+
+
+## v0.27 탈것 짐칸으로 연다.
+func open_vehicle(id: String) -> void:
+	vehicle_id = id
+	house_id = ""
 	move_to_front()
 	visible = true
 	_build()
@@ -96,6 +115,11 @@ func close() -> void:
 func _build() -> void:
 	var items: Array = Net.stash.get(house_id, [])
 	_title.text = "거점 상자 · %d/%d칸" % [items.size(), GameData.survival.stash_slots]
+	if not vehicle_id.is_empty():
+		var v: Dictionary = Net.vehicle(vehicle_id)
+		var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
+		items = v.get("cargo", []) if v.get("cargo") is Array else []
+		_title.text = "%s 짐칸 · %d/%d칸" % [m.name if m != null else "탈것", items.size(), m.cargo if m != null else 0]
 	for list: VBoxContainer in [_stash_list, _bag_list]:
 		for c: Node in list.get_children():
 			c.queue_free()
@@ -109,11 +133,11 @@ func _build() -> void:
 		if n > 1:
 			var one: Button = _button("1개", 26)
 			one.name = "TakeOne_%s" % id
-			one.pressed.connect(func() -> void: Net.stash_take(house_id, id, 1))
+			one.pressed.connect(func() -> void: _take(id, 1))
 			row.add_child(one)
 		var all: Button = _button("꺼내기", 26)
 		all.name = "Take_%s" % id
-		all.pressed.connect(func() -> void: Net.stash_take(house_id, id, 0))
+		all.pressed.connect(func() -> void: _take(id, 0))
 		row.add_child(all)
 		_stash_list.add_child(row)
 	var any: bool = false
@@ -128,15 +152,29 @@ func _build() -> void:
 		if it.count > 1:
 			var one: Button = _button("1개", 26)
 			one.name = "PutOne_%d" % slot
-			one.pressed.connect(func() -> void: Net.stash_put(house_id, slot, 1))
+			one.pressed.connect(func() -> void: _put(slot, 1))
 			row.add_child(one)
 		var put: Button = _button("넣기", 26)
 		put.name = "Put_%d" % slot
-		put.pressed.connect(func() -> void: Net.stash_put(house_id, slot, 0))
+		put.pressed.connect(func() -> void: _put(slot, 0))
 		row.add_child(put)
 		_bag_list.add_child(row)
 	if not any:
 		_bag_list.add_child(_label("가방이 비었어요", 28, SOFT))
+
+
+func _put(slot: int, n: int) -> void:
+	if vehicle_id.is_empty():
+		Net.stash_put(house_id, slot, n)
+	else:
+		Net.request("veh_cargo", {"v": vehicle_id, "op": "put", "slot": slot, "n": n})
+
+
+func _take(item_id: String, n: int) -> void:
+	if vehicle_id.is_empty():
+		Net.stash_take(house_id, item_id, n)
+	else:
+		Net.request("veh_cargo", {"v": vehicle_id, "op": "take", "id": item_id, "n": n})
 
 
 func _row(item_id: String, n: int) -> HBoxContainer:

@@ -83,4 +83,30 @@ describe('v0.27 탈것 배터리 · 짐칸 · 개조', () => {
     assert.equal(st.charge, max);
     assert.equal((await ask(c, { t: 'veh_refuel', v, how: 'station' })).code, 'bad_part', '이미 가득');
   });
+
+  it('짐칸: 트럭 곁에서 넣고 꺼내고, 칸이 차면 거절, 실은 채로 다닌다 (저장)', async () => {
+    const spot = { x: -150, z: 140 };
+    const { c, v, veh, server } = await drive('car_truck', spot, { startItems: 'wood:30,nails:5,cloth:3' });
+    const me = [...[...server.rooms.rooms.values()][0].players.values()][0];
+    const slotOf = (id) => me.slots.findIndex((x) => x?.id === id);
+    const put = await ask(c, { t: 'veh_cargo', v, op: 'put', slot: slotOf('wood'), n: 20 });
+    assert.equal(put.kind, 'cargo');
+    assert.deepEqual(put.items, [{ id: 'wood', n: 20 }]);
+    await ask(c, { t: 'veh_cargo', v, op: 'put', slot: slotOf('nails') });
+    const took = await ask(c, { t: 'veh_cargo', v, op: 'take', id: 'wood', n: 5 });
+    assert.deepEqual(took.items, [{ id: 'wood', n: 15 }, { id: 'nails', n: 5 }]);
+    assert.deepEqual(veh.cargo, [{ id: 'wood', n: 15 }, { id: 'nails', n: 5 }], '탈것에 실렸다');
+    // 타고 멀리 가도 실은 채로.
+    me.x += 40;
+    assert.equal((await ask(c, { t: 'veh_cargo', v, op: 'take', id: 'nails' })).items.length, 1);
+    // 세워 두고 멀리 가면 못 꺼낸다.
+    await ask(c, { t: 'veh_ride', v: '' });
+    me.x += 20;
+    assert.equal((await ask(c, { t: 'veh_cargo', v, op: 'take', id: 'wood' })).code, 'not_near_vehicle');
+    const saved = server.rooms.rooms.values().next().value.toSave();
+    const prof = Object.values(saved.profiles)[0] ?? saved.profiles[0];
+    assert.ok(JSON.stringify(prof).includes('"cargo":[{"id":"wood","n":15}]'), '저장된다');
+    // ATV 는 4칸.
+    assert.equal(data.garage.models.get('car_atv').cargo, 4);
+  });
 });
