@@ -1,6 +1,6 @@
 class_name HunterController
 extends Node
-## v0.28 헌터 (마을에 붙는 쪽): 동사무소 옆 헌터 협회 출장소(HunterOffice) · 창구 창(HunterWindow) ·
+## v0.28 헌터 (마을에 붙는 쪽): 동사무소 대피소 앞 헌터 협회 출장소(HunterOffice) · 창구 창(HunterWindow) ·
 ## 처치할 때 HUD 에 "+n점" 이 떴다 사라진다 · 마석 · 매각 · 등급 재심사 · 의뢰 · 길드 결과 안내.
 ## 상황 버튼 대상: "헌터 협회 창구" (출장소 앞). 판정은 서버 (Net.hunter_sell · hunter_rank_up · hunter_claim · guild_*).
 ## 게이트 (GateField): 곁에서 "게이트 진입 · E급", HUD 에 가장 가까운 게이트 방향 화살표 · 거리 · 남은 시간 (공략 중이면 웨이브 · 남은 크리처),

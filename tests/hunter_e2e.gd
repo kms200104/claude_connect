@@ -1,6 +1,6 @@
 extends Node
 ## v0.28 헌터 종단 테스트 (서버 1개 + Godot 1개, 밤 23시 · 크리처가 제자리에 선다, 가방에 마석 E 3 · D 1):
-## 헌터 자격증 E급 → 둔치에서 크리처를 "공격"으로 쓰러뜨리면 HUD "헌터 점수 +n" · 처치 수 → 동사무소 옆 협회 출장소 (모형 · 간판) →
+## 헌터 자격증 E급 → 둔치에서 크리처를 "공격"으로 쓰러뜨리면 HUD "헌터 점수 +n" · 처치 수 → 동사무소 대피소 앞 협회 출장소 (모형 · 간판) →
 ## 창구 앞 상황 버튼 "헌터 협회 창구" → 창 (자격증 · 마석 목록) → "모두 팔기" (솔이 오르고 마석이 빠진다) →
 ## 휴대폰 헌터넷: 오늘의 의뢰 3개 · 길드 만들기 → 길드 카드.
 ## 인자: -- --server=ws://127.0.0.1:PORT [--shots=폴더]
@@ -111,7 +111,7 @@ func _run() -> void:
 
 	# ---- 협회 출장소 ----
 	var rules: HunterRules = GameData.hunter
-	_check(hunter.office != null and hunter.office.is_inside_tree() and hunter.office.global_position.distance_to(rules.office_position) < 0.1, "동사무소 옆 협회 출장소")
+	_check(hunter.office != null and hunter.office.is_inside_tree() and hunter.office.global_position.distance_to(rules.office_position) < 0.1, "동사무소 대피소 앞 협회 출장소")
 	var sign_label: Label3D = hunter.office.get_node("Sign") as Label3D
 	_check(sign_label != null and sign_label.text.contains("헌터 협회"), "간판 '%s'" % (sign_label.text if sign_label != null else ""))
 	var counter: Vector3 = rules.counter_position()
