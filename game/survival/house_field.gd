@@ -171,15 +171,16 @@ func _build_house(h: SurvivalRules.House, rules: SurvivalRules) -> void:
 	var half_span: float = hd + 0.6
 	var rise: float = tan(slope) * half_span
 	for s: float in [-1.0, 1.0]:
-		roof_batch.box(Vector3(0.0, 0.2 + WALL_H + rise * 0.5 + 0.1, s * half_span * 0.5), Vector3(h.size.x + 0.9, 0.12, half_span / cos(slope) + 0.1), h.roof if s > 0 else h.roof.darkened(0.12), Basis(Vector3.RIGHT, -s * slope))
+		roof_batch.box(Vector3(0.0, 0.2 + WALL_H + rise * 0.5 + 0.1, s * half_span * 0.5), Vector3(h.size.x + 0.9, 0.12, half_span / cos(slope) + 0.1), h.roof if s > 0 else h.roof.darkened(0.12), Basis(Vector3.RIGHT, s * slope))
 		# 골 (함석 줄무늬).
 		for k: int in 7:
 			var x: float = -hw + 0.6 + float(k) * (h.size.x - 1.2) / 6.0
-			roof_batch.box(Vector3(x, 0.2 + WALL_H + rise * 0.5 + 0.18, s * half_span * 0.5), Vector3(0.06, 0.04, half_span / cos(slope)), h.roof.darkened(0.25), Basis(Vector3.RIGHT, -s * slope))
+			roof_batch.box(Vector3(x, 0.2 + WALL_H + rise * 0.5 + 0.18, s * half_span * 0.5), Vector3(0.06, 0.04, half_span / cos(slope)), h.roof.darkened(0.25), Basis(Vector3.RIGHT, s * slope))
 	for s: float in [-1.0, 1.0]:
-		for k: int in 4:
-			var t: float = float(k) / 4.0
-			roof_batch.box(Vector3(s * (hw + 0.05), 0.2 + WALL_H + rise * (t + 0.125), 0.0), Vector3(0.18, rise / 4.0, (1.0 - t) * h.size.y), h.wall.darkened(0.06))
+		# 박공 벽: 계단 8칸 (칸 윗면이 지붕 밑에 닿게 — 지붕 위로 삐져나오지 않는다).
+		for k: int in 8:
+			var t: float = float(k) / 8.0
+			roof_batch.box(Vector3(s * (hw + 0.05), 0.2 + WALL_H + rise * (t + 0.0625), 0.0), Vector3(0.18, rise / 8.0, maxf(0.1, 2.0 * half_span * (0.875 - t) - 0.1)), h.wall.darkened(0.06))
 	roof_batch.box(Vector3(0.0, 0.2 + WALL_H + rise + 0.12, 0.0), Vector3(h.size.x + 1.0, 0.16, 0.3), h.roof.darkened(0.3))
 	var roof: MeshInstance3D = _mesh(roof_batch, clay_material, "Roof")
 	root.add_child(roof)
