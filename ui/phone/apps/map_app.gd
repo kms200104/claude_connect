@@ -10,6 +10,7 @@ const SEA_DEEP: Color = Color("#6FB8DE")
 const COLORS: Dictionary[String, Color] = {
 	"me": Color("#FF7A3D"), "friend": Color("#3D8BFF"), "npc": Color("#F2A6C0"),
 	"place": Color("#FFFFFF"), "spot": Color("#2F7FD0"), "house": Color("#F7D98B"),
+	"supply": Color("#FF4A3A"),
 }
 const FILTERS: PackedStringArray = ["사람", "장소", "낚시터"]
 
@@ -131,6 +132,9 @@ func _collect() -> void:
 			var p: Vector3 = rep.remote_position(slot)
 			if p != Vector3.INF and _on_map(p):
 				_add("friend", "pl:%d" % slot, Journal.display_name(slot), "같은 마을 친구", Vector2(p.x, p.z), GameData.player_name(slot).left(1))
+	# v0.27 보급 상자 (밤, 먼저 연 사람이 갖는다).
+	for sid: String in Net.supply:
+		_add("supply", "supply:" + sid, "보급 상자", "헬기가 떨어뜨린 상자. 먼저 여는 사람이 가져요 — 둘레에 크리처가 있을지도.", Vector2(float(Net.supply[sid]["x"]), float(Net.supply[sid]["z"])), "보")
 	var me: Vector2 = _my_spot()
 	if me != Vector2.INF:
 		_add("me", "me", "나 (%s)" % GameData.player_name(Net.my_id), "지금 내가 있는 곳" if not Home.is_inside() else "집 안 (%s)" % Home.unit, me, "")

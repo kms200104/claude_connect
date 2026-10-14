@@ -1849,6 +1849,8 @@ export function createServer(overrides = {}) {
         return survival.handleSleep(ctx, msg, fail);
       case 'ram':
         return survival.handleRam(ctx, msg, fail);
+      case 'supply_open':
+        return survival.handleSupply(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2089,6 +2091,7 @@ export function createServer(overrides = {}) {
       case 'stash':
       case 'sleep':
       case 'ram':
+      case 'supply_open':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

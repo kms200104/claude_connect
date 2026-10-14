@@ -93,12 +93,15 @@ var base_range: float = 1.6
 var stash_slots: int = 12
 ## v0.26 들이받기 { fast, restitution, slow_keep, contact_top, reach, … } (서버 survival.json ram 과 같은 값).
 var ram: Dictionary = {}
+## v0.27 보급 상자를 열 수 있는 거리.
+var supply_range: float = 2.2
 
 
 static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRules:
 	var r: SurvivalRules = SurvivalRules.new()
 	var loot: Dictionary = rules.get("loot", {})
 	r.loot_range = float(loot.get("range", r.loot_range))
+	r.supply_range = float((rules.get("supply", {}) as Dictionary).get("range", r.supply_range))
 	var kinds: Dictionary = loot.get("kinds", {})
 	for k: Variant in kinds:
 		r.kind_names[str(k)] = str((kinds[k] as Dictionary).get("name", k))

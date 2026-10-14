@@ -138,6 +138,7 @@ export const ErrorCode = Object.freeze({
   notNearVehicle: 'not_near_vehicle', // v19.1: 세워 둔 그 탈것 곁이 아니다 (아직 오는 중 포함)
   vehicleBroken: 'vehicle_broken', // v0.26 고장난 탈것 (고쳐야 탄다)
   vehicleFull: 'vehicle_full', // v0.27 빈자리가 없다 (동승)
+  supplyFalling: 'supply_falling', // v0.27 보급 상자가 아직 떨어지는 중
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다

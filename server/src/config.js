@@ -90,6 +90,9 @@ export const defaultConfig = {
   creatureSpawnScale: num('CREATURE_SPAWN_SCALE', 1),
   // v0.26 시험용: 크리처가 걷지 않는다 (들이받기 시험이 서 있는 크리처를 겨눈다, 날아가는 건 그대로).
   creatureFreeze: process.env.CREATURE_FREEZE === '1',
+  // v0.27 시험용: 밤이 되고 첫 보급 상자까지 · 떨어지는 시간 (ms, 비우면 survival.json supply).
+  supplyFirstMs: num('SUPPLY_FIRST_MS', NaN),
+  supplyFallMs: num('SUPPLY_FALL_MS', NaN),
   // 날씨를 고정한다 (clear | cloudy | rain | thunder). 비우면 마을 시드로 정한다.
   weatherForce: process.env.WEATHER_FORCE || '',
   // 민방위 훈련을 지금 한 번 연다 (테스트·시연용, v0.20).

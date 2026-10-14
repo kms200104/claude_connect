@@ -7,6 +7,7 @@ extends Node
 ## v0.25: 판자는 시간 들여 대고 (진행 막대, 함께 대면 빨라진다), 밤에 소리를 내면 크리처가 몰려온다 (먼지 · 안내),
 ## 거점(다 막은 빈집)의 "거점 상자"(StashWindow) · "자기"(침대, 누운 몸 · 일어나기). 집 안에서는 판자 몇 곳을 막았는지 알림.
 ## v0.26: 피 냄새 — 다쳐서 피를 흘리면 하트 아래 "피 냄새" 알림, 땅에 핏자국 (모두에게 보이고 시간이 지나면 작아져 사라진다).
+## v0.27: 보급 상자 (SupplyField) — 떨어지면 안내, HUD 에 방향 화살표 · 거리, 곁에서 "보급 상자 열기" (먼저 연 사람이 갖는다).
 ## 판정은 서버 (Net.loot · Net.attack · Net.use_item · Net.board · Net.revive · Net.give_up · Net.stash_* · Net.sleep_in_bed).
 
 @export var player: Player
@@ -22,6 +23,7 @@ const TARGET_BOARD: String = "board:"
 const TARGET_REVIVE: String = "revive:"
 const TARGET_STASH: String = "stash:"
 const TARGET_BED: String = "bed:"
+const TARGET_SUPPLY: String = "supply:"
 ## 누운 몸: 옆으로 눕히는 각 · 내리는 높이 (리그 뿌리 기준). 앞뒤(x)는 리그가 낚시 당김에 쓴다.
 const DOWN_ROLL: float = 1.45
 const DOWN_DROP: float = 0.55
@@ -32,6 +34,11 @@ const BED_LIFT: float = 0.42
 
 var houses: HouseField = null
 var creatures: CreatureField = null
+var supply: SupplyField = null
+## v0.27 보급 상자 방향 (화살표 · 거리 글자).
+var _supply_chip: HBoxContainer = null
+var _supply_arrow: Label = null
+var _supply_label: Label = null
 var _hearts: HBoxContainer = null
 var _vignette: ColorRect = null
 var _light: OmniLight3D = null
@@ -69,6 +76,8 @@ func _ready() -> void:
 	creatures.name = "Creatures"
 	creatures.material = creature_material
 	world.add_child.call_deferred(creatures)
+	supply = SupplyField.new()
+	world.add_child.call_deferred(supply)
 	_build_hud()
 	_light = OmniLight3D.new()
 	_light.name = "HeldLight"
@@ -91,6 +100,9 @@ func _ready() -> void:
 	Net.noise_made.connect(_on_noise)
 	Net.scent_dropped.connect(_on_scent)
 	Net.bleed_changed.connect(_on_bleed)
+	Net.supply_changed.connect(_on_supply_changed)
+	Net.supply_taken.connect(_on_supply_taken)
+	Net.supply_got.connect(_on_supply_got)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
 		for d: Dictionary in _drops:
 			if is_instance_valid(d["node"]):
@@ -131,6 +143,7 @@ func _process(_delta: float) -> void:
 	_update_jobs()
 	_update_chip()
 	_update_scent()
+	_update_supply_chip()
 
 
 ## 상황 버튼 대상 (빈 글자 = 없음). 쓰러진 동료 곁이면 일으키기, 밤에 크리처가 곁이면 공격이 먼저,
@@ -143,6 +156,12 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 		var at: Vector3 = _remote_position(id)
 		if id != Net.my_id and at != Vector3.INF and Vector2(at.x - position.x, at.z - position.z).length() <= rules.revive_range - margin:
 			return TARGET_REVIVE + str(id)
+	# 보급 상자 (땅에 닿은 것): 크리처가 곁에 있어도 먼저 연다 (먼저 연 사람이 갖는다).
+	if supply != null and not Net.supply.is_empty():
+		var sid: String = supply.nearest(position, true)
+		var sp: Vector3 = supply.crate_position(sid) if not sid.is_empty() else Vector3.INF
+		if sp != Vector3.INF and Vector2(sp.x - position.x, sp.z - position.z).length() <= rules.supply_range - margin:
+			return TARGET_SUPPLY + sid
 	if creatures != null and not Net.creatures.is_empty():
 		var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item)
 		var near: String = creatures.nearest(position, w.range_m + 0.4)
@@ -182,6 +201,8 @@ func is_busy() -> bool:
 func target_label(target: String) -> String:
 	if target.begins_with(TARGET_ATTACK):
 		return "공격"
+	if target.begins_with(TARGET_SUPPLY):
+		return "보급 상자 열기"
 	if target.begins_with(TARGET_REVIVE):
 		return "일으키기 · %s" % GameData.player_name(int(target.trim_prefix(TARGET_REVIVE)))
 	if target.begins_with(TARGET_BOARD):
@@ -210,6 +231,14 @@ func cost_text() -> String:
 
 
 func activate(target: String) -> void:
+	if target.begins_with(TARGET_SUPPLY):
+		var sid: String = target.trim_prefix(TARGET_SUPPLY)
+		var sp: Vector3 = supply.crate_position(sid)
+		if sp != Vector3.INF:
+			player.look_toward(sp - player.global_position)
+		player.play_plant()
+		Net.open_supply(sid)
+		return
 	if target.begins_with(TARGET_ATTACK):
 		var now_s: float = Time.get_ticks_msec() / 1000.0
 		if now_s < _swing_ready_at:
@@ -332,6 +361,12 @@ func _on_failed(kind: String, code: String) -> void:
 		toast_hud.show_toast("가방이 가득해요", false)
 	elif kind == "sleep" and code == NetProtocol.ERR_HP_FULL:
 		toast_hud.show_toast("체력이 가득해서 잠이 안 와요", false)
+	elif kind == "supply_open" and code == NetProtocol.ERR_ALREADY_LOOTED:
+		toast_hud.show_toast("한발 늦었어요 — 누가 먼저 열었어요", false)
+	elif kind == "supply_open" and code == NetProtocol.ERR_SUPPLY_FALLING:
+		toast_hud.show_toast("아직 떨어지는 중이에요", false)
+	elif kind == "supply_open" and code == NetProtocol.ERR_TOO_FAR:
+		toast_hud.show_toast("조금 더 가까이 가요", false)
 
 
 func _on_boarded(info: Dictionary) -> void:
@@ -660,6 +695,21 @@ func _build_hud() -> void:
 	_blood_chip.add_theme_color_override("font_color", Color("#FF7A6A"))
 	_blood_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_blood_chip.visible = false
+	_supply_chip = HBoxContainer.new()
+	_supply_chip.name = "SupplyChip"
+	_supply_chip.position = Vector2(28.0, 400.0)
+	_supply_chip.add_theme_constant_override("separation", 10)
+	_supply_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_supply_chip.visible = false
+	_supply_arrow = _chip_label("▲", 40, Color("#FF6A4A"))
+	_supply_arrow.custom_minimum_size = Vector2(44.0, 44.0)
+	_supply_arrow.pivot_offset = Vector2(22.0, 22.0)
+	_supply_arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_supply_arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_supply_chip.add_child(_supply_arrow)
+	_supply_label = _chip_label("보급 상자", 30, Color("#FFD9A0"))
+	_supply_label.name = "SupplyLabel"
+	_supply_chip.add_child(_supply_label)
 	stash_window = StashWindow.new()
 	if hud != null:
 		hud.add_child.call_deferred(_vignette)
@@ -669,6 +719,7 @@ func _build_hud() -> void:
 		hud.add_child.call_deferred(_sleep_panel)
 		hud.add_child.call_deferred(_chip)
 		hud.add_child.call_deferred(_blood_chip)
+		hud.add_child.call_deferred(_supply_chip)
 		hud.add_child.call_deferred(stash_window)
 	_refresh_hearts()
 
@@ -711,3 +762,66 @@ func _refresh_hearts() -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hearts.add_child(l)
 	_hearts.visible = Net.state == Net.State.ONLINE
+
+
+# ---- v0.27 보급 상자 ----
+
+func _chip_label(text: String, size: int, color: Color) -> Label:
+	var l: Label = Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_constant_override("outline_size", 8)
+	l.add_theme_color_override("font_outline_color", Color("#2A1A10"))
+	l.add_theme_color_override("font_color", color)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+## 가장 가까운 상자 쪽 화살표 (카메라 기준 — 위가 화면 안쪽) · 거리.
+func _update_supply_chip() -> void:
+	if _supply_chip == null or player == null:
+		return
+	var sid: String = supply.nearest(player.global_position) if supply != null and Net.state == Net.State.ONLINE else ""
+	_supply_chip.visible = not sid.is_empty()
+	if sid.is_empty():
+		return
+	var at: Vector3 = supply.crate_position(sid)
+	var to: Vector3 = at - player.global_position
+	to.y = 0.0
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	var fwd: Vector3 = -cam.global_basis.z if cam != null else Vector3.FORWARD
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	var right: Vector3 = Vector3(-fwd.z, 0.0, fwd.x)
+	_supply_arrow.rotation = atan2(to.dot(right), to.dot(fwd))
+	var falling: bool = Time.get_ticks_msec() < int(Net.supply[sid]["land"])
+	_supply_label.text = "보급 상자 %dm%s" % [roundi(to.length()), " · 떨어지는 중" if falling else ""]
+
+
+func _on_supply_changed(id: String) -> void:
+	if toast_hud == null or not Net.supply.has(id) or Time.get_ticks_msec() >= int(Net.supply[id]["land"]):
+		return
+	# 새로 떨어지는 상자.
+	var d: float = Vector2(float(Net.supply[id]["x"]) - player.global_position.x, float(Net.supply[id]["z"]) - player.global_position.z).length()
+	toast_hud.show_toast("보급 상자가 떨어져요! %dm · 먼저 열면 내 것" % roundi(d), true)
+	Audio.play_sfx("quest_done", -8.0, 0.7)
+	Prefs.vibrate(60, 0.4)
+
+
+func _on_supply_taken(_id: String, by: int) -> void:
+	if toast_hud == null or by == Net.my_id:
+		return
+	if by == 0:
+		toast_hud.show_toast("해가 떠서 남은 보급 상자를 헬기가 거둬 갔어요", false)
+	else:
+		toast_hud.show_toast("%s 님이 보급 상자를 열었어요" % GameData.player_name(by), true)
+
+
+func _on_supply_got(info: Dictionary) -> void:
+	if toast_hud == null:
+		return
+	var parts: PackedStringArray = []
+	for it: Variant in info.get("items", []):
+		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
+	toast_hud.show_toast("보급 상자를 열었어요! %s" % " · ".join(parts), true)
+	Audio.play_sfx("quest_done", -6.0)

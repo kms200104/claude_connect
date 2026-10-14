@@ -57,6 +57,11 @@ signal noise_made(info: Dictionary)
 ## v0.26 피 냄새: 누가 피를 흘리기 시작 · 멈춤 · 핏자국 하나 { id, x, z, ms }.
 signal bleed_changed(player_id: int)
 signal scent_dropped(info: Dictionary)
+## v0.27 보급 상자: 새 상자 · 땅에 닿음 · 누가 열어 사라짐 (id), 내가 연 결과 { s, items, got }.
+signal supply_changed(crate_id: String)
+## 누가 열어 갔다 (by = 0 이면 해가 떠서 회수).
+signal supply_taken(crate_id: String, by: int)
+signal supply_got(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -309,6 +314,8 @@ var sleeping: Dictionary[int, bool] = {}
 ## v0.26 피 흘리는 사람 · 남은 핏자국 [{id, x, z, until: 이 기기 ms}].
 var bleeding: Dictionary[int, bool] = {}
 var scent: Array[Dictionary] = []
+## v0.27 보급 상자 (id → {x, z, land: 땅에 닿는 이 기기 ms}).
+var supply: Dictionary[String, Dictionary] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -1040,6 +1047,25 @@ func _handle_text(text: String) -> void:
 			var drop: Dictionary = {"id": int(msg.get("id", 0)), "x": float(msg.get("x", 0.0)), "z": float(msg.get("z", 0.0)), "until": Time.get_ticks_msec() + int(msg.get("ms", 40000))}
 			scent.append(drop)
 			scent_dropped.emit(drop)
+		"supply":
+			var crate: Dictionary = msg.get("s", {}) if msg.get("s") is Dictionary else {}
+			var cid: String = str(crate.get("id", ""))
+			if not cid.is_empty():
+				supply[cid] = {"x": float(crate.get("x", 0.0)), "z": float(crate.get("z", 0.0)), "land": Time.get_ticks_msec() + int(crate.get("left", 0))}
+				supply_changed.emit(cid)
+		"supply_land":
+			var lid: String = str(msg.get("s", ""))
+			if supply.has(lid):
+				supply[lid]["land"] = mini(int(supply[lid]["land"]), Time.get_ticks_msec())
+				supply_changed.emit(lid)
+		"supply_gone":
+			var gid: String = str(msg.get("s", ""))
+			if supply.has(gid):
+				supply.erase(gid)
+				supply_changed.emit(gid)
+				supply_taken.emit(gid, int(msg.get("by", 0)))
+		"supply_got":
+			supply_got.emit(msg)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1327,6 +1353,10 @@ func _on_welcome(msg: Dictionary) -> void:
 	for d: Variant in surv.get("scent", []):
 		if d is Dictionary:
 			scent.append({"id": int(d.get("id", 0)), "x": float(d.get("x", 0.0)), "z": float(d.get("z", 0.0)), "until": Time.get_ticks_msec() + int(d.get("left", 0))})
+	supply.clear()
+	for d: Variant in surv.get("supply", []):
+		if d is Dictionary:
+			supply[str(d.get("id", ""))] = {"x": float(d.get("x", 0.0)), "z": float(d.get("z", 0.0)), "land": Time.get_ticks_msec() + int(d.get("left", 0))}
 	downed.clear()
 	for d: Variant in surv.get("downed", []):
 		if d is Dictionary:
@@ -1416,6 +1446,12 @@ func _next_rid() -> String:
 func loot(container_id: String) -> void:
 	if state == State.ONLINE:
 		_request("loot", {"c": container_id})
+
+
+## v0.27 보급 상자 열기 (먼저 연 사람이 갖는다).
+func open_supply(crate_id: String) -> void:
+	if state == State.ONLINE:
+		_request("supply_open", {"s": crate_id})
 
 
 func attack() -> void:

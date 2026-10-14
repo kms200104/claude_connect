@@ -69,6 +69,7 @@ const ERR_NOT_NEAR_VEHICLE: String = "not_near_vehicle"
 const ERR_VEHICLE_BROKEN: String = "vehicle_broken"
 ## v0.27 동승: 빈자리가 없다.
 const ERR_VEHICLE_FULL: String = "vehicle_full"
+const ERR_SUPPLY_FALLING: String = "supply_falling"
 ## v20: 보트는 물 위(내 곁)에만 부를 수 있다 · 보트에서 내릴 땅이 곁에 없다.
 const ERR_NOT_ON_WATER: String = "not_on_water"
 const ERR_NO_LANDING: String = "no_landing"

@@ -5,9 +5,11 @@
 //        거점(다 막은 빈집)의 상자 · 침대.
 // v0.26: 피 냄새 — 다치면 핏자국을 남기고, 크리처가 더 멀리서 알아채고 핏자국을 따라온다 (붕대로 멈춘다) ·
 //        탈것으로 들이받기 ram { c, s, dx, dz } — 빠르면 날아가고(빠를수록 멀리 · 세게, 벽에 부딪히면 더), 느리면 넘어진다.
+// v0.27: 보급 상자 (survival.json supply) — 밤마다 헬기가 낙하산 상자를 떨어뜨린다 (supply 방송), 먼저 연 사람이 갖는다
+//        supply_open { s } → supply_got (나) · supply_gone (모두). 가까이 오면 지키던 크리처가 나타난다.
 // data/survival/survival.json (규칙) · data/survival/houses.json (빈집촌 · 가구 자리). 시각은 세상 시각(clock.hour · worldMs, 60배).
 //   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {} ·
-//   stash { h, op: put|take, slot|id, n? } · sleep { on }.
+//   stash { h, op: put|take, slot|id, n? } · sleep { on } · supply_open { s }.
 //   거리 · 쿨다운 · 확률 · 피해는 모두 여기서.
 import { ErrorCode } from './protocol.js';
 import { addItem, countWhere, removeAt, removeWhere } from './inventory.js';
@@ -27,6 +29,7 @@ export function loadSurvival(rules, houses, isKnown) {
   for (const [kind, c] of Object.entries(rules.creatures?.kinds ?? {})) check(c.drops, `creature ${kind}`);
   for (const id of Object.keys(rules.heal ?? {})) if (!id.startsWith('_') && !isKnown(id)) throw new Error(`heal: unknown ${id}`);
   check(rules.fortify?.cost, 'fortify');
+  check(rules.supply?.loot?.items, 'supply');
   const containers = new Map();
   // v0.24 뚫린 곳 (판자를 댈 수 있는 현관 · 깨진 창): "집:자리" → 월드 가운데 · 안쪽 · 바깥쪽 자리.
   const breaches = new Map();
@@ -737,6 +740,110 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     }
   }
 
+  // ---- v0.27 보급 상자 ----
+
+  const SU = S?.supply;
+  const supplyWire = (room, c) => ({ id: c.id, x: round(c.x), z: round(c.z), left: Math.max(0, c.land - now()) });
+
+  /** 상자를 떨어뜨릴 자리: 바깥에 있는 사람 하나에게서 dist m, 걸을 수 있는 땅 (집 · 안전한 곳 밖). */
+  function supplySpot(room, people, def) {
+    const p = people[Math.floor(random() * people.length)];
+    const [lo, hi] = SU.dist;
+    for (let i = 0; i < 30; i++) {
+      const a = random() * Math.PI * 2;
+      const r = lo + random() * (hi - lo);
+      const x = p.x + Math.cos(a) * r;
+      const z = p.z + Math.sin(a) * r;
+      if (groundProblem(data, x, z) !== null || !isLand(data, x, z) || safeAt(x, z) || houseAt(x, z, 1.5) || !canStand(x, z, def)) continue;
+      return { x, z };
+    }
+    return null;
+  }
+
+  /** 지키던 크리처: 상자 둘레에 guards 마리 (방 상한 안에서). */
+  function guard(room, c, def, t) {
+    const kinds = Object.entries(S.creatures.kinds).map(([k, v]) => ({ k, ...v }));
+    let n = 0;
+    for (let i = 0; i < 20 && n < SU.guards && room.creatures.size < S.creatures.max_per_room; i++) {
+      const a = random() * Math.PI * 2;
+      const r = 3 + random() * 4;
+      const x = c.x + Math.cos(a) * r;
+      const z = c.z + Math.sin(a) * r;
+      if (!canStand(x, z, def) || groundProblem(data, x, z) !== null) continue;
+      const kind = pickEntry(kinds, random);
+      room.creatureSeq = (room.creatureSeq ?? 0) + 1;
+      const g = { id: `z${room.creatureSeq}`, k: kind.k, x, z, yaw: Math.atan2(c.x - x, c.z - z), hp: kind.hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {} };
+      room.creatures.set(g.id, g);
+      n++;
+    }
+    return n;
+  }
+
+  /** npcTick 마다 (tick 안): 밤이면 때맞춰 떨어뜨리고, 땅에 닿으면 알리고, 다가오면 지키던 크리처. 해가 뜨면 회수. 바뀌었으면 true. */
+  function tickSupply(room, t, people, def) {
+    if (!SU) return false;
+    room.supply ??= new Map();
+    if (!night()) {
+      for (const c of room.supply.values()) room.broadcast({ t: 'supply_gone', s: c.id, by: 0 });
+      room.supply.clear();
+      room.supplyNextAt = undefined;
+      return false;
+    }
+    let changed = false;
+    if (room.supplyNextAt === undefined) {
+      room.supplyNextAt = t + (Number.isFinite(cfg.supplyFirstMs) ? cfg.supplyFirstMs : SU.first_ms);
+      room.supplyCount = 0;
+    }
+    if (t >= room.supplyNextAt && room.supplyCount < SU.per_night) {
+      const spot = people.length ? supplySpot(room, people, def) : null;
+      if (!spot) room.supplyNextAt = t + 10000;
+      else {
+        room.supplyNextAt = t + SU.every_ms;
+        room.supplyCount++;
+        room.supplySeq = (room.supplySeq ?? 0) + 1;
+        const fall = Number.isFinite(cfg.supplyFallMs) ? cfg.supplyFallMs : SU.fall_ms;
+        const c = { id: `s${room.supplySeq}`, x: spot.x, z: spot.z, land: now() + fall, landed: false, guarded: false };
+        room.supply.set(c.id, c);
+        room.broadcast({ t: 'supply', s: supplyWire(room, c) });
+      }
+    }
+    for (const c of room.supply.values()) {
+      if (!c.landed && now() >= c.land) {
+        c.landed = true;
+        room.broadcast({ t: 'supply_land', s: c.id });
+      }
+      if (c.landed && !c.guarded && people.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < SU.guard_near)) {
+        c.guarded = true;
+        if (guard(room, c, def, t) > 0) changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function handleSupply(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    if (!SU) return fail(ErrorCode.badItem);
+    if (player.downed) return fail(ErrorCode.downed);
+    const c = room.supply?.get(msg.s);
+    // 이미 누가 열었다 (먼저 연 사람이 갖는다).
+    if (!c) return fail(ErrorCode.alreadyLooted);
+    if (now() < c.land) return fail(ErrorCode.supplyFalling);
+    if (player.home || inShop(player) || Math.hypot(player.x - c.x, player.z - c.z) > SU.range + 0.3) return fail(ErrorCode.tooFar);
+    room.supply.delete(c.id);
+    const found = rollLoot(SU.loot, random);
+    const got = [];
+    for (const it of found) {
+      if (addItem(player.slots, it.id, it.n, cfg, data.limitOf)) got.push(it);
+      else dropAt(room, it.id, it.n, player.x, player.z);
+    }
+    sendInventory(player);
+    send(ctx.ws, { t: 'supply_got', rid: msg.rid, s: c.id, items: found, got });
+    room.broadcast({ t: 'supply_gone', s: c.id, by: player.id });
+    act(room, player, 'loot', 'supply');
+    saveRoom(room);
+  }
+
   /** npcTick 마다. 바뀌었으면 true (방송은 여기서). */
   function tick(room, dtMs, t) {
     if (!S) return;
@@ -748,6 +855,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const dt = dtMs / 1000;
     let changed = false;
     if (!night()) {
+      tickSupply(room, t, [], null);
       if (room.creatures.size > 0) {
         // 해가 뜨면 흩어진다.
         for (const c of room.creatures.values()) room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), sun: true });
@@ -758,6 +866,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     }
     const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed);
     const def = defenses(room);
+    if (tickSupply(room, t, people, def)) changed = true;
     // 나타나기.
     if (t >= (room.nextCreatureAt ?? 0)) {
       room.nextCreatureAt = t + (S.creatures.spawn_every_ms ?? 9000) * (cfg.creatureSpawnScale ?? 1);
@@ -1060,10 +1169,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       sleeping: [...room.players.values()].filter((p) => p.sleeping).map((p) => p.id),
       bleeding: [...room.players.values()].filter((p) => p.bleeding).map((p) => p.id),
       scent: (room.scent ?? []).map((s) => ({ id: s.id, x: s.x, z: s.z, left: Math.max(0, SC.trail_ms - (now() - s.t)) })),
+      supply: [...(room.supply?.values() ?? [])].map((c) => supplyWire(room, c)),
     };
   }
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }
