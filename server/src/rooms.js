@@ -25,6 +25,7 @@ import { sanitizeDeposits } from './savings.js';
 import { cleanBirthday, sanitizeAch, sanitizeDex, sanitizeStats } from './progress.js';
 import { sanitizeGuestbooks } from './guestbook.js';
 import { sanitizePhotos } from './photos.js';
+import { sanitizeGuild, sanitizeHunter } from './hunter.js';
 
 const finite = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const intOr = (v, fallback) => (Number.isInteger(v) ? v : fallback);
@@ -113,6 +114,7 @@ function newProfile(uid, slot, cfg, data) {
     vehSeq: 0,
     steps: { day: -1, today: 0, got: [] }, // v0.20 솔걸음: 마을 날짜 · 그날 인정된 걸음 · 받은 목표(번호)
     hp: cfg.startHp > 0 ? cfg.startHp : (data?.survival?.player?.max_hp ?? 10), // v0.23 체력 (START_HP 는 시험용)
+    hunter: sanitizeHunter(null, data?.hunter), // v0.28 헌터: 등급 · 점수 · 처치 · 오늘의 의뢰 진행
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
     dex: { fish: {}, items: [] },
@@ -241,6 +243,7 @@ export class Player {
       face: { ...this.profile.face },
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',
+      hr: this.profile.hunter?.rank ?? 'E', // v0.28 헌터 등급 (이름표)
       x: this.x,
       y: this.y,
       z: this.z,
@@ -425,6 +428,7 @@ export class Room {
         vehicles: sanitizeVehicles(p.vehicles, data.garage).map((v) => (moved ? { ...v, at: null } : v)),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
         hp: Number.isFinite(p.hp) ? Math.max(1, Math.min(data?.survival?.player?.max_hp ?? 10, Math.round(p.hp))) : (data?.survival?.player?.max_hp ?? 10),
+        hunter: sanitizeHunter(p.hunter, data.hunter),
         steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),
         dex: sanitizeDex(p.dex, data),
@@ -444,6 +448,8 @@ export class Room {
     // v0.25 거점 상자 (집 → [{ id, n }]).
     room.stash = Object.fromEntries(Object.entries(world.stash ?? {}).filter(([h, box]) => data.survival?.houseById.has(h) && Array.isArray(box))
       .map(([h, box]) => [h, box.filter((e) => typeof e?.id === 'string' && data.items.has(e.id) && Number.isInteger(e.n) && e.n > 0)]));
+    // v0.28 길드 (같은 방 둘).
+    room.guild = sanitizeGuild(world.guild, room.profiles);
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
     for (const h of Array.isArray(world.households) ? world.households : []) {
       const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
@@ -506,6 +512,7 @@ export class Room {
         // v0.24 빈집 현관 · 깨진 창에 댄 판자 ("집:자리" → 남은 hp).
         boards: { ...(this.boards ?? {}) },
         stash: structuredClone(this.stash ?? {}),
+        guild: this.guild ? structuredClone(this.guild) : null,
       },
       profiles,
     };

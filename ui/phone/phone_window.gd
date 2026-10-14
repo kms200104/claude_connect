@@ -13,7 +13,7 @@ signal closed
 ## 앱 스토어에서 앱을 받았다 / 지웠다.
 signal app_installed(kind: String, on: bool)
 
-enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS, CAMERA, ALBUM, MAP, DEX, WEATHER, MUSIC, ACHIEVE, VEHICLE, STORE, STEPS, SAFETY }
+enum Tab { STOCKS, HOMES, BANK, ASSETS, TALK, JOBS, DELIVERY, SETTINGS, CAMERA, ALBUM, MAP, DEX, WEATHER, MUSIC, ACHIEVE, VEHICLE, STORE, STEPS, SAFETY, HUNTER }
 
 const BG: Color = Color(0.99, 0.96, 0.88, 0.99)
 const EDGE: Color = Color(0.3, 0.26, 0.24)
@@ -24,10 +24,10 @@ const PICKED: Color = Color(0.98, 0.84, 0.55)
 const UP: Color = Color("#D8402F")
 const DOWN: Color = Color("#2F62C8")
 const GOOD: Color = Color("#3E8E4E")
-const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "지도", "도감", "날씨", "음악", "업적", "탈것", "앱 스토어", "솔걸음", "안전알림"]
+const TAB_NAMES: PackedStringArray = ["증권", "부동산", "은행", "자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "지도", "도감", "날씨", "음악", "업적", "탈것", "앱 스토어", "솔걸음", "안전알림", "헌터넷"]
 ## 앱 아이콘 그림 · 색 (Tab 순서, PhoneProp.ICON_COLORS 와 같은 색).
-const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings", "camera", "album", "map", "dex", "weather", "music", "achieve", "vehicle", "store", "steps", "safety"]
-const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "도시 지도", "도감", "날씨 · 달력", "음악", "업적 · 칭호", "탈것 · 차고", "앱 스토어", "솔걸음 만보기", "안전알림"]
+const APP_KINDS: PackedStringArray = ["stocks", "homes", "bank", "assets", "talk", "jobs", "delivery", "settings", "camera", "album", "map", "dex", "weather", "music", "achieve", "vehicle", "store", "steps", "safety", "hunter"]
+const APP_TITLES: PackedStringArray = ["솔바람 증권", "부동산", "은행", "내 자산", "마을톡", "일거리", "배달", "설정", "카메라", "앨범", "도시 지도", "도감", "날씨 · 달력", "음악", "업적 · 칭호", "탈것 · 차고", "앱 스토어", "솔걸음 만보기", "안전알림", "헌터넷 · 헌터 협회"]
 ## v16: 따로 만든 앱 화면 (ui/phone/apps/).
 const APP_SCENES: Dictionary[int, Script] = {
 	Tab.CAMERA: preload("res://ui/phone/apps/camera_app.gd"),
@@ -41,6 +41,7 @@ const APP_SCENES: Dictionary[int, Script] = {
 	Tab.STORE: preload("res://ui/phone/apps/store_app.gd"),
 	Tab.STEPS: preload("res://ui/phone/apps/steps_app.gd"),
 	Tab.SAFETY: preload("res://ui/phone/apps/safety_app.gd"),
+	Tab.HUNTER: preload("res://ui/phone/apps/hunter_app.gd"),
 }
 ## 앱 스토어에서 받아야 홈 화면에 생기는 앱 (받은 것은 Prefs.APPS).
 const DOWNLOADABLE: Array[int] = [Tab.STEPS, Tab.SAFETY]

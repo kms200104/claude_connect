@@ -5,6 +5,7 @@ import { SEASONS, inHours } from './clock.js';
 import { blockedAreas, islandShape } from './world.js';
 import { loadCrafting } from './crafting.js';
 import { loadSurvival } from './survival.js';
+import { loadHunter } from './hunter.js';
 import { loadFace } from './face.js';
 import { listUnits } from './realestate.js';
 import { loadPlans, planIdOf } from './homes.js';
@@ -270,6 +271,7 @@ export function loadGameData(dataDir, cfg) {
   };
   data.crafting = loadCrafting(read('crafting/crafting.json'), isKnown);
   data.survival = loadSurvival(read('survival/survival.json'), read('survival/houses.json'), isKnown);
+  data.hunter = loadHunter(read('hunter/hunter.json'), isKnown);
   data.blocked = blockedAreas(data);
   return data;
 }

@@ -13,6 +13,7 @@ const CITY_PATH: String = "res://data/world/city.json"
 const CRAFTING_PATH: String = "res://data/crafting/crafting.json"
 const SURVIVAL_PATH: String = "res://data/survival/survival.json"
 const HOUSES_PATH: String = "res://data/survival/houses.json"
+const HUNTER_PATH: String = "res://data/hunter/hunter.json"
 const EVENTS_PATH: String = "res://data/events/events.json"
 const PLANTS_PATH: String = "res://data/plants/plants.json"
 const EMOTES_PATH: String = "res://data/emotes/emotes.json"
@@ -53,6 +54,8 @@ var city: CityData = null
 var crafting: CraftingRules = CraftingRules.new()
 ## v0.23 생존 (빈집 · 체력 · 무기 · 크리처).
 var survival: SurvivalRules = SurvivalRules.new()
+## v0.28 헌터 (협회 등급 · 출장소 · 길드).
+var hunter: HunterRules = HunterRules.new()
 ## 마을 이벤트 종류 (id → 정보). 언제 열리는지는 서버가 알려 준다 (Net.events).
 var events: Dictionary[String, EventInfo] = {}
 ## 선물·별 조각을 주울 수 있는 거리 (서버 판정과 같은 값).
@@ -136,6 +139,7 @@ func _ready() -> void:
 	city = CityData.from_dict(_read_json(CITY_PATH))
 	crafting = CraftingRules.from_dict(_read_json(CRAFTING_PATH))
 	survival = SurvivalRules.from_dicts(_read_json(SURVIVAL_PATH), _read_json(HOUSES_PATH))
+	hunter = HunterRules.from_dict(_read_json(HUNTER_PATH))
 	if sea_spot != null:
 		sea_spot.island = layout
 	var plants_file: Dictionary = _read_json(PLANTS_PATH)

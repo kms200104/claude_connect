@@ -125,7 +125,8 @@ describe('v0.23 뒤지기 · 크리처 · 체력', () => {
       await sleep(700);
     }
     assert.ok(dead, '쓰러뜨렸다');
-    const drop = await c.next((x) => x.t === 'drop' && Math.hypot(x.d.x - dead.x, x.d.z - dead.z) < 2, 2000);
+    // v0.28 마석(헌터)은 따로 떨어진다 — 크리처 drops 표의 것만 본다.
+    const drop = await c.next((x) => x.t === 'drop' && !x.d.item?.startsWith('mana_') && Math.hypot(x.d.x - dead.x, x.d.z - dead.z) < 2, 2000);
     assert.ok(S.creatures.kinds.shambler.drops.some((e) => e.id === drop.d.item), drop.d.item);
   });
 

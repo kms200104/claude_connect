@@ -42,6 +42,7 @@ import { createGarage, mountWire, seatWire } from './garage.js';
 import { createAqua } from './aqua.js';
 import { createCrafting } from './crafting.js';
 import { createSurvival } from './survival.js';
+import { createHunter } from './hunter.js';
 import { createSafety } from './safety.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -156,7 +157,8 @@ export function createServer(overrides = {}) {
     room.broadcast({ t: 'drop', d: dropWire(d) });
     return d;
   };
-  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage });
+  const hunter = createHunter({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt });
+  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage, hunter });
   // v0.22 제작대.
   const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
@@ -534,6 +536,7 @@ export function createServer(overrides = {}) {
       aqua: aqua.tripsWire(room),
       // v0.23 생존: 체력 · 뒤진 가구 · 크리처.
       surv: survival.welcomeWire(room, player),
+      hunter: hunter.wire(room, player),
       // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
       dev: cfg.devTools,
     });
@@ -1851,6 +1854,13 @@ export function createServer(overrides = {}) {
         return survival.handleRam(ctx, msg, fail);
       case 'supply_open':
         return survival.handleSupply(ctx, msg, fail);
+      case 'hunter_sell':
+      case 'hunter_rank':
+      case 'hunter_claim':
+      case 'guild_create':
+      case 'guild_join':
+      case 'guild_leave':
+        return hunter.handle(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2092,6 +2102,12 @@ export function createServer(overrides = {}) {
       case 'sleep':
       case 'ram':
       case 'supply_open':
+      case 'hunter_sell':
+      case 'hunter_rank':
+      case 'hunter_claim':
+      case 'guild_create':
+      case 'guild_join':
+      case 'guild_leave':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

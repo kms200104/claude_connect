@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "_comment": "v0.28 헌터 (서버 권위: server/src/hunter.js · 클라이언트 core/types/hunter_rules.gd 가 같은 파일을 읽는다). 게이트가 열리는 도시에서 크리처를 사냥하는 헌터 — 협회 등급 · 마석 매각 · 현상금 의뢰 · 길드(둘이 함께).",
+
+  "ranks": {
+    "_comment": "헌터 점수(pts)가 points 를 넘으면 협회 창구에서 '등급 재심사'로 오른다. sell_bonus = 마석을 팔 때 더 받는 몫, gate = 들어갈 수 있는 가장 높은 게이트 등급.",
+    "list": [
+      { "id": "E", "name": "E급", "points": 0, "sell_bonus": 0.0, "color": "#9AA3A8" },
+      { "id": "D", "name": "D급", "points": 150, "sell_bonus": 0.05, "color": "#5AC08A" },
+      { "id": "C", "name": "C급", "points": 600, "sell_bonus": 0.1, "color": "#4A90E0" },
+      { "id": "B", "name": "B급", "points": 2000, "sell_bonus": 0.15, "color": "#9A6AE0" },
+      { "id": "A", "name": "A급", "points": 6000, "sell_bonus": 0.2, "color": "#F0B040" },
+      { "id": "S", "name": "S급", "points": 18000, "sell_bonus": 0.3, "color": "#E8483A" }
+    ]
+  },
+
+  "kill": {
+    "_comment": "크리처를 쓰러뜨린 헌터가 받는 점수 · 떨어지는 마석 (chance, 크리처 drops 와 따로). 길드원이 party_range m 안에 함께 있으면 점수 × party_mult.",
+    "points": { "shambler": 3, "runner": 4, "bloated": 8 },
+    "mana": {
+      "shambler": [ { "id": "mana_stone_e", "chance": 0.6, "n": [1, 1] } ],
+      "runner": [ { "id": "mana_stone_e", "chance": 0.7, "n": [1, 2] } ],
+      "bloated": [ { "id": "mana_stone_e", "chance": 1.0, "n": [1, 2] }, { "id": "mana_stone_d", "chance": 0.35, "n": [1, 1] } ]
+    },
+    "party_range": 20, "party_mult": 1.25
+  },
+
+  "office": {
+    "_comment": "헌터 협회 솔바람 출장소 (동사무소 옆 컨테이너 사무소). 창구 = 앞 range m 안. 마석은 여기서만 판다.",
+    "name": "헌터 협회 솔바람 출장소",
+    "x": -42.0, "z": 58.0, "yaw": 0.0, "range": 2.6,
+    "sell_items": ["mana_stone_e", "mana_stone_d", "mana_stone_c", "mana_stone_b", "mana_stone_a", "mana_shard"],
+    "sell_points": { "mana_stone_e": 0, "mana_stone_d": 1, "mana_stone_c": 3, "mana_stone_b": 10, "mana_stone_a": 30, "mana_shard": 1 }
+  },
+
+  "bounty": {
+    "_comment": "현상금 의뢰: 날마다(마을 날짜) 방 시드로 per_day 개를 뽑는다 (사람마다 따로 진행 · 보고). kind: kill(크리처 k 를 n 마리, k 없으면 아무거나) · loot(빈집 가구 n 곳) · sell(마석 n 개 매각) · supply(보급 상자 n 개) · gate(게이트 공략, v0.28 게이트). 다 채우면 헌터넷 앱에서 '완료 보고' → reward 솔 · pts 점수.",
+    "per_day": 3,
+    "pool": [
+      { "id": "hunt_shambler", "kind": "kill", "k": "shambler", "n": 4, "reward": 30000, "pts": 15, "name": "어슬렁이 소탕", "desc": "밤마다 빈집촌을 어슬렁이는 크리처 4마리를 처치해 주세요." },
+      { "id": "hunt_runner", "kind": "kill", "k": "runner", "n": 3, "reward": 40000, "pts": 18, "name": "달리미 추적", "desc": "빠르게 달려드는 달리미 3마리. 탈것으로 들이받아도 인정돼요." },
+      { "id": "hunt_bloated", "kind": "kill", "k": "bloated", "n": 1, "reward": 60000, "pts": 25, "name": "퉁퉁이 토벌", "desc": "덩치 큰 퉁퉁이 1마리. 혼자는 위험하니 길드원과 함께." },
+      { "id": "hunt_any", "kind": "kill", "n": 8, "reward": 50000, "pts": 20, "name": "야간 순찰", "desc": "밤사이 크리처 8마리를 처치해 방어선을 지켜 주세요." },
+      { "id": "scavenge", "kind": "loot", "n": 5, "reward": 25000, "pts": 10, "name": "빈집 수색", "desc": "브레이크로 비어 버린 집 가구 5곳을 뒤져 남은 물자를 확인해 주세요." },
+      { "id": "mana_haul", "kind": "sell", "n": 6, "reward": 30000, "pts": 12, "name": "마석 납품", "desc": "협회 창구에 마석 6개를 팔아 주세요 (등급 상관없음)." },
+      { "id": "supply_run", "kind": "supply", "n": 1, "reward": 45000, "pts": 18, "name": "보급 상자 회수", "desc": "밤에 헬기가 떨어뜨리는 보급 상자 하나를 먼저 열어 주세요." }
+    ]
+  },
+
+  "guild": {
+    "_comment": "길드: 같은 방(마을) 둘이 만드는 2인 파티. 만든 사람이 이름을 짓고, 다른 사람은 '가입'. 길드원이 번 점수는 길드 점수로도 쌓여 길드 등급이 오른다. 함께 있으면(kill.party_range) 처치 점수가 늘고, 마석을 팔 때 sell_bonus 를 더 받는다.",
+    "name_min": 2, "name_max": 12, "sell_bonus": 0.05,
+    "levels": [
+      { "level": 1, "points": 0, "name": "신생 길드" },
+      { "level": 2, "points": 300, "name": "중견 길드" },
+      { "level": 3, "points": 1500, "name": "정예 길드" },
+      { "level": 4, "points": 6000, "name": "대형 길드" }
+    ]
+  }
+}

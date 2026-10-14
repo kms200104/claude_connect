@@ -37,6 +37,8 @@ extends Node
 @export var crafting: CraftController
 ## 생존 (v0.23, 없어도 된다): 빈집 가구 "뒤지기" · 크리처 "공격".
 @export var survival: SurvivalController
+## 헌터 (v0.28, 없어도 된다): 협회 출장소 "헌터 협회 창구".
+@export var hunter: HunterController
 ## 결과 문구를 띄울 곳 (낚시 HUD의 토스트를 같이 쓴다).
 @export var toast_hud: FishingHud
 
@@ -53,7 +55,7 @@ extends Node
 ## 씨앗을 심는 자리: 캐릭터 앞 이만큼.
 @export_range(0.5, 2.0, 0.05, "suffix:m") var plant_ahead: float = 1.1
 
-enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA, CRAFT, SURVIVE, PASSENGER, CARGO }
+enum Target { NONE, TALK, CHOP, ENTER_SHOP, EXIT_SHOP, PICKUP, COLLECT, PICK, PLANT, MIRROR, ECONOMY, FIELD, HOME, JOB, RIDE_OFF, VEHICLE, AQUA, CRAFT, SURVIVE, PASSENGER, CARGO, HUNTER }
 ## 킥보드를 탄 채로 할 수 있는 일 (v0.16). 나머지 자리에서는 상황 버튼이 "내리기"가 된다.
 const RIDE_TARGETS: Array[Target] = [Target.TALK, Target.JOB, Target.ENTER_SHOP, Target.EXIT_SHOP, Target.HOME, Target.ECONOMY, Target.VEHICLE, Target.AQUA]
 ## 타는 중에 다른 내 탈것으로 바꿔 탈 수 있는 거리.
@@ -121,6 +123,8 @@ func _process(_delta: float) -> void:
 			action_hud.show_action(crafting.target_label(target_id))
 		Target.SURVIVE:
 			action_hud.show_action(survival.target_label(target_id))
+		Target.HUNTER:
+			action_hud.show_action(hunter.target_label(target_id))
 		Target.TALK:
 			action_hud.show_action("대화")
 		Target.CHOP:
@@ -181,6 +185,8 @@ func _pick_target() -> void:
 		return
 	if survival != null and survival.is_busy():
 		return
+	if hunter != null and hunter.is_busy():
+		return
 	if fishing != null and fishing.phase != FishingController.Phase.IDLE:
 		return
 	var pos: Vector3 = player.global_position
@@ -240,6 +246,12 @@ func _pick_target() -> void:
 		if not loot_target.is_empty() and not loot_target.begins_with(SurvivalController.TARGET_ATTACK) and not loot_target.begins_with(SurvivalController.TARGET_REVIVE):
 			target = Target.SURVIVE
 			target_id = loot_target
+			return
+	if hunter != null and not Home.is_inside() and not (shop != null and shop.is_inside(pos)):
+		var hunter_target: String = hunter.pick_target(pos, safety_margin)
+		if not hunter_target.is_empty():
+			target = Target.HUNTER
+			target_id = hunter_target
 			return
 	if crafting != null and not (shop != null and shop.is_inside(pos)):
 		var craft_target: String = crafting.pick_target(pos, safety_margin)
@@ -367,6 +379,8 @@ func _on_action_pressed() -> void:
 			crafting.activate(target_id)
 		Target.SURVIVE:
 			survival.activate(target_id)
+		Target.HUNTER:
+			hunter.activate(target_id)
 		Target.PASSENGER:
 			player.passenger.board(int(target_id))
 		Target.CARGO:

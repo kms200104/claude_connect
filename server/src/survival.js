@@ -108,7 +108,7 @@ export function rollLoot(table, random) {
   return out;
 }
 
-export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act, garage }) {
+export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act, garage, hunter }) {
   const S = data.survival;
   const worldMs = () => (clock.worldMs ? clock.worldMs() : clock.gameMs());
   const maxHp = S?.player?.max_hp ?? 10;
@@ -492,6 +492,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     send(ctx.ws, { t: 'looted', rid: msg.rid, c: c.id, items: found, got });
     room.broadcast({ t: 'container', c: c.id, until: room.looted[c.id] });
     act(room, player, 'loot', c.kind);
+    hunter?.onLoot(room, player);
     saveRoom(room);
   }
 
@@ -732,6 +733,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   function kill(room, c, by) {
     room.creatures.delete(c.id);
     room.broadcast({ t: 'creature_dead', id: c.id, by, x: round(c.x), z: round(c.z) });
+    // v0.28 헌터: 처치 점수 · 마석 · 의뢰.
+    if (by) hunter?.onKill(room, room.players.get(by), c);
     const kind = S.creatures.kinds[c.k];
     if (kind && random() < (kind.drop_chance ?? 1)) {
       const e = pickEntry(kind.drops, random);
@@ -841,6 +844,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     send(ctx.ws, { t: 'supply_got', rid: msg.rid, s: c.id, items: found, got });
     room.broadcast({ t: 'supply_gone', s: c.id, by: player.id });
     act(room, player, 'loot', 'supply');
+    hunter?.onSupply(room, player);
     saveRoom(room);
   }
 

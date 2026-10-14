@@ -232,6 +232,13 @@ func _glyph(o: Vector2, s: float, ink: Color) -> void:
 			draw_colored_polygon(PackedVector2Array([p.call(0.5, 0.18), p.call(0.76, 0.28), p.call(0.72, 0.58), p.call(0.5, 0.8), p.call(0.28, 0.58), p.call(0.24, 0.28)]), ink)
 			draw_line(p.call(0.5, 0.32), p.call(0.5, 0.56), tint, w * 1.4, true)
 			draw_circle(p.call(0.5, 0.66), s * 0.04, tint)
+		"hunter":
+			# 헌터넷: 비스듬한 검 + 손잡이 가로대 + 마석 하나.
+			draw_line(p.call(0.28, 0.76), p.call(0.7, 0.26), ink, w * 1.6, true)
+			draw_colored_polygon(PackedVector2Array([p.call(0.66, 0.22), p.call(0.78, 0.18), p.call(0.74, 0.3)]), ink)
+			draw_line(p.call(0.27, 0.58), p.call(0.46, 0.77), ink, w * 1.4, true)
+			draw_circle(p.call(0.24, 0.8), s * 0.045, ink)
+			draw_colored_polygon(PackedVector2Array([p.call(0.7, 0.56), p.call(0.78, 0.66), p.call(0.7, 0.8), p.call(0.62, 0.66)]), tint)
 		"vehicle":
 			# 자전거: 두 바퀴 + 몸체 + 핸들.
 			draw_arc(p.call(0.3, 0.62), s * 0.15, 0.0, TAU, 24, ink, w * 1.1, true)

@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 28;
+export const PROTOCOL_VERSION = 29;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -139,6 +139,13 @@ export const ErrorCode = Object.freeze({
   vehicleBroken: 'vehicle_broken', // v0.26 고장난 탈것 (고쳐야 탄다)
   vehicleFull: 'vehicle_full', // v0.27 빈자리가 없다 (동승)
   supplyFalling: 'supply_falling', // v0.27 보급 상자가 아직 떨어지는 중
+  notAtOffice: 'not_at_office', // v0.28 헌터 협회 출장소 창구 곁이 아니다
+  rankNotReady: 'rank_not_ready', // v0.28 다음 등급 점수가 모자란다 (또는 S급)
+  bountyNotDone: 'bounty_not_done', // v0.28 의뢰를 아직 다 채우지 않았다
+  badGuildName: 'bad_guild_name', // v0.28 길드 이름 길이
+  guildExists: 'guild_exists', // v0.28 이 마을에 이미 길드가 있다 (또는 이미 길드원)
+  noGuild: 'no_guild', // v0.28 길드가 없다 (또는 길드원이 아니다)
+  guildFull: 'guild_full', // v0.28 길드원이 다 찼다
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다

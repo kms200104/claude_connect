@@ -62,6 +62,10 @@ signal supply_changed(crate_id: String)
 ## 누가 열어 갔다 (by = 0 이면 해가 떠서 회수).
 signal supply_taken(crate_id: String, by: int)
 signal supply_got(info: Dictionary)
+## v0.28 헌터: 내 헌터 기록이 바뀜 (Net.hunter) · 길드가 바뀜 (Net.guild, info = 서버 guild 메시지) · 요청 결과 { kind, … }.
+signal hunter_changed
+signal guild_changed(info: Dictionary)
+signal hunter_done(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -316,6 +320,11 @@ var bleeding: Dictionary[int, bool] = {}
 var scent: Array[Dictionary] = []
 ## v0.27 보급 상자 (id → {x, z, land: 땅에 닿는 이 기기 ms}).
 var supply: Dictionary[String, Dictionary] = {}
+## v0.28 내 헌터 기록 { rank, pts, next, nextRank, kills, gates, bounties: [{id, kind, k, n, got, done, reward, pts, name, desc}] } ·
+## 이 마을 길드 { name, pts, level, title, next, members: [{id, rank, name}] } (없으면 빈 것) · 사람마다 헌터 등급.
+var hunter: Dictionary = {}
+var guild: Dictionary = {}
+var hunter_ranks: Dictionary[int, String] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -926,6 +935,7 @@ func _handle_text(text: String) -> void:
 				var joined: NetPlayerState = NetPlayerState.from_dict(joined_data)
 				faces[joined.id] = joined.face
 				names[joined.id] = joined.display_name
+				hunter_ranks[joined.id] = str((joined_data as Dictionary).get("hr", "E"))
 				peer_joined.emit(joined)
 		"peer_status":
 			var pid: int = int(msg.get("id", 0))
@@ -1066,6 +1076,21 @@ func _handle_text(text: String) -> void:
 				supply_taken.emit(gid, int(msg.get("by", 0)))
 		"supply_got":
 			supply_got.emit(msg)
+		"hunter":
+			hunter = msg
+			hunter_ranks[my_id] = str(msg.get("rank", "E"))
+			var hg: Variant = msg.get("guild", null)
+			guild = hg if hg is Dictionary else {}
+			hunter_changed.emit()
+		"guild":
+			var gg: Variant = msg.get("g", null)
+			guild = gg if gg is Dictionary else {}
+			guild_changed.emit(msg)
+		"hunter_rank":
+			hunter_ranks[int(msg.get("id", 0))] = str(msg.get("rank", "E"))
+			hunter_done.emit({"kind": "remote_rank", "id": int(msg.get("id", 0)), "rank": str(msg.get("rank", "E"))})
+		"hunter_result":
+			hunter_done.emit(msg)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1353,6 +1378,14 @@ func _on_welcome(msg: Dictionary) -> void:
 	for d: Variant in surv.get("scent", []):
 		if d is Dictionary:
 			scent.append({"id": int(d.get("id", 0)), "x": float(d.get("x", 0.0)), "z": float(d.get("z", 0.0)), "until": Time.get_ticks_msec() + int(d.get("left", 0))})
+	var hw: Variant = msg.get("hunter", {})
+	hunter = hw if hw is Dictionary else {}
+	var hgw: Variant = hunter.get("guild", null)
+	guild = hgw if hgw is Dictionary else {}
+	hunter_ranks.clear()
+	for pv: Variant in msg.get("players", []):
+		if pv is Dictionary:
+			hunter_ranks[int(pv.get("id", 0))] = str(pv.get("hr", "E"))
 	supply.clear()
 	for d: Variant in surv.get("supply", []):
 		if d is Dictionary:
@@ -1446,6 +1479,45 @@ func _next_rid() -> String:
 func loot(container_id: String) -> void:
 	if state == State.ONLINE:
 		_request("loot", {"c": container_id})
+
+
+## v0.28 헌터: 협회 창구에서 마석 팔기 (slot < 0 이면 모두) · 등급 재심사 · 의뢰 완료 보고 · 길드.
+func hunter_sell(slot: int, n: int = 0) -> void:
+	if state == State.ONLINE:
+		_request("hunter_sell", {"all": true} if slot < 0 else {"slot": slot, "n": n})
+
+
+func hunter_rank_up() -> void:
+	if state == State.ONLINE:
+		_request("hunter_rank", {})
+
+
+func hunter_claim(bounty_id: String) -> void:
+	if state == State.ONLINE:
+		_request("hunter_claim", {"b": bounty_id})
+
+
+func guild_create(guild_name: String) -> void:
+	if state == State.ONLINE:
+		_request("guild_create", {"name": guild_name})
+
+
+func guild_join() -> void:
+	if state == State.ONLINE:
+		_request("guild_join", {})
+
+
+func guild_leave() -> void:
+	if state == State.ONLINE:
+		_request("guild_leave", {})
+
+
+## 내가 길드원인지.
+func in_guild() -> bool:
+	for m: Variant in guild.get("members", []):
+		if m is Dictionary and int(m.get("id", 0)) == my_id:
+			return true
+	return false
 
 
 ## v0.27 보급 상자 열기 (먼저 연 사람이 갖는다).
