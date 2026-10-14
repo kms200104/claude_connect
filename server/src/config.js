@@ -93,6 +93,11 @@ export const defaultConfig = {
   // v0.27 시험용: 밤이 되고 첫 보급 상자까지 · 떨어지는 시간 (ms, 비우면 survival.json supply).
   supplyFirstMs: num('SUPPLY_FIRST_MS', NaN),
   supplyFallMs: num('SUPPLY_FALL_MS', NaN),
+  // v0.28 시험용: 첫 게이트까지 · 게이트가 브레이크까지 버티는 시간 (ms) · 게이트 등급 · 자리 고정.
+  gateFirstMs: num('GATE_FIRST_MS', NaN),
+  gateLifeMs: num('GATE_LIFE_MS', NaN),
+  gateForceRank: process.env.GATE_FORCE_RANK || '',
+  gateForceSpot: process.env.GATE_FORCE_SPOT || '',
   // 날씨를 고정한다 (clear | cloudy | rain | thunder). 비우면 마을 시드로 정한다.
   weatherForce: process.env.WEATHER_FORCE || '',
   // 민방위 훈련을 지금 한 번 연다 (테스트·시연용, v0.20).

@@ -1861,6 +1861,8 @@ export function createServer(overrides = {}) {
       case 'guild_join':
       case 'guild_leave':
         return hunter.handle(ctx, msg, fail);
+      case 'gate_enter':
+        return survival.handleGate(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -2108,6 +2110,7 @@ export function createServer(overrides = {}) {
       case 'guild_create':
       case 'guild_join':
       case 'guild_leave':
+      case 'gate_enter':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

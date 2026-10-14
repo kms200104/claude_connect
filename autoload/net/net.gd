@@ -66,6 +66,10 @@ signal supply_got(info: Dictionary)
 signal hunter_changed
 signal guild_changed(info: Dictionary)
 signal hunter_done(info: Dictionary)
+## v0.28 게이트: 열림 · 상태가 바뀜 · 닫힘 (id, Net.gates 에 없으면 닫힘) · 내가 들어감 · 공략 보상 { g, rank, name, items, got, sol, pts }.
+signal gate_changed(gate_id: String)
+signal gate_entered(gate_id: String)
+signal gate_cleared(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -325,6 +329,8 @@ var supply: Dictionary[String, Dictionary] = {}
 var hunter: Dictionary = {}
 var guild: Dictionary = {}
 var hunter_ranks: Dictionary[int, String] = {}
+## v0.28 열린 게이트 (id → {rank, spot, name, x, z, st: open|raid|break, until: 이 기기 ms, wave, waves, alive, boss, raiders: [id]}).
+var gates: Dictionary[String, Dictionary] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -1091,6 +1097,20 @@ func _handle_text(text: String) -> void:
 			hunter_done.emit({"kind": "remote_rank", "id": int(msg.get("id", 0)), "rank": str(msg.get("rank", "E"))})
 		"hunter_result":
 			hunter_done.emit(msg)
+		"gate":
+			var gw: Dictionary = msg.get("g", {}) if msg.get("g") is Dictionary else {}
+			var gid: String = str(gw.get("id", ""))
+			if not gid.is_empty():
+				gates[gid] = _gate_entry(gw)
+				gate_changed.emit(gid)
+		"gate_gone":
+			var gone_id: String = str(msg.get("g", ""))
+			if gates.erase(gone_id):
+				gate_changed.emit(gone_id)
+		"gate_entered":
+			gate_entered.emit(str(msg.get("g", "")))
+		"gate_clear":
+			gate_cleared.emit(msg)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1386,6 +1406,10 @@ func _on_welcome(msg: Dictionary) -> void:
 	for pv: Variant in msg.get("players", []):
 		if pv is Dictionary:
 			hunter_ranks[int(pv.get("id", 0))] = str(pv.get("hr", "E"))
+	gates.clear()
+	for gv: Variant in surv.get("gates", []):
+		if gv is Dictionary:
+			gates[str(gv.get("id", ""))] = _gate_entry(gv)
 	supply.clear()
 	for d: Variant in surv.get("supply", []):
 		if d is Dictionary:
@@ -1510,6 +1534,21 @@ func guild_join() -> void:
 func guild_leave() -> void:
 	if state == State.ONLINE:
 		_request("guild_leave", {})
+
+
+## v0.28 게이트 진입 (곁에서, 헌터 등급 확인은 서버).
+func gate_enter(gate_id: String) -> void:
+	if state == State.ONLINE:
+		_request("gate_enter", {"g": gate_id})
+
+
+func _gate_entry(gw: Dictionary) -> Dictionary:
+	var raiders: Array[int] = []
+	for r: Variant in gw.get("raiders", []):
+		raiders.append(int(r))
+	return {"rank": str(gw.get("rank", "E")), "spot": str(gw.get("spot", "")), "name": str(gw.get("name", "")), "x": float(gw.get("x", 0.0)), "z": float(gw.get("z", 0.0)),
+		"st": str(gw.get("st", "open")), "until": Time.get_ticks_msec() + int(gw.get("left", 0)), "wave": int(gw.get("wave", 0)), "waves": int(gw.get("waves", 1)),
+		"alive": int(gw.get("alive", 0)), "boss": int(gw.get("boss", 0)) == 1, "raiders": raiders}
 
 
 ## 내가 길드원인지.

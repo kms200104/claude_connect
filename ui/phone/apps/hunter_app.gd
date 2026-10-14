@@ -8,12 +8,19 @@ const GOLD: Color = Color("#C89A20")
 
 var _tab: int = 0
 var _name_edit: LineEdit = null
+var _gate_states: Dictionary[String, String] = {}
 
 
 func _ready() -> void:
 	_build()
 	Net.hunter_changed.connect(func() -> void: _build.call_deferred())
 	Net.guild_changed.connect(func(_i: Dictionary) -> void: _build.call_deferred())
+	Net.gate_changed.connect(func(id: String) -> void:
+		# 남은 시간은 1초마다 오므로 열림 · 닫힘 · 상태가 바뀔 때만 다시 그린다.
+		var st: String = str(Net.gates.get(id, {}).get("st", ""))
+		if not _gate_states.has(id) or _gate_states[id] != st:
+			_gate_states[id] = st
+			_build.call_deferred())
 
 
 func _build() -> void:
@@ -32,6 +39,18 @@ func _build() -> void:
 
 
 func _build_bounties() -> void:
+	# 열린 게이트.
+	for gid: String in Net.gates:
+		var g: Dictionary = Net.gates[gid]
+		var gc: VBoxContainer = card()
+		gc.get_parent().name = "GateCard_%s" % gid
+		var st: String = str(g["st"])
+		var left: int = maxi(0, int(g["until"]) - Time.get_ticks_msec())
+		var color: Color = WARN if st == "break" else GameData.hunter.gate_colors.get(str(g["rank"]), NAVY).darkened(0.2)
+		gc.add_child(label("🌀 %s급 게이트 · %s" % [str(g["rank"]), str(g["name"])], 30, color))
+		var mine: bool = GameData.hunter.can_enter(str(Net.hunter.get("rank", "E")), str(g["rank"]))
+		var state_text: String = "던전 브레이크 중! 피하세요" if st == "break" else ("공략 중 · 웨이브 %d/%d" % [int(g["wave"]) + 1, int(g["waves"])] if st == "raid" else "브레이크까지 %d분 %d초" % [left / 60000, (left / 1000) % 60])
+		gc.add_child(label("%s · %s" % [state_text, "진입 가능" if mine else "등급이 모자라요"], 22, SOFT))
 	var list: Array = Net.hunter.get("bounties", [])
 	if list.is_empty():
 		add_child(label("오늘은 의뢰가 없어요.", 26, SOFT))

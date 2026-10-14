@@ -7,6 +7,7 @@
 //        탈것으로 들이받기 ram { c, s, dx, dz } — 빠르면 날아가고(빠를수록 멀리 · 세게, 벽에 부딪히면 더), 느리면 넘어진다.
 // v0.27: 보급 상자 (survival.json supply) — 밤마다 헬기가 낙하산 상자를 떨어뜨린다 (supply 방송), 먼저 연 사람이 갖는다
 //        supply_open { s } → supply_got (나) · supply_gone (모두). 가까이 오면 지키던 크리처가 나타난다.
+// v0.28: 게이트 (gates.js) — 게이트 크리처(c.g · 우두머리 c.boss)는 낮에도 남고, 멀어도 사라지지 않는다. 브레이크 크리처(c.brk)도 낮에 남는다.
 // data/survival/survival.json (규칙) · data/survival/houses.json (빈집촌 · 가구 자리). 시각은 세상 시각(clock.hour · worldMs, 60배).
 //   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {} ·
 //   stash { h, op: put|take, slot|id, n? } · sleep { on } · supply_open { s }.
@@ -16,6 +17,7 @@ import { addItem, countWhere, removeAt, removeWhere } from './inventory.js';
 import { inHours, HOUR_MS } from './clock.js';
 import { groundProblem } from './world.js';
 import { isLand } from './water.js';
+import { createGates } from './gates.js';
 
 const round = (v) => Math.round(v * 100) / 100;
 
@@ -652,7 +654,21 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   // ---- 크리처 ----
 
   // f: 1 = 날아가는 중 (들이받혀서), 2 = 넘어져 있음.
-  const creatureWire = (c) => ({ id: c.id, k: c.k, x: round(c.x), z: round(c.z), yaw: round(c.yaw), hp: c.hp, a: c.attackAt > now() - 350 ? 1 : 0, f: c.kb ? 1 : (c.downUntil ?? 0) > now() ? 2 : 0 });
+  const creatureWire = (c) => {
+    const w = { id: c.id, k: c.k, x: round(c.x), z: round(c.z), yaw: round(c.yaw), hp: c.hp, a: c.attackAt > now() - 350 ? 1 : 0, f: c.kb ? 1 : (c.downUntil ?? 0) > now() ? 2 : 0 };
+    // v0.28 게이트 크리처: 게이트 id · 최대 hp · 우두머리 이름 · 크기.
+    if (c.g || c.brk) {
+      w.g = c.g ?? '';
+      w.m = c.max ?? c.hp;
+    }
+    if (c.boss) {
+      w.b = c.boss;
+      w.s = c.scale ?? 1;
+    }
+    return w;
+  };
+  const broadcastCreatures = (room) => room.broadcast({ t: 'creatures', st: now(), c: [...(room.creatures?.values() ?? [])].map(creatureWire) });
+  const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures });
 
   /** 놓인 가구로 막힌 곳 (바리케이드) · 불빛 (모닥불 · 든 횃불 · 손전등). */
   function defenses(room) {
@@ -735,6 +751,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     room.broadcast({ t: 'creature_dead', id: c.id, by, x: round(c.x), z: round(c.z) });
     // v0.28 헌터: 처치 점수 · 마석 · 의뢰.
     if (by) hunter?.onKill(room, room.players.get(by), c);
+    gates.onKill(room, c, by);
     const kind = S.creatures.kinds[c.k];
     if (kind && random() < (kind.drop_chance ?? 1)) {
       const e = pickEntry(kind.drops, random);
@@ -858,21 +875,27 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     tickScent(room, t);
     const dt = dtMs / 1000;
     let changed = false;
-    if (!night()) {
+    const day = !night();
+    if (day) {
       tickSupply(room, t, [], null);
-      if (room.creatures.size > 0) {
-        // 해가 뜨면 흩어진다.
-        for (const c of room.creatures.values()) room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), sun: true });
-        room.creatures.clear();
-        room.broadcast({ t: 'creatures', st: t, c: [] });
+      // 해가 뜨면 흩어진다 (게이트 · 브레이크 크리처는 남는다).
+      for (const c of [...room.creatures.values()]) {
+        if (c.g || c.brk) continue;
+        room.creatures.delete(c.id);
+        room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), sun: true });
+        changed = true;
       }
-      return;
     }
     const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed);
     const def = defenses(room);
-    if (tickSupply(room, t, people, def)) changed = true;
-    // 나타나기.
-    if (t >= (room.nextCreatureAt ?? 0)) {
+    if (gates.tick(room, t, people, def)) changed = true;
+    if (day && room.creatures.size === 0) {
+      if (changed) broadcastCreatures(room);
+      return;
+    }
+    if (!day && tickSupply(room, t, people, def)) changed = true;
+    // 나타나기 (밤만).
+    if (!day && t >= (room.nextCreatureAt ?? 0)) {
       room.nextCreatureAt = t + (S.creatures.spawn_every_ms ?? 9000) * (cfg.creatureSpawnScale ?? 1);
       for (const p of people) {
         if (room.creatures.size >= S.creatures.max_per_room) break;
@@ -904,6 +927,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
           best = p;
         }
       }
+      // 게이트 크리처는 게이트를 지킨다 (사라지지 않고, 아무도 없으면 제자리).
+      if (c.g && (!best || bestD > S.creatures.despawn_far)) continue;
       if (!best || bestD > S.creatures.despawn_far) {
         room.creatures.delete(c.id);
         room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), gone: true });
@@ -958,7 +983,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         if (c.target && sameRoom && !driving && Math.hypot(best.x - c.x, best.z - c.z) <= kind.reach && t >= c.nextAttack) {
           c.nextAttack = t + kind.attack_ms;
           c.attackAt = t;
-          hurt(room, best, kind.damage, c.k);
+          hurt(room, best, Math.round(kind.damage * (c.dmg ?? 1)), c.k);
           changed = true;
         }
       } else if (!ch) {
@@ -1174,10 +1199,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       bleeding: [...room.players.values()].filter((p) => p.bleeding).map((p) => p.id),
       scent: (room.scent ?? []).map((s) => ({ id: s.id, x: s.x, z: s.z, left: Math.max(0, SC.trail_ms - (now() - s.t)) })),
       supply: [...(room.supply?.values() ?? [])].map((c) => supplyWire(room, c)),
+      gates: gates.gatesWire(room),
     };
   }
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleGate: (ctx, msg, fail) => gates.handleEnter(ctx, msg, fail), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }

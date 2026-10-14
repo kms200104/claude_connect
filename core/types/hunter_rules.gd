@@ -23,6 +23,10 @@ var guild_name_max: int = 12
 var guild_sell_bonus: float = 0.05
 var party_range: float = 20.0
 var party_mult: float = 1.25
+## v0.28 게이트: 진입 거리 · 공략 구역 반지름 · 등급 → 색.
+var gate_enter_range: float = 4.0
+var gate_arena: float = 14.0
+var gate_colors: Dictionary[String, Color] = {}
 
 
 static func from_dict(d: Dictionary) -> HunterRules:
@@ -51,6 +55,12 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	var kill: Dictionary = d.get("kill", {})
 	r.party_range = float(kill.get("party_range", r.party_range))
 	r.party_mult = float(kill.get("party_mult", r.party_mult))
+	var gates: Dictionary = d.get("gates", {})
+	r.gate_enter_range = float(gates.get("enter_range", r.gate_enter_range))
+	r.gate_arena = float(gates.get("arena", r.gate_arena))
+	var granks: Dictionary = gates.get("ranks", {})
+	for id: Variant in granks:
+		r.gate_colors[str(id)] = Color(str((granks[id] as Dictionary).get("color", "#8FB8C8")))
 	return r
 
 
@@ -59,6 +69,11 @@ func rank(id: String) -> Rank:
 		if k.id == id:
 			return k
 	return ranks[0] if not ranks.is_empty() else Rank.new()
+
+
+## 내 헌터 등급으로 이 등급 게이트에 들어갈 수 있는지 (한 단계 아래까지).
+func can_enter(my_rank: String, gate_rank: String) -> bool:
+	return rank(my_rank).index >= rank(gate_rank).index - 1
 
 
 ## 창구 앞 (사람이 서는 곳): 출장소 앞면 쪽으로 1.6m.

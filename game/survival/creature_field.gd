@@ -16,6 +16,9 @@ class Actor:
 	var legs: Array[Node3D] = []
 	var arms: Node3D
 	var tag: Label3D
+	## v0.28 게이트 우두머리 이름 · 게이트 크리처 최대 hp (0 = 종류 기본).
+	var boss: String = ""
+	var max_hp: int = 0
 	var kind: String = ""
 	var target: Vector3 = Vector3.ZERO
 	var yaw: float = 0.0
@@ -66,11 +69,20 @@ func _sync() -> void:
 		if a == null:
 			a = _spawn(id, str(c.get("k", "shambler")))
 			a.root.position = Vector3(float(c.get("x", 0.0)), 0.0, float(c.get("z", 0.0)))
+			# v0.28 게이트 우두머리: 크게 · 금빛 이름표 · 게이트 크리처는 푸른 이름표.
+			if c.has("b"):
+				a.root.scale = Vector3.ONE * float(c.get("s", 1.5))
+				a.boss = str(c.get("b", ""))
+				a.tag.modulate = Color("#FFD24A")
+				a.tag.font_size = 34
+			elif c.has("g"):
+				a.tag.modulate = Color("#A8D8FF")
 		a.target = Vector3(float(c.get("x", 0.0)), 0.0, float(c.get("z", 0.0)))
 		a.yaw = float(c.get("yaw", 0.0))
 		if int(c.get("a", 0)) == 1:
 			a.lunge = 1.0
 		a.flag = int(c.get("f", 0))
+		a.max_hp = int(c.get("m", 0))
 		_update_tag(a, int(c.get("hp", 1)))
 	for id: String in _actors.keys():
 		if not Net.creatures.has(id) and is_instance_valid(_actors[id].root) and not _actors[id].root.has_meta(&"dying"):
@@ -208,8 +220,14 @@ func _update_tag(a: Actor, hp: int) -> void:
 	if a.tag == null:
 		return
 	var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(a.kind)
-	var max_hp: int = kind.hp if kind != null else maxi(hp, 1)
-	a.tag.text = "%s\n%s" % [kind.name if kind != null else a.kind, "■".repeat(maxi(hp, 0)) + "□".repeat(maxi(max_hp - hp, 0))]
+	var max_hp: int = a.max_hp if a.max_hp > 0 else (kind.hp if kind != null else maxi(hp, 1))
+	var title: String = a.boss if not a.boss.is_empty() else (kind.name if kind != null else a.kind)
+	if max_hp > 10:
+		# 체력이 많으면 10칸 막대로.
+		var full: int = ceili(10.0 * float(maxi(hp, 0)) / float(max_hp))
+		a.tag.text = "%s\n%s %d" % [title, "■".repeat(full) + "□".repeat(10 - full), maxi(hp, 0)]
+	else:
+		a.tag.text = "%s\n%s" % [title, "■".repeat(maxi(hp, 0)) + "□".repeat(maxi(max_hp - hp, 0))]
 
 
 func _spawn(id: String, kind: String) -> Actor:

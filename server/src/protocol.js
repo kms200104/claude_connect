@@ -146,6 +146,9 @@ export const ErrorCode = Object.freeze({
   guildExists: 'guild_exists', // v0.28 이 마을에 이미 길드가 있다 (또는 이미 길드원)
   noGuild: 'no_guild', // v0.28 길드가 없다 (또는 길드원이 아니다)
   guildFull: 'guild_full', // v0.28 길드원이 다 찼다
+  noGate: 'no_gate', // v0.28 없는(닫힌) 게이트
+  gateBroken: 'gate_broken', // v0.28 던전 브레이크 중이라 들어갈 수 없다
+  rankTooLow: 'rank_too_low', // v0.28 헌터 등급이 게이트 등급보다 두 단계 넘게 낮다
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다
