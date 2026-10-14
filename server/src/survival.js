@@ -3,6 +3,7 @@
 //        쓰러짐 (동료가 곁에서 일으키면 기절하지 않는다).
 // v0.25: 소리(휘두르기 · 달리기 · 망치질)가 크리처를 부른다 · 판자는 시간 들여 대고 함께 대면 빨라진다 ·
 //        거점(다 막은 빈집)의 상자 · 침대.
+// v0.26: 피 냄새 — 다치면 핏자국을 남기고, 크리처가 더 멀리서 알아채고 핏자국을 따라온다 (붕대로 멈춘다).
 // data/survival/survival.json (규칙) · data/survival/houses.json (빈집촌 · 가구 자리). 시각은 세상 시각(clock.hour · worldMs, 60배).
 //   클라이언트는 요청만: loot { c } · attack {} · use { slot } · board { h, o } · revive { p } · give_up {} ·
 //   stash { h, op: put|take, slot|id, n? } · sleep { on }.
@@ -315,6 +316,44 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     noise(room, player, 'run');
   }
 
+  // ---- 피 냄새 (v0.26) ----
+
+  const SC = S?.scent;
+
+  function stopBleeding(room, player) {
+    if (!player.bleeding) return;
+    player.bleeding = false;
+    room?.broadcast({ t: 'bleed', id: player.id, on: false });
+  }
+
+  /** 피 흘리는 사람 발밑에 핏자국 (drop_every_ms 마다), 오래된 것은 지운다. */
+  function tickScent(room, t) {
+    if (!SC) return;
+    room.scent ??= [];
+    const before = room.scent.length;
+    room.scent = room.scent.filter((s) => t - s.t < SC.trail_ms);
+    for (const p of room.players.values()) {
+      if (!p.bleeding || !p.online || !outdoors(p) || p.downed || t < (p.scentNext ?? 0)) continue;
+      p.scentNext = t + SC.drop_every_ms;
+      const s = { id: p.id, x: round(p.x), z: round(p.z), t };
+      room.scent.push(s);
+      const mine = room.scent.filter((x) => x.id === p.id);
+      if (mine.length > SC.max_points) room.scent.splice(room.scent.indexOf(mine[0]), 1);
+      room.broadcast({ t: 'scent', id: p.id, x: s.x, z: s.z, ms: SC.trail_ms });
+    }
+    return room.scent.length !== before;
+  }
+
+  /** 아무도 쫓지 않는 크리처가 따라갈 핏자국 (follow_range 안의 가장 새 것). */
+  function scentFor(room, c) {
+    let best = null;
+    for (const s of room.scent ?? []) {
+      if (Math.hypot(s.x - c.x, s.z - c.z) > SC.follow_range) continue;
+      if (!best || s.t > best.t) best = s;
+    }
+    return best;
+  }
+
   // ---- 거점: 상자 · 침대 (v0.25) ----
 
   const B = S?.base;
@@ -402,7 +441,10 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       sl.next = t + B.sleep_regen_ms;
       setHp(p, hpOf(p) + 1);
       sendTo(p, { t: 'hp', ...hpWire(p) });
-      if (hpOf(p) >= maxHp) wake(room, p);
+      if (hpOf(p) >= maxHp) {
+        wake(room, p);
+        stopBleeding(room, p);
+      }
     }
   }
 
@@ -467,10 +509,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     setHp(player, hpOf(player) + heal);
     sendInventory(player);
     send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal });
+    if ((SC?.stops ?? []).includes(slot.id) || hpOf(player) >= maxHp) stopBleeding(ctx.room, player);
   }
 
   function knockOut(room, player) {
     if (player.downed) getUp(room, player, 0, true);
+    stopBleeding(room, player);
     const lost = Math.min(S.player.ko_sol_max ?? 0, Math.floor((player.profile.sol ?? 0) * (S.player.ko_sol_rate ?? 0)));
     player.profile.sol = Math.max(0, (player.profile.sol ?? 0) - lost);
     setHp(player, maxHp);
@@ -496,7 +540,14 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     wake(room, player);
     setHp(player, hpOf(player) - damage);
     sendTo(player, { t: 'hurt', ...hpWire(player), by });
-    if (hpOf(player) > 0) return;
+    if (hpOf(player) > 0) {
+      if (SC && !player.bleeding) {
+        player.bleeding = true;
+        player.scentNext = 0;
+        room.broadcast({ t: 'bleed', id: player.id, on: true });
+      }
+      return;
+    }
     if (canBeRevived(room, player)) down(room, player);
     else knockOut(room, player);
   }
@@ -586,6 +637,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         p.regenAcc -= add;
         setHp(p, hpOf(p) + add);
         sendTo(p, { t: 'hp', ...hpWire(p) });
+        if (hpOf(p) >= maxHp) stopBleeding(room, p);
       }
     }
   }
@@ -688,6 +740,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     tickDowned(room, t);
     tickJobs(room, dtMs, t);
     tickSleep(room, t);
+    tickScent(room, t);
     const dt = dtMs / 1000;
     let changed = false;
     if (!night()) {
@@ -735,18 +788,20 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         best = alerted;
         bestD = Math.hypot(alerted.x - c.x, alerted.z - c.z);
       }
-      const aggro = c.target === best.id ? kind.aggro * 1.5 : kind.aggro;
+      const aggro = (c.target === best.id ? kind.aggro * 1.5 : kind.aggro) * (best.bleeding && SC ? SC.aggro_mult : 1);
       c.target = (bestD <= aggro || alerted) && !safeAt(best.x, best.z) ? best.id : 0;
       // 아직 알아채지 못했어도 사람 냄새를 따라 천천히 (wander) 다가온다.
-      const step = (c.target ? kind.speed : kind.speed * (S.creatures.wander ?? 0.45)) * dt;
+      // 아직 알아채지 못했으면 핏자국을 따라오거나 (냄새), 사람 냄새를 따라 천천히 (wander) 다가온다.
+      const trail = !c.target && SC && !c.inside ? scentFor(room, c) : null;
+      const step = (c.target ? kind.speed : kind.speed * (trail ? SC.follow_speed : (S.creatures.wander ?? 0.45))) * dt;
       if (safeAt(best.x, best.z)) continue;
       const ph = houseAt(best.x, best.z); // 사람이 있는 빈집 (밖이면 null)
       const ch = c.inside ? S.houseById.get(c.inside) : null; // 크리처가 있는 빈집
       const stand = ch ? (x, z) => standInside(ch, x, z, def) : (x, z) => canStand(x, z, def);
       if (ph === ch) {
         // 같은 곳 (둘 다 밖 · 같은 집 안): 쫓는다. 집 안에서는 방 사이 문틈으로, 밖에서는 가까운 집을 둘러서.
-        let aim = { x: best.x, z: best.z };
-        let stop = kind.reach * 0.8;
+        let aim = trail ? { x: trail.x, z: trail.z } : { x: best.x, z: best.z };
+        let stop = trail ? 0 : kind.reach * 0.8;
         let sameRoom = true;
         if (ch) {
           const q = toLocal(ch, c.x, c.z);
@@ -891,6 +946,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       jobs: [...(room.boardJobs?.values() ?? [])].map(jobWire),
       stash: Object.fromEntries(Object.entries(room.stash ?? {}).map(([h, box]) => [h, box.map((e) => ({ ...e }))])),
       sleeping: [...room.players.values()].filter((p) => p.sleeping).map((p) => p.id),
+      bleeding: [...room.players.values()].filter((p) => p.bleeding).map((p) => p.id),
+      scent: (room.scent ?? []).map((s) => ({ id: s.id, x: s.x, z: s.z, left: Math.max(0, SC.trail_ms - (now() - s.t)) })),
     };
   }
 

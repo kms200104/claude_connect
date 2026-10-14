@@ -50,6 +50,17 @@
     "spawn_every_ms": 20000
   },
 
+  "scent": {
+    "_comment": "v0.26 피 냄새: 크리처에게 맞아 다치면 피를 흘린다 (bleeding). 흘리는 동안 크리처가 aggro × aggro_mult 거리에서 알아채고, drop_every_ms 마다 발밑에 핏자국(냄새)을 남긴다 (trail_ms 동안). 아무도 쫓지 않는 크리처는 follow_range 안의 가장 새 핏자국을 따라온다. stops 를 쓰거나 체력이 가득 차거나 기절하면 멈춘다.",
+    "aggro_mult": 1.8,
+    "drop_every_ms": 2000,
+    "trail_ms": 40000,
+    "max_points": 16,
+    "follow_range": 10,
+    "follow_speed": 0.8,
+    "stops": ["bandage", "herb_salve", "first_aid_kit"]
+  },
+
   "base": {
     "_comment": "v0.25 거점: 뚫린 곳을 모두 막은 빈집. 앞방 상자(stash, 로컬)는 거점일 때 열린다 — 집마다 함께 쓰는 보관함 (slots 칸, 한 칸 max 개). 판자가 부서져도 넣어 둔 것은 그대로다. 침대(bed, 로컬)에서 자면 sleep_regen_ms 마다 체력 1 (밤에도). 맞으면 깬다.",
     "stash": [2.9, 3.45],

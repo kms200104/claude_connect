@@ -47,6 +47,9 @@ signal board_job_changed(key: String)
 signal stash_changed(house_id: String)
 signal sleep_changed(player_id: int)
 signal noise_made(info: Dictionary)
+## v0.26 피 냄새: 누가 피를 흘리기 시작 · 멈춤 · 핏자국 하나 { id, x, z, ms }.
+signal bleed_changed(player_id: int)
+signal scent_dropped(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -294,6 +297,9 @@ var downed: Dictionary[int, Dictionary] = {}
 var board_jobs: Dictionary[String, Dictionary] = {}
 var stash: Dictionary[String, Array] = {}
 var sleeping: Dictionary[int, bool] = {}
+## v0.26 피 흘리는 사람 · 남은 핏자국 [{id, x, z, until: 이 기기 ms}].
+var bleeding: Dictionary[int, bool] = {}
+var scent: Array[Dictionary] = []
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -985,6 +991,17 @@ func _handle_text(text: String) -> void:
 			sleep_changed.emit(sid)
 		"noise":
 			noise_made.emit(msg)
+		"bleed":
+			var bid: int = int(msg.get("id", 0))
+			if bool(msg.get("on", false)):
+				bleeding[bid] = true
+			else:
+				bleeding.erase(bid)
+			bleed_changed.emit(bid)
+		"scent":
+			var drop: Dictionary = {"id": int(msg.get("id", 0)), "x": float(msg.get("x", 0.0)), "z": float(msg.get("z", 0.0)), "until": Time.get_ticks_msec() + int(msg.get("ms", 40000))}
+			scent.append(drop)
+			scent_dropped.emit(drop)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1265,6 +1282,13 @@ func _on_welcome(msg: Dictionary) -> void:
 	sleeping.clear()
 	for sid: Variant in surv.get("sleeping", []):
 		sleeping[int(sid)] = true
+	bleeding.clear()
+	for bid: Variant in surv.get("bleeding", []):
+		bleeding[int(bid)] = true
+	scent.clear()
+	for d: Variant in surv.get("scent", []):
+		if d is Dictionary:
+			scent.append({"id": int(d.get("id", 0)), "x": float(d.get("x", 0.0)), "z": float(d.get("z", 0.0)), "until": Time.get_ticks_msec() + int(d.get("left", 0))})
 	downed.clear()
 	for d: Variant in surv.get("downed", []):
 		if d is Dictionary:

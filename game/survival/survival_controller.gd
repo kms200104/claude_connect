@@ -6,6 +6,7 @@ extends Node
 ## 쓰러진 동료 머리 위 "도와줘요!".
 ## v0.25: 판자는 시간 들여 대고 (진행 막대, 함께 대면 빨라진다), 밤에 소리를 내면 크리처가 몰려온다 (먼지 · 안내),
 ## 거점(다 막은 빈집)의 "거점 상자"(StashWindow) · "자기"(침대, 누운 몸 · 일어나기). 집 안에서는 판자 몇 곳을 막았는지 알림.
+## v0.26: 피 냄새 — 다쳐서 피를 흘리면 하트 아래 "피 냄새" 알림, 땅에 핏자국 (모두에게 보이고 시간이 지나면 작아져 사라진다).
 ## 판정은 서버 (Net.loot · Net.attack · Net.use_item · Net.board · Net.revive · Net.give_up · Net.stash_* · Net.sleep_in_bed).
 
 @export var player: Player
@@ -51,6 +52,9 @@ var _sleep_panel: PanelContainer = null
 var _chip: Label = null
 var _hammer_at: float = 0.0
 var _noise_tip_at: float = -100.0
+var _blood_chip: Label = null
+## 핏자국 메시 (Net.scent 와 같은 순서).
+var _drops: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -85,6 +89,15 @@ func _ready() -> void:
 	Net.boarded.connect(_on_boarded)
 	Net.sleep_changed.connect(_on_sleep_changed)
 	Net.noise_made.connect(_on_noise)
+	Net.scent_dropped.connect(_on_scent)
+	Net.bleed_changed.connect(_on_bleed)
+	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
+		for d: Dictionary in _drops:
+			if is_instance_valid(d["node"]):
+				(d["node"] as Node).queue_free()
+		_drops.clear()
+		for drop: Dictionary in Net.scent:
+			_on_scent(drop))
 	Net.downed_changed.connect(_on_downed_changed)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
 		_on_downed_changed(Net.my_id)
@@ -117,6 +130,7 @@ func _process(_delta: float) -> void:
 	_update_downed(_delta)
 	_update_jobs()
 	_update_chip()
+	_update_scent()
 
 
 ## 상황 버튼 대상 (빈 글자 = 없음). 쓰러진 동료 곁이면 일으키기, 밤에 크리처가 곁이면 공격이 먼저,
@@ -349,6 +363,56 @@ func _boarded_text(h: SurvivalRules.House) -> String:
 	return "판자 %d/%d" % [done, h.breaches.size()]
 
 
+# ---- 피 냄새 (v0.26) ----
+
+func _on_bleed(id: int) -> void:
+	if id != Net.my_id:
+		return
+	if toast_hud != null and Net.bleeding.has(id):
+		toast_hud.show_toast("피 냄새가 나요 — 크리처가 더 멀리서 알아채고 핏자국을 따라와요. 붕대 · 연고 · 구급상자로 멈춰요", false)
+	elif toast_hud != null and Net.hp > 0:
+		toast_hud.show_toast("피가 멈췄어요", true)
+
+
+## 땅에 핏자국 한 점 (작은 얼룩 몇 개).
+func _on_scent(drop: Dictionary) -> void:
+	if player == null:
+		return
+	var batch: BoxBatch = BoxBatch.new()
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = hash(Vector2(float(drop["x"]), float(drop["z"])))
+	for k: int in 4:
+		var size: float = rng.randf_range(0.08, 0.22)
+		batch.box(Vector3(rng.randf_range(-0.3, 0.3), 0.03, rng.randf_range(-0.3, 0.3)), Vector3(size, 0.02, size * rng.randf_range(0.6, 1.2)), Color("#7A1414").lightened(rng.randf() * 0.15), Basis(Vector3.UP, rng.randf() * TAU))
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.name = "Scent"
+	mi.mesh = batch.commit()
+	mi.material_override = creature_material
+	mi.visibility_range_end = 60.0
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	player.get_parent().add_child(mi)
+	mi.global_position = Vector3(float(drop["x"]), 0.0, float(drop["z"]))
+	_drops.append({"node": mi, "until": int(drop["until"]), "life": maxi(1, int(drop["until"]) - Time.get_ticks_msec())})
+
+
+## 핏자국은 시간이 지나면 작아져 사라진다.
+func _update_scent() -> void:
+	if _drops.is_empty():
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	for i: int in range(_drops.size() - 1, -1, -1):
+		var d: Dictionary = _drops[i]
+		var mi: MeshInstance3D = d["node"]
+		var left: float = float(int(d["until"]) - now_ms) / float(d["life"])
+		if left <= 0.0 or not is_instance_valid(mi):
+			if is_instance_valid(mi):
+				mi.queue_free()
+			_drops.remove_at(i)
+			continue
+		var k: float = clampf(left * 1.5, 0.15, 1.0)
+		mi.scale = Vector3(k, 1.0, k)
+
+
 # ---- 판자 대는 중 · 소리 · 잠 · 집 안 알림 (v0.25) ----
 
 func _update_jobs() -> void:
@@ -416,6 +480,7 @@ func _on_sleep_changed(id: int) -> void:
 func _update_chip() -> void:
 	if _chip == null or player == null:
 		return
+	_blood_chip.visible = Net.bleeding.has(Net.my_id) and Net.state == Net.State.ONLINE
 	var h: SurvivalRules.House = GameData.survival.house_at(player.global_position)
 	_chip.visible = h != null and Net.state == Net.State.ONLINE
 	if h != null:
@@ -585,6 +650,16 @@ func _build_hud() -> void:
 	_chip.add_theme_color_override("font_outline_color", Color("#3A2A20"))
 	_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_chip.visible = false
+	_blood_chip = Label.new()
+	_blood_chip.name = "BloodChip"
+	_blood_chip.text = "피 냄새 · 붕대로 멈춰요"
+	_blood_chip.position = Vector2(28.0, 356.0)
+	_blood_chip.add_theme_font_size_override("font_size", 28)
+	_blood_chip.add_theme_constant_override("outline_size", 8)
+	_blood_chip.add_theme_color_override("font_outline_color", Color("#3A1010"))
+	_blood_chip.add_theme_color_override("font_color", Color("#FF7A6A"))
+	_blood_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_blood_chip.visible = false
 	stash_window = StashWindow.new()
 	if hud != null:
 		hud.add_child.call_deferred(_vignette)
@@ -593,6 +668,7 @@ func _build_hud() -> void:
 		hud.add_child.call_deferred(_job_panel)
 		hud.add_child.call_deferred(_sleep_panel)
 		hud.add_child.call_deferred(_chip)
+		hud.add_child.call_deferred(_blood_chip)
 		hud.add_child.call_deferred(stash_window)
 	_refresh_hearts()
 

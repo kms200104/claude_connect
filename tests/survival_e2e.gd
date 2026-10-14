@@ -5,6 +5,7 @@ extends Node
 ## v0.24: 깨진 창 앞 "판자 대기" → 판자가 보이고 목재 · 못을 쓴다.
 ## v0.25: 판자는 망치질 막대가 찬 뒤에 붙는다 · 휘두르면 소리 · 현관 · 깨진 창을 다 막으면 거점 (알림 · 등불) →
 ## "거점 상자 열기" 넣기 · 꺼내기 → 침대 "자기" (누운 몸 · 체력이 오른다) → "일어나기".
+## v0.26: 맞으면 피 냄새 알림 · 땅의 핏자국, 붕대를 쓰면 멈춘다.
 ## 인자: -- --server=ws://127.0.0.1:PORT [--shots=폴더]
 
 var _server: String = ""
@@ -125,6 +126,9 @@ func _run() -> void:
 	await _teleport(Vector3(-150.0, 0.1, 140.0))
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty() and survival.creatures.get_child_count() > 0, 5.0), "둔치에 크리처가 나타났다 (%d)" % Net.creatures.size())
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
+	# v0.26 피 냄새: 다치면 피를 흘린다 (알림 · 땅의 핏자국).
+	_check(await _wait_until(func() -> bool: return Net.bleeding.has(Net.my_id) and (survival.get("_blood_chip") as Control).visible, 3.0), "피 냄새 알림")
+	_check(await _wait_until(func() -> bool: return not (survival.get("_drops") as Array).is_empty(), 5.0), "땅에 핏자국 (%d)" % Net.scent.size())
 	await _shot("surv_creature")
 	var noises: Array = [0]
 	Net.noise_made.connect(func(_i: Dictionary) -> void: noises[0] += 1)
@@ -215,5 +219,6 @@ func _run() -> void:
 		_check(use.visible and use.text.begins_with("쓰기"), "가방 붕대: '%s'" % use.text)
 		use.pressed.emit()
 		_check(await _wait_until(func() -> bool: return Net.hp > hp_before, 3.0), "붕대를 써서 체력이 올랐다 (%d → %d)" % [hp_before, Net.hp])
+		_check(await _wait_until(func() -> bool: return not Net.bleeding.has(Net.my_id), 2.0), "붕대로 피가 멈췄다")
 		bag.close()
 	_finished = true
