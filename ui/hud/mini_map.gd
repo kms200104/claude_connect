@@ -196,6 +196,16 @@ func _draw_map() -> void:
 				var f: Vector2 = _to_mini(Vector2(q.x, q.z), me)
 				_map.draw_circle(f, 8.0, Color.WHITE)
 				_map.draw_circle(f, 6.0, FRIEND)
+	# v0.28.1 웨이포인트 (밖이면 가장자리에 붙여 방향만).
+	if Waypoint.is_set():
+		var wp: Vector2 = _to_mini(Waypoint.at, me)
+		var inner: Rect2 = Rect2(Vector2.ZERO, s).grow(-14.0)
+		if not inner.has_point(wp):
+			var dir_w: Vector2 = (wp - s * 0.5)
+			var k: float = minf((s.x * 0.5 - 14.0) / maxf(absf(dir_w.x), 0.001), (s.y * 0.5 - 14.0) / maxf(absf(dir_w.y), 0.001))
+			wp = s * 0.5 + dir_w * k
+		_map.draw_circle(wp, 10.0, Color.WHITE)
+		_map.draw_circle(wp, 7.0, Color("#22C3E6"))
 	# 나: 가운데 동그라미 + 보는 쪽 화살표.
 	var c: Vector2 = s * 0.5
 	_map.draw_circle(c, 11.0, Color.WHITE)

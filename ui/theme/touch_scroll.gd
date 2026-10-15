@@ -134,4 +134,5 @@ static func _can_scroll(sc: ScrollContainer, vertical: bool) -> bool:
 ## 끌어서 쓰는 컨트롤(밀대 · 글 상자 · 스크롤 막대) 위에서 시작했으면 굴리지 않는다.
 func _blocked() -> bool:
 	var hovered: Control = get_viewport().gui_get_hovered_control()
-	return hovered is Range or hovered is TextEdit or hovered is LineEdit or hovered is ItemList or hovered is Tree
+	# v0.28.1 지도처럼 스스로 끌기를 받는 칸 (group no_touch_scroll) 위에서는 굴리지 않는다.
+	return hovered is Range or hovered is TextEdit or hovered is LineEdit or hovered is ItemList or hovered is Tree or (hovered != null and hovered.is_in_group(&"no_touch_scroll"))

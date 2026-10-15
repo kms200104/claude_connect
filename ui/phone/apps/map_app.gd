@@ -2,6 +2,8 @@ class_name MapApp
 extends PhoneApp
 ## 지도 (v16, v0.21 시내 / 도시 전체): 도시 지도(바닥 색 지도 ground_map) 위에 내 위치 · 친구 · 주민 · 상점 · 식당 · 낚시터 등을 표시한다.
 ## 표시를 누르면 아래에 이름과 설명, 친구면 "놀러 가기"(그 친구 집으로 바로). 위치는 화면에 그리는 값 그대로라 판정과 상관없다.
+## v0.28.1: 내 자리를 가운데 두고(따라가기) ＋ · － 단추 · 두 손가락 벌리기 · 휠로 확대 · 축소, 끌면 지도를 옮기고 "내 위치"로 돌아온다.
+## 빈 곳을 누르면 그 자리에 웨이포인트(Waypoint)가 놓이고 마을에 빛기둥 · 방향 화살표로 보인다.
 
 const GROUND_MAP: String = "res://assets/packs/low/ground_map.png"
 const SEA: Color = Color("#8FD0EC")
@@ -13,6 +15,7 @@ const COLORS: Dictionary[String, Color] = {
 	"supply": Color("#FF4A3A"), "gate": Color("#7A4AE0"),
 }
 const FILTERS: PackedStringArray = ["사람", "장소", "낚시터"]
+const WAYPOINT: Color = Color("#22C3E6")
 
 ## 지도 위 표시 하나.
 class Marker:
@@ -32,12 +35,21 @@ var _picked: String = ""
 var _shown: Dictionary[String, bool] = {"사람": true, "장소": true, "낚시터": true}
 var _ground: Texture2D = null
 var _extent: float = 104.0
-## v0.21 강변도시: 보이는 범위 (가운데 · 반 너비). 시내(기본) / 도시 전체.
+## 보이는 범위 (가운데 · 반 너비, m). 따라가기면 가운데 = 내 자리.
 var _view_center: Vector2 = Vector2.ZERO
-var _view_half: float = 104.0
-var _whole: bool = false
-const TOWN_VIEW_CENTER: Vector2 = Vector2(-60.0, 40.0)
-const TOWN_VIEW_HALF: float = 190.0
+var _view_half: float = 90.0
+var _follow: bool = true
+## 확대 · 축소 범위 (반 너비 m) · 단추 한 번 배율.
+const ZOOM_MIN: float = 25.0
+const ZOOM_STEP: float = 0.7
+## 처음 여는 반 너비 (앱을 닫았다 열어도 이어진다).
+static var last_half: float = 90.0
+## 누른 손가락 (index → 자리) · 끌기 시작점 · 끌었는지.
+var _touches: Dictionary[int, Vector2] = {}
+var _press_at: Vector2 = Vector2.INF
+var _dragged: bool = false
+var _pinch_dist: float = 0.0
+const TAP_SLOP: float = 18.0
 var _pulse: float = 0.0
 var _refresh: float = 0.0
 
@@ -46,19 +58,45 @@ func _ready() -> void:
 	_ground = load(GROUND_MAP) if ResourceLoader.exists(GROUND_MAP) else null
 	if GameData.layout != null:
 		_extent = GameData.layout.map_extent
-	_set_view(false)
+	_view_half = clampf(last_half, ZOOM_MIN, _extent)
+	_recenter()
 	_build()
 
 
-## 시내(리버파크 · 시내 · 둔치) 또는 도시 전체.
-func _set_view(whole: bool) -> void:
-	_whole = whole or _extent <= TOWN_VIEW_HALF
-	_view_center = Vector2.ZERO if _whole else TOWN_VIEW_CENTER
-	_view_half = _extent if _whole else TOWN_VIEW_HALF
+## 내 자리로 (따라가기).
+func _recenter() -> void:
+	_follow = true
+	var me: Vector2 = _my_spot()
+	_view_center = me if me != Vector2.INF else Vector2(-60.0, 40.0)
+
+
+## 확대(k < 1) · 축소(k > 1). focus = 지도 좌표의 그 자리를 그대로 두고.
+func zoom_by(k: float, focus: Vector2 = Vector2.INF) -> void:
+	var before: float = _view_half
+	_view_half = clampf(_view_half * k, ZOOM_MIN, _extent)
+	last_half = _view_half
+	if focus != Vector2.INF and not _follow and _canvas != null:
+		var world: Vector2 = _from_map(focus)
+		_view_center = world + (_view_center - world) * (_view_half / before)
+	if _canvas != null:
+		_canvas.queue_redraw()
+
+
+## 지금 반 너비 (테스트용).
+func view_half() -> float:
+	return _view_half
+
+
+func view_center() -> Vector2:
+	return _view_center
 
 
 func _process(delta: float) -> void:
 	_pulse = fmod(_pulse + delta * 2.2, TAU)
+	if _follow:
+		var me: Vector2 = _my_spot()
+		if me != Vector2.INF:
+			_view_center = me
 	_refresh -= delta
 	if _refresh <= 0.0:
 		_refresh = 0.25
@@ -88,15 +126,36 @@ func _build() -> void:
 			Audio.play_ui(Audio.SFX_CLICK)
 			_build())
 		filters.add_child(b)
-	if _extent > TOWN_VIEW_HALF:
-		var zoom: Button = button("도시 전체" if not _whole else "시내 크게", 26, INK, false)
-		zoom.name = "ZoomButton"
-		zoom.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		zoom.pressed.connect(func() -> void:
-			_set_view(not _whole)
+	# 확대 · 축소 · 내 위치.
+	var zoom_row: HBoxContainer = HBoxContainer.new()
+	zoom_row.add_theme_constant_override("separation", 8)
+	add_child(zoom_row)
+	for spec: Array in [["ZoomOut", "－", 1.0 / ZOOM_STEP], ["ZoomIn", "＋", ZOOM_STEP]]:
+		var zb: Button = button(str(spec[1]), 34, INK, false)
+		zb.name = str(spec[0])
+		zb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var k: float = float(spec[2])
+		zb.pressed.connect(func() -> void:
 			Audio.play_ui(Audio.SFX_CLICK)
+			zoom_by(k))
+		zoom_row.add_child(zb)
+	var mine: Button = button("◎ 내 위치", 26, INK, false)
+	mine.name = "CenterMe"
+	mine.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mine.pressed.connect(func() -> void:
+		Audio.play_ui(Audio.SFX_CLICK)
+		_recenter())
+	zoom_row.add_child(mine)
+	if Waypoint.is_set():
+		var clear: Button = button("웨이포인트 지우기", 24, WARN, false)
+		clear.name = "ClearWaypoint"
+		clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		clear.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Waypoint.clear()
+			_picked = ""
 			_build())
-		filters.add_child(zoom)
+		zoom_row.add_child(clear)
 	_canvas = Control.new()
 	_canvas.name = "MapCanvas"
 	var side: float = minf(view_width() - 6.0, view_height() - 120.0)
@@ -105,6 +164,7 @@ func _build() -> void:
 	_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	_canvas.draw.connect(_draw_map)
 	_canvas.gui_input.connect(_on_canvas_input)
+	_canvas.add_to_group(&"no_touch_scroll")
 	add_child(_canvas)
 	_info = card()
 	_collect()
@@ -234,6 +294,12 @@ func _to_map(world: Vector2) -> Vector2:
 	return Vector2((q.x / (2.0 * _view_half) + 0.5) * s.x, (q.y / (2.0 * _view_half) + 0.5) * s.y)
 
 
+## 지도 좌표 → 월드 (x, z).
+func _from_map(at: Vector2) -> Vector2:
+	var s: Vector2 = _canvas.size
+	return _view_center + Vector2((at.x / s.x - 0.5) * 2.0 * _view_half, (at.y / s.y - 0.5) * 2.0 * _view_half)
+
+
 ## 보이는 범위 안인지 (지도 칸 밖 표시는 그리지 않는다).
 func _in_view(world: Vector2) -> bool:
 	var q: Vector2 = (world - _view_center).abs()
@@ -253,11 +319,14 @@ func _draw_map() -> void:
 		var y: float = s.y * (0.08 + i * 0.11)
 		_canvas.draw_arc(Vector2(s.x * (0.1 + fmod(i * 0.37, 0.8)), y), 10.0, PI * 1.1, PI * 1.9, 8, Color(1, 1, 1, 0.35), 2.0, true)
 	if _ground != null:
-		# 바닥 지도(±_extent)에서 보이는 범위만 잘라 그린다.
-		var tex: Vector2 = _ground.get_size()
-		var lo: Vector2 = (_view_center - Vector2.ONE * _view_half + Vector2.ONE * _extent) / (2.0 * _extent) * tex
-		var span: Vector2 = Vector2.ONE * (_view_half / _extent) * tex
-		_canvas.draw_texture_rect_region(_ground, Rect2(Vector2.ZERO, s), Rect2(lo, span))
+		# 바닥 지도(±_extent)와 보이는 범위가 겹치는 곳만 잘라 그린다 (가장자리 밖은 물).
+		var lo: Vector2 = (_view_center - Vector2.ONE * _view_half).max(Vector2.ONE * -_extent)
+		var hi: Vector2 = (_view_center + Vector2.ONE * _view_half).min(Vector2.ONE * _extent)
+		if hi.x > lo.x and hi.y > lo.y:
+			var tex: Vector2 = _ground.get_size()
+			var src: Rect2 = Rect2((lo + Vector2.ONE * _extent) / (2.0 * _extent) * tex, (hi - lo) / (2.0 * _extent) * tex)
+			var a: Vector2 = _to_map(lo)
+			_canvas.draw_texture_rect_region(_ground, Rect2(a, _to_map(hi) - a), src)
 	# 낚시터 물 (사각형 수역, 윤곽이 있는 호수는 윤곽 그대로).
 	for spot: SpotInfo in GameData.spots.values():
 		if spot.is_sea:
@@ -280,6 +349,15 @@ func _draw_map() -> void:
 		for m: Marker in _markers:
 			if m.kind in pass_kind:
 				_draw_marker(m, font)
+	_draw_waypoint(font)
+	# 축척 (아래 왼쪽): 반 너비에 맞는 둥근 길이.
+	var meters: float = 10.0
+	for m_len: float in [10.0, 20.0, 50.0, 100.0, 200.0]:
+		if m_len <= _view_half * 0.6:
+			meters = m_len
+	var px: float = meters / (2.0 * _view_half) * s.x
+	_canvas.draw_line(Vector2(24.0, s.y - 26.0), Vector2(24.0 + px, s.y - 26.0), INK, 4.0)
+	_canvas.draw_string(font, Vector2(24.0, s.y - 36.0), "%dm" % roundi(meters), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
 	# 북쪽 표시.
 	_canvas.draw_string(font, Vector2(s.x - 54.0, 44.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, INK)
 	_canvas.draw_colored_polygon(PackedVector2Array([Vector2(s.x - 44.0, 52.0), Vector2(s.x - 36.0, 70.0), Vector2(s.x - 52.0, 70.0)]), INK)
@@ -342,13 +420,110 @@ func _draw_marker(m: Marker, font: Font) -> void:
 		_canvas.draw_arc(p, 24.0, 0.0, TAU, 32, Color("#FF7A3D"), 3.0, true)
 
 
-## 누른 자리에서 가장 가까운 표시를 고른다 (34px 안).
-func _on_canvas_input(event: InputEvent) -> void:
-	var pressed: bool = (event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) or (event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed)
-	if not pressed:
+## 웨이포인트: 깃발 + 나에게서 점선.
+func _draw_waypoint(font: Font) -> void:
+	if not Waypoint.is_set():
 		return
-	var at: Vector2 = (event as InputEventMouseButton).position if event is InputEventMouseButton else (event as InputEventScreenTouch).position
+	var p: Vector2 = _to_map(Waypoint.at)
+	var me: Vector2 = _my_spot()
+	if me != Vector2.INF:
+		var a: Vector2 = _to_map(me)
+		var n: int = int(a.distance_to(p) / 16.0)
+		for i: int in n:
+			if i % 2 == 0:
+				_canvas.draw_line(a.lerp(p, float(i) / float(maxi(n, 1))), a.lerp(p, float(i + 1) / float(maxi(n, 1))), WAYPOINT, 4.0, true)
+	if not Rect2(Vector2.ZERO, _canvas.size).grow(20.0).has_point(p):
+		return
+	_canvas.draw_line(p, p + Vector2(0.0, -40.0), INK, 4.0, true)
+	_canvas.draw_colored_polygon(PackedVector2Array([p + Vector2(0.0, -40.0), p + Vector2(28.0, -31.0), p + Vector2(0.0, -22.0)]), WAYPOINT)
+	_canvas.draw_circle(p, 7.0, WAYPOINT)
+	_canvas.draw_arc(p, 14.0 + sin(_pulse) * 3.0, 0.0, TAU, 24, WAYPOINT, 3.0, true)
+
+
+## 누르기 · 끌기(지도 옮기기) · 두 손가락 벌리기 · 휠(확대 · 축소). 끌지 않고 뗀 자리에서 표시를 고르거나, 빈 곳이면 웨이포인트.
+func _on_canvas_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			zoom_by(ZOOM_STEP, mb.position)
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+			zoom_by(1.0 / ZOOM_STEP, mb.position)
+		elif mb.button_index == MOUSE_BUTTON_LEFT:
+			_press(0, mb.position, mb.pressed)
+		_canvas.accept_event()
+	elif event is InputEventMouseMotion and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT and _touches.has(0) and not DisplayServer.is_touchscreen_available():
+		_drag(0, (event as InputEventMouseMotion).position)
+		_canvas.accept_event()
+	elif event is InputEventScreenTouch:
+		var st: InputEventScreenTouch = event
+		_press(st.index, st.position, st.pressed)
+		_canvas.accept_event()
+	elif event is InputEventScreenDrag:
+		var sd: InputEventScreenDrag = event
+		_drag(sd.index, sd.position)
+		_canvas.accept_event()
+	elif event is InputEventMagnifyGesture:
+		zoom_by(1.0 / maxf((event as InputEventMagnifyGesture).factor, 0.01), (event as InputEventMagnifyGesture).position)
+		_canvas.accept_event()
+
+
+func _press(index: int, at: Vector2, down: bool) -> void:
+	if down:
+		_touches[index] = at
+		if _touches.size() == 1:
+			_press_at = at
+			_dragged = false
+		else:
+			_dragged = true
+			_pinch_dist = _pinch_span()
+		return
+	_touches.erase(index)
+	if _touches.is_empty():
+		if not _dragged and _press_at != Vector2.INF and at.distance_to(_press_at) <= TAP_SLOP:
+			tap_at(at)
+		_press_at = Vector2.INF
+	elif _touches.size() == 1:
+		_pinch_dist = 0.0
+
+
+func _drag(index: int, at: Vector2) -> void:
+	if not _touches.has(index):
+		return
+	var before: Vector2 = _touches[index]
+	_touches[index] = at
+	if _touches.size() >= 2:
+		var span: float = _pinch_span()
+		if _pinch_dist > 1.0 and span > 1.0:
+			zoom_by(_pinch_dist / span)
+		_pinch_dist = span
+		return
+	if _press_at.distance_to(at) > TAP_SLOP:
+		_dragged = true
+	if _dragged and _canvas != null:
+		_follow = false
+		_view_center -= (at - before) / _canvas.size.x * 2.0 * _view_half
+		_canvas.queue_redraw()
+
+
+func _pinch_span() -> float:
+	var pts: Array[Vector2] = _touches.values()
+	return pts[0].distance_to(pts[1]) if pts.size() >= 2 else 0.0
+
+
+## 지도 위 자리(지도 좌표)를 눌렀다: 표시면 고르고, 빈 곳이면 웨이포인트를 놓는다 (테스트용으로도).
+func tap_at(at: Vector2) -> void:
 	pick_at(at)
+	if not _picked.is_empty():
+		return
+	# 웨이포인트 깃발 곁이면 고른 것으로.
+	if Waypoint.is_set() and _to_map(Waypoint.at).distance_to(at) < 34.0:
+		_picked = "waypoint"
+		_show_info()
+		return
+	Waypoint.place(_from_map(at))
+	_picked = "waypoint"
+	Audio.play_ui(Audio.SFX_CLICK)
+	_build()
 
 
 ## 지도 위 자리(지도 좌표)에서 표시 고르기 (테스트용으로도).
@@ -361,7 +536,8 @@ func pick_at(at: Vector2) -> void:
 			best_d = d
 			best = m
 	_picked = best.key if best != null else ""
-	Audio.play_ui(Audio.SFX_CLICK)
+	if best != null:
+		Audio.play_ui(Audio.SFX_CLICK)
 	_show_info()
 
 
@@ -375,12 +551,17 @@ func _show_info() -> void:
 		return
 	for c: Node in _info.get_children():
 		c.queue_free()
+	if _picked == "waypoint" and Waypoint.is_set():
+		_info.add_child(label("웨이포인트", 32, INK))
+		var mine: Vector2 = _my_spot()
+		_info.add_child(label("마을에 빛기둥과 방향 화살표로 보여요.%s 가까이 가면 저절로 지워져요." % (" 나에게서 %dm." % roundi(mine.distance_to(Waypoint.at)) if mine != Vector2.INF else ""), 24, SOFT))
+		return
 	var m: Marker = null
 	for x: Marker in _markers:
 		if x.key == _picked:
 			m = x
 	if m == null:
-		_info.add_child(label("표시를 누르면 무엇인지 알려 줘요.", 26, SOFT))
+		_info.add_child(label("표시를 누르면 무엇인지 알려 줘요. 빈 곳을 누르면 웨이포인트를 놓아요. 끌어서 옮기고, ＋ · － 나 두 손가락으로 확대 · 축소.", 26, SOFT))
 		var legend: HBoxContainer = HBoxContainer.new()
 		legend.add_theme_constant_override("separation", 14)
 		_info.add_child(legend)
