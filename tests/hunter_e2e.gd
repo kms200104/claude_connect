@@ -84,6 +84,8 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty(), 15.0), "둔치에 크리처 (%d)" % Net.creatures.size())
 	var popup: Label = hunter.get("_popup")
 	var seen_popup: Array = [false]
+	# (떨어진 것의 테두리를 보려고 저절로 줍기를 잠깐 끈다 — 아래에서 다시 켠다.)
+	Prefs.set_value(Prefs.AUTO_PICKUP, false)
 	var kills: Array = [0]
 	Net.hunter_done.connect(func(i: Dictionary) -> void:
 		if str(i.get("kind", "")) == "kill":
@@ -115,6 +117,7 @@ func _run() -> void:
 			if drops.is_glowing(id):
 				return true
 		return false, 3.0), "곁에 떨어진 것의 테두리가 빛난다")
+	Prefs.set_value(Prefs.AUTO_PICKUP, true)
 	await _shot("hunter_drop_glow")
 
 	# ---- 협회 출장소 ----
