@@ -350,7 +350,13 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
   function standAt(room, x, z) {
     const at = dungeonAt(G, x, z);
     if (!at) return null;
-    const g = [...(room?.gates?.values() ?? [])].find((v) => v.spot === at.spot);
+    let g = null;
+    for (const v of room?.gates?.values() ?? []) {
+      if (v.spot === at.spot) {
+        g = v;
+        break;
+      }
+    }
     const dg = g ? dungeonOf(g) : null;
     return dg ? dungeonStandLocal(dg.map, x - dg.o.x, z - dg.o.z) : false;
   }

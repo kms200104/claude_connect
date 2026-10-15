@@ -51,6 +51,10 @@ var edge_hint: CreatureEdgeHint = null
 var fear: FearOverlay = null
 ## v0.28.6 치료 퀵버튼.
 var heal_button: HealButton = null
+## v0.28.7 배고픔 · 목마름 막대.
+var needs_bar: NeedsBar = null
+## v0.28.7 회피 구르기 단추.
+var dodge_button: DodgeButton = null
 ## v0.28.1 핏자국 머티리얼 (젖어 번들거리는 정점 색) · 마지막 핏자국 자리 (끌린 방향).
 static var _blood_material: StandardMaterial3D = null
 var _last_drop: Vector2 = Vector2.INF
@@ -499,6 +503,8 @@ func _on_failed(kind: String, code: String) -> void:
 		return
 	if kind == "use" and code == NetProtocol.ERR_HP_FULL:
 		toast_hud.show_toast("체력이 가득해요", false)
+	elif kind == "use" and code == NetProtocol.ERR_NOT_HUNGRY:
+		toast_hud.show_toast("배도 부르고 목도 마르지 않아요", false)
 	elif kind == "loot" and code == NetProtocol.ERR_ALREADY_LOOTED:
 		toast_hud.show_toast("이미 누가 뒤졌어요. 시간이 지나면 다시 찰지도", false)
 	elif (kind == "loot" or kind == "board" or kind == "revive") and code == NetProtocol.ERR_TOO_FAR:
@@ -823,6 +829,10 @@ func _build_hud() -> void:
 	heal_button = HealButton.new()
 	heal_button.toast_hud = toast_hud
 	heal_button.player = player
+	needs_bar = NeedsBar.new()
+	needs_bar.toast_hud = toast_hud
+	dodge_button = DodgeButton.new()
+	dodge_button.player = player
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -931,6 +941,8 @@ func _build_hud() -> void:
 		hud.add_child.call_deferred(fear)
 		hud.move_child.call_deferred(fear, 0)
 		hud.add_child.call_deferred(heal_button)
+		hud.add_child.call_deferred(needs_bar)
+		hud.add_child.call_deferred(dodge_button)
 		hud.add_child.call_deferred(_vignette)
 		hud.add_child.call_deferred(_hurt)
 		hud.add_child.call_deferred(_hearts)

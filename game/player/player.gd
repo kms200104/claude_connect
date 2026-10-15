@@ -25,6 +25,8 @@ signal braked
 @export_range(0.5, 20.0, 0.1, "suffix:m/s") var run_speed: float = 7.0
 ## v0.28.1 민첩 스탯만큼 걷기 · 달리기가 빨라진다 (HunterController 가 정한다, 서버도 같은 배율로 받아 준다).
 var speed_bonus: float = 1.0
+## v0.28.7 잠깐 붙는 배율 (그림자 걸음 등 — AwakenHud 가 정한다). speed_bonus 와 따로 두어 서로 덮어쓰지 않는다.
+var speed_fx: float = 1.0
 ## 달리다가 입력이 이 비율 아래로 떨어지면 걷기로 돌아간다 (조금 덜 밀어도 바로 멈추지 않게).
 @export_range(0.0, 1.0, 0.01) var run_release_threshold: float = 0.7
 @export_range(1.0, 100.0, 0.5, "suffix:m/s²") var acceleration: float = 16.0
@@ -107,11 +109,14 @@ func _physics_process(delta: float) -> void:
 	if garage_ride != null and garage_ride.is_active():
 		_physics_ride(delta)
 		return
+	if _roll_left > 0.0:
+		_physics_roll(delta)
+		return
 	var input: Vector2 = _read_input()
 	_update_running(input.length(), delta)
 	var move_dir: Vector3 = _input_to_world(input)
 	move_intent = move_dir * minf(input.length(), 1.0)
-	var top_speed: float = (run_speed if running else max_speed) * speed_bonus
+	var top_speed: float = (run_speed if running else max_speed) * speed_bonus * speed_fx
 	wading = not Field.zone_at(global_position, 0.1).is_empty()
 	if wading:
 		top_speed *= WADE_SPEED
@@ -375,6 +380,70 @@ func _input_to_world(input: Vector2) -> Vector3:
 	var forward: Vector3 = Vector3(-basis_ref.z.x, 0.0, -basis_ref.z.z).normalized()
 	var right: Vector3 = Vector3(basis_ref.x.x, 0.0, basis_ref.x.z).normalized()
 	return (right * input.x - forward * input.y).normalized()
+
+
+# ---- v0.28.7 회피 구르기 ----
+## 서버가 허락하면 (Net.dodged) 미는 방향 (없으면 보는 방향) 으로 앞구르기. 그 동안은 입력을 받지 않는다.
+var _roll_left: float = 0.0
+var _roll_total: float = 0.0
+var _roll_dir: Vector3 = Vector3.ZERO
+var _roll_speed: float = 0.0
+const ROLL_PIVOT: float = 0.55
+
+
+func is_rolling() -> bool:
+	return _roll_left > 0.0
+
+
+func start_dodge(ms: int, dist: float) -> void:
+	if is_riding() or ms <= 0:
+		return
+	var dir: Vector3 = Vector3(move_intent.x, 0.0, move_intent.z)
+	if dir.length() < 0.1 and body != null:
+		dir = -body.global_basis.z
+		dir.y = 0.0
+	if dir.length() < 0.01:
+		dir = Vector3.FORWARD
+	_roll_dir = dir.normalized()
+	_roll_total = float(ms) / 1000.0
+	_roll_left = _roll_total
+	# 서버가 허락한 빠르기보다 조금 느리게 (이동 검사에 걸리지 않게).
+	_roll_speed = dist / _roll_total * 0.95
+	if braking:
+		_end_brake()
+	running = false
+	if body != null:
+		body.rotation.y = atan2(-_roll_dir.x, -_roll_dir.z)
+	if is_inside_tree():
+		Puff.burst(get_parent(), global_position + Vector3(0.0, 0.05, 0.0), Puff.dust_color(global_position), 6, 0.6, 0.3, 0.1, 0.5)
+		Audio.play_at("kick_push", global_position, -4.0, 0.8)
+
+
+func _physics_roll(delta: float) -> void:
+	_roll_left = maxf(0.0, _roll_left - delta)
+	var p: float = 1.0 - _roll_left / maxf(_roll_total, 0.001)
+	velocity.x = _roll_dir.x * _roll_speed
+	velocity.z = _roll_dir.z * _roll_speed
+	velocity.y = 0.0 if is_on_floor() else velocity.y - gravity * delta
+	move_intent = _roll_dir
+	move_and_slide()
+	if body != null:
+		if is_nan(_body_rest_y):
+			_body_rest_y = body.position.y
+		# 허리 높이를 축으로 한 바퀴 (모형 정면 -Z 쪽으로 고꾸라진다).
+		var a: float = -TAU * ease(p, 0.8) if _roll_left > 0.0 else 0.0
+		body.rotation.x = a
+		var dy: float = ROLL_PIVOT * (1.0 - cos(a))
+		var dz: float = -ROLL_PIVOT * sin(a)
+		var yaw: float = body.rotation.y
+		body.position = Vector3(dz * sin(yaw), _body_rest_y + dy - 0.25 * sin(p * PI), dz * cos(yaw))
+	if rig != null:
+		rig.set_move_speed(0.0)
+	if _roll_left <= 0.0:
+		velocity.x *= 0.4
+		velocity.z *= 0.4
+		if is_inside_tree():
+			Puff.burst(get_parent(), global_position + Vector3(0.0, 0.05, 0.0), Puff.dust_color(global_position), 4, 0.5, 0.25, 0.08, 0.45)
 
 
 func _turn_body(move_dir: Vector3, input_amount: float, delta: float) -> void:

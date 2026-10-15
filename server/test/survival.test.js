@@ -90,9 +90,9 @@ describe('v0.23 뒤지기 · 크리처 · 체력', () => {
     const seen = await c.next((m) => m.t === 'container' && m.c === box.id);
     assert.ok(seen.until > 0);
     assert.equal((await ask(c, { t: 'loot', c: box.id })).code, 'already_looted');
-    // 체력이 가득하면 먹지 않는다.
+    // 체력이 가득하면 먹지 않는다 (v0.28.7 먹을 것이면 배도 불러야 — not_hungry).
     const slot = inv.slots.findIndex((s) => s && S.heal[s.id]);
-    if (slot >= 0) assert.equal((await ask(c, { t: 'use', slot })).code, 'hp_full');
+    if (slot >= 0) assert.equal((await ask(c, { t: 'use', slot })).code, S.needs?.nourish?.[inv.slots[slot].id] ? 'not_hungry' : 'hp_full');
   });
 
   it('밤: 사람 둘레에 크리처가 나타나 쫓아와 때리고, 맞서 쓰러뜨리면 아이템이 떨어진다', async () => {

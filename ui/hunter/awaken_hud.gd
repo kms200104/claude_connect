@@ -14,7 +14,6 @@ var _buttons: Dictionary[String, Button] = {}
 var _cool: Dictionary[String, Label] = {}
 ## 효과: 플레이어 id → {a: {"until": ms, "node": Node3D}}.
 var _fx: Dictionary[int, Dictionary] = {}
-var _base_speed: float = -1.0
 static var _shell_mat: StandardMaterial3D = null
 
 
@@ -155,8 +154,7 @@ func _on_fx(player_id: int, aid: String, ms: int) -> void:
 			Puff.burst(node.get_parent(), node.global_position + Vector3(0.0, 0.8, 0.0), Color(0.35, 0.2, 0.6, 0.85), 16, 1.2, 0.4, 0.12, 0.7)
 			Audio.play_at("emote_down", node.global_position, -2.0, 0.6)
 			if player_id == Net.my_id and player != null:
-				_base_speed = player.speed_bonus
-				player.speed_bonus = _base_speed * (1.0 + float(GameData.hunter.awaken("shadow").get("speed", 0.2)))
+				player.speed_fx = 1.0 + float(GameData.hunter.awaken("shadow").get("speed", 0.2))
 		"shield":
 			# 몸을 감싼 푸른 빛 껍질.
 			var shell: MeshInstance3D = MeshInstance3D.new()
@@ -190,9 +188,8 @@ func _end_fx(player_id: int, aid: String) -> void:
 			if node != null and is_instance_valid(node):
 				for m: MeshInstance3D in _meshes(node):
 					m.transparency = 0.0
-			if player_id == Net.my_id and player != null and _base_speed > 0.0:
-				player.speed_bonus = _base_speed
-				_base_speed = -1.0
+			if player_id == Net.my_id and player != null:
+				player.speed_fx = 1.0
 		"shield":
 			var shell: MeshInstance3D = f.get("shell")
 			if shell != null and is_instance_valid(shell):

@@ -130,7 +130,8 @@ export function updateApproaches(npcs, players, { rules, now, dtMs, random, mode
   if (!rules) return false;
   let changed = false;
   for (const n of npcs.values()) {
-    if (n.talkingWith !== null) {
+    // v0.28.7 쓰러진 주민은 다가가 말 걸지 않는다.
+    if (n.talkingWith !== null || n.down) {
       n.approaching = null;
       continue;
     }

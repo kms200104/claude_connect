@@ -154,6 +154,7 @@ export const ErrorCode = Object.freeze({
   noAwakenSlot: 'no_awaken_slot', // v0.28.5 각성을 고를 자리가 없다 (레벨)
   notAwakened: 'not_awakened', // v0.28.5 그 각성이 없다
   coolingDown: 'cooling_down', // v0.28.5 아직 다시 쓸 수 없다
+  notHungry: 'not_hungry', // v0.28.7 배도 부르고 목도 마르지 않다
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다

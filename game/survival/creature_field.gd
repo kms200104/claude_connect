@@ -40,6 +40,9 @@ class Actor:
 	var yaw: float = 0.0
 	var phase: float = 0.0
 	var t: float = 0.0
+	## v0.28.7 멀리 있으면 3프레임에 한 번만 몸짓을 계산한다 (밀린 시간을 모아서).
+	var anim_acc: float = 0.0
+	var anim_slot: int = 0
 	var speed: float = 0.0
 	var punch: float = 0.0
 	var lunge: float = 0.0
@@ -153,7 +156,13 @@ func _sync() -> void:
 	_synced_once = true
 
 
+## v0.28.7 이보다 먼 크리처는 FAR_ANIM_EVERY 프레임에 한 번만 몸짓 · 어둠을 계산한다.
+const FAR_ANIM_RANGE: float = 22.0
+const FAR_ANIM_EVERY: int = 3
+
+
 func _process(delta: float) -> void:
+	var frame: int = Engine.get_process_frames()
 	for a: Actor in _actors.values():
 		if not is_instance_valid(a.root):
 			continue
@@ -169,8 +178,12 @@ func _process(delta: float) -> void:
 		a.root.rotation.y = lerp_angle(a.root.rotation.y, a.yaw + PI, minf(1.0, delta * 6.0))
 		a.body.rotation.x = move_toward(a.body.rotation.x, 0.0, delta * 3.0)
 		a.body.position.y = move_toward(a.body.position.y, 0.0, delta * 2.0) if a.emerge >= 1.0 else a.body.position.y
-		_animate(a, delta)
-		_darkness(a, delta)
+		a.anim_acc += delta
+		if a.boss.is_empty() and a.lunge <= 0.05 and a.punch <= 0.05 and (frame + a.anim_slot) % FAR_ANIM_EVERY != 0 and not player_near(a.root.global_position, FAR_ANIM_RANGE):
+			continue
+		_animate(a, a.anim_acc)
+		_darkness(a, a.anim_acc)
+		a.anim_acc = 0.0
 		if a.tag != null:
 			a.tag.visible = a.seen > 0.5 and a.emerge >= 1.0 and (player_near(a.root.global_position, 3.0) or (a.hurt or not a.boss.is_empty()) and player_near(a.root.global_position, 14.0))
 	for i: int in range(_dying.size() - 1, -1, -1):
@@ -185,16 +198,39 @@ func _process(delta: float) -> void:
 ## v0.28.5 어둠 속 눈빛: 밤 · 던전에서 내 불빛 (손전등 원뿔 · 횃불 · 맨손의 희미한 빛) · 동료 곁 밖에 있는 크리처는
 ## 몸이 어둠에 묻혀 빛나는 눈만 보인다 (가끔 깜빡인다). 불빛에 들어오면 서서히 드러난다. 맞거나 덮치는 중이면 보인다.
 var _player: Player = null
+## 프레임마다 한 번만 구하는 것 (밤 · 던전, 기척 감지 거리, 동료 자리).
+var _light_frame: int = -1
+var _dark_now: bool = false
+var _sense_r: float = -1.0
+var _mates: Array[Vector3] = []
+
+
+func _refresh_light() -> void:
+	var frame: int = Engine.get_process_frames()
+	if frame == _light_frame:
+		return
+	_light_frame = frame
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group(&"player") as Player
+	_dark_now = false
+	_mates.clear()
+	if _player == null:
+		return
+	var night: bool = Net.state == Net.State.ONLINE and GameData.survival.is_night(Net.game_hour())
+	_dark_now = night or not GameData.hunter.dungeon_spot_at(_player.global_position).is_empty()
+	if not _dark_now:
+		return
+	_sense_r = float(GameData.hunter.awaken("sense").get("range", 40.0)) if Net.has_awaken("sense") else -1.0
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	if replicator != null:
+		for r: RemotePlayer in replicator.remote_nodes():
+			_mates.append(r.global_position)
 
 
 func is_lit(a: Actor) -> bool:
-	if _player == null or not is_instance_valid(_player):
-		_player = get_tree().get_first_node_in_group(&"player") as Player
+	_refresh_light()
 	var player: Player = _player
-	if player == null:
-		return true
-	var night: bool = Net.state == Net.State.ONLINE and GameData.survival.is_night(Net.game_hour())
-	if not night and GameData.hunter.dungeon_spot_at(player.global_position).is_empty():
+	if player == null or not _dark_now:
 		return true
 	if a.punch > 0.05 or a.lunge > 0.05 or not a.boss.is_empty():
 		return true
@@ -202,7 +238,7 @@ func is_lit(a: Actor) -> bool:
 	to.y = 0.0
 	var d: float = to.length()
 	# v0.28.5 각성 '기척 감지': 둘레 크리처는 어둠 속에서도 몸이 보인다.
-	if Net.has_awaken("sense") and d <= float(GameData.hunter.awaken("sense").get("range", 40.0)):
+	if d <= _sense_r:
 		return true
 	match player.held_item:
 		"flashlight":
@@ -216,11 +252,9 @@ func is_lit(a: Actor) -> bool:
 	if d <= 4.6:
 		return true
 	# 동료 곁 (동료의 불빛).
-	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
-	if replicator != null:
-		for r: RemotePlayer in replicator.remote_nodes():
-			if r.global_position.distance_to(a.root.global_position) <= 5.0:
-				return true
+	for m: Vector3 in _mates:
+		if m.distance_to(a.root.global_position) <= 5.0:
+			return true
 	return false
 
 
@@ -622,7 +656,15 @@ func _on_dead(info: Dictionary) -> void:
 		a.tag.visible = false
 	a.dead_quiet = bool(info.get("sun", false)) or bool(info.get("gone", false))
 	a.dead_t = 0.0
+	# 어둠 속에서 쓰러져도 몸이 드러난다 (눈빛만 떠 있지 않게).
+	if a.rig.glint != null:
+		a.rig.glint.visible = false
+		a.rig.halo.visible = false
 	if not a.dead_quiet:
+		a.seen = 1.0
+		for m: MeshInstance3D in a.rig.body_meshes:
+			m.visible = true
+			m.transparency = 0.0
 		_float_text(a.root.global_position + Vector3(0.0, 2.2, 0.0), "쓰러뜨렸다!", Color("#FFFFFF"))
 		_blood_spray(a, 16)
 		if player_near(a.root.global_position, GROAN_RANGE):
@@ -720,6 +762,7 @@ func _update_tag(a: Actor, hp: int) -> void:
 func _spawn(id: String, kind: String) -> Actor:
 	var a: Actor = Actor.new()
 	a.kind = kind
+	a.anim_slot = randi() % FAR_ANIM_EVERY
 	a.root = Node3D.new()
 	a.root.name = "Creature_%s" % id
 	add_child(a.root)
@@ -794,10 +837,14 @@ func _boss_cast(msg: Dictionary) -> void:
 			_shake_if_near(at, 0.18)
 	# 돌진 경고가 끝나면 내달린다.
 	if str(msg.get("k", "")) == "charge" and a != null:
+		# (서버가 돌진을 미뤘으면 charge_end 가 먼저 와 cast 가 비어 있다. 늦어도 2.5초 뒤에는 멈춘 자세로.)
 		get_tree().create_timer(ms).timeout.connect(func() -> void:
-			if is_instance_valid(a.root):
+			if is_instance_valid(a.root) and a.cast == "charge":
 				a.cast = ""
-				a.dashing = true)
+				a.dashing = true
+				get_tree().create_timer(2.5).timeout.connect(func() -> void:
+					if is_instance_valid(a.root):
+						a.dashing = false))
 
 
 static var _warn_mat: StandardMaterial3D = null

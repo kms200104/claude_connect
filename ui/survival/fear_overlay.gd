@@ -11,6 +11,7 @@ var player: Node3D = null
 var level: float = 0.0
 var _edge: TextureRect = null
 var _env: Environment = null
+var _env_retry_at: int = 0
 var _beat_in: float = 0.0
 var _beat_pulse: float = 0.0
 var _sting_ready_at: float = 0.0
@@ -113,6 +114,10 @@ func _process(delta: float) -> void:
 ## 세상 색: 채도를 빼고, 대비를 올리고, 조금 어둡게.
 func _apply_world(f: float) -> void:
 	if _env == null:
+		# 무서울 때만, 1초에 한 번만 찾는다 (매 프레임 나무 전체를 뒤지지 않게).
+		if f <= 0.005 or Time.get_ticks_msec() < _env_retry_at:
+			return
+		_env_retry_at = Time.get_ticks_msec() + 1000
 		var we: WorldEnvironment = get_tree().root.find_child("WorldEnvironment", true, false) as WorldEnvironment
 		if we == null or we.environment == null:
 			return
@@ -130,3 +135,13 @@ func _apply_world(f: float) -> void:
 	_env.adjustment_saturation = 1.0 - 0.82 * clampf(f, 0.0, 1.0)
 	_env.adjustment_contrast = 1.0 + 0.1 * clampf(f, 0.0, 1.0)
 	_env.adjustment_brightness = 1.0 - 0.05 * clampf(f, 0.0, 1.0)
+
+
+## 무서운 중에 사라져도 세상 색을 되돌린다 (Environment 는 장면끼리 나눠 쓸 수 있다).
+func _exit_tree() -> void:
+	if _env != null and _adjusted:
+		_adjusted = false
+		_env.adjustment_saturation = 1.0
+		_env.adjustment_contrast = 1.0
+		_env.adjustment_brightness = 1.0
+		_env.adjustment_enabled = false

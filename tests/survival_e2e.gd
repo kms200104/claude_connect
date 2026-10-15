@@ -83,7 +83,25 @@ func _run() -> void:
 	var rules: SurvivalRules = GameData.survival
 	_check(rules.houses.size() == 32 and survival.houses.get_child_count() == 32, "빈집 32채 (%d)" % survival.houses.get_child_count())
 	_check(survival.get("_hearts") != null and (survival.get("_hearts") as Control).get_child_count() == 5, "체력 하트 5개 (체력 10)")
+	# v0.28.7 배고픔 · 목마름 막대 (처음엔 가득).
+	_check(survival.needs_bar.visible and Net.food == GameData.survival.needs_max and Net.water == GameData.survival.needs_max, "배고픔 · 목마름 막대 (%d · %d)" % [Net.food, Net.water])
 	_check(Net.hp == 10 and GameData.survival.is_night(Net.game_hour()), "밤 · 체력 가득 (%d, %.1f시)" % [Net.hp, Net.game_hour()])
+
+	# ---- v0.28.7 회피 구르기: 단추 → 서버 허락 → 보는 쪽으로 구른다 → 재사용 대기 표시 ----
+	var me: Player = _village.get_node("Player")
+	await _teleport(Vector3(-150.0, 0.3, 140.0), 0.0)
+	var roll_from: Vector3 = me.global_position
+	_check(survival.dodge_button.visible, "구르기 단추")
+	survival.dodge_button.pressed.emit()
+	_check(await _wait_until(func() -> bool: return me.is_rolling(), 2.0), "구른다")
+	await _shot("surv_dodge_roll")
+	_check(await _wait_until(func() -> bool: return not me.is_rolling(), 2.0), "구르기 끝")
+	var rolled: float = Vector2(me.global_position.x - roll_from.x, me.global_position.z - roll_from.z).length()
+	_check(rolled > 2.0 and me.global_position.z < roll_from.z, "보는 쪽 (-Z) 으로 %.1fm" % rolled)
+	_check(Net.dodge_ready_at > Time.get_ticks_msec() and (survival.dodge_button.get_node("Cool") as Label).visible, "재사용 대기 표시")
+	survival.dodge_button.pressed.emit()
+	await get_tree().create_timer(0.5).timeout
+	_check(not me.is_rolling(), "대기 중에는 못 구른다")
 
 	# ---- 빈집 냉장고 뒤지기 ----
 	var fridge: SurvivalRules.LootBox = rules.containers["h01_2"]
@@ -138,10 +156,18 @@ func _run() -> void:
 	# v0.28.2 화면 밖에서 다가오는 크리처 쪽 가장자리가 은은하게 붉다.
 	_check(await _wait_until(func() -> bool: return survival.edge_hint.hint_count() > 0, 5.0), "다가오는 크리처 방향 가장자리 표시")
 	await _shot("surv_edge_hint")
-	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
-	# v0.28.1 맞으면 화면 가장자리가 붉게 번지고 피가 튄다.
+	# (맞는 순간을 잡아 둔다 — 스크린샷을 그리는 동안 맞으면 효과가 이미 사라졌을 수 있다.)
 	var hurt: HurtOverlay = survival.get("_hurt")
-	_check(hurt != null and hurt.is_showing(), "맞은 화면 (붉은 가장자리 · 튄 피)")
+	var hurt_seen: Array[bool] = [false]
+	var on_hurt: Callable = func(_info: Dictionary) -> void:
+		get_tree().process_frame.connect(func() -> void: hurt_seen[0] = hurt_seen[0] or hurt.is_showing(), CONNECT_ONE_SHOT)
+	Net.hurt.connect(on_hurt)
+	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	Net.hurt.disconnect(on_hurt)
+	# v0.28.1 맞으면 화면 가장자리가 붉게 번지고 피가 튄다.
+	_check(hurt != null and (hurt.is_showing() or hurt_seen[0]), "맞은 화면 (붉은 가장자리 · 튄 피)")
 	# v0.28.4 저레벨(Lv.1) 공포 연출: 크리처가 다가오면 채도가 빠지고 가장자리가 조여 온다 · 심장 소리.
 	var fear: FearOverlay = survival.fear
 	_check(await _wait_until(func() -> bool: return fear.level > 0.25, 3.0), "공포 연출 (세기 %.2f, Lv.%d)" % [fear.level, int(Net.hunter.get("lv", 1))])

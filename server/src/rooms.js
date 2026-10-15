@@ -114,6 +114,8 @@ function newProfile(uid, slot, cfg, data) {
     vehSeq: 0,
     steps: { day: -1, today: 0, got: [] }, // v0.20 솔걸음: 마을 날짜 · 그날 인정된 걸음 · 받은 목표(번호)
     hp: cfg.startHp > 0 ? cfg.startHp : (data?.survival?.player?.max_hp ?? 10), // v0.23 체력 (START_HP 는 시험용)
+    food: data?.survival?.needs?.max ?? 100, // v0.28.7 배고픔 · 목마름
+    water: data?.survival?.needs?.max ?? 100,
     hunter: sanitizeHunter(null, data?.hunter), // v0.28 헌터: 등급 · 점수 · 처치 · 오늘의 의뢰 진행
     // v16 (progress.js): 한 일 · 도감 · 이룬 업적 · 고른 칭호 · 생일 · 생일 축하를 받은 해.
     stats: sanitizeStats(null),
@@ -428,6 +430,8 @@ export class Room {
         vehicles: sanitizeVehicles(p.vehicles, data.garage).map((v) => (moved ? { ...v, at: null } : v)),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
         hp: Number.isFinite(p.hp) ? Math.max(1, Math.min(99, Math.round(p.hp))) : (data?.survival?.player?.max_hp ?? 10), // 최대는 survival 이 사람마다 (체력 스탯)
+        food: Number.isFinite(p.food) ? Math.max(0, Math.min(data?.survival?.needs?.max ?? 100, p.food)) : (data?.survival?.needs?.max ?? 100),
+        water: Number.isFinite(p.water) ? Math.max(0, Math.min(data?.survival?.needs?.max ?? 100, p.water)) : (data?.survival?.needs?.max ?? 100),
         hunter: sanitizeHunter(p.hunter, data.hunter),
         steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),

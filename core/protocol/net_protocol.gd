@@ -203,6 +203,8 @@ const ERR_NOT_ENOUGH_ITEMS: String = "not_enough_items"
 const ERR_TOO_FAR: String = "too_far"
 const ERR_ALREADY_LOOTED: String = "already_looted"
 const ERR_HP_FULL: String = "hp_full"
+## v0.28.7 체력 · 배 · 목 모두 가득.
+const ERR_NOT_HUNGRY: String = "not_hungry"
 ## v0.24 거점 · 쓰러짐: 판자가 이미 멀쩡함 · 쓰러져서 못 함 · 쓰러진 사람이 아님.
 const ERR_ALREADY_BOARDED: String = "already_boarded"
 const ERR_DOWNED: String = "downed"

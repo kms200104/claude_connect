@@ -76,6 +76,13 @@ var loot_range: float = 1.8
 var kind_names: Dictionary[String, String] = {}
 var max_hp: int = 10
 var heal: Dictionary[String, int] = {}
+## v0.28.7 배고픔 · 목마름: 최대 · 알림 기준 · 먹고 마실 것 (id → {food, water}).
+var needs_max: int = 100
+var needs_warn: int = 25
+var nourish: Dictionary[String, Dictionary] = {}
+## v0.28.7 회피 구르기 (ms · dist · iframe_ms · cooldown_ms).
+var dodge_ms: int = 380
+var dodge_cooldown_ms: int = 1800
 var weapons: Dictionary[String, Weapon] = {}
 var lights: Dictionary[String, float] = {}
 var creature_kinds: Dictionary[String, CreatureKind] = {}
@@ -116,6 +123,16 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 	for k: Variant in kinds:
 		r.kind_names[str(k)] = str((kinds[k] as Dictionary).get("name", k))
 	r.max_hp = int((rules.get("player", {}) as Dictionary).get("max_hp", 10))
+	var needs: Dictionary = rules.get("needs", {})
+	r.needs_max = int(needs.get("max", r.needs_max))
+	r.needs_warn = int(needs.get("warn", r.needs_warn))
+	var dodge: Dictionary = rules.get("dodge", {})
+	r.dodge_ms = int(dodge.get("ms", r.dodge_ms))
+	r.dodge_cooldown_ms = int(dodge.get("cooldown_ms", r.dodge_cooldown_ms))
+	var nour: Dictionary = needs.get("nourish", {})
+	for nid: Variant in nour:
+		if nour[nid] is Dictionary:
+			r.nourish[str(nid)] = nour[nid]
 	var heal: Dictionary = rules.get("heal", {})
 	for id: Variant in heal:
 		if not str(id).begins_with("_"):
@@ -230,6 +247,11 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 
 func heal_of(item_id: String) -> int:
 	return int(heal.get(item_id, 0))
+
+
+## v0.28.7 먹거나 마실 수 있는지 (배고픔 · 목마름을 채운다).
+func is_nourishing(item_id: String) -> bool:
+	return nourish.has(item_id)
 
 
 ## 손에 든 것의 무기 값 (없으면 맨손).

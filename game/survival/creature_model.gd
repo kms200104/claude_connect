@@ -250,8 +250,22 @@ static func parts(kind: String) -> Parts:
 	_build_head(p, d, rng, skin)
 	_build_arms(p, d, rng, skin, shirt)
 	_build_legs(p, d, rng, skin, pants)
+	# v0.28.7 멀리 있으면 엉성한 모양으로 (자동 LOD — 몸통 · 팔다리만, 눈 같은 빛나는 부위는 작아서 그대로).
+	for key: String in p.meshes.keys():
+		p.meshes[key] = with_lods(p.meshes[key])
 	_cache[kind] = p
 	return p
+
+
+## 메시에 자동 LOD 를 붙인다 (ImporterMesh.generate_lods). 거리에 따라 렌더러가 고른다.
+static func with_lods(m: ArrayMesh) -> ArrayMesh:
+	if m == null or m.get_surface_count() == 0:
+		return m
+	var im: ImporterMesh = ImporterMesh.new()
+	for s: int in m.get_surface_count():
+		im.add_surface(m.surface_get_primitive_type(s), m.surface_get_arrays(s), [], {}, m.surface_get_material(s))
+	im.generate_lods(25.0, 60.0, [])
+	return im.get_mesh()
 
 
 static func _build_pelvis(p: Parts, d: Dictionary, rng: RandomNumberGenerator, skin: Callable, pants: Color) -> void:

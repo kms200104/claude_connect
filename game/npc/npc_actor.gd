@@ -79,7 +79,10 @@ func apply_state(state: NetNpcState) -> void:
 	# v0.28.2 크리처에게 쓰러졌다: 옆으로 눕고 머리 위에 "다쳤어요".
 	if state.down != down:
 		down = state.down
-		set_mark("다쳤어요…" if down else "")
+		if down:
+			set_mark("다쳤어요…")
+		elif mark != null and mark.text == "다쳤어요…":
+			set_mark("")
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:
 		global_position = state.position
 		if body != null:

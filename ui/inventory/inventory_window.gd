@@ -321,7 +321,7 @@ func _refresh_detail() -> void:
 	var info: ItemInfo = GameData.item(item.id) if item != null else null
 	_discard.visible = info != null and not info.is_tool()
 	var heal: int = GameData.survival.heal_of(item.id) if item != null else 0
-	_use.visible = info != null and (info.is_furniture() or info.is_clothing() or not info.ride.is_empty() or heal > 0 or info.id in ["battery_pack", "bumper_spikes", "armor_plate"])
+	_use.visible = info != null and (info.is_furniture() or info.is_clothing() or not info.ride.is_empty() or heal > 0 or GameData.survival.is_nourishing(info.id) or info.id in ["battery_pack", "bumper_spikes", "armor_plate"])
 	if info == null:
 		_name.text = "아이템을 골라 보세요"
 		_name.add_theme_color_override("font_color", TITLE_COLOR)
@@ -370,7 +370,7 @@ func _on_use_pressed() -> void:
 			rider.refuel_pack()
 		return
 	# v0.23 회복 아이템: 서버가 체력을 올리고 하나를 쓴다.
-	if GameData.survival.heal_of(item.id) > 0:
+	if GameData.survival.heal_of(item.id) > 0 or GameData.survival.is_nourishing(item.id):
 		Net.use_item(selected_slot)
 		return
 	# v0.16 탈것: 가방 창을 닫고 꺼내 펼쳐 올라탄다 (타고 있으면 내려서 접어 넣는다).

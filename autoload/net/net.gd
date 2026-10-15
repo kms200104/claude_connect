@@ -39,6 +39,10 @@ signal crafted(info: Dictionary)
 signal looted(info: Dictionary)
 signal container_changed(container_id: String, until: float)
 signal hp_changed(hp: int, max_hp: int)
+## v0.28.7 배고픔 · 목마름.
+signal needs_changed(food: int, water: int)
+## v0.28.7 회피 구르기 허락 (서버 dodge_ok): ms 동안 dist m 를 구른다.
+signal dodged(ms: int, dist: float)
 signal hurt(info: Dictionary)
 signal knocked_out(info: Dictionary)
 signal creatures_updated
@@ -318,6 +322,8 @@ var _clock_world_ms: float = 0.0
 ## v0.23 생존 상태: 체력 · 뒤진 가구(id → 다시 차는 세상 ms) · 크리처(id → {k, x, z, yaw, hp, a}).
 var hp: int = 10
 var max_hp: int = 10
+var food: int = 100
+var water: int = 100
 var looted_until: Dictionary[String, float] = {}
 var creatures: Dictionary[String, Dictionary] = {}
 var night: bool = false
@@ -1020,6 +1026,13 @@ func _handle_text(text: String) -> void:
 			container_changed.emit(str(msg.get("c", "")), float(msg.get("until", 0.0)))
 		"hp":
 			_set_hp(msg)
+		"dodge_ok":
+			dodge_ready_at = Time.get_ticks_msec() + int(float(GameData.survival.dodge_cooldown_ms) * dodge_cool_mult())
+			dodged.emit(int(msg.get("ms", 380)), float(msg.get("dist", 3.4)))
+		"needs":
+			food = int(msg.get("food", food))
+			water = int(msg.get("water", water))
+			needs_changed.emit(food, water)
 		"hurt":
 			_set_hp(msg)
 			hurt.emit(msg)
@@ -1420,6 +1433,10 @@ func _on_welcome(msg: Dictionary) -> void:
 			looted_until[str(id)] = float(looted_map[id])
 	night = bool(surv.get("night", false))
 	_set_hp({"hp": surv.get("hp", max_hp), "max": surv.get("max", max_hp)})
+	var nd: Dictionary = surv.get("needs", {}) if surv.get("needs") is Dictionary else {}
+	food = int(nd.get("food", 100))
+	water = int(nd.get("water", 100))
+	needs_changed.emit(food, water)
 	creatures.clear()
 	_apply_creatures(surv.get("creatures", []))
 	boards.clear()
@@ -1657,6 +1674,22 @@ func awaken_pick(awaken_id: String) -> void:
 func awaken_use(awaken_id: String) -> void:
 	if state == State.ONLINE:
 		_request("awaken_use", {"a": awaken_id})
+
+
+## v0.28.7 회피 구르기 요청 (서버가 dodge_ok 로 허락해야 구른다). 이 시각 (ms) 전에는 다시 못 한다 (단추 표시용).
+var dodge_ready_at: int = 0
+
+
+func dodge() -> void:
+	if state == State.ONLINE:
+		_request("dodge", {})
+
+
+## 민첩만큼 짧아지는 재사용 배율 (서버 hunter.bonus.cooldown 과 같은 셈).
+func dodge_cool_mult() -> float:
+	var st: Dictionary = hunter.get("st", {}) if hunter.get("st") is Dictionary else {}
+	var per: float = float((GameData.hunter.level_stats.get("agi", {}) as Dictionary).get("cooldown", 0.0)) if GameData.hunter != null else 0.0
+	return maxf(0.3, 1.0 - float(st.get("agi", 0)) * per)
 
 
 func use_item(slot: int) -> void:

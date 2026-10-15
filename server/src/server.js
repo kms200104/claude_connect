@@ -1869,6 +1869,8 @@ export function createServer(overrides = {}) {
       case 'gate_enter':
       case 'gate_leave':
         return survival.handleGate(ctx, msg, fail);
+      case 'dodge':
+        return survival.handleDodge(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
       case 'home_place':
@@ -1957,7 +1959,7 @@ export function createServer(overrides = {}) {
     if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
     // v19: 차고 탈것을 타는 동안은 그 탈것의 최고 속도까지.
     // v0.28.1 민첩 스탯만큼 빨리 걷고 달린다.
-    const topSpeed = Math.max(cfg.maxSpeed * hunter.bonus.speed(player), garage.topSpeed(player));
+    const topSpeed = Math.max(cfg.maxSpeed * hunter.bonus.speed(player), garage.topSpeed(player), survival.dodgeSpeed(player));
     const allowed = topSpeed * cfg.speedTolerance * dt + cfg.moveSlackMeters;
     let corrected = tx !== msg.x || tz !== msg.z || ty !== msg.y;
     if (dist > allowed) {
@@ -2122,6 +2124,7 @@ export function createServer(overrides = {}) {
       case 'awaken_use':
       case 'gate_enter':
       case 'gate_leave':
+      case 'dodge':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

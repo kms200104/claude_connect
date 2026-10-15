@@ -2,6 +2,21 @@
   "version": 1,
   "_comment": "v0.23 생존 규칙 (서버 권위: server/src/survival.js · 클라이언트 core/types/survival_rules.gd 가 같은 파일을 읽는다). 시각은 세상 시각(60배).",
 
+  "dodge": {
+    "_comment": "v0.28.7 회피 구르기 (서버 권위): dodge {} → ms 동안 dist m 를 구른다 (그 동안 이동 검사가 그만큼 빠른 걸음을 허락), iframe_ms 동안은 맞지 않는다. cooldown_ms 뒤 다시 (민첩만큼 짧아진다).",
+    "ms": 380, "dist": 3.4, "iframe_ms": 420, "cooldown_ms": 1800
+  },
+
+  "needs": {
+    "_comment": "v0.28.7 배고픔 · 목마름 (서버 권위): 0~max, 접속 중일 때만 세상 시간 1시간마다 food · water 만큼 준다. 하나라도 0 이면 낮에도 체력이 돌아오지 않고 starve_world_hours 마다 체력 1을 잃는다 (0 이 되면 기절 — 대피소에서 ko_refill 만큼 채워 깨어난다). nourish 의 것을 '사용'하면 채운다 (heal 이 있으면 체력도). warn 아래로 떨어지면 알림.",
+    "max": 100, "food_per_world_hour": 1.4, "water_per_world_hour": 2.0, "starve_world_hours": 4, "warn": 25, "ko_refill": 40,
+    "nourish": {
+      "canned_food": { "food": 45, "water": 5 }, "hardtack": { "food": 30 }, "clean_water": { "water": 55 },
+      "raspberry": { "food": 6, "water": 6 }, "potato": { "food": 12 }, "egg": { "food": 10 }, "tofu": { "food": 12 }, "laver": { "food": 5 },
+      "wild_greens": { "food": 6, "water": 3 }, "lemon": { "water": 10 }, "honey_jar": { "food": 15 }, "wild_mushroom": { "food": 8 }
+    }
+  },
+
   "fear": {
     "_comment": "v0.28.4 공포 연출 (그림 · 소리만, 클라이언트): 헌터 레벨이 max_level 이하이면 range m 안에 크리처가 오면 화면 채도가 빠지고 가장자리가 어둡게 조여 오며 심장 소리 · 진동이 빨라진다. 세기는 Lv.1 이 가장 세고 max_level 로 갈수록 약해지다 그 위로는 없다. 크리처가 처음 다가오면 섬뜩한 소리 (sting_cooldown_s 마다 한 번).",
     "max_level": 5, "range": 16, "sting_cooldown_s": 25

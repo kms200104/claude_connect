@@ -31,6 +31,7 @@ export function loadSurvival(rules, houses, isKnown) {
   for (const [kind, table] of Object.entries(rules.loot?.kinds ?? {})) check(table.items, `loot ${kind}`);
   for (const [kind, c] of Object.entries(rules.creatures?.kinds ?? {})) check(c.drops, `creature ${kind}`);
   for (const id of Object.keys(rules.heal ?? {})) if (!id.startsWith('_') && !isKnown(id)) throw new Error(`heal: unknown ${id}`);
+  for (const id of Object.keys(rules.needs?.nourish ?? {})) if (!isKnown(id)) throw new Error(`needs.nourish: unknown ${id}`);
   check(rules.fortify?.cost, 'fortify');
   check(rules.supply?.loot?.items, 'supply');
   const containers = new Map();
@@ -126,6 +127,10 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     return Number.isFinite(hp) ? Math.max(0, Math.min(maxOf(player), hp)) : maxOf(player);
   };
   const hpWire = (player) => ({ hp: hpOf(player), max: maxOf(player) });
+  // v0.28.7 배고픔 · 목마름.
+  const NE = S?.needs;
+  const needsWire = (player) => ({ t: 'needs', food: Math.round(player.profile.food ?? 100), water: Math.round(player.profile.water ?? 100), max: NE?.max ?? 100 });
+  const starving = (player) => NE && ((player.profile.food ?? 100) <= 0 || (player.profile.water ?? 100) <= 0);
   hunter?.setOnVit((room, player) => sendTo(player, { t: 'hp', ...hpWire(player) }));
 
   /** 크리처가 들어오지 못하는 안전한 곳: 대피소 · 광장 둘레 · v0.28.2 배리어, 상점 · 집 안. */
@@ -516,13 +521,43 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (player.downed) return fail(ErrorCode.downed);
     const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
     const heal = slot ? S?.heal?.[slot.id] : undefined;
-    if (!slot || !heal) return fail(ErrorCode.badItem);
-    if (hpOf(player) >= maxOf(player)) return fail(ErrorCode.hpFull);
+    // v0.28.7 먹고 마실 것: 배고픔 · 목마름을 채운다 (체력이 가득해도).
+    const nour = slot ? NE?.nourish?.[slot.id] : undefined;
+    if (!slot || (!heal && !nour)) return fail(ErrorCode.badItem);
+    const pr = player.profile;
+    const needFood = nour?.food && (pr.food ?? NE.max) < NE.max - 1;
+    const needWater = nour?.water && (pr.water ?? NE.max) < NE.max - 1;
+    if (hpOf(player) >= maxOf(player) && !needFood && !needWater) return fail(nour ? ErrorCode.notHungry : ErrorCode.hpFull);
     removeAt(player.slots, msg.slot, 1);
-    setHp(player, hpOf(player) + heal);
+    if (heal) setHp(player, hpOf(player) + heal);
+    if (nour) {
+      pr.food = Math.min(NE.max, (pr.food ?? NE.max) + (nour.food ?? 0));
+      pr.water = Math.min(NE.max, (pr.water ?? NE.max) + (nour.water ?? 0));
+      sendTo(player, needsWire(player));
+    }
     sendInventory(player);
-    send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal });
+    send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal: heal ?? 0, food: nour?.food ?? 0, water: nour?.water ?? 0 });
     if ((SC?.stops ?? []).includes(slot.id) || hpOf(player) >= maxOf(player)) stopBleeding(ctx.room, player);
+  }
+
+  /** v0.28.7 회피 구르기: dodge {} → dodge_ok { ms, dist } (재사용 대기 · 쓰러짐이면 거절). */
+  function handleDodge(ctx, msg, fail) {
+    const { player } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const D = S.dodge;
+    if (!D) return fail(ErrorCode.badMessage);
+    if (player.downed || player.sleeping) return fail(ErrorCode.downed);
+    const t = now();
+    if (t < (player.dodgeReadyAt ?? 0)) return fail(ErrorCode.coolingDown);
+    player.dodgeReadyAt = t + D.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) - 60;
+    player.dodgeUntil = t + D.ms + 150;
+    player.dodgeIframeUntil = t + D.iframe_ms;
+    send(ctx.ws, { t: 'dodge_ok', rid: msg.rid, ms: D.ms, dist: D.dist });
+  }
+
+  /** 구르는 중이면 그 빠르기 (m/s), 아니면 0 (server.js handleMove 가 쓴다). */
+  function dodgeSpeed(player) {
+    return S.dodge && now() < (player.dodgeUntil ?? 0) ? S.dodge.dist / (S.dodge.ms / 1000) : 0;
   }
 
   function knockOut(room, player) {
@@ -532,6 +567,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const lost = Math.min(S.player.ko_sol_max ?? 0, Math.floor((player.profile.sol ?? 0) * (S.player.ko_sol_rate ?? 0)));
     player.profile.sol = Math.max(0, (player.profile.sol ?? 0) - lost);
     setHp(player, maxOf(player));
+    // v0.28.7 대피소에서 조금 먹고 마시고 깨어난다.
+    if (NE) {
+      player.profile.food = Math.max(player.profile.food ?? 0, NE.ko_refill);
+      player.profile.water = Math.max(player.profile.water ?? 0, NE.ko_refill);
+      sendTo(player, needsWire(player));
+    }
     // v0.28.2 던전에서 기절하면 그 공략에서 빠진다.
     gates.left(room, player);
     player.x = shelter.x;
@@ -552,6 +593,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   function hurt(room, player, damage, by) {
     const t = now();
     if (player.downed || t < (player.hurtUntil ?? 0)) return;
+    // v0.28.7 구르는 동안은 맞지 않는다.
+    if (t < (player.dodgeIframeUntil ?? 0)) return;
     player.hurtUntil = t + (S.player.hurt_grace_ms ?? 700);
     // v0.28.5 마력 방패가 막는다.
     if (hunter?.bonus.block(player)) {
@@ -649,10 +692,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   /** 낮에는 체력이 천천히 돌아온다 (worldTick, 1초마다). */
   function regen(room, dtMs) {
+    tickNeeds(room, dtMs);
     if (night()) return;
     const perMs = (S.player.day_regen_per_world_hour ?? 1) * (clock.worldScale ?? 1) / HOUR_MS;
     for (const p of room.players.values()) {
-      if (!p.online || p.downed || hpOf(p) >= maxOf(p)) continue;
+      if (!p.online || p.downed || hpOf(p) >= maxOf(p) || starving(p)) continue;
       p.regenAcc = (p.regenAcc ?? 0) + perMs * dtMs;
       if (p.regenAcc >= 1) {
         const add = Math.floor(p.regenAcc);
@@ -661,6 +705,29 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         sendTo(p, { t: 'hp', ...hpWire(p) });
         if (hpOf(p) >= maxOf(p)) stopBleeding(room, p);
       }
+    }
+  }
+
+  /** v0.28.7 배고픔 · 목마름이 준다 (접속 중 · 쓰러지지 않았을 때). 바닥나면 체력을 조금씩 잃는다. */
+  function tickNeeds(room, dtMs) {
+    if (!NE) return;
+    const hours = (dtMs * (clock.worldScale ?? 1)) / HOUR_MS;
+    for (const p of room.players.values()) {
+      if (!p.online || p.downed || p.sleeping) continue;
+      const pr = p.profile;
+      const before = [Math.round(pr.food ?? NE.max), Math.round(pr.water ?? NE.max)];
+      pr.food = Math.max(0, (pr.food ?? NE.max) - NE.food_per_world_hour * hours);
+      pr.water = Math.max(0, (pr.water ?? NE.max) - NE.water_per_world_hour * hours);
+      if (Math.round(pr.food) !== before[0] || Math.round(pr.water) !== before[1]) sendTo(p, needsWire(p));
+      if (starving(p)) {
+        p.starveAcc = (p.starveAcc ?? 0) + hours;
+        if (p.starveAcc >= NE.starve_world_hours) {
+          p.starveAcc = 0;
+          setHp(p, hpOf(p) - 1);
+          sendTo(p, { t: 'hurt', ...hpWire(p), by: 'starve' });
+          if (hpOf(p) <= 0) knockOut(room, p);
+        }
+      } else p.starveAcc = 0;
     }
   }
 
@@ -904,7 +971,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       }
     }
     // v0.28.5 그림자 걸음 중인 사람은 크리처가 보지 못한다.
-    const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed && !hunter?.bonus.hidden(p));
+    // (사라짐 · 나타남 · 게이트 · 보급은 숨은 사람도 센다 — 숨었다고 둘레 크리처가 모두 사라지면 안 된다.)
+    const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed);
+    const seen = people.filter((p) => !hunter?.bonus.hidden(p));
     const def = defenses(room);
     if (gates.tick(room, t, people, def)) changed = true;
     // v0.28.2 가디언: 쏘기 · 부활, 쓰러진 주민 일어나기 (낮 · 밤).
@@ -938,21 +1007,31 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
       }
       // 아무도 가까이 없으면 사라진다.
+      let nearD = Infinity;
+      for (const p of people) nearD = Math.min(nearD, Math.hypot(p.x - c.x, p.z - c.z));
+      // 게이트 크리처는 게이트를 지킨다 (사라지지 않고, 아무도 없으면 제자리).
+      if (c.g && nearD > S.creatures.despawn_far) continue;
+      if (nearD > S.creatures.despawn_far) {
+        room.creatures.delete(c.id);
+        room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), gone: true });
+        changed = true;
+        continue;
+      }
+      // 쫓을 사람은 보이는 사람 중에서 (그림자 걸음 중이면 못 본다 — 제자리).
       let best = null;
       let bestD = Infinity;
-      for (const p of people) {
+      for (const p of seen) {
         const d = Math.hypot(p.x - c.x, p.z - c.z);
         if (d < bestD) {
           bestD = d;
           best = p;
         }
       }
-      // 게이트 크리처는 게이트를 지킨다 (사라지지 않고, 아무도 없으면 제자리).
-      if (c.g && (!best || bestD > S.creatures.despawn_far)) continue;
-      if (!best || bestD > S.creatures.despawn_far) {
-        room.creatures.delete(c.id);
-        room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), gone: true });
-        changed = true;
+      if (!best) {
+        if (c.target) {
+          c.target = 0;
+          changed = true;
+        }
         continue;
       }
       // v0.28.5 게이트 우두머리 패턴 (내려치기 · 돌진 · 소환).
@@ -974,7 +1053,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         continue;
       }
       // 소리를 들었으면 소리 낸 사람을 쫓는다 (aggro 밖이라도).
-      const alerted = (c.alertUntil ?? 0) > t ? people.find((p) => p.id === c.alertBy) : null;
+      const alerted = (c.alertUntil ?? 0) > t ? seen.find((p) => p.id === c.alertBy) : null;
       if (alerted) {
         best = alerted;
         bestD = Math.hypot(alerted.x - c.x, alerted.z - c.z);
@@ -1245,13 +1324,22 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         const push = w.push ?? 0.7;
         const nx = c.x + ((c.x - player.x) / d) * push;
         const nz = c.z + ((c.z - player.z) / d) * push;
-        if (isLand(data, nx, nz) && canStand(nx, nz, defenses(room))) {
+        // 빈집 안이면 그 집 벽 안에서만 (밖으로 밀려나 갇히지 않게). 던전은 canStand 가 던전 지도로 본다.
+        const ch = c.inside ? S.houseById.get(c.inside) : null;
+        const def = defenses(room);
+        if (ch ? standInside(ch, nx, nz, def) : canStand(nx, nz, def)) {
           c.x = nx;
           c.z = nz;
         }
       }
-      if (w.stun_ms) c.stunUntil = t + w.stun_ms;
-      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ...(ammo ? { shot: 1, sx: round(player.x), sz: round(player.z) } : {}), ...(w.stun_ms ? { stun: w.stun_ms } : {}) });
+      // 비틀거림 뒤에는 잠깐 버틴다 (계속 때려 영영 묶어 두지 못하게). 우두머리는 절반만.
+      let stun = 0;
+      if (w.stun_ms && t >= (c.stunImmuneUntil ?? 0)) {
+        stun = c.boss ? Math.round(w.stun_ms * 0.5) : w.stun_ms;
+        c.stunUntil = t + stun;
+        c.stunImmuneUntil = t + stun * 2.5;
+      }
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ...(ammo ? { shot: 1, sx: round(player.x), sz: round(player.z) } : {}), ...(stun ? { stun } : {}) });
     }
     send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge, n: hits.length });
     for (const { c } of hits) if (c.hp <= 0) kill(room, c, player.id);
@@ -1346,7 +1434,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   function welcomeWire(room, player) {
     return {
-      ...hpWire(player), looted: lootedWire(room), creatures: [...(room.creatures?.values() ?? [])].map(creatureWire), night: night(),
+      ...hpWire(player), needs: needsWire(player), looted: lootedWire(room), creatures: [...(room.creatures?.values() ?? [])].map(creatureWire), night: night(),
       boards: boardsWire(room), downed: downedWire(room),
       jobs: [...(room.boardJobs?.values() ?? [])].map(jobWire),
       stash: Object.fromEntries(Object.entries(room.stash ?? {}).map(([h, box]) => [h, box.map((e) => ({ ...e }))])),
@@ -1362,5 +1450,5 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleGate: (ctx, msg, fail) => (msg.t === 'gate_leave' ? gates.handleLeave(ctx, msg, fail) : gates.handleEnter(ctx, msg, fail)), fixDungeon: (room, player) => gates.fixPosition(room, player), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleDodge, dodgeSpeed, handleGate: (ctx, msg, fail) => (msg.t === 'gate_leave' ? gates.handleLeave(ctx, msg, fail) : gates.handleEnter(ctx, msg, fail)), fixDungeon: (room, player) => gates.fixPosition(room, player), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }
