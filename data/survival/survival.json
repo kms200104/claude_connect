@@ -2,6 +2,11 @@
   "version": 1,
   "_comment": "v0.23 생존 규칙 (서버 권위: server/src/survival.js · 클라이언트 core/types/survival_rules.gd 가 같은 파일을 읽는다). 시각은 세상 시각(60배).",
 
+  "fear": {
+    "_comment": "v0.28.4 공포 연출 (그림 · 소리만, 클라이언트): 헌터 레벨이 max_level 이하이면 range m 안에 크리처가 오면 화면 채도가 빠지고 가장자리가 어둡게 조여 오며 심장 소리 · 진동이 빨라진다. 세기는 Lv.1 이 가장 세고 max_level 로 갈수록 약해지다 그 위로는 없다. 크리처가 처음 다가오면 섬뜩한 소리 (sting_cooldown_s 마다 한 번).",
+    "max_level": 5, "range": 16, "sting_cooldown_s": 25
+  },
+
   "barriers": {
     "_comment": "v0.28.2 배리어: 상점 · 광장 · 주요 건물 둘레의 보호막 (원, x · z · r m). 크리처는 들어오지 못하고 (막혀 둘러 간다), 안에 있는 사람은 노리지 않는다. 마을에는 옅은 돔 · 땅의 빛 고리 · 기둥으로 보인다.",
     "list": [

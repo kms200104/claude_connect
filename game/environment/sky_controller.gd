@@ -36,6 +36,14 @@ static var night_light: float = 0.0
 @export var night_ambient: Color = Color(0.42, 0.48, 0.78)
 ## 밤에도 폰 화면에서 보이도록 주변광을 이만큼은 남긴다.
 @export_range(0.0, 2.0, 0.05) var night_ambient_energy: float = 0.7
+## v0.28.4 바깥 밤 (생존): 하늘 · 주변광 · 달빛을 훨씬 어둡게, 검푸른 밤안개 — 손전등 · 횃불 · 가로등 · 창 불빛만 또렷하다.
+## 집 · 가게 안(indoor)은 위의 예전 밤 값 그대로.
+@export var outdoor_night_sky: Color = Color(0.015, 0.02, 0.045)
+@export var outdoor_night_ambient: Color = Color(0.2, 0.25, 0.42)
+@export_range(0.0, 2.0, 0.01) var outdoor_night_ambient_energy: float = 0.2
+@export_range(0.0, 2.0, 0.01) var outdoor_moon_energy: float = 0.08
+@export var night_fog_color: Color = Color(0.012, 0.016, 0.03)
+@export_range(0.0, 0.1, 0.001) var night_fog_density: float = 0.02
 
 @export_group("Weather")
 ## 날씨가 바뀔 때 하늘·빛이 따라가는 속도 (클수록 빠름).
@@ -130,7 +138,7 @@ func _apply(delta: float, instant: bool) -> void:
 	if sun != null:
 		var is_day: bool = daylight > 0.05
 		var sun_color: Color = day_sun.lerp(dawn_sun_color, golden * 0.8) if is_day else moon_color
-		var base_energy: float = lerpf(moon_energy, day_energy, daylight) * (1.0 - 0.55 * clouds)
+		var base_energy: float = lerpf(moon_energy if indoor else outdoor_moon_energy, day_energy, daylight) * (1.0 - 0.55 * clouds)
 		# 번개 발생 시 푸른 백색의 강렬한 섬광 조명 투사
 		var lightning_tint: Color = Color(0.85, 0.93, 1.0)
 		sun.light_color = sun_color.lerp(lightning_tint, minf(flash * 1.2, 1.0))
@@ -142,17 +150,19 @@ func _apply(delta: float, instant: bool) -> void:
 
 	if world_environment != null and world_environment.environment != null:
 		var env: Environment = world_environment.environment
-		var sky: Color = night_sky.lerp(dusk_sky, golden).lerp(day_sky, clampf(daylight * 2.0 - 1.0, 0.0, 1.0))
+		var dark: float = 0.0 if indoor else 1.0 - daylight
+		var sky: Color = (night_sky if indoor else outdoor_night_sky).lerp(dusk_sky, golden).lerp(day_sky, clampf(daylight * 2.0 - 1.0, 0.0, 1.0))
 		sky = sky.lerp(storm_sky * lerpf(0.35, 1.0, daylight), clouds * 0.8)
 		env.background_color = sky.lerp(Color(0.92, 0.96, 1.0), flash * 0.85)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = night_ambient.lerp(day_ambient, daylight)
-		env.ambient_light_energy = lerpf(night_ambient_energy, day_ambient_energy, daylight) * (1.0 - 0.2 * clouds) + flash * 2.0
+		env.ambient_light_color = (night_ambient if indoor else outdoor_night_ambient).lerp(day_ambient, daylight)
+		env.ambient_light_energy = lerpf(night_ambient_energy if indoor else outdoor_night_ambient_energy, day_ambient_energy, daylight) * (1.0 - 0.2 * clouds) + flash * 2.0
 		# 비·밤에는 촉촉하고 몽환적인 비안개(Mist)로 원경을 채워 적막함 해소 및 깊이감 부여
 		var fog: float = maxf(rain_amount * 0.95, (1.0 - daylight) * 0.15)
 		env.fog_enabled = fog > 0.02 and not indoor
-		env.fog_light_color = sky.lerp(Color(0.85, 0.92, 1.0), flash * 0.6)
-		env.fog_density = 0.003 + 0.015 * fog
+		env.fog_light_color = sky.lerp(night_fog_color, dark).lerp(Color(0.85, 0.92, 1.0), flash * 0.6)
+		env.fog_density = maxf(0.003 + 0.015 * fog, night_fog_density * dark)
+		env.fog_enabled = env.fog_enabled or (dark > 0.05 and not indoor)
 
 	var lamps: float = clampf(maxf(1.0 - daylight * 1.4, clouds * rain_amount * 0.5), 0.0, 1.0)
 	RenderingServer.global_shader_parameter_set("night_light", lamps)

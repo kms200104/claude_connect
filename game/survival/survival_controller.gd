@@ -47,10 +47,15 @@ var _hearts: HBoxContainer = null
 var _vignette: ColorRect = null
 var _hurt: HurtOverlay = null
 var edge_hint: CreatureEdgeHint = null
+## v0.28.4 저레벨 공포 연출.
+var fear: FearOverlay = null
 ## v0.28.1 핏자국 머티리얼 (젖어 번들거리는 정점 색) · 마지막 핏자국 자리 (끌린 방향).
 static var _blood_material: StandardMaterial3D = null
 var _last_drop: Vector2 = Vector2.INF
 var _light: OmniLight3D = null
+## v0.28.4 손전등: 바라보는 쪽으로 비추는 원뿔 빛 (그림자를 드리운다).
+var _spot: SpotLight3D = null
+var _light_t: float = 0.0
 var _was_night: bool = false
 var _swing_ready_at: float = 0.0
 ## 쓰러졌을 때 화면 안내.
@@ -99,9 +104,24 @@ func _ready() -> void:
 	_light.light_energy = 1.6
 	_light.shadow_enabled = false
 	_light.visible = false
+	_spot = SpotLight3D.new()
+	_spot.name = "Flashlight"
+	_spot.light_color = Color("#EEF4FF")
+	_spot.light_energy = 5.0
+	_spot.spot_range = 15.0
+	_spot.spot_angle = 26.0
+	_spot.spot_angle_attenuation = 1.6
+	_spot.spot_attenuation = 0.9
+	_spot.shadow_enabled = true
+	_spot.visible = false
 	if player != null:
 		player.add_child.call_deferred(_light)
 		_light.position = Vector3(0.3, 1.5, -0.3)
+		var holder: Node3D = player.body if player.body != null else player
+		holder.add_child.call_deferred(_spot)
+		# 가슴 높이에서 앞(-Z)으로, 조금 아래를 비춘다.
+		_spot.position = Vector3(0.18, 1.0, -0.25)
+		_spot.rotation = Vector3(-0.22, 0.0, 0.0)
 	Net.hp_changed.connect(func(_hp: int, _max: int) -> void: _refresh_hearts())
 	Net.hurt.connect(_on_hurt)
 	Net.knocked_out.connect(_on_ko)
@@ -144,13 +164,32 @@ func _process(_delta: float) -> void:
 			toast_hud.show_toast("밤이 됐어요 — 크리처가 나와요. 횃불 · 손전등 · 모닥불 곁, 대피소, 판자를 댄 빈집이 안전해요", false)
 		elif toast_hud != null:
 			toast_hud.show_toast("해가 떴어요. 크리처가 흩어졌어요", true)
-	# 든 횃불 · 손전등 불빛 (밤에).
+	# v0.28.4 밤 불빛 (밤 · 던전): 손전등은 바라보는 쪽 원뿔 빛 (+ 발밑이 살짝), 횃불은 일렁이는 주황 불빛,
+	# 아무것도 없으면 발밑만 겨우 보이는 희미한 빛 — 그 밖은 어둠.
 	if _light != null and player != null:
-		var w: SurvivalRules.Weapon = GameData.survival.weapon_of(player.held_item)
-		_light.visible = night and w.light > 0.0
-		if _light.visible:
-			_light.omni_range = w.light * 1.8
-			_light.light_color = Color("#FFC870") if player.held_item == "torch" else Color("#F4F8FF")
+		_light_t += _delta
+		var dark: bool = night or not GameData.hunter.dungeon_spot_at(player.global_position).is_empty()
+		var held: String = player.held_item
+		_spot.visible = dark and held == "flashlight"
+		_light.visible = dark
+		if dark:
+			match held:
+				"torch":
+					var flick: float = sin(_light_t * 13.0) * 0.5 + sin(_light_t * 23.0 + 1.3) * 0.3 + sin(_light_t * 5.0) * 0.2
+					_light.light_color = Color("#FFB45A")
+					_light.omni_range = 7.0 + flick * 0.4
+					_light.light_energy = 1.7 + flick * 0.35
+					_light.position = Vector3(0.3, 1.6, -0.3)
+				"flashlight":
+					_light.light_color = Color("#B8C8E8")
+					_light.omni_range = 2.6
+					_light.light_energy = 0.35
+					_light.position = Vector3(0.0, 1.4, 0.0)
+				_:
+					_light.light_color = Color("#8A9AC0")
+					_light.omni_range = 3.4
+					_light.light_energy = 0.45
+					_light.position = Vector3(0.0, 1.6, 0.0)
 	if _vignette != null and _vignette.color.a > 0.0:
 		_vignette.color.a = maxf(0.0, _vignette.color.a - _delta * 1.2)
 	_update_downed(_delta)
@@ -695,6 +734,8 @@ func _build_hud() -> void:
 	_hurt = HurtOverlay.new()
 	edge_hint = CreatureEdgeHint.new()
 	edge_hint.player = player
+	fear = FearOverlay.new()
+	fear.player = player
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -800,6 +841,8 @@ func _build_hud() -> void:
 	if hud != null:
 		hud.add_child.call_deferred(edge_hint)
 		hud.move_child.call_deferred(edge_hint, 0)
+		hud.add_child.call_deferred(fear)
+		hud.move_child.call_deferred(fear, 0)
 		hud.add_child.call_deferred(_vignette)
 		hud.add_child.call_deferred(_hurt)
 		hud.add_child.call_deferred(_hearts)

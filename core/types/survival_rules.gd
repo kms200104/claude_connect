@@ -93,6 +93,10 @@ var base_range: float = 1.6
 var stash_slots: int = 12
 ## v0.28.2 배리어 [{id, name, x, z, r}] (크리처가 못 들어오는 보호막).
 var barriers: Array[Dictionary] = []
+## v0.28.4 공포 연출: 이 헌터 레벨까지 · 크리처 거리 (m) · 섬뜩한 소리 간격 (초).
+var fear_max_level: int = 5
+var fear_range: float = 16.0
+var fear_sting_cooldown: float = 25.0
 ## v0.26 들이받기 { fast, restitution, slow_keep, contact_top, reach, … } (서버 survival.json ram 과 같은 값).
 var ram: Dictionary = {}
 ## v0.27 보급 상자를 열 수 있는 거리.
@@ -157,6 +161,10 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 	r.bed_local = Vector2(float(bd[0]), float(bd[1]))
 	r.base_range = float(base.get("range", r.base_range))
 	r.stash_slots = int(base.get("slots", r.stash_slots))
+	var fear: Dictionary = rules.get("fear", {})
+	r.fear_max_level = int(fear.get("max_level", r.fear_max_level))
+	r.fear_range = float(fear.get("range", r.fear_range))
+	r.fear_sting_cooldown = float(fear.get("sting_cooldown_s", r.fear_sting_cooldown))
 	for b: Variant in (rules.get("barriers", {}) as Dictionary).get("list", []):
 		if b is Dictionary:
 			r.barriers.append(b)

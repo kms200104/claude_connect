@@ -7,6 +7,8 @@
   creature_shriek      비명이의 찢어지는 비명 (1.3초)
   creature_hit         맞을 때 살 터지는 소리 (0.3초)
   creature_die         쓰러질 때 꺼져 가는 꾸르륵 (1.7초)
+  heartbeat            v0.28.4 공포 연출 심장 박동 한 번 (쿵-쿵, 0.5초)
+  fear_sting           v0.28.4 크리처가 처음 다가올 때 섬뜩한 소리 (불협 화음이 부풀다 긁히는 소리, 2.4초)
 
 사용: python3 tools/audio/gen_creature_sfx.py  → assets/audio/sfx/*.wav (44.1kHz 16bit 모노)
 """
@@ -187,6 +189,42 @@ def die():
     return room(finish(x, 2.8), rng, 0.2)
 
 
+def heartbeat():
+    rng = np.random.default_rng(5)
+    dur = 0.5
+    n = int(dur * SR)
+    tt = np.arange(n) / SR
+    x = np.zeros(n)
+    for start, amp, f in [(0.0, 1.0, 52.0), (0.16, 0.7, 46.0)]:
+        u = tt - start
+        m = u >= 0
+        env = np.where(m, np.exp(-np.maximum(u, 0) * 24) * (1 - np.exp(-np.maximum(u, 0) * 400)), 0)
+        x += amp * env * np.sin(2 * np.pi * f * np.maximum(u, 0) * (1 - 0.3 * np.maximum(u, 0)))
+        # 가슴 안의 둔한 울림 (낮게 거른 잡음).
+        noise = signal.lfilter(*signal.butter(2, 180 / (SR / 2), "low"), rng.normal(0, 1, n))
+        x += 0.25 * amp * env * noise / (np.max(np.abs(noise)) + 1e-9)
+    return finish(x, 1.6)
+
+
+def fear_sting():
+    rng = np.random.default_rng(66)
+    dur = 2.4
+    n = int(dur * SR)
+    t = np.linspace(0, 1, n)
+    tt = np.arange(n) / SR
+    # 낮은 불협 화음 (반음 · 증4도) 이 부풀어 오른다.
+    x = np.zeros(n)
+    for f, a in [(55.0, 1.0), (58.3, 0.8), (77.8, 0.6), (110.0, 0.4), (116.5, 0.35)]:
+        x += a * np.sin(2 * np.pi * f * tt * (1 + 0.004 * np.sin(2 * np.pi * 0.7 * tt)))
+    swell = np.clip(t / 0.55, 0, 1) ** 2.5 * np.exp(-np.maximum(t - 0.55, 0) * 3.0)
+    x *= swell
+    # 쇠를 긁는 듯한 높은 소리 (줄 긁기).
+    scrape = resonator(rng.normal(0, 1, n), np.interp(t, [0, 0.5, 1], [2400, 3100, 1900]), 60) * 6
+    scrape *= np.clip((t - 0.38) / 0.12, 0, 1) * np.exp(-np.maximum(t - 0.5, 0) * 4.5) * (0.6 + 0.4 * np.sin(2 * np.pi * 37 * tt))
+    x = x / (np.max(np.abs(x)) + 1e-9) + 0.45 * scrape / (np.max(np.abs(scrape)) + 1e-9)
+    return room(finish(x, 1.8), rng, 0.35, 0.9)
+
+
 def main():
     write("creature_groan_1", groan(1, 1.9, 82, 64))
     write("creature_groan_2", groan(2, 1.5, 96, 72))
@@ -195,6 +233,8 @@ def main():
     write("creature_shriek", shriek())
     write("creature_hit", hit())
     write("creature_die", die())
+    write("heartbeat", heartbeat())
+    write("fear_sting", fear_sting())
 
 
 if __name__ == "__main__":
