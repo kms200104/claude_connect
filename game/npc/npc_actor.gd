@@ -76,6 +76,10 @@ func apply_state(state: NetNpcState) -> void:
 		rig.set_mood_face(mood)
 	_target_yaw = state.yaw
 	_set_activity(state.activity)
+	# v0.28.2 크리처에게 쓰러졌다: 옆으로 눕고 머리 위에 "다쳤어요".
+	if state.down != down:
+		down = state.down
+		set_mark("다쳤어요…" if down else "")
 	if not _has_state or global_position.distance_to(state.position) > teleport_distance:
 		global_position = state.position
 		if body != null:
@@ -94,6 +98,8 @@ func set_mark(text: String) -> void:
 
 ## 지금 기분 (서버가 알려 준다). 가끔 혼자서 기분대로 몸짓을 한다 (NpcCrowd).
 var mood: String = "calm"
+## v0.28.2 쓰러져 누워 있는지.
+var down: bool = false
 
 
 ## 감정표현 (몸짓 + 머리 위 말풍선 + 말소리). line 이 있으면 머리 위에 짧은 대사도 띄운다.
@@ -126,6 +132,9 @@ func _process(delta: float) -> void:
 		var moved: float = Vector3(global_position.x - before.x, 0.0, global_position.z - before.z).length() / delta
 		_shown_speed = lerpf(_shown_speed, moved, 1.0 - exp(-10.0 * delta))
 		rig.set_move_speed(_shown_speed / walk_speed_reference)
+	if body != null:
+		body.rotation.z = lerpf(body.rotation.z, 1.45 if down else 0.0, 1.0 - exp(-6.0 * delta))
+		body.position.y = lerpf(body.position.y, 0.2 if down else 0.72, 1.0 - exp(-6.0 * delta))
 	if mark != null and mark.visible:
 		_mark_time += delta
 		mark.position.y = 2.45 + sin(_mark_time * 4.0) * 0.06

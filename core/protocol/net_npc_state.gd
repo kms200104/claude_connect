@@ -13,6 +13,8 @@ var mood: String = "calm"
 var approaching: int = 0
 ## 길목에 멈춰 하는 몸짓 (v0.16: stretch · warmup · sun · sit · fish, 빈 문자열 = 없음).
 var activity: String = ""
+## v0.28.2 크리처에게 쓰러져 누워 있다.
+var down: bool = false
 
 
 static func from_dict(data: Dictionary) -> NetNpcState:
@@ -24,4 +26,5 @@ static func from_dict(data: Dictionary) -> NetNpcState:
 	state.mood = str(data.get("m", "calm"))
 	state.approaching = int(data.get("ap", 0))
 	state.activity = str(data.get("a", ""))
+	state.down = int(data.get("dn", 0)) == 1
 	return state

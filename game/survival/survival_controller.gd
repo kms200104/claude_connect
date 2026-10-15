@@ -38,6 +38,7 @@ var houses: HouseField = null
 var creatures: CreatureField = null
 var supply: SupplyField = null
 var barriers: BarrierField = null
+var guards: GuardField = null
 ## v0.27 보급 상자 방향 (화살표 · 거리 글자).
 var _supply_chip: HBoxContainer = null
 var _supply_arrow: Label = null
@@ -88,6 +89,8 @@ func _ready() -> void:
 	world.add_child.call_deferred(supply)
 	barriers = BarrierField.new()
 	world.add_child.call_deferred(barriers)
+	guards = GuardField.new()
+	world.add_child.call_deferred(guards)
 	_build_hud()
 	_light = OmniLight3D.new()
 	_light.name = "HeldLight"
@@ -113,6 +116,7 @@ func _ready() -> void:
 	Net.supply_changed.connect(_on_supply_changed)
 	Net.supply_taken.connect(_on_supply_taken)
 	Net.supply_got.connect(_on_supply_got)
+	Net.npc_hurt.connect(_on_npc_hurt)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
 		for d: Dictionary in _drops:
 			if is_instance_valid(d["node"]):
@@ -915,3 +919,17 @@ func _on_supply_got(info: Dictionary) -> void:
 ## 달리는 중인지 (조이스틱을 끝까지 밀어 달리기 · 실제로 움직이는 중).
 func _is_running() -> bool:
 	return player != null and player.running and Vector2(player.velocity.x, player.velocity.z).length() > 3.0
+
+
+# ---- v0.28.2 주민이 크리처에게 ----
+
+func _on_npc_hurt(info: Dictionary) -> void:
+	if toast_hud == null:
+		return
+	var who: NpcInfo = GameData.npcs.get(str(info.get("id", "")))
+	var name_text: String = who.display_name if who != null else "주민"
+	match str(info.get("t", "")):
+		"npc_down":
+			toast_hud.show_toast("%s 님이 크리처에게 쓰러졌어요!" % name_text, false)
+		"npc_up":
+			toast_hud.show_toast("%s 님이 다시 일어났어요" % name_text, true)

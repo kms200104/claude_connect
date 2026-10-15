@@ -70,6 +70,10 @@ signal hunter_done(info: Dictionary)
 signal gate_changed(gate_id: String)
 signal gate_entered(gate_id: String)
 signal gate_cleared(info: Dictionary)
+## v0.28.2 가디언: 상태가 바뀜 (id) · 총을 쐈다 { g, c, hp, x, z } · 주민이 맞음 { id, hp } · 쓰러짐 · 일어남.
+signal guard_changed(guard_id: String)
+signal guard_shot(info: Dictionary)
+signal npc_hurt(info: Dictionary)
 signal alert_received(alert: Dictionary)
 signal drill_changed(info: Dictionary)
 signal drill_finished(info: Dictionary)
@@ -331,6 +335,8 @@ var guild: Dictionary = {}
 var hunter_ranks: Dictionary[int, String] = {}
 ## v0.28 열린 게이트 (id → {rank, spot, name, x, z, st: open|raid|break, until: 이 기기 ms, wave, waves, alive, boss, raiders: [id]}).
 var gates: Dictionary[String, Dictionary] = {}
+## v0.28.2 가디언 (id → {x, z, yaw, hp, max, until: 부활하는 이 기기 ms, 0 = 서 있음}).
+var guards: Dictionary[String, Dictionary] = {}
 var _world_scale: float = 1.0
 ## 서버가 계절을 고정했으면 그 계절 (SEASON_FORCE, 테스트·시연용). 비어 있으면 마을 날짜로.
 var _season_force: String = ""
@@ -1113,6 +1119,30 @@ func _handle_text(text: String) -> void:
 			gate_entered.emit(str(msg.get("g", "")))
 		"gate_clear":
 			gate_cleared.emit(msg)
+		"guard_shot":
+			var sg: String = str(msg.get("g", ""))
+			if guards.has(sg):
+				guards[sg]["yaw"] = atan2(float(msg.get("x", 0.0)) - float(guards[sg]["x"]), float(msg.get("z", 0.0)) - float(guards[sg]["z"]))
+			guard_shot.emit(msg)
+		"guard_hit":
+			var hg: String = str(msg.get("g", ""))
+			if guards.has(hg):
+				guards[hg]["hp"] = int(msg.get("hp", 0))
+				guard_changed.emit(hg)
+		"guard_down":
+			var dg: String = str(msg.get("g", ""))
+			if guards.has(dg):
+				guards[dg]["hp"] = 0
+				guards[dg]["until"] = Time.get_ticks_msec() + int(float(msg.get("left", 0)) / maxf(_world_scale, 1.0))
+				guard_changed.emit(dg)
+		"guard_up":
+			var ug: String = str(msg.get("g", ""))
+			if guards.has(ug):
+				guards[ug]["hp"] = int(guards[ug]["max"])
+				guards[ug]["until"] = 0
+				guard_changed.emit(ug)
+		"npc_hit", "npc_down", "npc_up":
+			npc_hurt.emit(msg)
 		"downed":
 			downed[int(msg.get("id", 0))] = {"until": Time.get_ticks_msec() + int(msg.get("left", 0)), "by": 0, "done": 0}
 			downed_changed.emit(int(msg.get("id", 0)))
@@ -1408,6 +1438,11 @@ func _on_welcome(msg: Dictionary) -> void:
 	for pv: Variant in msg.get("players", []):
 		if pv is Dictionary:
 			hunter_ranks[int(pv.get("id", 0))] = str(pv.get("hr", "E"))
+	guards.clear()
+	for gd: Variant in surv.get("guards", []):
+		if gd is Dictionary:
+			var left_ms: int = int(float(gd.get("left", 0)) / maxf(_world_scale, 1.0))
+			guards[str(gd.get("id", ""))] = {"x": float(gd.get("x", 0.0)), "z": float(gd.get("z", 0.0)), "yaw": float(gd.get("yaw", 0.0)), "hp": int(gd.get("hp", 1)), "max": int(gd.get("max", 1)), "until": Time.get_ticks_msec() + left_ms if left_ms > 0 else 0}
 	gates.clear()
 	for gv: Variant in surv.get("gates", []):
 		if gv is Dictionary:
