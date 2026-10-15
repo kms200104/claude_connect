@@ -926,7 +926,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
         continue;
       }
-      if ((c.downUntil ?? 0) > t || cfg.creatureFreeze) continue;
+      if ((c.downUntil ?? 0) > t || (c.stunUntil ?? 0) > t || cfg.creatureFreeze) continue;
       if (c.wasDown) {
         c.wasDown = false;
         changed = true;
@@ -1196,7 +1196,10 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const { player, room } = ctx;
     if (!player.acceptRid(msg.rid)) return;
     if (player.downed) return fail(ErrorCode.downed);
-    const w = S.weapons[player.heldItem] ?? S.weapons.hands;
+    let w = S.weapons[player.heldItem] ?? S.weapons.hands;
+    // v0.28.5 쏘는 무기 (석궁): 화살이 없으면 맨손.
+    const ammo = w.ammo && countWhere(player.slots, (id) => id === w.ammo) > 0 ? w.ammo : null;
+    if (w.ammo && !ammo) w = S.weapons.hands;
     const t = now();
     if (t < (player.attackReadyAt ?? 0)) return fail(ErrorCode.tooFast);
     player.attackReadyAt = t + w.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) - 60;
@@ -1208,34 +1211,39 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     act(room, player, 'swing', player.heldItem ?? '');
     wake(room, player);
     noise(room, player, 'swing');
-    let target = null;
-    let bestD = w.range + 0.3 + reach;
-    for (const c of room.creatures?.values() ?? []) {
-      const d = Math.hypot(c.x - ax, c.z - az);
-      if (d <= bestD) {
-        bestD = d;
-        target = c;
-      }
+    // 닿는 크리처 (가까운 순). 소방도끼는 cleave 만큼 한 번에 벤다.
+    const limit = w.range + 0.3 + reach;
+    const hits = [...(room.creatures?.values() ?? [])]
+      .map((c) => ({ c, d: Math.hypot(c.x - ax, c.z - az) }))
+      .filter((h) => h.d <= limit)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, Math.max(1, w.cleave ?? 1));
+    if (hits.length === 0) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
+    if (ammo) {
+      removeWhere(player.slots, (id) => id === ammo, 1);
+      sendInventory(player);
     }
-    if (!target) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
-    // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더).
-    const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1);
-    // v0.28.2 철갑이: 갑옷만큼 덜 받는다 (최소 1).
-    const armor = S.creatures.kinds[target.k]?.armor ?? 0;
-    target.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
-    // 맞으면 조금 밀려난다.
-    if (bestD > 0.01) {
-      const push = 0.7;
-      const nx = target.x + ((target.x - player.x) / bestD) * push;
-      const nz = target.z + ((target.z - player.z) / bestD) * push;
-      if (isLand(data, nx, nz)) {
-        target.x = nx;
-        target.z = nz;
+    const target = hits[0].c;
+    for (const { c, d } of hits) {
+      // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더). v0.28.2 철갑이: 갑옷만큼 덜 받는다 (최소 1).
+      const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1);
+      const armor = S.creatures.kinds[c.k]?.armor ?? 0;
+      c.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+      // 맞으면 밀려난다 (못 박힌 방망이는 크게) · 비틀거린다.
+      if (d > 0.01) {
+        const push = w.push ?? 0.7;
+        const nx = c.x + ((c.x - player.x) / d) * push;
+        const nz = c.z + ((c.z - player.z) / d) * push;
+        if (isLand(data, nx, nz) && canStand(nx, nz, defenses(room))) {
+          c.x = nx;
+          c.z = nz;
+        }
       }
+      if (w.stun_ms) c.stunUntil = t + w.stun_ms;
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ...(ammo ? { shot: 1, sx: round(player.x), sz: round(player.z) } : {}), ...(w.stun_ms ? { stun: w.stun_ms } : {}) });
     }
-    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge });
-    room.broadcast({ t: 'creature_hit', id: target.id, hp: Math.max(0, target.hp), by: player.id });
-    if (target.hp <= 0) kill(room, target, player.id);
+    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge, n: hits.length });
+    for (const { c } of hits) if (c.hp <= 0) kill(room, c, player.id);
     room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
   }
 

@@ -222,7 +222,7 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 		if sp != Vector3.INF and Vector2(sp.x - position.x, sp.z - position.z).length() <= rules.supply_range - margin:
 			return TARGET_SUPPLY + sid
 	if creatures != null and not Net.creatures.is_empty():
-		var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item)
+		var w: SurvivalRules.Weapon = held_weapon()
 		# 기술이 있으면 달릴 때 더 먼 크리처도 노린다.
 		var reach: float = HunterApp.skill_reach("run_attack") if _is_running() and Net.has_skill("run_attack") else 0.0
 		var near: String = creatures.nearest(position, w.range_m + 0.4 + reach)
@@ -267,6 +267,27 @@ func _flicker(delta: float) -> void:
 		_light.light_energy *= 0.15 if off else 1.0
 	else:
 		_light.light_energy *= 0.35 if off else randf_range(0.6, 1.0)
+
+
+## 손에 든 무기 (v0.28.5 석궁은 화살이 없으면 맨손 — 서버와 같다).
+func held_weapon() -> SurvivalRules.Weapon:
+	var rules: SurvivalRules = GameData.survival
+	var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item if player != null else "")
+	if not w.ammo.is_empty():
+		var have: int = 0
+		for it: InventoryItem in Net.inventory:
+			if it != null and it.id == w.ammo:
+				have += it.count
+		if have == 0:
+			if not _warned_ammo and toast_hud != null and Net.state == Net.State.ONLINE:
+				_warned_ammo = true
+				toast_hud.show_toast("%s이 없어요 — 맨손으로 싸워요 (제작대에서 만들거나 상점에서 사요)" % GameData.item_name(w.ammo), false)
+			return rules.weapon_of("hands")
+		_warned_ammo = false
+	return w
+
+
+var _warned_ammo: bool = false
 
 
 ## v0.28.4 자동 공격: 공격 범위 안에 크리처가 들면 (공격 간격이 찼을 때) 저절로 휘두른다. 상황 버튼은 그대로 (눌러도 된다).
@@ -350,7 +371,7 @@ func activate(target: String, auto: bool = false) -> void:
 		var now_s: float = Time.get_ticks_msec() / 1000.0
 		if now_s < _swing_ready_at:
 			return
-		var w: SurvivalRules.Weapon = GameData.survival.weapon_of(player.held_item)
+		var w: SurvivalRules.Weapon = held_weapon()
 		# 민첩만큼 공격 간격이 짧다.
 		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown"))
 		var at: Vector3 = creatures.actor_position(target.trim_prefix(TARGET_ATTACK))

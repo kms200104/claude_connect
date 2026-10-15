@@ -67,6 +67,11 @@ class Actor:
 	var pool: MeshInstance3D
 	## 다쳤는지 (이름표는 다쳤거나 아주 가까울 때만).
 	var hurt: bool = false
+	## v0.28.5 못 박힌 방망이에 맞아 비틀거리는 남은 시간 (초).
+	var stun: float = 0.0
+	## v0.28.5 어둠 속 눈빛: 몸이 보이는 정도 (0 = 어둠에 묻혀 눈만, 1 = 다 보임) · 다음 깜빡임까지.
+	var seen: float = 1.0
+	var blink_next: float = 3.0
 
 var _actors: Dictionary[String, Actor] = {}
 var _dying: Array[Actor] = []
@@ -161,8 +166,9 @@ func _process(delta: float) -> void:
 		a.body.rotation.x = move_toward(a.body.rotation.x, 0.0, delta * 3.0)
 		a.body.position.y = move_toward(a.body.position.y, 0.0, delta * 2.0) if a.emerge >= 1.0 else a.body.position.y
 		_animate(a, delta)
+		_darkness(a, delta)
 		if a.tag != null:
-			a.tag.visible = a.emerge >= 1.0 and (player_near(a.root.global_position, 3.0) or (a.hurt or not a.boss.is_empty()) and player_near(a.root.global_position, 14.0))
+			a.tag.visible = a.seen > 0.5 and a.emerge >= 1.0 and (player_near(a.root.global_position, 3.0) or (a.hurt or not a.boss.is_empty()) and player_near(a.root.global_position, 14.0))
 	for i: int in range(_dying.size() - 1, -1, -1):
 		var d: Actor = _dying[i]
 		if not is_instance_valid(d.root):
@@ -170,6 +176,76 @@ func _process(delta: float) -> void:
 			continue
 		if _die_step(d, delta):
 			_dying.remove_at(i)
+
+
+## v0.28.5 어둠 속 눈빛: 밤 · 던전에서 내 불빛 (손전등 원뿔 · 횃불 · 맨손의 희미한 빛) · 동료 곁 밖에 있는 크리처는
+## 몸이 어둠에 묻혀 빛나는 눈만 보인다 (가끔 깜빡인다). 불빛에 들어오면 서서히 드러난다. 맞거나 덮치는 중이면 보인다.
+var _player: Player = null
+
+
+func is_lit(a: Actor) -> bool:
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group(&"player") as Player
+	var player: Player = _player
+	if player == null:
+		return true
+	var night: bool = Net.state == Net.State.ONLINE and GameData.survival.is_night(Net.game_hour())
+	if not night and GameData.hunter.dungeon_spot_at(player.global_position).is_empty():
+		return true
+	if a.punch > 0.05 or a.lunge > 0.05 or not a.boss.is_empty():
+		return true
+	var to: Vector3 = a.root.global_position - player.global_position
+	to.y = 0.0
+	var d: float = to.length()
+	match player.held_item:
+		"flashlight":
+			if d <= 4.6:
+				return true
+			var fwd: Vector3 = -player.body.global_basis.z if player.body != null else Vector3.FORWARD
+			fwd.y = 0.0
+			return d <= 15.5 and fwd.length() > 0.01 and to.normalized().dot(fwd.normalized()) >= cos(deg_to_rad(19.0))
+		"torch":
+			return d <= 7.5
+	if d <= 4.6:
+		return true
+	# 동료 곁 (동료의 불빛).
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	if replicator != null:
+		for r: RemotePlayer in replicator.remote_nodes():
+			if r.global_position.distance_to(a.root.global_position) <= 5.0:
+				return true
+	return false
+
+
+func _darkness(a: Actor, delta: float) -> void:
+	var goal: float = 1.0 if is_lit(a) else 0.0
+	var before: float = a.seen
+	a.seen = move_toward(a.seen, goal, delta * (2.5 if goal > a.seen else 1.6))
+	if a.seen != before or (a.seen > 0.0 and a.seen < 1.0):
+		var hide: bool = a.seen <= 0.01
+		var fade: float = 0.0 if a.seen >= 0.99 else 1.0 - a.seen
+		for m: MeshInstance3D in a.rig.body_meshes:
+			m.visible = not hide
+			m.transparency = fade
+	# 눈: 어둠 속에서는 더 크게 빛나고, 가끔 깜빡인다.
+	a.blink_next -= delta
+	var blink: float = 1.0
+	if a.blink_next < 0.0:
+		blink = 0.08
+		if a.blink_next < -0.14:
+			a.blink_next = randf_range(1.5, 5.0)
+	if a.rig.glint != null:
+		var dark: float = 1.0 - a.seen
+		a.rig.glint.visible = dark > 0.05 and blink > 0.5
+		a.rig.glint.transparency = 1.0 - dark if dark < 0.99 else 0.0
+		a.rig.halo.visible = a.rig.glint.visible
+		a.rig.halo.transparency = a.rig.glint.transparency
+
+
+## 몸이 어둠에 묻혀 눈만 보이는지 (점검용).
+func only_eyes(id: String) -> bool:
+	var a: Actor = _actors.get(id)
+	return a != null and a.seen <= 0.01 and a.rig.body_meshes.all(func(m: MeshInstance3D) -> bool: return not m.visible)
 
 
 func _pitch(a: Actor) -> float:
@@ -265,6 +341,15 @@ func _animate(a: Actor, delta: float) -> void:
 		_emerge_step(a, delta)
 	# 맞으면 뒤로 밀린다 · 덮치면 앞으로 튀어 나간다.
 	a.body.position.z = -0.32 * l + 0.14 * p
+	# 비틀거림: 몸이 크게 휘청이고 고개가 축 늘어진다.
+	if a.stun > 0.0:
+		a.stun = maxf(0.0, a.stun - delta)
+		var k: float = minf(1.0, a.stun * 2.0)
+		a.body.rotation.z = sin(a.t * 9.0) * 0.28 * k
+		r.head.rotation.x += 0.6 * k
+		r.head.rotation.z += sin(a.t * 7.0) * 0.4 * k
+	elif a.body.rotation.z != 0.0:
+		a.body.rotation.z = move_toward(a.body.rotation.z, 0.0, delta * 2.0)
 
 
 ## 팔: 종류마다 다른 자세.
@@ -430,6 +515,10 @@ func _on_hit(info: Dictionary) -> void:
 	if a == null:
 		return
 	a.punch = 1.0
+	if info.has("stun"):
+		a.stun = float(info.get("stun", 0)) / 1000.0
+	if info.has("shot"):
+		_bolt(Vector3(float(info.get("sx", 0.0)), 1.3, float(info.get("sz", 0.0))), a)
 	a.tw_goal = Vector4(randf_range(-0.3, 0.3), randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), 0.0)
 	a.tw_hold = 0.12
 	_update_tag(a, int(info.get("hp", 0)))
@@ -459,6 +548,30 @@ func _on_hit(info: Dictionary) -> void:
 	_float_text(a.root.global_position + Vector3(0.0, 2.0, 0.0), "퍽!", Color("#FFE08A"))
 	_blood_spray(a, 9)
 	Audio.play_at("creature_hit", a.root.global_position, -2.0, randf_range(0.85, 1.1))
+
+
+## v0.28.5 석궁 화살: 쏜 자리에서 크리처까지 빠르게 날아가 꽂힌다 (잠시 뒤 사라진다).
+func _bolt(from: Vector3, a: Actor) -> void:
+	var to: Vector3 = a.root.global_position + Vector3(0.0, 1.15 * a.rig.parts.scale * a.root.scale.y, 0.0)
+	var info: ItemInfo = GameData.item("crossbow_bolt")
+	if info == null or info.model.is_empty():
+		return
+	var bolt: MeshInstance3D = MeshInstance3D.new()
+	bolt.mesh = PartMesh.get_mesh("crossbow_bolt", info.model)
+	bolt.material_override = material
+	add_child(bolt)
+	bolt.global_position = from
+	if from.distance_to(to) > 0.05:
+		bolt.look_at_from_position(from, to, Vector3.UP)
+	Audio.play_at("crossbow_shot", from, -2.0, randf_range(0.95, 1.08))
+	var flight: float = clampf(from.distance_to(to) / 40.0, 0.04, 0.25)
+	var tween: Tween = bolt.create_tween()
+	tween.tween_property(bolt, "global_position", to, flight)
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(a.root) and is_instance_valid(bolt):
+			bolt.reparent(a.root, true))
+	tween.tween_interval(2.5)
+	tween.tween_callback(bolt.queue_free)
 
 
 ## 맞은 자리에서 검붉은 피가 튄다.

@@ -54,6 +54,13 @@ class Rig:
 	## 독침이 독주머니 (숨쉬듯 부푼다), 없으면 null.
 	var sac: Node3D
 	var parts: Parts
+	## v0.28.5 어둠 속 눈빛: 몸 메시들 (불빛 밖이면 감춘다) · 빛나는 눈.
+	var body_meshes: Array[MeshInstance3D] = []
+	var eyes: MeshInstance3D
+	## 어둠 속에서만 보이는 큰 눈빛 (멀리서도 보이게) · 그 둘레 빛무리.
+	var glint: MeshInstance3D
+	var halo: MeshInstance3D
+	var halo_color: Color = Color.WHITE
 
 
 static var _cache: Dictionary[String, Parts] = {}
@@ -486,6 +493,10 @@ static func _build_head(p: Parts, d: Dictionary, rng: RandomNumberGenerator, ski
 		var r: float = 0.0062 if p.kind != "screamer" else 0.0085
 		ClayMesh.add_ellipsoid(es, hc + Vector3(s * 0.034, 0.02, -0.1095) * big, Vector3(r, r, 0.0025) * big, Color.WHITE, 10, 4)
 	p.glows["eyes"] = ClayMesh.commit(es)
+	var gs: SurfaceTool = ClayMesh.begin()
+	for s: float in [-1.0, 1.0]:
+		ClayMesh.add_ellipsoid(gs, hc + Vector3(s * 0.045, 0.02, -0.112) * big, Vector3(0.04, 0.026, 0.012) * big, Color.WHITE, 10, 4, Basis(Vector3.BACK, s * -0.2))
+	p.glows["glint"] = ClayMesh.commit(gs)
 	p.glow_colors["eyes"] = p.eye_color
 	# 턱 (턱 관절 = 귀 밑 기준): 아래턱뼈 · 잇몸 · 아랫니 · 검은 혀 · 늘어진 살 조각.
 	var js: SurfaceTool = ClayMesh.begin()
@@ -646,7 +657,21 @@ static func build(kind: String, material: Material) -> Rig:
 		_mesh(r.sac, p.glows["sac"], glow_material(p.glow_colors["sac"], Color("#3E5A1E")), false)
 	r.head = _joint(r.neck, "Head", Vector3(0.0, p.neck_len, 0.0))
 	_mesh(r.head, p.meshes["head"], material)
-	_mesh(r.head, p.glows["eyes"], glow_material(p.glow_colors["eyes"], Color("#B8B094")), false)
+	r.eyes = _mesh(r.head, p.glows["eyes"], glow_material(p.glow_colors["eyes"], Color("#B8B094")), false)
+	r.glint = _mesh(r.head, p.glows["glint"], glow_material(p.glow_colors["eyes"], Color("#B8B094")), false)
+	r.glint.visible = false
+	# 눈빛 무리 (어둠 속에서만): 카메라를 향한 작은 판에 둥글게 번지는 빛 (모든 크리처가 머티리얼 하나를 같이 쓴다, 색은 인스턴스마다).
+	var halo: MeshInstance3D = MeshInstance3D.new()
+	var quad: QuadMesh = QuadMesh.new()
+	quad.size = Vector2(0.6, 0.36)
+	halo.mesh = quad
+	halo.material_override = _halo_material(p.eye_color)
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.position = Vector3(0.0, 0.15, -0.14)
+	halo.visible = false
+	r.head.add_child(halo)
+	r.halo = halo
+	r.halo_color = p.eye_color
 	r.jaw = _joint(r.head, "Jaw", Vector3(0.0, 0.1, 0.0))
 	_mesh(r.jaw, p.meshes["jaw"], material)
 	for side: String in ["l", "r"]:
@@ -670,7 +695,46 @@ static func build(kind: String, material: Material) -> Rig:
 			r.thigh_r = th
 			r.knee_r = kn
 	r.root.scale = Vector3.ONE * p.scale
+	_collect(r.root, r)
 	return r
+
+
+static func _collect(n: Node, r: Rig) -> void:
+	for c: Node in n.get_children():
+		if c is MeshInstance3D and c != r.eyes and c != r.glint and c != r.halo:
+			r.body_meshes.append(c as MeshInstance3D)
+		_collect(c, r)
+
+
+static var _halo_mat: Dictionary[String, StandardMaterial3D] = {}
+
+
+## 빛무리 머티리얼 (색마다 하나 — 크리처 종류 수만큼): 가운데가 밝고 둘레로 사라지는 둥근 빛, 더해 그리기, 늘 카메라를 본다.
+static func _halo_material(c: Color = Color.WHITE) -> StandardMaterial3D:
+	var key: String = c.to_html(false)
+	if _halo_mat.has(key):
+		return _halo_mat[key]
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.no_depth_test = false
+	var g: Gradient = Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 0.85))
+	g.set_color(1, Color(1, 1, 1, 0.0))
+	g.add_point(0.25, Color(1, 1, 1, 0.45))
+	var tex: GradientTexture2D = GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
+	m.albedo_texture = tex
+	m.albedo_color = c
+	_halo_mat[key] = m
+	return m
 
 
 static func _joint(parent: Node3D, joint_name: String, at: Vector3) -> Node3D:

@@ -148,12 +148,16 @@
   },
 
   "weapons": {
-    "_comment": "손에 든 것 → 피해 · 닿는 거리(m) · 다시 휘두르기(ms). 없으면 hands. light = 들고 있으면 크리처가 이 거리 안으로 오지 못한다 (횃불 · 손전등).",
+    "_comment": "손에 든 것 → 피해 · 닿는 거리(m) · 다시 휘두르기(ms). 없으면 hands. light = 들고 있으면 크리처가 이 거리 안으로 오지 못한다 (횃불 · 손전등). v0.28.5: push = 맞으면 밀려나는 거리 (기본 0.7), stun_ms = 비틀거리는 시간, cleave = 한 번에 베는 수 (가까운 순), ammo = 쏠 때마다 쓰는 것 (없으면 맨손).",
     "hands": { "damage": 1, "range": 1.4, "cooldown_ms": 650 },
     "axe": { "damage": 2, "range": 1.6, "cooldown_ms": 650 },
     "shovel": { "damage": 2, "range": 1.7, "cooldown_ms": 700 },
     "wooden_club": { "damage": 3, "range": 1.7, "cooldown_ms": 600 },
     "pipe_spear": { "damage": 4, "range": 2.5, "cooldown_ms": 700 },
+    "iron_pipe": { "damage": 3, "range": 1.8, "cooldown_ms": 520 },
+    "nail_bat": { "damage": 4, "range": 1.9, "cooldown_ms": 650, "push": 1.8, "stun_ms": 900 },
+    "fire_axe": { "damage": 7, "range": 1.9, "cooldown_ms": 1000, "cleave": 2 },
+    "crossbow": { "damage": 5, "range": 9.0, "cooldown_ms": 1100, "ammo": "crossbow_bolt", "push": 0.3 },
     "torch": { "damage": 2, "range": 1.5, "cooldown_ms": 650, "light": 3.2 },
     "flashlight": { "damage": 1, "range": 1.4, "cooldown_ms": 650, "light": 4.5 }
   },

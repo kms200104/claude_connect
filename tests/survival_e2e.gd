@@ -125,6 +125,16 @@ func _run() -> void:
 	# ---- 밤 크리처 ----
 	await _teleport(Vector3(-150.0, 0.1, 140.0))
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty() and survival.creatures.get_child_count() > 0, 5.0), "둔치에 크리처가 나타났다 (%d)" % Net.creatures.size())
+	# v0.28.5 불빛 밖 크리처는 몸이 어둠에 묻혀 빛나는 눈만 보인다.
+	_check(await _wait_until(func() -> bool: return Net.creatures.keys().any(func(id: String) -> bool: return survival.creatures.only_eyes(id)), 4.0), "어둠 속 크리처는 눈만 보인다")
+	# 화면 위쪽에 오도록 그 크리처 남쪽 7m 로 옮겨 찍는다.
+	if not _shots.is_empty():
+		for id: String in Net.creatures:
+			if survival.creatures.only_eyes(id):
+				var cp: Vector3 = survival.creatures.actor_position(id)
+				await _teleport(Vector3(cp.x, 0.1, cp.z + 7.0))
+				break
+		await _shot("surv_eyes")
 	# v0.28.2 화면 밖에서 다가오는 크리처 쪽 가장자리가 은은하게 붉다.
 	_check(await _wait_until(func() -> bool: return survival.edge_hint.hint_count() > 0, 5.0), "다가오는 크리처 방향 가장자리 표시")
 	await _shot("surv_edge_hint")

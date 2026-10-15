@@ -54,6 +54,10 @@ class Weapon:
 	var range_m: float = 1.4
 	var cooldown_ms: int = 650
 	var light: float = 0.0
+	## v0.28.5 쏠 때마다 쓰는 것 (석궁 화살, 없으면 빈 글자) · 비틀거리게 하는 시간 · 한 번에 베는 수.
+	var ammo: String = ""
+	var stun_ms: int = 0
+	var cleave: int = 1
 
 
 class CreatureKind:
@@ -126,6 +130,9 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		weapon.range_m = float(w.get("range", 1.4))
 		weapon.cooldown_ms = int(w.get("cooldown_ms", 650))
 		weapon.light = float(w.get("light", 0.0))
+		weapon.ammo = str(w.get("ammo", ""))
+		weapon.stun_ms = int(w.get("stun_ms", 0))
+		weapon.cleave = int(w.get("cleave", 1))
 		r.weapons[str(id)] = weapon
 	var defense: Dictionary = rules.get("defense", {})
 	for id: Variant in defense:

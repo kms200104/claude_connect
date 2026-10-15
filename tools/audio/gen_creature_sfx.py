@@ -8,6 +8,7 @@
   creature_hit         맞을 때 살 터지는 소리 (0.3초)
   creature_die         쓰러질 때 꺼져 가는 꾸르륵 (1.7초)
   heartbeat            v0.28.4 공포 연출 심장 박동 한 번 (쿵-쿵, 0.5초)
+  crossbow_shot        v0.28.5 석궁 쏘는 소리 (시위 튕김 · 바람 가르기, 0.4초)
   light_flicker        v0.28.4 맞을 때 손전등이 지직거리는 소리 (0.6초)
   fear_sting           v0.28.4 크리처가 처음 다가올 때 섬뜩한 소리 (불협 화음이 부풀다 긁히는 소리, 2.4초)
 
@@ -243,6 +244,18 @@ def light_flicker():
     return finish(x, 1.5)
 
 
+def crossbow_shot():
+    rng = np.random.default_rng(31)
+    dur = 0.4
+    n = int(dur * SR)
+    tt = np.arange(n) / SR
+    # 시위가 튕기는 '퉁' (낮은 줄 울림) + 화살이 바람을 가르는 '슉'.
+    twang = np.sin(2 * np.pi * 180 * tt * (1 - 0.6 * tt)) * np.exp(-tt * 28) + 0.4 * np.sin(2 * np.pi * 360 * tt) * np.exp(-tt * 40)
+    click = rng.normal(0, 1, n) * np.exp(-tt * 300) * 0.8
+    whoosh = resonator(rng.normal(0, 1, n), np.interp(tt, [0, dur], [3200, 1400]), 500) * 4 * np.clip((tt - 0.02) / 0.05, 0, 1) * np.exp(-tt * 9)
+    return finish(twang + click + whoosh * 0.5, 1.4)
+
+
 def main():
     write("creature_groan_1", groan(1, 1.9, 82, 64))
     write("creature_groan_2", groan(2, 1.5, 96, 72))
@@ -254,6 +267,7 @@ def main():
     write("heartbeat", heartbeat())
     write("fear_sting", fear_sting())
     write("light_flicker", light_flicker())
+    write("crossbow_shot", crossbow_shot())
 
 
 if __name__ == "__main__":
