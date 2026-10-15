@@ -12,6 +12,31 @@ class Rank:
 	var index: int = 0
 
 
+## v0.28.2 게이트 안 던전 지도 (로컬 좌표, 가운데 기준 m). 서버 server/src/dungeon.js 와 같은 판정.
+class DungeonMap:
+	var id: String = ""
+	var name: String = ""
+	var size: Vector2 = Vector2(20.0, 30.0)
+	var spawn: Vector2 = Vector2.ZERO
+	var exit: Vector2 = Vector2.ZERO
+	var center: Vector2 = Vector2.ZERO
+	## [x, z, r]
+	var pillars: Array[Vector3] = []
+	## Rect2 (가운데 x · z 에서 w · d 만큼).
+	var rubble: Array[Rect2] = []
+
+	func stand_local(at: Vector2, pad: float = 0.35) -> bool:
+		if absf(at.x) > size.x * 0.5 - pad or absf(at.y) > size.y * 0.5 - pad:
+			return false
+		for p: Vector3 in pillars:
+			if Vector2(at.x - p.x, at.y - p.y).length() < p.z + pad:
+				return false
+		for r: Rect2 in rubble:
+			if r.grow(pad).has_point(at):
+				return false
+		return true
+
+
 var ranks: Array[Rank] = []
 var office_name: String = "헌터 협회 출장소"
 var office_position: Vector3 = Vector3.ZERO
@@ -27,6 +52,13 @@ var party_mult: float = 1.25
 var gate_enter_range: float = 4.0
 var gate_arena: float = 14.0
 var gate_colors: Dictionary[String, Color] = {}
+## v0.28.2 던전: 게이트 자리 순서 i 마다 가운데 (x0 + i × dx, z0) · 나가는 균열 거리 · 지도들.
+var gate_spots: PackedStringArray = []
+var dungeon_x0: float = 0.0
+var dungeon_dx: float = 100.0
+var dungeon_z0: float = 0.0
+var dungeon_exit_range: float = 2.2
+var dungeon_maps: Dictionary[String, DungeonMap] = {}
 ## v0.28.1 레벨: 최대 · 다음까지 경험치 식 · 스탯 정의 (키 → {name, desc, 값들, cap}) · 기술 [{id, name, level, desc, reach}].
 var level_max: int = 50
 var level_stats: Dictionary[String, Dictionary] = {}
@@ -74,7 +106,52 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	var granks: Dictionary = gates.get("ranks", {})
 	for id: Variant in granks:
 		r.gate_colors[str(id)] = Color(str((granks[id] as Dictionary).get("color", "#8FB8C8")))
+	for sp: Variant in gates.get("spots", []):
+		if sp is Dictionary:
+			r.gate_spots.append(str((sp as Dictionary).get("id", "")))
+	var dg: Dictionary = gates.get("dungeon", {})
+	r.dungeon_x0 = float(dg.get("x0", 0.0))
+	r.dungeon_dx = float(dg.get("dx", 100.0))
+	r.dungeon_z0 = float(dg.get("z0", 0.0))
+	r.dungeon_exit_range = float(dg.get("exit_range", r.dungeon_exit_range))
+	var maps: Dictionary = dg.get("maps", {})
+	for mid: Variant in maps:
+		var md: Dictionary = maps[mid]
+		var m: DungeonMap = DungeonMap.new()
+		m.id = str(mid)
+		m.name = str(md.get("name", ""))
+		m.size = Vector2(float(md.get("w", 20.0)), float(md.get("d", 30.0)))
+		m.spawn = _v2(md.get("spawn", []))
+		m.exit = _v2(md.get("exit", []))
+		m.center = _v2(md.get("center", []))
+		for p: Variant in md.get("pillars", []):
+			var pa: Array = p
+			m.pillars.append(Vector3(float(pa[0]), float(pa[1]), float(pa[2])))
+		for b: Variant in md.get("rubble", []):
+			var ba: Array = b
+			m.rubble.append(Rect2(float(ba[0]) - float(ba[2]) * 0.5, float(ba[1]) - float(ba[3]) * 0.5, float(ba[2]), float(ba[3])))
+		r.dungeon_maps[m.id] = m
 	return r
+
+
+static func _v2(a: Variant) -> Vector2:
+	return Vector2(float((a as Array)[0]), float((a as Array)[1])) if a is Array and (a as Array).size() >= 2 else Vector2.ZERO
+
+
+## v0.28.2 그 게이트 자리의 던전 가운데 (월드). 없는 자리면 Vector3.INF.
+func dungeon_origin(spot_id: String) -> Vector3:
+	var i: int = gate_spots.find(spot_id)
+	if i < 0 or dungeon_maps.is_empty():
+		return Vector3.INF
+	return Vector3(dungeon_x0 + float(i) * dungeon_dx, 0.0, dungeon_z0)
+
+
+## v0.28.2 그 자리가 어느 게이트 자리의 던전 영역이면 그 자리 id, 아니면 빈 글자 (서버 dungeonAt).
+func dungeon_spot_at(pos: Vector3) -> String:
+	if dungeon_maps.is_empty() or absf(pos.z - dungeon_z0) > dungeon_dx * 0.5:
+		return ""
+	var i: int = roundi((pos.x - dungeon_x0) / dungeon_dx)
+	return gate_spots[i] if i >= 0 and i < gate_spots.size() else ""
 
 
 func rank(id: String) -> Rank:

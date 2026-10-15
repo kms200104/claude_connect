@@ -158,7 +158,7 @@ export function createServer(overrides = {}) {
     return d;
   };
   const hunter = createHunter({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt });
-  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage, hunter });
+  const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage, hunter, teleport: (player, room, x, z) => teleport({ player, room }, x, z) });
   // v0.22 제작대.
   const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
@@ -498,6 +498,8 @@ export function createServer(overrides = {}) {
     economy.tickWeek(room);
     // 들어오자마자 주민 기분이 보이도록 (worldTick 을 기다리지 않는다).
     tickMoods(room, weatherOf(room), activeOf(room).length > 0, now());
+    // v0.28.2 공략이 끝난 게이트 던전에서 끊겼다 돌아오면 밖으로.
+    survival.fixDungeon(room, player);
     send(ctx.ws, {
       t: 'welcome',
       v: PROTOCOL_VERSION,
@@ -1863,6 +1865,7 @@ export function createServer(overrides = {}) {
       case 'stat_up':
         return hunter.handle(ctx, msg, fail);
       case 'gate_enter':
+      case 'gate_leave':
         return survival.handleGate(ctx, msg, fail);
       case 'home_enter':
       case 'home_exit':
@@ -2114,6 +2117,7 @@ export function createServer(overrides = {}) {
       case 'guild_leave':
       case 'stat_up':
       case 'gate_enter':
+      case 'gate_leave':
       case 'home_enter':
       case 'home_exit':
       case 'home_place':

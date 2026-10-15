@@ -69,6 +69,8 @@ signal hunter_done(info: Dictionary)
 ## v0.28 게이트: 열림 · 상태가 바뀜 · 닫힘 (id, Net.gates 에 없으면 닫힘) · 내가 들어감 · 공략 보상 { g, rank, name, items, got, sol, pts }.
 signal gate_changed(gate_id: String)
 signal gate_entered(gate_id: String)
+## v0.28.2 던전에서 나왔다 (나가는 균열).
+signal gate_left(gate_id: String)
 signal gate_cleared(info: Dictionary)
 ## v0.28.2 가디언: 상태가 바뀜 (id) · 총을 쐈다 { g, c, hp, x, z } · 주민이 맞음 { id, hp } · 쓰러짐 · 일어남.
 signal guard_changed(guard_id: String)
@@ -1117,6 +1119,8 @@ func _handle_text(text: String) -> void:
 				gate_changed.emit(gone_id)
 		"gate_entered":
 			gate_entered.emit(str(msg.get("g", "")))
+		"gate_left":
+			gate_left.emit(str(msg.get("g", "")))
 		"gate_clear":
 			gate_cleared.emit(msg)
 		"guard_shot":
@@ -1579,13 +1583,19 @@ func gate_enter(gate_id: String) -> void:
 		_request("gate_enter", {"g": gate_id})
 
 
+## v0.28.2 던전에서 나가기 (나가는 균열 곁에서).
+func gate_leave(gate_id: String) -> void:
+	if state == State.ONLINE:
+		_request("gate_leave", {"g": gate_id})
+
+
 func _gate_entry(gw: Dictionary) -> Dictionary:
 	var raiders: Array[int] = []
 	for r: Variant in gw.get("raiders", []):
 		raiders.append(int(r))
 	return {"rank": str(gw.get("rank", "E")), "spot": str(gw.get("spot", "")), "name": str(gw.get("name", "")), "x": float(gw.get("x", 0.0)), "z": float(gw.get("z", 0.0)),
 		"st": str(gw.get("st", "open")), "until": Time.get_ticks_msec() + int(gw.get("left", 0)), "wave": int(gw.get("wave", 0)), "waves": int(gw.get("waves", 1)),
-		"alive": int(gw.get("alive", 0)), "boss": int(gw.get("boss", 0)) == 1, "raiders": raiders}
+		"alive": int(gw.get("alive", 0)), "boss": int(gw.get("boss", 0)) == 1, "raiders": raiders, "map": str(gw.get("map", ""))}
 
 
 ## 내가 길드원인지.

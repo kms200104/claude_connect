@@ -111,7 +111,7 @@ export function rollLoot(table, random) {
   return out;
 }
 
-export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act, garage, hunter }) {
+export function createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom, dropAt, act, garage, hunter, teleport }) {
   const S = data.survival;
   const worldMs = () => (clock.worldMs ? clock.worldMs() : clock.gameMs());
   const maxHp = S?.player?.max_hp ?? 10;
@@ -532,6 +532,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const lost = Math.min(S.player.ko_sol_max ?? 0, Math.floor((player.profile.sol ?? 0) * (S.player.ko_sol_rate ?? 0)));
     player.profile.sol = Math.max(0, (player.profile.sol ?? 0) - lost);
     setHp(player, maxOf(player));
+    // v0.28.2 던전에서 기절하면 그 공략에서 빠진다.
+    gates.left(room, player);
     player.x = shelter.x;
     player.z = shelter.z + 2;
     player.y = 0.1;
@@ -675,7 +677,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   };
   const broadcastCreatures = (room) => room.broadcast({ t: 'creatures', st: now(), c: [...(room.creatures?.values() ?? [])].map(creatureWire) });
   const guardians = createGuardians({ data, worldMs, random, kill: (room, c, by) => kill(room, c, by), armorOf: (c) => S.creatures.kinds[c.k]?.armor ?? 0 });
-  const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures });
+  const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures, teleport, shelter });
 
   /** 놓인 가구로 막힌 곳 (바리케이드) · 불빛 (모닥불 · 든 횃불 · 손전등). */
   function defenses(room) {
@@ -693,10 +695,13 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       const w = S.weapons[p.heldItem];
       if (p.online && w?.light) lights.push({ x: p.x, z: p.z, r: w.light });
     }
-    return { blocks, lights, traps };
+    return { blocks, lights, traps, room };
   }
 
   function canStand(x, z, def) {
+    // v0.28.2 게이트 던전 안이면 그 지도 (바닥 · 기둥 · 잔해).
+    const inDungeon = def.room ? gates.standAt(def.room, x, z) : null;
+    if (inDungeon !== null) return inDungeon && !def.lights.some((l) => Math.hypot(x - l.x, z - l.z) < l.r);
     if (!isLand(data, x, z)) return false;
     if (groundProblem(data, x, z) === 'building') return false;
     if (safeAt(x, z)) return false;
@@ -908,7 +913,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       room.nextCreatureAt = t + (S.creatures.spawn_every_ms ?? 9000) * (cfg.creatureSpawnScale ?? 1);
       for (const p of people) {
         if (room.creatures.size >= S.creatures.max_per_room) break;
-        if (safeAt(p.x, p.z)) continue;
+        if (safeAt(p.x, p.z) || p.dungeon) continue;
         const near = [...room.creatures.values()].filter((c) => Math.hypot(c.x - p.x, c.z - p.z) < S.creatures.despawn_far).length;
         if (near < S.creatures.per_player && spawnNear(room, p, def, t)) changed = true;
       }
@@ -1252,5 +1257,5 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleGate: (ctx, msg, fail) => gates.handleEnter(ctx, msg, fail), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleGate: (ctx, msg, fail) => (msg.t === 'gate_leave' ? gates.handleLeave(ctx, msg, fail) : gates.handleEnter(ctx, msg, fail)), fixDungeon: (room, player) => gates.fixPosition(room, player), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }

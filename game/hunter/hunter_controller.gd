@@ -5,17 +5,22 @@ extends Node
 ## 상황 버튼 대상: "헌터 협회 창구" (출장소 앞). 판정은 서버 (Net.hunter_sell · hunter_rank_up · hunter_claim · guild_*).
 ## 게이트 (GateField): 곁에서 "게이트 진입 · E급", HUD 에 가장 가까운 게이트 방향 화살표 · 거리 · 남은 시간 (공략 중이면 웨이브 · 남은 크리처),
 ## 열림 · 브레이크는 재난문자로 온다 (SafetyController), 공략 보상 안내.
+## v0.28.2 던전 (DungeonField): 진입하면 서버가 게이트 안 공간으로 옮겨 준다. 그 안에서 "나가는 균열" 곁이면 "던전 나가기",
+## HUD 는 던전 이름 · 웨이브 · 남은 크리처와 나가는 균열 쪽 화살표.
 
 @export var player: Player
 @export var hud: CanvasLayer
 @export var toast_hud: FishingHud
+@export var sky: SkyController
 
 const TARGET_OFFICE: String = "office"
 const TARGET_GATE: String = "gate:"
+const TARGET_GATE_OUT: String = "gate_out:"
 
 var office: HunterOffice = null
 var window: HunterWindow = null
 var gates: GateField = null
+var dungeon: DungeonField = null
 var _gate_chip: HBoxContainer = null
 var _gate_arrow: Label = null
 var _gate_label: Label = null
@@ -29,6 +34,10 @@ func _ready() -> void:
 	world.add_child.call_deferred(office)
 	gates = GateField.new()
 	world.add_child.call_deferred(gates)
+	dungeon = DungeonField.new()
+	dungeon.player = player
+	dungeon.sky = sky
+	world.add_child.call_deferred(dungeon)
 	window = HunterWindow.new()
 	_popup = Label.new()
 	_popup.name = "HunterPoints"
@@ -50,6 +59,9 @@ func _ready() -> void:
 	Net.guild_changed.connect(_on_guild)
 	Net.request_failed.connect(_on_failed)
 	Net.gate_entered.connect(_on_gate_entered)
+	Net.gate_left.connect(func(_id: String) -> void:
+		if toast_hud != null:
+			toast_hud.show_toast("게이트 밖으로 나왔어요", false))
 	Net.gate_cleared.connect(_on_gate_cleared)
 	Net.gate_changed.connect(_on_gate_changed)
 	Net.hunter_changed.connect(_on_hunter_changed)
@@ -73,6 +85,13 @@ func is_busy() -> bool:
 func pick_target(pos: Vector3, margin: float = 0.3) -> String:
 	if Net.state != Net.State.ONLINE:
 		return ""
+	# 던전 안: 나가는 균열 곁에서만.
+	if dungeon != null and dungeon.inside():
+		var gid: String = dungeon.gate_id()
+		var exit: Vector3 = dungeon.exit_position()
+		if not gid.is_empty() and Vector2(exit.x - pos.x, exit.z - pos.z).length() <= GameData.hunter.dungeon_exit_range - margin:
+			return TARGET_GATE_OUT + gid
+		return ""
 	var at: Vector3 = GameData.hunter.counter_position()
 	if Vector2(at.x - pos.x, at.z - pos.z).length() <= GameData.hunter.office_range - margin:
 		return TARGET_OFFICE
@@ -87,6 +106,8 @@ func pick_target(pos: Vector3, margin: float = 0.3) -> String:
 
 
 func target_label(target: String) -> String:
+	if target.begins_with(TARGET_GATE_OUT):
+		return "던전 나가기"
 	if target.begins_with(TARGET_GATE):
 		var g: Dictionary = Net.gates.get(target.trim_prefix(TARGET_GATE), {})
 		var rank: String = str(g.get("rank", "E"))
@@ -95,6 +116,10 @@ func target_label(target: String) -> String:
 
 
 func activate(target: String) -> void:
+	if target.begins_with(TARGET_GATE_OUT):
+		Audio.play_sfx("twinkle", -4.0, 0.8)
+		Net.gate_leave(target.trim_prefix(TARGET_GATE_OUT))
+		return
 	if target.begins_with(TARGET_GATE):
 		var gid: String = target.trim_prefix(TARGET_GATE)
 		var g: Dictionary = Net.gates.get(gid, {})
@@ -180,7 +205,7 @@ func _on_guild(msg: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
-	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind == "gate_enter"):
+	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind == "gate_enter" or kind == "gate_leave"):
 		return
 	var text: String = ""
 	match code:
@@ -207,7 +232,7 @@ func _on_failed(kind: String, code: String) -> void:
 		NetProtocol.ERR_NO_GATE:
 			text = "게이트가 닫혔어요"
 		NetProtocol.ERR_TOO_FAR:
-			text = "게이트에 조금 더 가까이 가요"
+			text = "나가는 균열 곁에서 나가요" if kind == "gate_leave" else "게이트에 조금 더 가까이 가요"
 		_:
 			text = "지금은 할 수 없어요"
 	toast_hud.show_toast(text, false)
@@ -246,21 +271,35 @@ func _build_gate_chip() -> void:
 func _update_gate_chip() -> void:
 	if _gate_chip == null or player == null:
 		return
-	var gid: String = gates.nearest(player.global_position) if gates != null and Net.state == Net.State.ONLINE else ""
-	_gate_chip.visible = not gid.is_empty()
-	if gid.is_empty():
+	var in_dungeon: bool = dungeon != null and dungeon.inside()
+	var gid: String = ""
+	if in_dungeon:
+		gid = dungeon.gate_id()
+	elif gates != null and Net.state == Net.State.ONLINE:
+		gid = gates.nearest(player.global_position)
+	_gate_chip.visible = not gid.is_empty() or in_dungeon
+	if not _gate_chip.visible:
 		return
-	var g: Dictionary = Net.gates[gid]
-	var to: Vector3 = Vector3(float(g["x"]), 0.0, float(g["z"])) - player.global_position
+	# 던전 안: 나가는 균열 쪽 화살표 · 던전 이름 · 웨이브 (공략이 끝났으면 곧 돌아간다는 안내).
+	var g: Dictionary = Net.gates.get(gid, {})
+	var to: Vector3 = (dungeon.exit_position() if in_dungeon else Vector3(float(g["x"]), 0.0, float(g["z"]))) - player.global_position
 	to.y = 0.0
 	var cam: Camera3D = get_viewport().get_camera_3d()
 	var fwd: Vector3 = -cam.global_basis.z if cam != null else Vector3.FORWARD
 	fwd.y = 0.0
 	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
 	_gate_arrow.rotation = atan2(to.dot(Vector3(-fwd.z, 0.0, fwd.x)), to.dot(fwd))
+	if in_dungeon and g.is_empty():
+		_gate_arrow.add_theme_color_override("font_color", Color("#8FD0FF"))
+		_gate_label.add_theme_color_override("font_color", Color("#8FD0FF"))
+		_gate_label.text = "%s · 공략 완료! 곧 게이트 앞으로 돌아가요" % (dungeon.map().name if dungeon.map() != null else "던전")
+		return
 	var color: Color = Color("#FF5A4A") if str(g["st"]) == "break" else GameData.hunter.gate_colors.get(str(g["rank"]), Color.WHITE).lightened(0.3)
 	_gate_arrow.add_theme_color_override("font_color", color)
 	_gate_label.add_theme_color_override("font_color", color)
+	if in_dungeon:
+		_gate_label.text = "%s · %s급 · %s · 남은 크리처 %d" % [dungeon.map().name if dungeon.map() != null else "던전", str(g["rank"]), "우두머리!" if bool(g["boss"]) else "웨이브 %d/%d" % [int(g["wave"]) + 1, int(g["waves"])], int(g["alive"])]
+		return
 	var left: int = maxi(0, int(g["until"]) - Time.get_ticks_msec())
 	var time_text: String = "%d:%02d" % [left / 60000, (left / 1000) % 60]
 	var d: int = roundi(to.length())
@@ -279,7 +318,8 @@ func _update_gate_chip() -> void:
 func _on_gate_entered(id: String) -> void:
 	var g: Dictionary = Net.gates.get(id, {})
 	if toast_hud != null:
-		toast_hud.show_toast("%s급 게이트 진입! 크리처를 모두 쓰러뜨리면 우두머리가 나와요" % str(g.get("rank", "")), true)
+		var dm: HunterRules.DungeonMap = GameData.hunter.dungeon_maps.get(str(g.get("map", "")))
+		toast_hud.show_toast("%s급 게이트 진입%s! 크리처를 모두 쓰러뜨리면 우두머리가 나와요" % [str(g.get("rank", "")), " — %s" % dm.name if dm != null else ""], true)
 	Prefs.vibrate(80, 0.5)
 
 
@@ -305,7 +345,7 @@ func _on_gate_cleared(info: Dictionary) -> void:
 	var parts: PackedStringArray = []
 	for it: Variant in info.get("items", []):
 		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
-	toast_hud.show_toast("%s급 게이트 공략! %s · 헌터 점수 +%d · %s" % [str(info.get("rank", "")), Money.delta(int(info.get("sol", 0))), int(info.get("pts", 0)), " · ".join(parts)], true)
+	toast_hud.show_toast("%s급 게이트 공략! %s · 헌터 점수 +%d · %s%s" % [str(info.get("rank", "")), Money.delta(int(info.get("sol", 0))), int(info.get("pts", 0)), " · ".join(parts), " — 떨어진 것을 줍고 나면 곧 밖으로 나가요" if int(info.get("back", 0)) > 0 else ""], true)
 	Audio.play_sfx("fanfare_big", -4.0)
 
 

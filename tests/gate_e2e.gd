@@ -3,6 +3,8 @@ extends Node
 ## 게이트가 열리면 재난문자(헌터 협회) · 둔치에 빛나는 고리(GateField) · HUD 화살표 "E급 게이트 Nm · 브레이크까지" →
 ## 곁에서 "게이트 진입 · E급" → 공략 구역 고리 · 웨이브 크리처(한낮에도) → 다 쓰러뜨리면 우두머리(크고 금빛 이름표) →
 ## 우두머리를 쓰러뜨리면 공략 보상(가방 · 솔 · 헌터 점수 · 게이트 수) · 게이트가 사라진다.
+## v0.28.2 던전: 진입하면 게이트 안 공간(GATE_MAP 지하철역 · 동굴)으로 옮겨 가 지도 · 어두운 지하 · HUD 던전 이름,
+## "나가는 균열" 곁에서 "던전 나가기" → 게이트 앞 (공략이 풀린다) → 다시 진입해 공략 → 잠시 뒤 게이트 앞으로.
 ## 인자: -- --server=ws://127.0.0.1:PORT [--shots=폴더]
 
 var _server: String = ""
@@ -105,6 +107,33 @@ func _run() -> void:
 	_check(arena.visible, "공략 구역 고리")
 	_check(await _wait_until(func() -> bool: return Net.creatures.values().any(func(c: Dictionary) -> bool: return c.has("g")), 3.0), "한낮에 게이트 크리처 (%d)" % Net.creatures.size())
 	_check(await _wait_until(func() -> bool: return chip_label.text.contains("웨이브 1/"), 2.0), "HUD '%s'" % chip_label.text)
+
+	# ---- v0.28.2 던전 안 ----
+	var dungeon: DungeonField = hunter.dungeon
+	var player: Player = _village.get_node("Player")
+	_check(await _wait_until(func() -> bool: return dungeon.inside(), 3.0), "던전 안으로 옮겨 왔다 (%s)" % str(player.global_position))
+	var dmap: HunterRules.DungeonMap = dungeon.map()
+	_check(dmap != null and dungeon.built_map == str(Net.gates[gid].get("map", "")), "지도 '%s'" % (dmap.name if dmap != null else ""))
+	_check(dungeon.find_child("Solid", true, false) != null and dungeon.find_child("Exit", true, false) != null, "바닥 · 벽 · 나가는 균열")
+	var sky: SkyController = _village.get_node("SkyController")
+	_check(sky.underground, "지하처럼 어둡다")
+	_check(await _wait_until(func() -> bool: return chip_label.text.begins_with(dmap.name if dmap != null else "?"), 1.0), "HUD '%s'" % chip_label.text)
+	await get_tree().create_timer(0.6).timeout
+	_check(player.global_position.y > -0.5, "바닥에 서 있다 (y %.2f)" % player.global_position.y)
+	await _shot("dungeon_" + dungeon.built_map)
+	var exit: Vector3 = dungeon.exit_position()
+	await _teleport(exit + Vector3(0.0, 0.1, -0.6), PI)
+	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.HUNTER and interaction.target_id == "gate_out:" + gid, 2.0), "상황 버튼 '%s' (%s)" % [hunter.target_label("gate_out:" + gid), interaction.target_id])
+	await _shot("dungeon_exit")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return not dungeon.inside() and Vector2(player.global_position.x - spot.x, player.global_position.z - spot.z).length() < 5.0, 3.0), "게이트 앞으로 나왔다")
+	_check(await _wait_until(func() -> bool: return str(Net.gates[gid]["st"]) == "open" and not sky.underground, 2.0), "혼자 나오면 공략이 풀린다 · 하늘이 돌아온다")
+	# 다시 진입.
+	await _teleport(spot + Vector3(0.0, 0.0, 2.5), PI)
+	_check(await _wait_until(func() -> bool: return interaction.target_id == "gate:" + gid, 2.0), "다시 '게이트 진입'")
+	interaction.action_hud.action_pressed.emit()
+	_check(await _wait_until(func() -> bool: return dungeon.inside() and str(Net.gates[gid]["st"]) == "raid", 3.0), "다시 던전 안")
+	await get_tree().create_timer(1.6).timeout
 	await _shot("gate_raid")
 
 	# ---- 웨이브 → 우두머리 ----
@@ -133,7 +162,6 @@ func _run() -> void:
 			await _shot("gate_boss")
 		var c: Dictionary = Net.creatures[target]
 		var at: Vector3 = Vector3(float(c.get("x", 0.0)), 0.1, float(c.get("z", 0.0)))
-		var player: Player = _village.get_node("Player")
 		if Vector2(player.global_position.x - at.x, player.global_position.z - at.z).length() > 1.4:
 			await _teleport(at + Vector3(1.0, 0.0, 0.0), PI * 0.5)
 		if interaction.target == InteractionController.Target.SURVIVE and interaction.target_id.begins_with("attack:"):
@@ -144,5 +172,7 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return not Net.gates.has(gid), 2.0), "게이트가 닫혔다")
 	_check(await _wait_until(func() -> bool: return Net.sol >= sol0 + int(cleared[0].get("sol", 0)), 2.0), "보상 솔 (%d → %d)" % [sol0, Net.sol])
 	_check(await _wait_until(func() -> bool: return int(Net.hunter.get("gates", 0)) == 1, 2.0), "헌터 기록: 게이트 1")
+	_check(dungeon.inside() and chip.visible and chip_label.text.contains("공략 완료"), "공략 뒤 잠시 던전에 남는다 (HUD '%s')" % chip_label.text)
+	_check(await _wait_until(func() -> bool: return not dungeon.inside() and Vector2(player.global_position.x - spot.x, player.global_position.z - spot.z).length() < 5.0, 6.0), "잠시 뒤 게이트 앞으로 돌아왔다")
 	_check(await _wait_until(func() -> bool: return not chip.visible, 1.0), "HUD 게이트 안내가 사라졌다")
 	_finished = true

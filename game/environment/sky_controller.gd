@@ -57,6 +57,8 @@ var wetness: float = 0.0
 var flash: float = 0.0
 ## 실내(상점 안)에 있으면 비·안개·젖은 땅을 보이지 않는다. ShopController 가 켜고 끈다.
 var indoor: bool = false
+## v0.28.2 게이트 던전 안 (지하): 해 · 하늘빛 없이 어둡고, 던전의 불빛만.
+var underground: bool = false
 
 var _flash_tween: Tween = null
 
@@ -162,8 +164,20 @@ func _apply(delta: float, instant: bool) -> void:
 			light.visible = lamps > 0.05
 			light.light_energy = lamps * 1.4
 
+	if underground:
+		if sun != null:
+			sun.light_energy = 0.06
+			sun.shadow_enabled = false
+		if world_environment != null and world_environment.environment != null:
+			var uenv: Environment = world_environment.environment
+			uenv.background_color = Color(0.02, 0.02, 0.03)
+			uenv.ambient_light_color = Color(0.34, 0.4, 0.48)
+			uenv.ambient_light_energy = 0.7
+			uenv.fog_enabled = false
+		RenderingServer.global_shader_parameter_set("world_wetness", 0.0)
+		RenderingServer.global_shader_parameter_set("lightning_flash", 0.0)
 	if rain != null:
-		rain.visible = rain_amount > 0.02 and not indoor
+		rain.visible = rain_amount > 0.02 and not indoor and not underground
 		var material: ShaderMaterial = rain.material_override as ShaderMaterial
 		if material != null:
 			material.set_shader_parameter("intensity", rain_amount)
