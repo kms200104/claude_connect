@@ -156,9 +156,14 @@ func _run() -> void:
 	var app: HunterApp = phone.app_view() as HunterApp
 	_check(app != null, "헌터넷 앱")
 	if app != null:
+		_check(app.find_child("LevelCard", true, false) != null and app.find_child("Stat_str", true, false) != null, "능력치 탭 (레벨 · 스탯)")
+		await _shot("hunter_stats")
+		app.set("_tab", 1)
+		app.call("_build")
+		await get_tree().process_frame
 		_check(app.find_child("Bounty_*", true, false) != null, "오늘의 의뢰 카드")
 		await _shot("hunter_app")
-		app.set("_tab", 1)
+		app.set("_tab", 2)
 		app.call("_build")
 		await get_tree().process_frame
 		var edit: LineEdit = app.find_child("GuildName", true, false) as LineEdit

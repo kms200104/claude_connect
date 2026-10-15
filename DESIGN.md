@@ -686,6 +686,18 @@
   - 메시지: `gate {g}` · `gate_gone {g, why}` · `gate_enter {g}` → `gate_entered` · `gate_clear {g, rank, items, got, sol, pts}`, 크리처에 `g`(게이트) · `m`(최대 체력) · `b`(우두머리 이름) · `s`(크기). welcome `surv.gates`. 오류 `no_gate` · `gate_broken` · `rank_too_low`. 시험용 `GATE_FIRST_MS` · `GATE_LIFE_MS` · `GATE_FORCE_RANK` · `GATE_FORCE_SPOT`.
 - 헌터 메시지: `hunter_sell {slot, n} | {all}` · `hunter_rank` · `hunter_claim {b}` · `guild_create {name}` · `guild_join` · `guild_leave` → `hunter_result {kind}` · 서버 → `hunter {rank, pts, next, nextRank, kills, gates, bounties, guild}` · `guild {g, op, by}` · `hunter_rank {id, rank}`. 사람 상태에 `hr`(등급). 오류 `not_at_office` · `rank_not_ready` · `bounty_not_done` · `bad_guild_name` · `guild_exists` · `no_guild` · `guild_full`.
 
+### 3.46.14 레벨 · 스탯 · 지도 확대와 웨이포인트 · 피 · 상점 분류 (v0.28.1, 프로토콜 29)
+- **판잣집 문**: 안쪽 문틈이 벽 끝 여유(0.1m)에 먹혀 침실 0.9m · 욕실 0.7m 라 비스듬히 오면 벽 모서리에 걸리고 욕실은 아예 못 들어가던 버그 → 침실 1.3m · 욕실 1.1m (`houses.json walls`). 점검 `tests/house_door_check`.
+- **레벨** (`hunter.json level`): 경험치 — 처치(어슬렁이 10 · 달리미 12 · 퉁퉁이 25, 우두머리 ×6) · 게이트(E 80 · D 200 · C 500) · 의뢰 보고(점수 × 2) · 빈집 뒤지기 3 · 보급 상자 25. 다음 레벨까지 round(60 × 레벨^1.45) (Lv.2 60 · Lv.3 164 …), 최대 Lv.50. 레벨마다 스탯 포인트 3.
+  - **스탯** (헌터넷 · 능력치 탭에서 ＋): 힘(피해 +5%, 소수는 확률로) · 체력(2점마다 최대 체력 +1 = 하트 반 칸) · 민첩(이동 +2% · 공격 간격 -2%, 최대 20 — 서버 이동 검사도 같은 배율) · 행운(마석 확률 +4%). `stat_up {s}` → `hunter_result kind 'stat'`, 오류 `no_stat_point` · `stat_capped`.
+  - **기술**: Lv.3 "달리며 공격" — 달리며 휘두르면 멈추지 않고 돌진해 벤다 (사거리 +0.8m, 서버는 달리는 쪽으로 0.15초 앞서 본다, `attack {run}`). 배우기 전에는 달리다 휘두르면 0.35초 선다.
+  - HUD 하트 아래 "Lv.n ＋남은 포인트", 처치하면 "헌터 점수 +n · 경험치 +n", 레벨 업 안내 · 소리. `hunter` 메시지에 `lv · xp · xpNext · sp · st · skills`, 친구에게 `hunter_level {id, lv}`.
+- **지도** (휴대폰): 내 자리를 가운데 두고 따라간다. ＋ · － 단추 · 두 손가락 벌리기 · 휠로 확대 · 축소(반 너비 25m ~ 도시 전체), 끌면 옮겨지고 "◎ 내 위치"로 돌아온다. 아래 왼쪽 축척. 빈 곳을 누르면 **웨이포인트** — 지도에 깃발 · 나에게서 점선, 마을에 하늘색 빛기둥 · 땅 고리 · 거리 글자, HUD 화살표 "웨이포인트 Nm", 작은 지도에도 (밖이면 가장자리에). 4m 안에 오면 "도착" 하고 지워진다 (`Waypoint`, 이 기기에만).
+- **떨어진 것 테두리**: 3.5m 안의 떨어진 물건 · 보급품 · 마나 조각은 테두리가 노랗게 빛나며 숨쉰다 (`material_overlay` 뒤집은 껍질).
+- **핏자국**: 고르지 않은 검붉은 웅덩이(가장자리 옅게 · 가운데 짙게) · 둘레에 튄 방울 · 걸어온 쪽으로 끌린 자국, 젖은 광택. 마를 때까지 그대로 있다가 마지막에 스며든다.
+- **맞았을 때 화면** (`HurtOverlay`): 가장자리가 붉게 번지고(가운데는 맑게), 모서리에 피가 튀어 흘러내리다 마르고(한 번에 1~3, 최대 5), 전체가 잠깐 붉게 번쩍, 화면이 흔들린다(`FollowCamera.shake`). 체력 30% 이하이면 가장자리가 심장 박동처럼 맥동.
+- **상점 분류**: 목록 위 단추 — 전체 · 가구 · 옷 · 소품 · 재료 · 식재료 · 도구 · 물고기 (지금 목록에 있는 것만, 개수).
+
 ### 3.47 주민이 돌아보고, 먼저 다가와 말 걸기 (v0.11)
 - 멈춰 서 있는 주민은 5m 안에 내가 오면 나를 돌아본다.
 - 친밀도 6 이상인 주민은 9m 안에 내가 있으면 가끔 내 쪽으로 **걸어와서** 손을 흔들며 먼저 말을 건다 ("보리, 마침 잘 만났네. 차 한잔 하고 갈래?"). 가만히 있으면 그대로 대화가 열리고, 움직이면 그냥 지나간다. 한 사람에게 5분에 한 번.

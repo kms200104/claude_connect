@@ -27,6 +27,10 @@ var party_mult: float = 1.25
 var gate_enter_range: float = 4.0
 var gate_arena: float = 14.0
 var gate_colors: Dictionary[String, Color] = {}
+## v0.28.1 레벨: 최대 · 다음까지 경험치 식 · 스탯 정의 (키 → {name, desc, 값들, cap}) · 기술 [{id, name, level, desc, reach}].
+var level_max: int = 50
+var level_stats: Dictionary[String, Dictionary] = {}
+var skills: Array[Dictionary] = []
 
 
 static func from_dict(d: Dictionary) -> HunterRules:
@@ -55,6 +59,15 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	var kill: Dictionary = d.get("kill", {})
 	r.party_range = float(kill.get("party_range", r.party_range))
 	r.party_mult = float(kill.get("party_mult", r.party_mult))
+	var level: Dictionary = d.get("level", {})
+	r.level_max = int(level.get("max", r.level_max))
+	var stats: Dictionary = level.get("stats", {})
+	for k: Variant in stats:
+		if not str(k).begins_with("_"):
+			r.level_stats[str(k)] = stats[k]
+	for sk: Variant in level.get("skills", []):
+		if sk is Dictionary:
+			r.skills.append(sk)
 	var gates: Dictionary = d.get("gates", {})
 	r.gate_enter_range = float(gates.get("enter_range", r.gate_enter_range))
 	r.gate_arena = float(gates.get("arena", r.gate_arena))

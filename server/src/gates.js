@@ -123,7 +123,7 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
       sendInventory(p);
       sendProfile(p);
       sendTo(p, { t: 'gate_clear', g: g.id, rank: g.rank, name: g.name, by: ids, killer: by, items, got, sol: R.sol, pts: R.pts });
-      hunter?.onGate(room, p, R.pts);
+      hunter?.onGate(room, p, R.pts, g.rank);
     }
     alert(room, `gate_${g.id}_clear`, 'safety', `[헌터 협회] ${g.name} ${g.rank}급 게이트 공략 완료. 협조해 주신 헌터께 감사드립니다.`);
     remove(room, g, 'clear');

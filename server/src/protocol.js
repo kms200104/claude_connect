@@ -149,6 +149,8 @@ export const ErrorCode = Object.freeze({
   noGate: 'no_gate', // v0.28 없는(닫힌) 게이트
   gateBroken: 'gate_broken', // v0.28 던전 브레이크 중이라 들어갈 수 없다
   rankTooLow: 'rank_too_low', // v0.28 헌터 등급이 게이트 등급보다 두 단계 넘게 낮다
+  noStatPoint: 'no_stat_point', // v0.28.1 남은 스탯 포인트가 없다
+  statCapped: 'stat_capped', // v0.28.1 그 스탯은 더 올릴 수 없다
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다
   notNearDock: 'not_near_dock', // v21: 물놀이 선착장 곁이 아니다

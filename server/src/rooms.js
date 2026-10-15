@@ -427,7 +427,7 @@ export class Room {
         tipStreak: Number.isInteger(p.tipStreak) ? Math.max(0, p.tipStreak) : 0,
         vehicles: sanitizeVehicles(p.vehicles, data.garage).map((v) => (moved ? { ...v, at: null } : v)),
         vehSeq: Math.max(0, intOr(p.vehSeq, 0)),
-        hp: Number.isFinite(p.hp) ? Math.max(1, Math.min(data?.survival?.player?.max_hp ?? 10, Math.round(p.hp))) : (data?.survival?.player?.max_hp ?? 10),
+        hp: Number.isFinite(p.hp) ? Math.max(1, Math.min(99, Math.round(p.hp))) : (data?.survival?.player?.max_hp ?? 10), // 최대는 survival 이 사람마다 (체력 스탯)
         hunter: sanitizeHunter(p.hunter, data.hunter),
         steps: Number.isInteger(p.steps?.day) ? { day: p.steps.day, today: Math.max(0, intOr(p.steps.today, 0)), got: Array.isArray(p.steps.got) ? p.steps.got.filter(Number.isInteger) : [] } : { day: -1, today: 0, got: [] },
         stats: sanitizeStats(p.stats),

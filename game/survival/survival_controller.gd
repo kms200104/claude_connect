@@ -29,6 +29,8 @@ const DOWN_ROLL: float = 1.45
 const DOWN_DROP: float = 0.55
 const INPUT_LOCK: StringName = &"downed"
 const SLEEP_LOCK: StringName = &"sleeping"
+## 달리다 휘두르면 (기술 없이) 잠깐 선다.
+const SWING_LOCK: StringName = &"swing"
 ## 침대 매트 높이만큼 몸을 올린다.
 const BED_LIFT: float = 0.42
 
@@ -168,7 +170,9 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 			return TARGET_SUPPLY + sid
 	if creatures != null and not Net.creatures.is_empty():
 		var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item)
-		var near: String = creatures.nearest(position, w.range_m + 0.4)
+		# 기술이 있으면 달릴 때 더 먼 크리처도 노린다.
+		var reach: float = HunterApp.skill_reach("run_attack") if _is_running() and Net.has_skill("run_attack") else 0.0
+		var near: String = creatures.nearest(position, w.range_m + 0.4 + reach)
 		if not near.is_empty():
 			return TARGET_ATTACK + near
 	var best: String = ""
@@ -248,13 +252,23 @@ func activate(target: String) -> void:
 		if now_s < _swing_ready_at:
 			return
 		var w: SurvivalRules.Weapon = GameData.survival.weapon_of(player.held_item)
-		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0
+		# 민첩만큼 공격 간격이 짧다.
+		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown"))
 		var at: Vector3 = creatures.actor_position(target.trim_prefix(TARGET_ATTACK))
-		if at != Vector3.INF:
-			player.look_toward(at - player.global_position)
+		var run: bool = _is_running()
+		# v0.28.1 달리며 공격: 기술이 있으면 멈추지 않고 돌진해 벤다, 없으면 달리다 휘두르면 잠깐 멈춘다.
+		if run and Net.has_skill("run_attack"):
+			if at != Vector3.INF:
+				Puff.burst(player.get_parent(), player.global_position + Vector3(0.0, 0.3, 0.0), Color(0.85, 0.8, 0.7, 0.8), 6, 0.6, 0.25, 0.08, 0.35)
+		else:
+			if at != Vector3.INF:
+				player.look_toward(at - player.global_position)
+			if run:
+				player.set_input_lock(SWING_LOCK, true)
+				get_tree().create_timer(0.35).timeout.connect(func() -> void: player.set_input_lock(SWING_LOCK, false))
 		player.play_chop()
 		Audio.play_sfx("chop", -10.0, 1.3)
-		Net.attack()
+		Net.attack(run)
 		return
 	if target.begins_with(TARGET_REVIVE):
 		var id: int = int(target.trim_prefix(TARGET_REVIVE))
@@ -888,3 +902,8 @@ func _on_supply_got(info: Dictionary) -> void:
 		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
 	toast_hud.show_toast("보급 상자를 열었어요! %s" % " · ".join(parts), true)
 	Audio.play_sfx("quest_done", -6.0)
+
+
+## 달리는 중인지 (조이스틱을 끝까지 밀어 달리기 · 실제로 움직이는 중).
+func _is_running() -> bool:
+	return player != null and player.running and Vector2(player.velocity.x, player.velocity.z).length() > 3.0

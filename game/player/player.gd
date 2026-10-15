@@ -23,6 +23,8 @@ signal braked
 @export_range(0.5, 1.0, 0.01) var run_threshold: float = 0.95
 @export_range(0.0, 3.0, 0.05, "suffix:s") var run_delay: float = 0.7
 @export_range(0.5, 20.0, 0.1, "suffix:m/s") var run_speed: float = 7.0
+## v0.28.1 민첩 스탯만큼 걷기 · 달리기가 빨라진다 (HunterController 가 정한다, 서버도 같은 배율로 받아 준다).
+var speed_bonus: float = 1.0
 ## 달리다가 입력이 이 비율 아래로 떨어지면 걷기로 돌아간다 (조금 덜 밀어도 바로 멈추지 않게).
 @export_range(0.0, 1.0, 0.01) var run_release_threshold: float = 0.7
 @export_range(1.0, 100.0, 0.5, "suffix:m/s²") var acceleration: float = 16.0
@@ -109,7 +111,7 @@ func _physics_process(delta: float) -> void:
 	_update_running(input.length(), delta)
 	var move_dir: Vector3 = _input_to_world(input)
 	move_intent = move_dir * minf(input.length(), 1.0)
-	var top_speed: float = run_speed if running else max_speed
+	var top_speed: float = (run_speed if running else max_speed) * speed_bonus
 	wading = not Field.zone_at(global_position, 0.1).is_empty()
 	if wading:
 		top_speed *= WADE_SPEED

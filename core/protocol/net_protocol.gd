@@ -80,6 +80,8 @@ const ERR_GUILD_FULL: String = "guild_full"
 const ERR_NO_GATE: String = "no_gate"
 const ERR_GATE_BROKEN: String = "gate_broken"
 const ERR_RANK_TOO_LOW: String = "rank_too_low"
+const ERR_NO_STAT_POINT: String = "no_stat_point"
+const ERR_STAT_CAPPED: String = "stat_capped"
 ## v20: 보트는 물 위(내 곁)에만 부를 수 있다 · 보트에서 내릴 땅이 곁에 없다.
 const ERR_NOT_ON_WATER: String = "not_on_water"
 const ERR_NO_LANDING: String = "no_landing"

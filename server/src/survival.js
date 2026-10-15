@@ -117,12 +117,15 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   const night = () => inHours(S.creatures.night, clock.hour());
   const shelter = data.safety?.drill?.shelter ?? { x: 0, z: 0 };
 
+  /** v0.28.1 사람마다 최대 체력 (체력 스탯만큼 더). */
+  const maxOf = (player) => maxHp + (hunter?.bonus.hp(player) ?? 0);
   /** 프로필 체력 (없으면 가득). */
   const hpOf = (player) => {
     const hp = player.profile.hp;
-    return Number.isFinite(hp) ? Math.max(0, Math.min(maxHp, hp)) : maxHp;
+    return Number.isFinite(hp) ? Math.max(0, Math.min(maxOf(player), hp)) : maxOf(player);
   };
-  const hpWire = (player) => ({ hp: hpOf(player), max: maxHp });
+  const hpWire = (player) => ({ hp: hpOf(player), max: maxOf(player) });
+  hunter?.setOnVit((room, player) => sendTo(player, { t: 'hp', ...hpWire(player) }));
 
   /** 크리처가 들어오지 못하는 안전한 곳: 대피소 · 광장 둘레, 상점 · 집 안. */
   function safeAt(x, z) {
@@ -421,7 +424,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const bed = h ? bedAt(h) : null;
     if (!h || Math.hypot(player.x - bed.x, player.z - bed.z) > B.range + 0.3) return fail(ErrorCode.tooFar);
     if (!isBase(room, h)) return fail(ErrorCode.notBase);
-    if (hpOf(player) >= maxHp) return fail(ErrorCode.hpFull);
+    if (hpOf(player) >= maxOf(player)) return fail(ErrorCode.hpFull);
     player.sleeping = { h: h.id, next: now() + B.sleep_regen_ms };
     send(ctx.ws, { t: 'slept', rid: msg.rid, on: true });
     room.broadcast({ t: 'sleep', id: player.id, on: true });
@@ -447,7 +450,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       sl.next = t + B.sleep_regen_ms;
       setHp(p, hpOf(p) + 1);
       sendTo(p, { t: 'hp', ...hpWire(p) });
-      if (hpOf(p) >= maxHp) {
+      if (hpOf(p) >= maxOf(p)) {
         wake(room, p);
         stopBleeding(room, p);
       }
@@ -501,7 +504,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   // ---- 체력 · 회복 · 기절 ----
 
   function setHp(player, hp) {
-    player.profile.hp = Math.max(0, Math.min(maxHp, hp));
+    player.profile.hp = Math.max(0, Math.min(maxOf(player), hp));
   }
 
   function handleUse(ctx, msg, fail) {
@@ -511,12 +514,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
     const heal = slot ? S?.heal?.[slot.id] : undefined;
     if (!slot || !heal) return fail(ErrorCode.badItem);
-    if (hpOf(player) >= maxHp) return fail(ErrorCode.hpFull);
+    if (hpOf(player) >= maxOf(player)) return fail(ErrorCode.hpFull);
     removeAt(player.slots, msg.slot, 1);
     setHp(player, hpOf(player) + heal);
     sendInventory(player);
     send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal });
-    if ((SC?.stops ?? []).includes(slot.id) || hpOf(player) >= maxHp) stopBleeding(ctx.room, player);
+    if ((SC?.stops ?? []).includes(slot.id) || hpOf(player) >= maxOf(player)) stopBleeding(ctx.room, player);
   }
 
   function knockOut(room, player) {
@@ -525,7 +528,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     stopBleeding(room, player);
     const lost = Math.min(S.player.ko_sol_max ?? 0, Math.floor((player.profile.sol ?? 0) * (S.player.ko_sol_rate ?? 0)));
     player.profile.sol = Math.max(0, (player.profile.sol ?? 0) - lost);
-    setHp(player, maxHp);
+    setHp(player, maxOf(player));
     player.x = shelter.x;
     player.z = shelter.z + 2;
     player.y = 0.1;
@@ -639,14 +642,14 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (night()) return;
     const perMs = (S.player.day_regen_per_world_hour ?? 1) * (clock.worldScale ?? 1) / HOUR_MS;
     for (const p of room.players.values()) {
-      if (!p.online || p.downed || hpOf(p) >= maxHp) continue;
+      if (!p.online || p.downed || hpOf(p) >= maxOf(p)) continue;
       p.regenAcc = (p.regenAcc ?? 0) + perMs * dtMs;
       if (p.regenAcc >= 1) {
         const add = Math.floor(p.regenAcc);
         p.regenAcc -= add;
         setHp(p, hpOf(p) + add);
         sendTo(p, { t: 'hp', ...hpWire(p) });
-        if (hpOf(p) >= maxHp) stopBleeding(room, p);
+        if (hpOf(p) >= maxOf(p)) stopBleeding(room, p);
       }
     }
   }
@@ -1158,21 +1161,28 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const w = S.weapons[player.heldItem] ?? S.weapons.hands;
     const t = now();
     if (t < (player.attackReadyAt ?? 0)) return fail(ErrorCode.tooFast);
-    player.attackReadyAt = t + w.cooldown_ms - 60;
+    player.attackReadyAt = t + w.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) - 60;
+    // v0.28.1 달리며 공격 (기술): 멈추지 않고 돌진해 벤다 — 사거리가 늘고, 달리는 쪽으로 조금 앞서 본다.
+    const lunge = msg.run === true && hunter?.bonus.skill(player, 'run_attack');
+    const reach = lunge ? (hunter.bonus.skillDef('run_attack')?.reach ?? 0) : 0;
+    const ax = player.x + (lunge ? (player.vx ?? 0) * 0.15 : 0);
+    const az = player.z + (lunge ? (player.vz ?? 0) * 0.15 : 0);
     act(room, player, 'swing', player.heldItem ?? '');
     wake(room, player);
     noise(room, player, 'swing');
     let target = null;
-    let bestD = w.range + 0.3;
+    let bestD = w.range + 0.3 + reach;
     for (const c of room.creatures?.values() ?? []) {
-      const d = Math.hypot(c.x - player.x, c.z - player.z);
+      const d = Math.hypot(c.x - ax, c.z - az);
       if (d <= bestD) {
         bestD = d;
         target = c;
       }
     }
-    if (!target) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '' });
-    target.hp -= w.damage;
+    if (!target) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
+    // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더).
+    const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1);
+    target.hp -= Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0);
     // 맞으면 조금 밀려난다.
     if (bestD > 0.01) {
       const push = 0.7;
@@ -1183,7 +1193,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         target.z = nz;
       }
     }
-    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp) });
+    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge });
     room.broadcast({ t: 'creature_hit', id: target.id, hp: Math.max(0, target.hp), by: player.id });
     if (target.hp <= 0) kill(room, target, player.id);
     room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });

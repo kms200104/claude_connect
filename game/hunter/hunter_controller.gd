@@ -40,7 +40,9 @@ func _ready() -> void:
 	_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_popup.visible = false
 	_build_gate_chip()
+	_build_level_label()
 	if hud != null:
+		hud.add_child.call_deferred(_level_label)
 		hud.add_child.call_deferred(_popup)
 		hud.add_child.call_deferred(_gate_chip)
 		hud.add_child.call_deferred(window)
@@ -50,6 +52,7 @@ func _ready() -> void:
 	Net.gate_entered.connect(_on_gate_entered)
 	Net.gate_cleared.connect(_on_gate_cleared)
 	Net.gate_changed.connect(_on_gate_changed)
+	Net.hunter_changed.connect(_on_hunter_changed)
 
 
 func _process(delta: float) -> void:
@@ -124,7 +127,7 @@ func _on_done(info: Dictionary) -> void:
 			var extra: String = ""
 			if not mana.is_empty():
 				extra = " · %s" % GameData.item_name(str((mana[0] as Dictionary).get("id", "")))
-			_show_points("헌터 점수 +%d%s" % [int(info.get("pts", 0)), extra])
+			_show_points("헌터 점수 +%d · 경험치 +%d%s" % [int(info.get("pts", 0)), int(info.get("xp", 0)), extra])
 		"sell":
 			if toast_hud != null:
 				var n: int = 0
@@ -142,6 +145,19 @@ func _on_done(info: Dictionary) -> void:
 			if toast_hud != null:
 				toast_hud.show_toast("의뢰 완료 보고! %s · 헌터 점수 +%d" % [Money.delta(int(info.get("reward", 0))), int(info.get("pts", 0))], true)
 			Audio.play_sfx("quest_done", -6.0)
+		"level":
+			if toast_hud != null:
+				var learned: Array = info.get("learned", [])
+				var skill_text: String = ""
+				for sk: Dictionary in GameData.hunter.skills:
+					if learned.has(str(sk.get("id", ""))):
+						skill_text += " · 기술 '%s' 를 배웠어요!" % str(sk.get("name", ""))
+				toast_hud.show_toast("레벨 업! Lv.%d — 스탯 포인트 %d (헌터넷 · 능력치)%s" % [int(info.get("lv", 1)), int(info.get("sp", 0)), skill_text], true)
+			Audio.play_sfx("level_up", -2.0)
+			Prefs.vibrate(120, 0.6)
+		"remote_level":
+			if toast_hud != null and int(info.get("id", 0)) != Net.my_id:
+				toast_hud.show_toast("%s 님이 Lv.%d 가 됐어요" % [GameData.player_name(int(info.get("id", 0))), int(info.get("lv", 1))], true)
 		"remote_rank":
 			if toast_hud != null and int(info.get("id", 0)) != Net.my_id:
 				toast_hud.show_toast("%s 님이 %s급 헌터가 됐어요!" % [GameData.player_name(int(info.get("id", 0))), str(info.get("rank", ""))], true)
@@ -291,3 +307,31 @@ func _on_gate_cleared(info: Dictionary) -> void:
 		parts.append("%s ×%d" % [GameData.item_name(str(it.get("id", ""))), int(it.get("n", 1))])
 	toast_hud.show_toast("%s급 게이트 공략! %s · 헌터 점수 +%d · %s" % [str(info.get("rank", "")), Money.delta(int(info.get("sol", 0))), int(info.get("pts", 0)), " · ".join(parts)], true)
 	Audio.play_sfx("fanfare_big", -4.0)
+
+
+# ---- v0.28.1 레벨 ----
+
+## 민첩만큼 걷기 · 달리기가 빨라진다 · HUD 레벨 표시.
+func _on_hunter_changed() -> void:
+	var st: Dictionary = Net.hunter.get("st", {}) if Net.hunter.get("st") is Dictionary else {}
+	if player != null:
+		player.speed_bonus = 1.0 + float(st.get("agi", 0)) * HunterApp.stat_value("agi", "speed")
+	if _level_label != null:
+		var sp: int = int(Net.hunter.get("sp", 0))
+		_level_label.text = "Lv.%d%s" % [int(Net.hunter.get("lv", 1)), "  ＋%d" % sp if sp > 0 else ""]
+		_level_label.visible = Net.state == Net.State.ONLINE
+
+
+var _level_label: Label = null
+
+
+func _build_level_label() -> void:
+	_level_label = Label.new()
+	_level_label.name = "LevelLabel"
+	_level_label.position = Vector2(28.0, 304.0)
+	_level_label.add_theme_font_size_override("font_size", 28)
+	_level_label.add_theme_constant_override("outline_size", 8)
+	_level_label.add_theme_color_override("font_outline_color", Color("#1E2A42"))
+	_level_label.add_theme_color_override("font_color", Color("#FFE08A"))
+	_level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_level_label.visible = false

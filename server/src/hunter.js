@@ -4,6 +4,8 @@
 //   hunter_rank {}                            창구에서 등급 재심사 (점수가 다음 등급 기준을 넘었을 때)
 //   hunter_claim { b }                        현상금 의뢰 완료 보고 (헌터넷 앱, 다 채운 것만)
 //   guild_create { name } · guild_join {} · guild_leave {}   길드 (같은 방 둘)
+//   stat_up { s }                             v0.28.1 스탯 포인트 하나를 힘 · 체력 · 민첩 · 행운에 쓴다
+// v0.28.1 레벨: 경험치(처치 · 게이트 · 의뢰 · 뒤지기 · 보급 상자)가 차면 레벨이 오르고 스탯 포인트를 받는다, 레벨이 되면 기술을 배운다.
 // 서버 → hunter { rank, pts, next, kills, bounties, guild } (나) · guild { … } (방 전체) · hunter_result { kind, … }.
 // 처치 · 뒤지기 · 보급 상자 · 게이트는 survival.js 가 onKill · onLoot · onSupply · onGate 로 알린다.
 import { ErrorCode } from './protocol.js';
@@ -37,7 +39,29 @@ export function sanitizeHunter(raw, rules) {
     bday: intOr(h.bday, -1),
     bprog: Object.fromEntries(Object.entries(h.bprog ?? {}).filter(([id, n]) => rules?.bountyById.has(id) && Number.isInteger(n) && n >= 0)),
     bdone: Array.isArray(h.bdone) ? h.bdone.filter((id) => rules?.bountyById.has(id)) : [],
+    // v0.28.1 레벨 · 경험치 · 남은 스탯 포인트 · 쓴 스탯.
+    lv: Math.max(1, Math.min(rules?.level?.max ?? 50, intOr(h.lv, 1))),
+    xp: Math.max(0, intOr(h.xp, 0)),
+    sp: Math.max(0, intOr(h.sp, 0)),
+    st: Object.fromEntries(Object.keys(rules?.level?.stats ?? {}).map((k) => [k, Math.max(0, Math.min(rules.level.stats[k].cap ?? 99, intOr(h.st?.[k], 0)))])),
   };
+}
+
+/** 다음 레벨까지 경험치. */
+export function xpToNext(rules, lv) {
+  const L = rules?.level;
+  return L ? Math.round(L.base * lv ** L.power) : 0;
+}
+
+/** 스탯 하나 (프로필 기준, 없으면 0). */
+export function statOf(rules, profile, key) {
+  return Number.isInteger(profile?.hunter?.st?.[key]) ? profile.hunter.st[key] : 0;
+}
+
+/** 배운 기술인지 (레벨). */
+export function hasSkill(rules, profile, id) {
+  const sk = rules?.level?.skills?.find((x) => x.id === id);
+  return Boolean(sk) && (profile?.hunter?.lv ?? 1) >= sk.level;
 }
 
 /** 저장된 길드 { name, members: [uid], pts, since } (같은 방 둘). */
@@ -49,6 +73,8 @@ export function sanitizeGuild(raw, profiles) {
 }
 
 export function createHunter({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, inShop }) {
+  /** 체력 스탯이 오르면 survival 이 하트를 다시 보낸다 (createSurvival 뒤에 이어 준다). */
+  let onVit = null;
   const H = data.hunter;
   const ranks = H?.ranks ?? [];
 
@@ -113,7 +139,31 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       rank: r.id, pts: h.pts, next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
       bounties: todayBounties(room).map((b) => ({ id: b.id, kind: b.kind, k: b.k ?? '', n: b.n, got: Math.min(b.n, h.bprog[b.id] ?? 0), done: h.bdone.includes(b.id), reward: b.reward, pts: b.pts, name: b.name, desc: b.desc })),
       guild: guildWire(room),
+      lv: h.lv, xp: h.xp, xpNext: h.lv >= (H.level?.max ?? 50) ? 0 : xpToNext(H, h.lv), sp: h.sp, st: { ...h.st },
+      skills: (H.level?.skills ?? []).filter((sk) => h.lv >= sk.level).map((sk) => sk.id),
     };
+  }
+
+  /** 경험치를 더한다 (레벨이 오르면 스탯 포인트 · 기술). 오른 레벨 수. */
+  function addXp(room, player, xp) {
+    const L = H?.level;
+    if (!L || !player || xp <= 0) return 0;
+    const h = rec(player);
+    h.xp += Math.round(xp);
+    let ups = 0;
+    while (h.lv < L.max && h.xp >= xpToNext(H, h.lv)) {
+      h.xp -= xpToNext(H, h.lv);
+      h.lv++;
+      h.sp += L.points_per_level;
+      ups++;
+    }
+    if (h.lv >= L.max) h.xp = 0;
+    if (ups > 0) {
+      const learned = L.skills.filter((sk) => sk.level > h.lv - ups && sk.level <= h.lv).map((sk) => sk.id);
+      sendTo(player, { t: 'hunter_result', kind: 'level', lv: h.lv, sp: h.sp, learned });
+      room.broadcast({ t: 'hunter_level', id: player.id, lv: h.lv }, player.id);
+    }
+    return ups;
   }
 
   const sendHunter = (room, player) => sendTo(player, { t: 'hunter', ...wire(room, player) });
@@ -161,32 +211,42 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     }
     addPoints(room, player, pts);
     const got = [];
+    const luck = 1 + statOf(H, player.profile, 'luk') * (H.level?.stats?.luk?.mana ?? 0);
     for (const e of H.kill.mana[c.k] ?? []) {
-      if (random() >= e.chance) continue;
+      if (random() >= e.chance * luck) continue;
       const [lo, hi] = e.n ?? [1, 1];
       const n = lo + Math.floor(random() * (hi - lo + 1));
       dropAt(room, e.id, n, c.x + (random() - 0.5) * 0.8, c.z + (random() - 0.5) * 0.8);
       got.push({ id: e.id, n });
     }
     progress(room, player, 'kill', c.k);
-    sendTo(player, { t: 'hunter_result', kind: 'kill', k: c.k, pts, mana: got });
+    const xp = (H.level?.xp?.kill?.[c.k] ?? 8) * (c.boss ? (H.level?.xp?.boss_mult ?? 1) : 1);
+    sendTo(player, { t: 'hunter_result', kind: 'kill', k: c.k, pts, mana: got, xp });
+    addXp(room, player, xp);
     sendHunter(room, player);
   }
 
   function onLoot(room, player) {
-    if (H && player && progress(room, player, 'loot')) sendHunter(room, player);
+    if (!H || !player) return;
+    progress(room, player, 'loot');
+    addXp(room, player, H.level?.xp?.loot ?? 0);
+    sendHunter(room, player);
   }
 
   function onSupply(room, player) {
-    if (H && player && progress(room, player, 'supply')) sendHunter(room, player);
+    if (!H || !player) return;
+    progress(room, player, 'supply');
+    addXp(room, player, H.level?.xp?.supply ?? 0);
+    sendHunter(room, player);
   }
 
   /** 게이트를 공략했다 (게이트 점수 · 의뢰). */
-  function onGate(room, player, pts) {
+  function onGate(room, player, pts, rank = 'E') {
     if (!H || !player) return;
     rec(player).gates++;
     addPoints(room, player, pts);
     progress(room, player, 'gate');
+    addXp(room, player, H.level?.xp?.gate?.[rank] ?? 0);
     sendHunter(room, player);
   }
 
@@ -272,8 +332,24 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         earn(player.profile, b.reward);
         addPoints(room, player, b.pts);
         sendProfile(player);
-        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'claim', b: b.id, reward: b.reward, pts: b.pts });
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'claim', b: b.id, reward: b.reward, pts: b.pts, xp: b.pts * (H.level?.xp?.claim_mult ?? 0) });
+        addXp(room, player, b.pts * (H.level?.xp?.claim_mult ?? 0));
         sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'stat_up': {
+        const def = H.level?.stats?.[msg.s];
+        const h = rec(player);
+        if (!def) return fail(ErrorCode.badItem);
+        if (h.sp <= 0) return fail(ErrorCode.noStatPoint);
+        if ((h.st[msg.s] ?? 0) >= (def.cap ?? 99)) return fail(ErrorCode.statCapped);
+        h.sp--;
+        h.st[msg.s] = (h.st[msg.s] ?? 0) + 1;
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'stat', s: msg.s, v: h.st[msg.s], sp: h.sp });
+        sendHunter(room, player);
+        // 체력이 오르면 하트도 (survival hpWire).
+        if (msg.s === 'vit') onVit?.(room, player);
         saveRoom(room);
         return;
       }
@@ -317,5 +393,15 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
   /** 다른 사람에게 보이는 등급 (머리 위 이름표). */
   const rankWire = (player) => (H ? rec(player).rank : '');
 
-  return { handle, wire, sendHunter, guildWire, onKill, onLoot, onSupply, onGate, rankWire, sellBonus };
+  /** 스탯이 주는 값 (survival · server 가 쓴다). */
+  const bonus = {
+    damage: (player) => 1 + statOf(H, player.profile, 'str') * (H?.level?.stats?.str?.damage ?? 0),
+    hp: (player) => Math.floor(statOf(H, player.profile, 'vit') * (H?.level?.stats?.vit?.hp_per ?? 0)),
+    speed: (player) => 1 + statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.speed ?? 0),
+    cooldown: (player) => 1 - statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.cooldown ?? 0),
+    skill: (player, id) => hasSkill(H, player.profile, id),
+    skillDef: (id) => H?.level?.skills?.find((x) => x.id === id) ?? null,
+  };
+
+  return { handle, wire, sendHunter, guildWire, onKill, onLoot, onSupply, onGate, rankWire, sellBonus, bonus, setOnVit: (fn) => { onVit = fn; } };
 }

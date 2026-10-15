@@ -1860,6 +1860,7 @@ export function createServer(overrides = {}) {
       case 'guild_create':
       case 'guild_join':
       case 'guild_leave':
+      case 'stat_up':
         return hunter.handle(ctx, msg, fail);
       case 'gate_enter':
         return survival.handleGate(ctx, msg, fail);
@@ -1950,7 +1951,8 @@ export function createServer(overrides = {}) {
     // 문을 지난 직후 도착한, 문 반대편의 낡은 위치 요청은 버린다 (되돌리지 않는다).
     if (t - player.doorAt < cfg.doorGraceMs && dist > 10) return;
     // v19: 차고 탈것을 타는 동안은 그 탈것의 최고 속도까지.
-    const topSpeed = Math.max(cfg.maxSpeed, garage.topSpeed(player));
+    // v0.28.1 민첩 스탯만큼 빨리 걷고 달린다.
+    const topSpeed = Math.max(cfg.maxSpeed * hunter.bonus.speed(player), garage.topSpeed(player));
     const allowed = topSpeed * cfg.speedTolerance * dt + cfg.moveSlackMeters;
     let corrected = tx !== msg.x || tz !== msg.z || ty !== msg.y;
     if (dist > allowed) {
@@ -2110,6 +2112,7 @@ export function createServer(overrides = {}) {
       case 'guild_create':
       case 'guild_join':
       case 'guild_leave':
+      case 'stat_up':
       case 'gate_enter':
       case 'home_enter':
       case 'home_exit':

@@ -1092,6 +1092,8 @@ func _handle_text(text: String) -> void:
 			var gg: Variant = msg.get("g", null)
 			guild = gg if gg is Dictionary else {}
 			guild_changed.emit(msg)
+		"hunter_level":
+			hunter_done.emit({"kind": "remote_level", "id": int(msg.get("id", 0)), "lv": int(msg.get("lv", 1))})
 		"hunter_rank":
 			hunter_ranks[int(msg.get("id", 0))] = str(msg.get("rank", "E"))
 			hunter_done.emit({"kind": "remote_rank", "id": int(msg.get("id", 0)), "rank": str(msg.get("rank", "E"))})
@@ -1565,9 +1567,21 @@ func open_supply(crate_id: String) -> void:
 		_request("supply_open", {"s": crate_id})
 
 
-func attack() -> void:
+## run: 달리며 휘두름 (v0.28.1 "달리며 공격" 기술이 있으면 서버가 사거리를 늘린다).
+func attack(run: bool = false) -> void:
 	if state == State.ONLINE:
-		_request("attack", {})
+		_request("attack", {"run": true} if run else {})
+
+
+## v0.28.1 스탯 포인트 쓰기 (str · vit · agi · luk).
+func stat_up(stat: String) -> void:
+	if state == State.ONLINE:
+		_request("stat_up", {"s": stat})
+
+
+## 배운 기술인지 (서버 hunter.skills).
+func has_skill(skill_id: String) -> bool:
+	return (hunter.get("skills", []) as Array).has(skill_id)
 
 
 func use_item(slot: int) -> void:

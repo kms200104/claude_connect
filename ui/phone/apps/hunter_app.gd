@@ -1,7 +1,7 @@
 class_name HunterApp
 extends PhoneApp
 ## 헌터넷 (v0.28, 헌터 협회 공식 앱): 헌터 자격증 · 오늘의 현상금 의뢰(진행 막대 · "완료 보고") · 길드(만들기 · 가입 · 탈퇴, 길드원 등급)
-## · 등급표. 판정은 서버 (Net.hunter_claim · guild_create · guild_join · guild_leave). 마석 매각 · 재심사는 출장소 창구에서.
+## · 등급표 · v0.28.1 능력치(레벨 · 경험치 · 스탯 포인트 쓰기 · 기술). 판정은 서버 (Net.hunter_claim · guild_create · guild_join · guild_leave). 마석 매각 · 재심사는 출장소 창구에서.
 
 const NAVY: Color = Color("#2A3A5A")
 const GOLD: Color = Color("#C89A20")
@@ -26,13 +26,15 @@ func _ready() -> void:
 func _build() -> void:
 	clear()
 	add_child(HunterWindow.license_card(false))
-	tabs(PackedStringArray(["의뢰", "길드", "등급표"]), _tab, func(i: int) -> void:
+	tabs(PackedStringArray(["능력치", "의뢰", "길드", "등급표"]), _tab, func(i: int) -> void:
 		_tab = i
 		_build())
 	match _tab:
 		0:
-			_build_bounties()
+			_build_stats()
 		1:
+			_build_bounties()
+		2:
 			_build_guild()
 		_:
 			_build_ranks()
@@ -151,3 +153,82 @@ func _build_ranks() -> void:
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(t)
 		row.add_child(label("%d점 · 마석 +%d%%" % [r.points, roundi(r.sell_bonus * 100.0)], 24, SOFT, false))
+
+
+# ---- v0.28.1 능력치 ----
+
+const STAT_ORDER: PackedStringArray = ["str", "vit", "agi", "luk"]
+
+
+## 스탯 정의의 값 하나 (예: agi · speed), 없으면 0.
+static func stat_value(stat: String, field: String) -> float:
+	return float((GameData.hunter.level_stats.get(stat, {}) as Dictionary).get(field, 0.0))
+
+
+## 기술의 늘어나는 사거리 (m).
+static func skill_reach(skill_id: String) -> float:
+	for sk: Dictionary in GameData.hunter.skills:
+		if str(sk.get("id", "")) == skill_id:
+			return float(sk.get("reach", 0.0))
+	return 0.0
+
+
+func _build_stats() -> void:
+	var h: Dictionary = Net.hunter
+	var lv: int = int(h.get("lv", 1))
+	var xp: int = int(h.get("xp", 0))
+	var nxt: int = int(h.get("xpNext", 0))
+	var sp: int = int(h.get("sp", 0))
+	var st: Dictionary = h.get("st", {}) if h.get("st") is Dictionary else {}
+	var c: VBoxContainer = card()
+	c.get_parent().name = "LevelCard"
+	c.add_child(label("Lv.%d%s" % [lv, " (최고)" if nxt <= 0 else ""], 40, NAVY))
+	if nxt > 0:
+		c.add_child(meter(clampf(float(xp) / float(nxt), 0.0, 1.0), GOLD))
+		c.add_child(label("경험치 %d / %d — 크리처 처치 · 게이트 · 의뢰 · 빈집 뒤지기 · 보급 상자" % [xp, nxt], 22, SOFT))
+	var pts: Label = label("남은 스탯 포인트 %d" % sp if sp > 0 else "레벨이 오르면 스탯 포인트 3을 받아요", 26, WARN if sp > 0 else SOFT)
+	pts.name = "StatPoints"
+	c.add_child(pts)
+	for key: String in STAT_ORDER:
+		var def: Dictionary = GameData.hunter.level_stats.get(key, {})
+		if def.is_empty():
+			continue
+		var v: int = int(st.get(key, 0))
+		var cap: int = int(def.get("cap", 99))
+		var row_card: VBoxContainer = card()
+		row_card.get_parent().name = "Stat_%s" % key
+		var row: HBoxContainer = HBoxContainer.new()
+		row_card.add_child(row)
+		var name_label: Label = label("%s  %d" % [str(def.get("name", key)), v], 32, INK, false)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_label)
+		var plus: Button = button("＋", 32, INK, sp > 0 and v < cap)
+		plus.name = "StatUp_%s" % key
+		plus.custom_minimum_size = Vector2(96, 72)
+		plus.disabled = sp <= 0 or v >= cap
+		plus.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Net.stat_up(key))
+		row.add_child(plus)
+		row_card.add_child(label("%s · 지금 %s%s" % [str(def.get("desc", "")), _stat_effect(key, v), " (최대)" if v >= cap else ""], 22, SOFT))
+	add_child(label("기술", 30, INK))
+	for sk: Dictionary in GameData.hunter.skills:
+		var learned: bool = Net.has_skill(str(sk.get("id", "")))
+		var kc: VBoxContainer = card()
+		kc.get_parent().name = "Skill_%s" % str(sk.get("id", ""))
+		kc.add_child(label("%s %s · Lv.%d" % ["✔" if learned else "🔒", str(sk.get("name", "")), int(sk.get("level", 1))], 28, GOOD if learned else SOFT))
+		kc.add_child(label(str(sk.get("desc", "")), 22, SOFT))
+
+
+## 스탯 값이 주는 효과 글자.
+func _stat_effect(key: String, v: int) -> String:
+	match key:
+		"str":
+			return "피해 +%d%%" % roundi(v * stat_value("str", "damage") * 100.0)
+		"vit":
+			return "최대 체력 +%d" % floori(v * stat_value("vit", "hp_per"))
+		"agi":
+			return "이동 +%d%% · 공격 간격 -%d%%" % [roundi(v * stat_value("agi", "speed") * 100.0), roundi(v * stat_value("agi", "cooldown") * 100.0)]
+		"luk":
+			return "마석 확률 +%d%%" % roundi(v * stat_value("luk", "mana") * 100.0)
+	return ""
