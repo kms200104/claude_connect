@@ -23,9 +23,9 @@ const offsetTo = (hour) => {
 };
 
 describe('v0.23 빈집촌 규칙', () => {
-  it('빈집 16채 · 가구 96개, 집 안은 놓기 · 심기 금지 (크리처도 못 들어온다)', () => {
-    assert.equal(S.houses.length, 16);
-    assert.equal(S.containers.size, 96);
+  it('빈집 32채 · 가구 192개 (v0.28.2), 집 안은 놓기 · 심기 금지 (크리처도 못 들어온다)', () => {
+    assert.equal(S.houses.length, 32);
+    assert.equal(S.containers.size, 192);
     for (const h of S.houses) assert.equal(groundProblem(data, h.x, h.z), 'building', h.id);
     for (const kind of ['fridge', 'drawer', 'wardrobe', 'sink', 'shoe_cabinet', 'medicine']) assert.ok(S.loot.kinds[kind], kind);
   });

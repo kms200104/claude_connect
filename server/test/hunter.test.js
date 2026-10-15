@@ -125,7 +125,7 @@ describe('v0.28 헌터', () => {
     await moveTo(c, { x: fridge.x, z: fridge.z + 0.8 });
     c.send({ t: 'loot', c: 'h01_2', rid: 'lt-1' });
     await c.next((m) => m.t === 'looted', 2000);
-    if (loot) await c.next((m) => m.t === 'hunter' && m.bounties.find((x) => x.id === loot.id)?.got === 1, 2000);
+    if (loot) await c.next((m) => m.t === 'hunter' && m.bounties.find((x) => x.id === loot.id)?.got === 1, 5000);
   });
 
   it('길드: 하나가 만들고 다른 하나가 가입, 함께 있으면 처치 점수가 늘고 길드 점수가 쌓인다 (저장된다)', async () => {

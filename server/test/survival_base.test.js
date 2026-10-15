@@ -28,7 +28,7 @@ describe('v0.24 빈집 거점 규칙', () => {
       assert.equal(h.breaches.length, 3, h.id);
       assert.equal(h.breaches.filter((b) => b.kind === 'door').length, 1);
     }
-    assert.equal(S.breaches.size, 48);
+    assert.equal(S.breaches.size, 96); // v0.28.2 32채 × 3
   });
 });
 

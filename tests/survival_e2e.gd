@@ -81,7 +81,7 @@ func _run() -> void:
 	await Net.welcomed
 	await get_tree().create_timer(0.6).timeout
 	var rules: SurvivalRules = GameData.survival
-	_check(rules.houses.size() == 16 and survival.houses.get_child_count() == 16, "빈집 16채 (%d)" % survival.houses.get_child_count())
+	_check(rules.houses.size() == 32 and survival.houses.get_child_count() == 32, "빈집 32채 (%d)" % survival.houses.get_child_count())
 	_check(survival.get("_hearts") != null and (survival.get("_hearts") as Control).get_child_count() == 5, "체력 하트 5개 (체력 10)")
 	_check(Net.hp == 10 and GameData.survival.is_night(Net.game_hour()), "밤 · 체력 가득 (%d, %.1f시)" % [Net.hp, Net.game_hour()])
 
