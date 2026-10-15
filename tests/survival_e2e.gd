@@ -128,19 +128,18 @@ func _run() -> void:
 	# v0.28.2 화면 밖에서 다가오는 크리처 쪽 가장자리가 은은하게 붉다.
 	_check(await _wait_until(func() -> bool: return survival.edge_hint.hint_count() > 0, 5.0), "다가오는 크리처 방향 가장자리 표시")
 	await _shot("surv_edge_hint")
-	# v0.28.4 저레벨(Lv.1) 공포 연출: 크리처가 다가오면 채도가 빠지고 가장자리가 조여 온다 · 심장 소리.
-	var fear: FearOverlay = survival.fear
-	_check(await _wait_until(func() -> bool: return fear.level > 0.25, 15.0), "공포 연출 (세기 %.2f, Lv.%d)" % [fear.level, int(Net.hunter.get("lv", 1))])
-	var env: Environment = (_village.get_node("WorldEnvironment") as WorldEnvironment).environment
-	_check(env.adjustment_enabled and env.adjustment_saturation < 0.85, "세상 채도가 빠졌다 (%.2f)" % env.adjustment_saturation)
-	_check(FearOverlay.level_factor(1, 5) == 1.0 and FearOverlay.level_factor(6, 5) == 0.0 and FearOverlay.level_factor(5, 5) < 0.3, "레벨이 오르면 약해지다 Lv.6 부터 없다")
-	var sky: SkyController = _village.get_node("SkyController")
-	_check(sky.night_light > 0.5 and env.ambient_light_energy < 0.35, "바깥 밤은 어둡다 (주변광 %.2f)" % env.ambient_light_energy)
-	await _shot("surv_fear")
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
 	# v0.28.1 맞으면 화면 가장자리가 붉게 번지고 피가 튄다.
 	var hurt: HurtOverlay = survival.get("_hurt")
 	_check(hurt != null and hurt.is_showing(), "맞은 화면 (붉은 가장자리 · 튄 피)")
+	# v0.28.4 저레벨(Lv.1) 공포 연출: 크리처가 다가오면 채도가 빠지고 가장자리가 조여 온다 · 심장 소리.
+	var fear: FearOverlay = survival.fear
+	_check(await _wait_until(func() -> bool: return fear.level > 0.25, 3.0), "공포 연출 (세기 %.2f, Lv.%d)" % [fear.level, int(Net.hunter.get("lv", 1))])
+	var env: Environment = (_village.get_node("WorldEnvironment") as WorldEnvironment).environment
+	_check(env.adjustment_enabled and env.adjustment_saturation < 0.85, "세상 채도가 빠졌다 (%.2f)" % env.adjustment_saturation)
+	_check(FearOverlay.level_factor(1, 5) == 1.0 and FearOverlay.level_factor(6, 5) == 0.0 and FearOverlay.level_factor(5, 5) < 0.3, "레벨이 오르면 약해지다 Lv.6 부터 없다")
+	var sky: SkyController = _village.get_node("SkyController")
+	_check(sky.night_light > 0.5 and env.ambient_light_energy < 0.45, "바깥 밤은 어둡다 (주변광 %.2f)" % env.ambient_light_energy)
 	await _shot("surv_hurt")
 	# v0.26 피 냄새: 다치면 피를 흘린다 (알림 · 땅의 핏자국).
 	_check(await _wait_until(func() -> bool: return Net.bleeding.has(Net.my_id) and (survival.get("_blood_chip") as Control).visible, 3.0), "피 냄새 알림")
@@ -166,17 +165,23 @@ func _run() -> void:
 	await _shot("surv_drop")
 	# v0.28.4 손전등: 바라보는 쪽으로 원뿔 빛.
 	var fl: int = -1
-	for i: int in mini(Net.inventory.size(), 5):
+	for i: int in Net.inventory.size():
 		if Net.inventory[i] != null and Net.inventory[i].id == "flashlight":
 			fl = i
-	_check(fl >= 0, "퀵슬롯에 손전등")
+	_check(fl >= 0, "가방에 손전등")
+	if fl >= 5:
+		Net.move_item(fl, 4)
+		_check(await _wait_until(func() -> bool: return Net.inventory[4] != null and Net.inventory[4].id == "flashlight", 2.0), "손전등을 퀵슬롯으로")
+		fl = 4
 	var held_before: int = Net.held_slot
 	Net.equip(fl)
-	var spot: SpotLight3D = survival.get("_spot")
-	_check(await _wait_until(func() -> bool: return spot.visible, 2.0), "손전등 원뿔 빛")
+	var flash_spot: SpotLight3D = survival.get("_spot")
+	_check(await _wait_until(func() -> bool: return flash_spot.visible, 2.0), "손전등 원뿔 빛")
+	# 앞(북쪽, 화면 위)을 비추게 돌려서 찍는다.
+	player.body.rotation.y = 0.0
 	await _shot("surv_flashlight")
 	Net.equip(held_before)
-	_check(await _wait_until(func() -> bool: return not spot.visible, 2.0), "내려놓으면 꺼진다")
+	_check(await _wait_until(func() -> bool: return not flash_spot.visible, 2.0), "내려놓으면 꺼진다")
 
 	# ---- v0.25 거점: 현관 · 깨진 창 하나 더 → 상자 · 침대 ----
 	var turn: Basis = Basis(Vector3.UP, house.yaw)

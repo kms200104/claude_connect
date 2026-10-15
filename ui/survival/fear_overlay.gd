@@ -105,8 +105,8 @@ func _process(delta: float) -> void:
 	_beat_pulse = maxf(0.0, _beat_pulse - delta * 4.0)
 	# 가장자리: 세질수록 안쪽으로 조여 오고, 박동마다 한 번 더.
 	var squeeze: float = level + _beat_pulse * 0.12 * level
-	_edge.modulate.a = clampf(level * 1.15, 0.0, 0.95)
-	_edge.scale = Vector2.ONE * lerpf(1.35, 0.95, clampf(squeeze, 0.0, 1.0))
+	_edge.modulate.a = clampf(level * 0.9, 0.0, 0.72)
+	_edge.scale = Vector2.ONE * lerpf(1.4, 1.05, clampf(squeeze, 0.0, 1.0))
 	_apply_world(level + _beat_pulse * 0.06 * level)
 
 
@@ -128,5 +128,5 @@ func _apply_world(f: float) -> void:
 	_adjusted = true
 	_env.adjustment_enabled = true
 	_env.adjustment_saturation = 1.0 - 0.82 * clampf(f, 0.0, 1.0)
-	_env.adjustment_contrast = 1.0 + 0.22 * clampf(f, 0.0, 1.0)
-	_env.adjustment_brightness = 1.0 - 0.14 * clampf(f, 0.0, 1.0)
+	_env.adjustment_contrast = 1.0 + 0.1 * clampf(f, 0.0, 1.0)
+	_env.adjustment_brightness = 1.0 - 0.05 * clampf(f, 0.0, 1.0)

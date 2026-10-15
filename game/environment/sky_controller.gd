@@ -40,8 +40,8 @@ static var night_light: float = 0.0
 ## 집 · 가게 안(indoor)은 위의 예전 밤 값 그대로.
 @export var outdoor_night_sky: Color = Color(0.015, 0.02, 0.045)
 @export var outdoor_night_ambient: Color = Color(0.2, 0.25, 0.42)
-@export_range(0.0, 2.0, 0.01) var outdoor_night_ambient_energy: float = 0.2
-@export_range(0.0, 2.0, 0.01) var outdoor_moon_energy: float = 0.08
+@export_range(0.0, 2.0, 0.01) var outdoor_night_ambient_energy: float = 0.32
+@export_range(0.0, 2.0, 0.01) var outdoor_moon_energy: float = 0.12
 @export var night_fog_color: Color = Color(0.012, 0.016, 0.03)
 @export_range(0.0, 0.1, 0.001) var night_fog_density: float = 0.02
 

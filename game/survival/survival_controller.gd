@@ -53,7 +53,7 @@ var fear: FearOverlay = null
 static var _blood_material: StandardMaterial3D = null
 var _last_drop: Vector2 = Vector2.INF
 var _light: OmniLight3D = null
-## v0.28.4 손전등: 바라보는 쪽으로 비추는 원뿔 빛 (그림자를 드리운다).
+## v0.28.4 손전등: 바라보는 쪽으로 비추는 원뿔 빛 (자기 몸에 가리지 않게 그림자는 끈다).
 var _spot: SpotLight3D = null
 var _light_t: float = 0.0
 var _was_night: bool = false
@@ -107,21 +107,21 @@ func _ready() -> void:
 	_spot = SpotLight3D.new()
 	_spot.name = "Flashlight"
 	_spot.light_color = Color("#EEF4FF")
-	_spot.light_energy = 5.0
+	_spot.light_energy = 10.0
 	_spot.spot_range = 15.0
-	_spot.spot_angle = 26.0
+	_spot.spot_angle = 30.0
 	_spot.spot_angle_attenuation = 1.6
-	_spot.spot_attenuation = 0.9
-	_spot.shadow_enabled = true
+	_spot.spot_attenuation = 0.6
+	_spot.shadow_enabled = false
 	_spot.visible = false
 	if player != null:
 		player.add_child.call_deferred(_light)
 		_light.position = Vector3(0.3, 1.5, -0.3)
 		var holder: Node3D = player.body if player.body != null else player
 		holder.add_child.call_deferred(_spot)
-		# 가슴 높이에서 앞(-Z)으로, 조금 아래를 비춘다.
-		_spot.position = Vector3(0.18, 1.0, -0.25)
-		_spot.rotation = Vector3(-0.22, 0.0, 0.0)
+		# 가슴 높이에서 몸 앞(-Z)으로, 조금 아래를 비춘다.
+		_spot.position = Vector3(0.15, 1.1, -0.45)
+		_spot.rotation = Vector3(-0.32, 0.0, 0.0)
 	Net.hp_changed.connect(func(_hp: int, _max: int) -> void: _refresh_hearts())
 	Net.hurt.connect(_on_hurt)
 	Net.knocked_out.connect(_on_ko)
@@ -182,13 +182,13 @@ func _process(_delta: float) -> void:
 					_light.position = Vector3(0.3, 1.6, -0.3)
 				"flashlight":
 					_light.light_color = Color("#B8C8E8")
-					_light.omni_range = 2.6
-					_light.light_energy = 0.35
+					_light.omni_range = 3.2
+					_light.light_energy = 0.55
 					_light.position = Vector3(0.0, 1.4, 0.0)
 				_:
 					_light.light_color = Color("#8A9AC0")
-					_light.omni_range = 3.4
-					_light.light_energy = 0.45
+					_light.omni_range = 4.6
+					_light.light_energy = 0.8
 					_light.position = Vector3(0.0, 1.6, 0.0)
 	if _vignette != null and _vignette.color.a > 0.0:
 		_vignette.color.a = maxf(0.0, _vignette.color.a - _delta * 1.2)
