@@ -56,13 +56,16 @@ func _process(delta: float) -> void:
 		g.body.rotation.y = lerp_angle(g.body.rotation.y, float(info["yaw"]) + PI, 1.0 - exp(-8.0 * delta)) if not lying else g.body.rotation.y
 		g.body.rotation.z = g.down * 1.45
 		g.body.position.y = lerpf(0.72, 0.2, g.down)
+		# 글자가 바뀔 때만 넣는다 (Label3D 는 글자를 넣을 때마다 메시를 다시 만든다).
+		var text: String
 		if lying:
 			var left: int = maxi(0, until - now)
-			g.tag.text = "가디언 · 다시 서기까지 %d:%02d" % [left / 60000, (left / 1000) % 60]
-			g.tag.modulate = Color("#FF9A8A")
+			text = "가디언 · 다시 서기까지 %d:%02d" % [left / 60000, (left / 1000) % 60]
 		else:
-			g.tag.text = "가디언 %s" % "■".repeat(ceili(5.0 * float(info["hp"]) / maxf(float(info["max"]), 1.0)))
-			g.tag.modulate = Color("#A8D8FF")
+			text = "가디언 %s" % "■".repeat(ceili(5.0 * float(info["hp"]) / maxf(float(info["max"]), 1.0)))
+		if g.tag.text != text:
+			g.tag.text = text
+			g.tag.modulate = Color("#FF9A8A") if lying else Color("#A8D8FF")
 		g.flash.visible = g.flash.visible and g.flash.get_meta("until", 0) > now
 
 
