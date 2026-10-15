@@ -25,6 +25,8 @@ var focus_side: float = 0.0
 
 ## 0 = 평소, 1 = 클로즈업. set_focus 로 부드럽게 바꾼다.
 var focus: float = 0.0
+## v0.28.4 기본 거리 배율 (크리처가 나오는 곳에서 SurvivalController 가 1.7 쯤으로 올려 더 넓게 본다).
+var zoom_out: float = 1.0
 var _focus_tween: Tween = null
 
 @export_group("Bag")
@@ -225,7 +227,7 @@ func _apply_framing() -> void:
 	var pitch: float = lerpf(lerpf(lerpf(pitch_degrees, focus_pitch_degrees, focus), bag_pitch_degrees, bag_view), booth_pitch_degrees, booth_view)
 	rotation_degrees = Vector3(-pitch, yaw_degrees, 0.0)
 	if camera != null:
-		var dist: float = lerpf(lerpf(distance, focus_distance, focus), bag_distance, bag_view)
+		var dist: float = lerpf(lerpf(distance * zoom_out, focus_distance, focus), bag_distance, bag_view)
 		var w: float = point_weight * (1.0 - focus)
 		if w > 0.0 and target != null:
 			dist = lerpf(dist, maxf(dist * point_zoom, _distance_to_fit_point()), w)

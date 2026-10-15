@@ -5,8 +5,8 @@ extends Control
 ## x: 오른쪽 +, y: 아래 + (위로 밀면 y < 0). 마우스는 emulate_touch_from_mouse로 터치처럼 동작한다.
 
 @export_group("Shape")
-@export_range(40.0, 300.0, 1.0, "suffix:px") var radius: float = 140.0
-@export_range(20.0, 200.0, 1.0, "suffix:px") var knob_radius: float = 60.0
+@export_range(40.0, 300.0, 1.0, "suffix:px") var radius: float = 118.0
+@export_range(20.0, 200.0, 1.0, "suffix:px") var knob_radius: float = 50.0
 
 @export_group("Response")
 ## 이 비율(0~1) 이하의 입력은 무시한다.

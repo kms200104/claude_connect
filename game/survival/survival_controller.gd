@@ -193,6 +193,8 @@ func _process(_delta: float) -> void:
 	if _vignette != null and _vignette.color.a > 0.0:
 		_vignette.color.a = maxf(0.0, _vignette.color.a - _delta * 1.2)
 	_update_downed(_delta)
+	_auto_attack()
+	_update_zoom(_delta)
 	_update_jobs()
 	_update_chip()
 	_update_scent()
@@ -249,6 +251,38 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 	return best
 
 
+## v0.28.4 자동 공격: 공격 범위 안에 크리처가 들면 (공격 간격이 찼을 때) 저절로 휘두른다. 상황 버튼은 그대로 (눌러도 된다).
+## 쓰러졌거나 · 자거나 · 탈것을 탔거나 · 창이 열려 있으면 하지 않는다. 판정은 서버 (Net.attack).
+func _auto_attack() -> void:
+	if player == null or creatures == null or Net.creatures.is_empty() or Net.state != Net.State.ONLINE:
+		return
+	if Time.get_ticks_msec() / 1000.0 < _swing_ready_at or player.is_riding() or player.is_input_locked() or is_busy():
+		return
+	var target: String = pick_target(player.global_position)
+	if target.begins_with(TARGET_ATTACK):
+		activate(target, true)
+
+
+## v0.28.4 크리처가 나오는 곳 (바깥 밤 · 던전 · 가까이 크리처)에서는 카메라를 더 뒤로 물러 시야를 넓힌다 (천천히).
+const ZOOM_OUT: float = 1.7
+func _update_zoom(delta: float) -> void:
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	var rig: FollowCamera = cam.get_parent() as FollowCamera if cam != null else null
+	if rig == null or player == null:
+		return
+	var danger: bool = false
+	if Net.state == Net.State.ONLINE:
+		var indoor: bool = Home.is_inside()
+		danger = not indoor and (_is_night() or not GameData.hunter.dungeon_spot_at(player.global_position).is_empty())
+		if not danger and not indoor:
+			for id: String in Net.creatures:
+				var c: Dictionary = Net.creatures[id]
+				if Vector2(float(c.get("x", 0.0)) - player.global_position.x, float(c.get("z", 0.0)) - player.global_position.z).length() < 40.0:
+					danger = true
+					break
+	rig.zoom_out = move_toward(rig.zoom_out, ZOOM_OUT if danger else 1.0, delta * 0.35)
+
+
 func is_busy() -> bool:
 	return stash_window != null and stash_window.is_open()
 
@@ -285,7 +319,7 @@ func cost_text() -> String:
 	return " · ".join(parts)
 
 
-func activate(target: String) -> void:
+func activate(target: String, auto: bool = false) -> void:
 	if target.begins_with(TARGET_SUPPLY):
 		var sid: String = target.trim_prefix(TARGET_SUPPLY)
 		var sp: Vector3 = supply.crate_position(sid)
@@ -307,6 +341,10 @@ func activate(target: String) -> void:
 		if run and Net.has_skill("run_attack"):
 			if at != Vector3.INF:
 				Puff.burst(player.get_parent(), player.global_position + Vector3(0.0, 0.3, 0.0), Color(0.85, 0.8, 0.7, 0.8), 6, 0.6, 0.25, 0.08, 0.35)
+		elif auto:
+			# v0.28.4 자동 공격은 도망치는 걸음을 멈춰 세우지 않는다 (서 있으면 크리처 쪽을 본다).
+			if at != Vector3.INF and not run:
+				player.look_toward(at - player.global_position)
 		else:
 			if at != Vector3.INF:
 				player.look_toward(at - player.global_position)

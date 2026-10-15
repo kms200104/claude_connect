@@ -152,6 +152,15 @@ func _run() -> void:
 		if int(i.get("by", 0)) == Net.my_id:
 			dead[0] = true)
 	var drops_before: int = Net.drops.size()
+	# v0.28.4 범위 안에 들면 버튼을 누르지 않아도 저절로 공격한다.
+	var auto_hit: Array = [false]
+	Net.creature_hit.connect(func(i: Dictionary) -> void:
+		if int(i.get("by", 0)) == Net.my_id:
+			auto_hit[0] = true)
+	_check(await _wait_until(func() -> bool: return auto_hit[0] or dead[0], 8.0), "범위 안 크리처를 자동 공격")
+	# v0.28.4 크리처가 나오는 밤에는 카메라가 더 물러난다.
+	var rig: FollowCamera = _village.get_node("CameraRig") as FollowCamera
+	_check(rig.zoom_out > 1.2, "밤에는 더 넓게 본다 (거리 ×%.2f)" % rig.zoom_out)
 	for i: int in 40:
 		if dead[0]:
 			break
