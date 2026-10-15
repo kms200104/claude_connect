@@ -946,6 +946,18 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       }
       const aggro = (c.target === best.id ? kind.aggro * 1.5 : kind.aggro) * (best.bleeding && SC ? SC.aggro_mult : 1);
       c.target = (bestD <= aggro || alerted) && !safeAt(best.x, best.z) ? best.id : 0;
+      // v0.28.2 비명이: 사람을 처음 알아채면 한 번 비명 — 둘레 크리처가 그 사람에게 몰려온다.
+      if (kind.scream && c.target && !c.screamed) {
+        c.screamed = true;
+        let called = 0;
+        for (const o of room.creatures.values()) {
+          if (o === c || Math.hypot(o.x - c.x, o.z - c.z) > kind.scream) continue;
+          o.alertUntil = t + (N?.alert_ms ?? 8000);
+          o.alertBy = c.target;
+          called++;
+        }
+        room.broadcast({ t: 'creature_scream', id: c.id, x: round(c.x), z: round(c.z), n: called });
+      }
       // 아직 알아채지 못했어도 사람 냄새를 따라 천천히 (wander) 다가온다.
       // 아직 알아채지 못했으면 핏자국을 따라오거나 (냄새), 사람 냄새를 따라 천천히 (wander) 다가온다.
       const trail = !c.target && SC && !c.inside ? scentFor(room, c) : null;
@@ -986,6 +998,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         if (c.target && sameRoom && !driving && Math.hypot(best.x - c.x, best.z - c.z) <= kind.reach && t >= c.nextAttack) {
           c.nextAttack = t + kind.attack_ms;
           c.attackAt = t;
+          // v0.28.2 독침이는 멀리서 침을 뱉는다 (그림).
+          if (kind.spit) room.broadcast({ t: 'creature_spit', id: c.id, to: best.id });
           hurt(room, best, Math.round(kind.damage * (c.dmg ?? 1)), c.k);
           changed = true;
         }
@@ -1182,7 +1196,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (!target) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
     // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더).
     const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1);
-    target.hp -= Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0);
+    // v0.28.2 철갑이: 갑옷만큼 덜 받는다 (최소 1).
+    const armor = S.creatures.kinds[target.k]?.armor ?? 0;
+    target.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
     // 맞으면 조금 밀려난다.
     if (bestD > 0.01) {
       const push = 0.7;

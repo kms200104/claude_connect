@@ -43,6 +43,8 @@ func _ready() -> void:
 	Net.creature_hit.connect(_on_hit)
 	Net.creature_dead.connect(_on_dead)
 	Net.welcomed.connect(_sync.unbind(3))
+	# v0.28.2 독침이 침 · 비명이 비명 (그림 · 소리).
+	Net.message_received.connect(_on_message)
 
 
 func actor_position(id: String) -> Vector3:
@@ -267,7 +269,10 @@ func _spawn(id: String, kind: String) -> Actor:
 	a.tag.modulate = Color("#FFB0A0")
 	a.tag.outline_modulate = Color("#2A1A1A")
 	a.tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	a.tag.position = Vector3(0.0, 2.15 if kind != "bloated" else 2.3, 0.0)
+	a.tag.position = Vector3(0.0, 1.15 if kind == "crawler" else (2.3 if kind in ["bloated", "brute"] else 2.15), 0.0)
+	# v0.28.2 철갑이는 덩치가 크다.
+	if kind == "brute":
+		a.root.scale = Vector3.ONE * 1.22
 	a.root.add_child(a.tag)
 	_actors[id] = a
 	return a
@@ -295,6 +300,25 @@ func _meshes_for(kind: String) -> Array:
 			shirt = Color("#C9C2A8")
 			pants = Color("#5A5E50")
 			belly = 0.22
+		"crawler":
+			return _crawler_meshes()
+		"screamer":
+			skin = Color("#C9CBB8")
+			shirt = Color("#3A3A46")
+			pants = Color("#2E2E36")
+			thin = 0.72
+			lean = 0.15
+		"brute":
+			skin = Color("#7E9070")
+			shirt = Color("#4A4A50")
+			pants = Color("#38383E")
+			thin = 1.35
+			belly = 0.08
+		"spitter":
+			skin = Color("#7FA868")
+			shirt = Color("#5A6A40")
+			pants = Color("#3E4632")
+			lean = 0.2
 	var hip_y: float = 0.72
 	var shoulder_y: float = 1.42
 	var st: SurfaceTool = ClayMesh.begin()
@@ -313,6 +337,23 @@ func _meshes_for(kind: String) -> Array:
 		ClayMesh.add_ellipsoid(st, head + Vector3(s * 0.09, 0.03, -0.2), Vector3(0.06, 0.05, 0.03), Color("#2A2620"))
 		ClayMesh.add_ellipsoid(st, head + Vector3(s * 0.09, 0.03, -0.225), Vector3(0.025, 0.025, 0.015), Color("#F4E04A"))
 	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.11, -0.19), Vector3(0.07, 0.04, 0.03), Color("#4A2A2A"))
+	match kind:
+		"screamer":
+			# 찢어질 듯 벌린 입 · 긴 목.
+			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.13, -0.18), Vector3(0.1, 0.13, 0.05), Color("#3A0A0A"))
+			ClayMesh.add_capsule(st, Vector3(0.0, 1.42, -lean * 0.4), head + Vector3(0.0, -0.18, 0.02), 0.07, skin.darkened(0.08))
+		"brute":
+			# 철판 갑옷 (가슴 · 어깨) · 철모 · 리벳.
+			var steel: Color = Color("#6A6E74")
+			ClayMesh.add_rounded_box(st, Vector3(0.0, 1.12, -0.24), Vector3(0.62, 0.5, 0.08), 0.3, steel)
+			for sd: float in [-1.0, 1.0]:
+				ClayMesh.add_rounded_box(st, Vector3(sd * 0.36, 1.42, -0.02), Vector3(0.26, 0.12, 0.36), 0.4, steel.darkened(0.1), Basis(Vector3.BACK, sd * 0.35))
+				ClayMesh.add_ellipsoid(st, Vector3(sd * 0.2, 1.3, -0.29), Vector3(0.03, 0.03, 0.02), Color("#3A3E44"))
+			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, 0.1, 0.0), Vector3(0.27, 0.16, 0.26), steel.darkened(0.05))
+		"spitter":
+			# 부풀어 오른 독주머니 (목) · 초록 침.
+			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.24, -0.1), Vector3(0.17, 0.13, 0.15), Color("#B8D06A"))
+			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.13, -0.21), Vector3(0.05, 0.05, 0.03), Color("#6AA83A"))
 	var torso: ArrayMesh = ClayMesh.commit(st)
 	# 팔: 어깨에서 앞으로 쭉 (좀비 자세).
 	st = ClayMesh.begin()
@@ -328,3 +369,113 @@ func _meshes_for(kind: String) -> Array:
 	var leg: ArrayMesh = ClayMesh.commit(st)
 	_meshes[kind] = [torso, arms, leg, shoulder_y, hip_y]
 	return _meshes[kind]
+
+
+## v0.28.2 기어미: 배를 땅에 깔고 기어 온다 (몸통 · 머리가 낮고, 팔로 땅을 짚는다). 다리는 뒤로 끌린다.
+func _crawler_meshes() -> Array:
+	var skin: Color = Color("#8E9C86")
+	var rag: Color = Color("#5A4E44")
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.32, 0.05), Vector3(0.24, 0.16, 0.48), rag, 12, 6)
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.36, 0.3), Vector3(0.2, 0.12, 0.22), rag.darkened(0.15), 10, 5)
+	var head: Vector3 = Vector3(0.0, 0.42, -0.5)
+	ClayMesh.add_ellipsoid(st, head, Vector3(0.2, 0.18, 0.2), skin, 12, 8)
+	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, 0.12, 0.04), Vector3(0.18, 0.08, 0.16), Color("#3E3A30"))
+	for sd: float in [-1.0, 1.0]:
+		ClayMesh.add_ellipsoid(st, head + Vector3(sd * 0.08, 0.02, -0.17), Vector3(0.05, 0.04, 0.03), Color("#2A2620"))
+		ClayMesh.add_ellipsoid(st, head + Vector3(sd * 0.08, 0.02, -0.19), Vector3(0.022, 0.022, 0.014), Color("#F4E04A"))
+	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.08, -0.16), Vector3(0.07, 0.04, 0.03), Color("#4A2A2A"))
+	var torso: ArrayMesh = ClayMesh.commit(st)
+	# 팔: 앞으로 뻗어 땅을 짚는다 (어깨 0.36 기준).
+	st = ClayMesh.begin()
+	for sd: float in [-1.0, 1.0]:
+		var sh: Vector3 = Vector3(sd * 0.2, 0.36, -0.3)
+		ClayMesh.add_capsule(st, sh, sh + Vector3(sd * 0.18, -0.18, -0.32), 0.06, rag)
+		ClayMesh.add_capsule(st, sh + Vector3(sd * 0.18, -0.18, -0.32), sh + Vector3(sd * 0.22, -0.32, -0.46), 0.05, skin)
+	var arms: ArrayMesh = ClayMesh.commit(st)
+	# 다리: 뒤로 끌린다 (엉덩이 0 기준).
+	st = ClayMesh.begin()
+	ClayMesh.add_capsule(st, Vector3.ZERO, Vector3(0.0, -0.18, 0.55), 0.08, Color("#3A3E44"))
+	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.2, 0.62), Vector3(0.12, 0.1, 0.2), 0.4, Color("#3A3632"))
+	var leg: ArrayMesh = ClayMesh.commit(st)
+	_meshes["crawler"] = [torso, arms, leg, 0.36, 0.3]
+	return _meshes["crawler"]
+
+
+func _on_message(msg: Dictionary) -> void:
+	match str(msg.get("t", "")):
+		"creature_spit":
+			_spit(str(msg.get("id", "")), int(msg.get("to", 0)))
+		"creature_scream":
+			_scream(str(msg.get("id", "")))
+
+
+## 독침이 침: 입에서 초록 덩어리가 포물선으로 날아가 맞은 자리에 튄다.
+func _spit(id: String, to: int) -> void:
+	var a: Actor = _actors.get(id)
+	if a == null or not is_instance_valid(a.root):
+		return
+	var from: Vector3 = a.root.global_position + Vector3(0.0, 1.5, 0.0)
+	var target: Node3D = null
+	if to == Net.my_id:
+		target = get_tree().get_first_node_in_group(&"player") as Node3D
+	else:
+		var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+		if replicator != null:
+			for r: RemotePlayer in replicator.remote_nodes():
+				if r.player_id == to:
+					target = r
+	if target == null:
+		return
+	var goal: Vector3 = target.global_position + Vector3(0.0, 1.1, 0.0)
+	var blob: MeshInstance3D = MeshInstance3D.new()
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = 0.09
+	sphere.height = 0.16
+	sphere.radial_segments = 8
+	sphere.rings = 4
+	blob.mesh = sphere
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.albedo_color = Color("#9AD040")
+	m.emission_enabled = true
+	m.emission = Color("#6AA020")
+	blob.material_override = m
+	add_child(blob)
+	blob.global_position = from
+	a.lunge = 1.0
+	var tween: Tween = blob.create_tween()
+	tween.tween_method(func(k: float) -> void:
+		if is_instance_valid(blob):
+			blob.global_position = from.lerp(goal, k) + Vector3(0.0, sin(k * PI) * 1.2, 0.0), 0.0, 1.0, 0.32)
+	tween.tween_callback(func() -> void:
+		Puff.burst(self, goal, Color(0.6, 0.85, 0.25, 0.9), 8, 0.4, 0.2, 0.07, 0.4)
+		blob.queue_free())
+	Audio.play_at("fish_plop", from, -6.0, 1.6)
+
+
+## 비명이 비명: 머리 위로 퍼지는 고리 · "끼아아악!" · 소리.
+func _scream(id: String) -> void:
+	var a: Actor = _actors.get(id)
+	if a == null or not is_instance_valid(a.root):
+		return
+	var at: Vector3 = a.root.global_position
+	var l: Label3D = Label3D.new()
+	l.text = "끼아아악!"
+	l.font_size = 64
+	l.pixel_size = 0.009
+	l.outline_size = 12
+	l.modulate = Color("#FF8A7A")
+	l.outline_modulate = Color("#2A0A0A")
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	add_child(l)
+	l.global_position = at + Vector3(0.0, 2.6, 0.0)
+	var tween: Tween = l.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(l, "scale", Vector3.ONE * 1.5, 0.8)
+	tween.tween_property(l, "modulate:a", 0.0, 0.8).set_delay(0.5)
+	tween.chain().tween_callback(l.queue_free)
+	for i: int in 3:
+		Puff.burst(self, at + Vector3(0.0, 1.8, 0.0), Color(1.0, 0.6, 0.5, 0.5), 10, 1.6 + i * 0.8, 0.1, 0.1, 0.6)
+	Audio.play_at("emote_hey", at, 2.0, 0.55)
+	a.punch = 1.0

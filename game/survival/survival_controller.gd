@@ -44,6 +44,7 @@ var _supply_label: Label = null
 var _hearts: HBoxContainer = null
 var _vignette: ColorRect = null
 var _hurt: HurtOverlay = null
+var edge_hint: CreatureEdgeHint = null
 ## v0.28.1 핏자국 머티리얼 (젖어 번들거리는 정점 색) · 마지막 핏자국 자리 (끌린 방향).
 static var _blood_material: StandardMaterial3D = null
 var _last_drop: Vector2 = Vector2.INF
@@ -685,6 +686,8 @@ func _build_hud() -> void:
 	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hurt = HurtOverlay.new()
+	edge_hint = CreatureEdgeHint.new()
+	edge_hint.player = player
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -788,6 +791,8 @@ func _build_hud() -> void:
 	_supply_chip.add_child(_supply_label)
 	stash_window = StashWindow.new()
 	if hud != null:
+		hud.add_child.call_deferred(edge_hint)
+		hud.move_child.call_deferred(edge_hint, 0)
 		hud.add_child.call_deferred(_vignette)
 		hud.add_child.call_deferred(_hurt)
 		hud.add_child.call_deferred(_hearts)

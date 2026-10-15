@@ -125,6 +125,9 @@ func _run() -> void:
 	# ---- 밤 크리처 ----
 	await _teleport(Vector3(-150.0, 0.1, 140.0))
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty() and survival.creatures.get_child_count() > 0, 5.0), "둔치에 크리처가 나타났다 (%d)" % Net.creatures.size())
+	# v0.28.2 화면 밖에서 다가오는 크리처 쪽 가장자리가 은은하게 붉다.
+	_check(await _wait_until(func() -> bool: return survival.edge_hint.hint_count() > 0, 5.0), "다가오는 크리처 방향 가장자리 표시")
+	await _shot("surv_edge_hint")
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
 	# v0.28.1 맞으면 화면 가장자리가 붉게 번지고 피가 튄다.
 	var hurt: HurtOverlay = survival.get("_hurt")

@@ -102,7 +102,8 @@ describe('v0.23 뒤지기 · 크리처 · 체력', () => {
     await moveTo(c, -150, 140);
     const m = await c.next((x) => x.t === 'creatures' && x.c.length >= 1, 4000);
     const z = m.c[0];
-    assert.equal(z.k, 'shambler');
+    // v0.28.2 종류가 늘어 random 0.5 로는 달리미가 뽑힌다 (가중치 순서).
+    assert.equal(z.k, 'runner');
     // 크리처가 다가와 때린다.
     const hurt = await c.next((x) => x.t === 'hurt', 30000);
     assert.ok(hurt.hp < hurt.max, `체력 ${hurt.hp}`);
@@ -115,7 +116,7 @@ describe('v0.23 뒤지기 · 크리처 · 체력', () => {
     const healed = await ask(c, { t: 'use', slot: bandage });
     assert.equal(healed.t, 'hp');
     assert.ok(healed.hp > hurt.hp || healed.hp === healed.max);
-    // 맨손으로 계속 때려 쓰러뜨린다 (어슬렁이 체력 5).
+    // 맨손으로 계속 때려 쓰러뜨린다 (달리미 체력 3).
     let dead = null;
     for (let i = 0; i < 20 && !dead; i++) {
       const target = [...room.creatures.values()].sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
@@ -127,7 +128,8 @@ describe('v0.23 뒤지기 · 크리처 · 체력', () => {
     assert.ok(dead, '쓰러뜨렸다');
     // v0.28 마석(헌터)은 따로 떨어진다 — 크리처 drops 표의 것만 본다.
     const drop = await c.next((x) => x.t === 'drop' && !x.d.item?.startsWith('mana_') && Math.hypot(x.d.x - dead.x, x.d.z - dead.z) < 2, 2000);
-    assert.ok(S.creatures.kinds.shambler.drops.some((e) => e.id === drop.d.item), drop.d.item);
+    // v0.28.2 크리처 종류가 늘었다 — 어느 종류의 drops 표에든 있는 것.
+    assert.ok(Object.values(S.creatures.kinds).some((k) => k.drops.some((e) => e.id === drop.d.item)), drop.d.item);
   });
 
   it('체력이 0 이 되면 기절: 대피소에서 깨어나고 솔을 조금 잃는다', async () => {

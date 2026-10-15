@@ -16,11 +16,15 @@
 
   "kill": {
     "_comment": "크리처를 쓰러뜨린 헌터가 받는 점수 · 떨어지는 마석 (chance, 크리처 drops 와 따로). 길드원이 party_range m 안에 함께 있으면 점수 × party_mult.",
-    "points": { "shambler": 3, "runner": 4, "bloated": 8 },
+    "points": { "shambler": 3, "runner": 4, "bloated": 8, "crawler": 3, "screamer": 5, "brute": 12, "spitter": 5 },
     "mana": {
       "shambler": [ { "id": "mana_stone_e", "chance": 0.6, "n": [1, 1] } ],
       "runner": [ { "id": "mana_stone_e", "chance": 0.7, "n": [1, 2] } ],
-      "bloated": [ { "id": "mana_stone_e", "chance": 1.0, "n": [1, 2] }, { "id": "mana_stone_d", "chance": 0.35, "n": [1, 1] } ]
+      "bloated": [ { "id": "mana_stone_e", "chance": 1.0, "n": [1, 2] }, { "id": "mana_stone_d", "chance": 0.35, "n": [1, 1] } ],
+      "crawler": [ { "id": "mana_stone_e", "chance": 0.5, "n": [1, 1] } ],
+      "screamer": [ { "id": "mana_stone_e", "chance": 0.8, "n": [1, 2] } ],
+      "brute": [ { "id": "mana_stone_e", "chance": 1.0, "n": [2, 3] }, { "id": "mana_stone_d", "chance": 0.6, "n": [1, 1] } ],
+      "spitter": [ { "id": "mana_stone_e", "chance": 0.8, "n": [1, 2] } ]
     },
     "party_range": 20, "party_mult": 1.25
   },
@@ -75,14 +79,14 @@
       },
       "D": {
         "weight": 3, "color": "#5AC08A", "hp_mult": 1.3, "dmg_mult": 1.2,
-        "waves": [ [["runner", 3], ["shambler", 2]], [["runner", 2], ["bloated", 1]] ],
+        "waves": [ [["runner", 3], ["crawler", 2]], [["spitter", 1], ["runner", 2], ["bloated", 1]] ],
         "boss": { "k": "bloated", "name": "퉁퉁이 우두머리", "hp_mult": 3, "dmg_mult": 1.5, "scale": 1.5 },
         "sol": 80000, "pts": 80,
         "loot": { "rolls": 4, "empty": 0, "items": [ { "id": "mana_stone_d", "w": 40, "n": [1, 3] }, { "id": "mana_stone_c", "w": 12, "n": [1, 1] }, { "id": "first_aid_kit", "w": 15, "n": [1, 1] }, { "id": "battery_pack", "w": 15, "n": [1, 1] }, { "id": "armor_plate", "w": 5, "n": [1, 1] }, { "id": "nails", "w": 13, "n": [2, 4] } ] }
       },
       "C": {
         "weight": 1, "color": "#4A90E0", "hp_mult": 1.6, "dmg_mult": 1.4,
-        "waves": [ [["runner", 4], ["bloated", 1]], [["bloated", 2], ["runner", 2]], [["runner", 3], ["shambler", 3]] ],
+        "waves": [ [["runner", 4], ["screamer", 1]], [["brute", 1], ["spitter", 2], ["runner", 2]], [["crawler", 3], ["bloated", 2], ["shambler", 2]] ],
         "boss": { "k": "bloated", "name": "균열의 군주", "hp_mult": 6, "dmg_mult": 2, "scale": 1.9 },
         "sol": 200000, "pts": 200,
         "loot": { "rolls": 5, "empty": 0, "items": [ { "id": "mana_stone_c", "w": 40, "n": [1, 3] }, { "id": "mana_stone_b", "w": 10, "n": [1, 1] }, { "id": "armor_plate", "w": 12, "n": [1, 1] }, { "id": "bumper_spikes", "w": 12, "n": [1, 1] }, { "id": "first_aid_kit", "w": 14, "n": [1, 2] }, { "id": "battery_pack", "w": 12, "n": [1, 2] } ] }
@@ -93,7 +97,7 @@
   "level": {
     "_comment": "v0.28.1 레벨 · 스탯 · 기술: 경험치(xp)는 처치 kill(우두머리는 × boss_mult) · 게이트 gate · 의뢰 보고(pts × claim_mult) · 빈집 뒤지기 loot · 보급 상자 supply 로 쌓인다. 다음 레벨까지 = round(base × 레벨 ^ power). 레벨마다 스탯 포인트 points_per_level — 힘(str 피해 +5%) · 체력(vit 2점마다 최대 체력 +1) · 민첩(agi 이동 속도 +2% · 공격 간격 -2%, 최대 cap) · 행운(luk 마석이 떨어질 확률 +4%). 기술은 레벨이 되면 저절로 배운다.",
     "max": 50, "base": 60, "power": 1.45, "points_per_level": 3,
-    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500 }, "claim_mult": 2, "loot": 3, "supply": 25 },
+    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25, "crawler": 8, "screamer": 14, "brute": 35, "spitter": 14 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500 }, "claim_mult": 2, "loot": 3, "supply": 25 },
     "stats": {
       "str": { "name": "힘", "desc": "공격 피해 +5%", "damage": 0.05, "cap": 60 },
       "vit": { "name": "체력", "desc": "2점마다 최대 체력 +1 (하트 반 칸)", "hp_per": 0.5, "cap": 40 },

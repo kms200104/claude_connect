@@ -139,6 +139,7 @@
 
   "creatures": {
     "_comment": "밤(night 시각, 세상 시각)에 사람 둘레 spawn_min~spawn_max m 땅에 나타나 aggro 안의 사람을 쫓는다. 닿으면(reach) damage, attack_ms 마다. 해가 뜨면 사라진다. 대피소 · 상점에는 오지 않는다. 빈집에는 막지 않은 현관 · 깨진 창으로 들어오고, 판자를 대 둔 곳은 두드려 부순다 (fortify). 쓰러뜨리면 drops 에서 하나 (drop_chance).",
+    "_kinds_v0_28_2": "기어미(낮게 기어 와 잘 안 보인다) · 비명이(사람을 알아채면 한 번 비명 — scream m 안의 크리처가 몰려온다) · 철갑이(armor 만큼 피해를 덜 받는다, 최소 1) · 독침이(reach 거리에서 침을 뱉는다 — 맞으면 피를 흘린다, spit).",
     "night": [20, 5],
     "per_player": 3,
     "max_per_room": 10,
@@ -153,7 +154,15 @@
       "runner": { "name": "달리미", "weight": 25, "mass": 55, "hp": 3, "speed": 3.4, "aggro": 20, "reach": 1.0, "damage": 1, "attack_ms": 900,
         "drop_chance": 1.0, "drops": [ { "id": "battery", "w": 30, "n": [1, 1] }, { "id": "nails", "w": 30, "n": [1, 2] }, { "id": "cloth", "w": 25, "n": [1, 1] }, { "id": "rope", "w": 15, "n": [1, 1] }, { "id": "battery_pack", "w": 6, "n": [1, 1] } ] },
       "bloated": { "name": "퉁퉁이", "weight": 15, "mass": 140, "hp": 10, "speed": 1.0, "aggro": 12, "reach": 1.3, "damage": 2, "attack_ms": 1600,
-        "drop_chance": 1.0, "drops": [ { "id": "canned_food", "w": 35, "n": [1, 2] }, { "id": "scrap_metal", "w": 30, "n": [2, 3] }, { "id": "first_aid_kit", "w": 15, "n": [1, 1] }, { "id": "battery", "w": 20, "n": [1, 2] } ] }
+        "drop_chance": 1.0, "drops": [ { "id": "canned_food", "w": 35, "n": [1, 2] }, { "id": "scrap_metal", "w": 30, "n": [2, 3] }, { "id": "first_aid_kit", "w": 15, "n": [1, 1] }, { "id": "battery", "w": 20, "n": [1, 2] } ] },
+      "crawler": { "name": "기어미", "weight": 14, "mass": 40, "hp": 2, "speed": 2.6, "aggro": 14, "reach": 0.9, "damage": 1, "attack_ms": 900,
+        "drop_chance": 0.8, "drops": [ { "id": "cloth", "w": 40, "n": [1, 1] }, { "id": "plastic", "w": 35, "n": [1, 2] }, { "id": "nails", "w": 25, "n": [1, 1] } ] },
+      "screamer": { "name": "비명이", "weight": 8, "mass": 50, "hp": 4, "speed": 1.9, "aggro": 22, "reach": 1.0, "damage": 1, "attack_ms": 1100, "scream": 28,
+        "drop_chance": 1.0, "drops": [ { "id": "battery", "w": 40, "n": [1, 2] }, { "id": "rope", "w": 30, "n": [1, 1] }, { "id": "bandage", "w": 30, "n": [1, 2] } ] },
+      "brute": { "name": "철갑이", "weight": 5, "mass": 210, "hp": 18, "speed": 0.9, "aggro": 12, "reach": 1.4, "damage": 3, "attack_ms": 1900, "armor": 1,
+        "drop_chance": 1.0, "drops": [ { "id": "scrap_metal", "w": 50, "n": [3, 5] }, { "id": "armor_plate", "w": 10, "n": [1, 1] }, { "id": "nails", "w": 40, "n": [2, 4] } ] },
+      "spitter": { "name": "독침이", "weight": 7, "mass": 60, "hp": 4, "speed": 1.2, "aggro": 18, "reach": 5.0, "damage": 1, "attack_ms": 2200, "spit": true,
+        "drop_chance": 1.0, "drops": [ { "id": "plastic", "w": 40, "n": [1, 2] }, { "id": "first_aid_kit", "w": 20, "n": [1, 1] }, { "id": "battery", "w": 40, "n": [1, 1] } ] }
     }
   }
 }
