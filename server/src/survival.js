@@ -127,12 +127,14 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   const hpWire = (player) => ({ hp: hpOf(player), max: maxOf(player) });
   hunter?.setOnVit((room, player) => sendTo(player, { t: 'hp', ...hpWire(player) }));
 
-  /** 크리처가 들어오지 못하는 안전한 곳: 대피소 · 광장 둘레, 상점 · 집 안. */
+  /** 크리처가 들어오지 못하는 안전한 곳: 대피소 · 광장 둘레 · v0.28.2 배리어, 상점 · 집 안. */
   function safeAt(x, z) {
     const r = S.creatures.safe_radius ?? 12;
     if (Math.hypot(x - shelter.x, z - shelter.z) < r) return true;
     const plaza = data.layout?.plaza;
     if (plaza && Math.hypot(x - plaza.x, z - plaza.z) < r) return true;
+    // v0.28.2 배리어 (상점 · 주요 건물 둘레): 크리처가 들어오지 못하고, 안의 사람은 노리지 않는다.
+    for (const b of S?.barriers?.list ?? []) if (Math.hypot(x - b.x, z - b.z) < b.r) return true;
     return false;
   }
 
@@ -1085,7 +1087,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const nx = c.x + kb.vx * dt;
     const nz = c.z + kb.vz * dt;
     const h = c.inside ? S.houseById.get(c.inside) : null;
-    const solid = h ? !standInside(h, nx, nz, { lights: [] }) : !isLand(data, nx, nz) || groundProblem(data, nx, nz) === 'building' || def.blocks.some((b) => Math.hypot(nx - b.x, nz - b.z) < b.r);
+    const solid = h ? !standInside(h, nx, nz, { lights: [] }) : !isLand(data, nx, nz) || groundProblem(data, nx, nz) === 'building' || safeAt(nx, nz) || def.blocks.some((b) => Math.hypot(nx - b.x, nz - b.z) < b.r);
     let stop = false;
     if (solid) {
       // 벽 · 건물 · 바리케이드에 쾅.

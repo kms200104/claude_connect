@@ -37,6 +37,7 @@ const BED_LIFT: float = 0.42
 var houses: HouseField = null
 var creatures: CreatureField = null
 var supply: SupplyField = null
+var barriers: BarrierField = null
 ## v0.27 보급 상자 방향 (화살표 · 거리 글자).
 var _supply_chip: HBoxContainer = null
 var _supply_arrow: Label = null
@@ -85,6 +86,8 @@ func _ready() -> void:
 	world.add_child.call_deferred(creatures)
 	supply = SupplyField.new()
 	world.add_child.call_deferred(supply)
+	barriers = BarrierField.new()
+	world.add_child.call_deferred(barriers)
 	_build_hud()
 	_light = OmniLight3D.new()
 	_light.name = "HeldLight"

@@ -2,6 +2,17 @@
   "version": 1,
   "_comment": "v0.23 생존 규칙 (서버 권위: server/src/survival.js · 클라이언트 core/types/survival_rules.gd 가 같은 파일을 읽는다). 시각은 세상 시각(60배).",
 
+  "barriers": {
+    "_comment": "v0.28.2 배리어: 상점 · 광장 · 주요 건물 둘레의 보호막 (원, x · z · r m). 크리처는 들어오지 못하고 (막혀 둘러 간다), 안에 있는 사람은 노리지 않는다. 마을에는 옅은 돔 · 땅의 빛 고리 · 기둥으로 보인다.",
+    "list": [
+      { "id": "plaza", "name": "광장 · 상점", "x": 0, "z": 62, "r": 16 },
+      { "id": "museum", "name": "박물관", "x": -26, "z": 60, "r": 12 },
+      { "id": "restaurant", "name": "식당", "x": 26, "z": 58, "r": 11 },
+      { "id": "civic", "name": "동사무소 · 대피소 · 협회 출장소", "x": -58, "z": 70, "r": 18 },
+      { "id": "airport", "name": "공항", "x": 0, "z": -74, "r": 13 }
+    ]
+  },
+
   "supply": {
     "_comment": "v0.27 보급 상자: 밤이 되고 first_ms(현실) 뒤부터 every_ms 마다 (한 밤에 per_night 번) 헬기가 바깥에 있는 사람 하나에게서 dist m 떨어진 땅에 낙하산 상자를 떨어뜨린다 (fall_ms 뒤 땅에 닿는다). 모두에게 알리고, 먼저 range 안에서 연 사람이 loot 를 다 갖는다. 누가 guard_near m 안에 처음 오면 둘레에 크리처 guards 마리가 기다리고 있다. 해가 뜨면 남은 상자는 회수된다.",
     "first_ms": 60000, "every_ms": 180000, "per_night": 2, "dist": [40, 90], "fall_ms": 9000, "range": 2.2,

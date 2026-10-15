@@ -76,6 +76,17 @@ describe('v0.28.2 크리처 종류', () => {
     assert.equal(room.creatures.get('zf').alertBy, me.id);
   });
 
+  it('배리어: 크리처는 들어오지 못하고, 안의 사람은 노리지 않는다', async () => {
+    const { c, room } = await setup();
+    const b = data.survival.barriers.list.find((x) => x.id === 'civic');
+    await moveTo(c, { x: b.x, z: b.z - b.r + 3 });
+    put(room, 'zw', { x: b.x, z: b.z - b.r - 3 }, 'runner');
+    await sleep(2500);
+    const z = room.creatures.get('zw');
+    assert.ok(Math.hypot(z.x - b.x, z.z - b.z) >= b.r - 0.01, '배리어 밖에 머문다');
+    assert.ok(!c.inbox.some((m) => m.t === 'hurt'), '맞지 않았다');
+  });
+
   it('독침이는 떨어져서 침을 뱉는다 (맞으면 피를 흘린다)', async () => {
     const { c, room } = await setup();
     await moveTo(c, spot);

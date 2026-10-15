@@ -91,6 +91,8 @@ var stash_local: Vector2 = Vector2(2.9, 3.45)
 var bed_local: Vector2 = Vector2(-3.2, -2.5)
 var base_range: float = 1.6
 var stash_slots: int = 12
+## v0.28.2 배리어 [{id, name, x, z, r}] (크리처가 못 들어오는 보호막).
+var barriers: Array[Dictionary] = []
 ## v0.26 들이받기 { fast, restitution, slow_keep, contact_top, reach, … } (서버 survival.json ram 과 같은 값).
 var ram: Dictionary = {}
 ## v0.27 보급 상자를 열 수 있는 거리.
@@ -155,6 +157,9 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 	r.bed_local = Vector2(float(bd[0]), float(bd[1]))
 	r.base_range = float(base.get("range", r.base_range))
 	r.stash_slots = int(base.get("slots", r.stash_slots))
+	for b: Variant in (rules.get("barriers", {}) as Dictionary).get("list", []):
+		if b is Dictionary:
+			r.barriers.append(b)
 	var downed: Dictionary = rules.get("downed", {})
 	r.downed_ms = int(downed.get("ms", r.downed_ms))
 	r.revive_range = float(downed.get("revive_range", r.revive_range))
