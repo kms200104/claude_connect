@@ -155,6 +155,13 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return Net.bleeding.has(Net.my_id) and (survival.get("_blood_chip") as Control).visible, 3.0), "피 냄새 알림")
 	_check(await _wait_until(func() -> bool: return not (survival.get("_drops") as Array).is_empty(), 5.0), "땅에 핏자국 (%d)" % Net.scent.size())
 	await _shot("surv_creature")
+	# v0.28.6 치료 퀵버튼: 가방을 열지 않고 한 번에 (붕대 — 피도 멈춘다).
+	var hb: HealButton = survival.heal_button
+	_check(hb.visible and hb.choice == "bandage", "치료 퀵버튼 (%s)" % hb.choice)
+	var hp_q: int = Net.hp
+	var band_q: int = _count("bandage")
+	hb.pressed.emit()
+	_check(await _wait_until(func() -> bool: return Net.hp > hp_q and _count("bandage") == band_q - 1, 3.0), "퀵버튼으로 붕대를 썼다 (체력 %d → %d)" % [hp_q, Net.hp])
 	var noises: Array = [0]
 	Net.noise_made.connect(func(_i: Dictionary) -> void: noises[0] += 1)
 	var dead: Array = [false]
@@ -226,6 +233,7 @@ func _run() -> void:
 	interaction.action_hud.action_pressed.emit()
 	await get_tree().process_frame
 	_check(survival.stash_window.is_open(), "거점 상자 창이 열렸다")
+	var band_before: int = _count("bandage")
 	var band_slot: int = -1
 	for i: int in Net.inventory.size():
 		if Net.inventory[i] != null and Net.inventory[i].id == "bandage":
@@ -240,7 +248,7 @@ func _run() -> void:
 	_check(take != null, "상자 '꺼내기' 단추")
 	if take != null:
 		take.pressed.emit()
-	_check(await _wait_until(func() -> bool: return (Net.stash.get("h01", []) as Array).is_empty() and _count("bandage") == 3, 3.0), "다시 꺼냈다")
+	_check(await _wait_until(func() -> bool: return (Net.stash.get("h01", []) as Array).is_empty() and _count("bandage") == band_before, 3.0), "다시 꺼냈다")
 	await _shot("surv_stash")
 	survival.stash_window.close()
 	if Net.hp < Net.max_hp:

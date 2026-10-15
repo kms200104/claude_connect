@@ -49,6 +49,8 @@ var _hurt: HurtOverlay = null
 var edge_hint: CreatureEdgeHint = null
 ## v0.28.4 저레벨 공포 연출.
 var fear: FearOverlay = null
+## v0.28.6 치료 퀵버튼.
+var heal_button: HealButton = null
 ## v0.28.1 핏자국 머티리얼 (젖어 번들거리는 정점 색) · 마지막 핏자국 자리 (끌린 방향).
 static var _blood_material: StandardMaterial3D = null
 var _last_drop: Vector2 = Vector2.INF
@@ -818,6 +820,8 @@ func _build_hud() -> void:
 	edge_hint.player = player
 	fear = FearOverlay.new()
 	fear.player = player
+	heal_button = HealButton.new()
+	heal_button.toast_hud = toast_hud
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -925,6 +929,7 @@ func _build_hud() -> void:
 		hud.move_child.call_deferred(edge_hint, 0)
 		hud.add_child.call_deferred(fear)
 		hud.move_child.call_deferred(fear, 0)
+		hud.add_child.call_deferred(heal_button)
 		hud.add_child.call_deferred(_vignette)
 		hud.add_child.call_deferred(_hurt)
 		hud.add_child.call_deferred(_hearts)
