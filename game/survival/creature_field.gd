@@ -1,20 +1,36 @@
 class_name CreatureField
 extends Node3D
-## v0.23 밤 크리처 그림 (Net.creatures — 서버가 자리 · 체력을 정한다). 귀엽지만 으스스한 점토 좀비:
-##   어슬렁이(회녹색 피부 · 해진 셔츠, 두 팔을 앞으로) · 달리미(마르고 앞으로 숙인 빨간 후드) · 퉁퉁이(불룩한 배 · 러닝셔츠).
-## 서버 자리로 부드럽게 따라가며 걸음마다 다리를 흔들고, 덮치면(a) 팔을 내지른다. 맞으면 움찔 · "퍽!", 쓰러지면 땅으로 꺼지며 연기.
+## v0.23 밤 크리처 그림 (Net.creatures — 서버가 자리 · 체력을 정한다).
+## v0.28.3 무섭게: 관절이 있는 썩어 가는 몸 (CreatureModel) — 살갗은 멍 · 핏줄 · 축축한 광택, 퀭한 눈구멍 안에서 눈이 빛난다.
+##   걸음: 어슬렁이는 한쪽 다리를 끌며 두 팔을 앞으로, 달리미는 앞으로 고꾸라질 듯 팔을 휘저으며, 퉁퉁이는 뒤뚱, 철갑이는 쿵쿵,
+##   비명이는 고개가 옆으로 꺾인 채 비틀, 독침이는 웅크리고 독주머니가 숨쉬듯 부푼다, 기어미는 두 팔로 몸을 끌고 온다.
+##   가만히 있어도 숨을 쉬고 턱을 우물거리며, 가끔 고개 · 어깨가 갑자기 꺾인다 (경련). 덮치면(a) 턱이 쩍 벌어지며 팔을 내지른다.
+##   맞으면 고개가 젖혀지며 피가 튄다. 쓰러지면 무릎이 꺾여 앞으로 고꾸라지고 피가 고인다, 잠시 뒤 땅으로 꺼진다.
+##   새로 나타나는 크리처는 땅을 헤집고 기어 나온다. 가끔 신음하고, 덮칠 때 으르렁, 맞으면 살 터지는 소리.
 ## 머리 위 이름 · 체력 칸 (가까울 때만).
-## v0.26 탈것에 들이받히면 빠르기만큼 높이 · 멀리 빙글빙글 날아가 (서버가 미끄러지는 자리를 정한다) 뒤로 벌러덩 눕고,
+## v0.26 탈것에 들이받히면 빠르기만큼 높이 · 멀리 빙글빙글 날아가 (서버가 미끄러지는 자리를 정한다) 눕고,
 ## 느리게 닿으면 털썩 넘어진다 (f: 1 날아감 · 2 넘어짐). 벽에 부딪히면 "쿵!".
 
 @export var material: Material
 @export_range(1.0, 20.0, 0.5) var follow: float = 8.0
 
+## 종류마다 걸음 (보폭 m · 숙임 · 걸음 크기) — 그림만.
+const GAIT: Dictionary = {
+	"shambler": {"stride": 0.85, "hunch": -0.32, "swing": 0.45, "knee": 0.7},
+	"runner": {"stride": 1.9, "hunch": -0.55, "swing": 0.95, "knee": 1.5},
+	"bloated": {"stride": 0.62, "hunch": 0.06, "swing": 0.32, "knee": 0.45},
+	"brute": {"stride": 1.05, "hunch": -0.28, "swing": 0.4, "knee": 0.6},
+	"screamer": {"stride": 0.95, "hunch": -0.12, "swing": 0.42, "knee": 0.7},
+	"spitter": {"stride": 0.85, "hunch": -0.48, "swing": 0.4, "knee": 0.7},
+	"crawler": {"stride": 0.55, "hunch": -1.38, "swing": 0.0, "knee": 0.0},
+}
+const GROAN_RANGE: float = 22.0
+
 class Actor:
 	var root: Node3D
+	## 날아가기 · 눕기 · 기어 나오기 (rig 의 부모).
 	var body: Node3D
-	var legs: Array[Node3D] = []
-	var arms: Node3D
+	var rig: CreatureModel.Rig
 	var tag: Label3D
 	## v0.28 게이트 우두머리 이름 · 게이트 크리처 최대 hp (0 = 종류 기본).
 	var boss: String = ""
@@ -23,8 +39,21 @@ class Actor:
 	var target: Vector3 = Vector3.ZERO
 	var yaw: float = 0.0
 	var phase: float = 0.0
+	var t: float = 0.0
+	var speed: float = 0.0
 	var punch: float = 0.0
 	var lunge: float = 0.0
+	var lunge_heard: bool = false
+	var scream: float = 0.0
+	## 경련: 목표 (머리 x · y · z, 팔) · 지금 값 · 다음까지 · 붙잡는 시간.
+	var tw_goal: Vector4 = Vector4.ZERO
+	var tw: Vector4 = Vector4.ZERO
+	var tw_next: float = 1.0
+	var tw_hold: float = 0.0
+	var groan_next: float = 3.0
+	var groan: float = 0.0
+	## 기어 나오는 중 (0 → 1).
+	var emerge: float = 1.0
 	## 0 서 있음 · 1 날아가는 중 · 2 넘어져 있음 (서버 f).
 	var flag: int = 0
 	## 들이받혀 공중에 뜬 시간 · 전체 · 높이 · 도는 빠르기 (rad/s).
@@ -32,9 +61,18 @@ class Actor:
 	var air_total: float = 0.0
 	var air_h: float = 0.0
 	var spin: float = 0.0
+	## 쓰러지는 중 (초, 음수 = 아님) · 해가 떠서 · 사라져서 꺼지는지.
+	var dead_t: float = -1.0
+	var dead_quiet: bool = false
+	var pool: MeshInstance3D
+	## 다쳤는지 (이름표는 다쳤거나 아주 가까울 때만).
+	var hurt: bool = false
 
 var _actors: Dictionary[String, Actor] = {}
-var _meshes: Dictionary[String, Array] = {}
+var _dying: Array[Actor] = []
+## 처음 동기화가 지난 뒤 나타나는 크리처만 땅에서 기어 나온다.
+var _synced_once: bool = false
+static var _pool_mesh: ArrayMesh = null
 
 
 func _ready() -> void:
@@ -42,7 +80,9 @@ func _ready() -> void:
 	Net.creatures_updated.connect(_sync)
 	Net.creature_hit.connect(_on_hit)
 	Net.creature_dead.connect(_on_dead)
-	Net.welcomed.connect(_sync.unbind(3))
+	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
+		_synced_once = false
+		_sync())
 	# v0.28.2 독침이 침 · 비명이 비명 (그림 · 소리).
 	Net.message_received.connect(_on_message)
 
@@ -71,57 +111,296 @@ func _sync() -> void:
 		if a == null:
 			a = _spawn(id, str(c.get("k", "shambler")))
 			a.root.position = Vector3(float(c.get("x", 0.0)), 0.0, float(c.get("z", 0.0)))
-			# v0.28 게이트 우두머리: 크게 · 금빛 이름표 · 게이트 크리처는 푸른 이름표.
+			a.root.rotation.y = float(c.get("yaw", 0.0)) + PI
+			# v0.28 게이트 우두머리: 크게 · 금빛 이름표 · 붉은 기운. 게이트 크리처는 푸른 이름표.
 			if c.has("b"):
 				a.root.scale = Vector3.ONE * float(c.get("s", 1.5))
 				a.boss = str(c.get("b", ""))
 				a.tag.modulate = Color("#FFD24A")
 				a.tag.font_size = 34
+				var aura: OmniLight3D = OmniLight3D.new()
+				aura.light_color = a.rig.parts.eye_color.lerp(Color("#FF2A1A"), 0.5)
+				aura.light_energy = 1.2
+				aura.omni_range = 3.5
+				aura.position = Vector3(0.0, 1.6, -0.3)
+				a.root.add_child(aura)
 			elif c.has("g"):
 				a.tag.modulate = Color("#A8D8FF")
+			if _synced_once and int(c.get("f", 0)) == 0 and player_near(a.root.global_position, 30.0):
+				_begin_emerge(a)
 		a.target = Vector3(float(c.get("x", 0.0)), 0.0, float(c.get("z", 0.0)))
 		a.yaw = float(c.get("yaw", 0.0))
 		if int(c.get("a", 0)) == 1:
+			if a.lunge < 0.5 and player_near(a.root.global_position, GROAN_RANGE):
+				Audio.play_at("creature_snarl", a.root.global_position, -2.0, _pitch(a))
 			a.lunge = 1.0
 		a.flag = int(c.get("f", 0))
 		a.max_hp = int(c.get("m", 0))
 		_update_tag(a, int(c.get("hp", 1)))
 	for id: String in _actors.keys():
-		if not Net.creatures.has(id) and is_instance_valid(_actors[id].root) and not _actors[id].root.has_meta(&"dying"):
+		if not Net.creatures.has(id) and is_instance_valid(_actors[id].root):
 			_actors[id].root.queue_free()
 			_actors.erase(id)
+	_synced_once = true
 
 
 func _process(delta: float) -> void:
 	for a: Actor in _actors.values():
-		if not is_instance_valid(a.root) or a.root.has_meta(&"dying"):
+		if not is_instance_valid(a.root):
 			continue
+		a.t += delta
 		var before: Vector3 = a.root.position
 		a.root.position = before.lerp(a.target, minf(1.0, delta * (follow * 2.0 if a.flag != 0 else follow)))
-		var moved: float = before.distance_to(a.root.position) / maxf(delta, 0.001)
+		var moved: float = Vector2(a.root.position.x - before.x, a.root.position.z - before.z).length() / maxf(delta, 0.001)
+		a.speed = lerpf(a.speed, moved, minf(1.0, delta * 6.0))
 		if a.air_total > 0.0 or a.flag != 0:
 			_tumble(a, delta)
 			continue
 		# 모형은 -Z 를 본다 (서버 yaw 는 +Z 기준 방향).
-		a.root.rotation.y = lerp_angle(a.root.rotation.y, a.yaw + PI, minf(1.0, delta * 8.0))
-		a.phase += delta * clampf(moved * 3.2, 0.0, 14.0)
-		var swing: float = sin(a.phase) * clampf(moved * 0.25, 0.0, 0.6)
-		if a.legs.size() == 2:
-			a.legs[0].rotation.x = swing
-			a.legs[1].rotation.x = -swing
-		a.body.position.y = absf(sin(a.phase)) * 0.05
-		a.body.rotation.z = sin(a.phase * 0.5) * 0.08
-		a.lunge = maxf(0.0, a.lunge - delta * 3.0)
-		a.arms.rotation.x = -0.15 - a.lunge * 0.6
-		a.arms.position.z = -a.lunge * 0.25
-		a.punch = maxf(0.0, a.punch - delta * 5.0)
-		a.body.scale = Vector3.ONE * (1.0 + a.punch * 0.12)
+		a.root.rotation.y = lerp_angle(a.root.rotation.y, a.yaw + PI, minf(1.0, delta * 6.0))
+		a.body.rotation.x = move_toward(a.body.rotation.x, 0.0, delta * 3.0)
+		a.body.position.y = move_toward(a.body.position.y, 0.0, delta * 2.0) if a.emerge >= 1.0 else a.body.position.y
+		_animate(a, delta)
 		if a.tag != null:
-			a.tag.visible = player_near(a.root.global_position, 14.0)
+			a.tag.visible = a.emerge >= 1.0 and (player_near(a.root.global_position, 3.0) or (a.hurt or not a.boss.is_empty()) and player_near(a.root.global_position, 14.0))
+	for i: int in range(_dying.size() - 1, -1, -1):
+		var d: Actor = _dying[i]
+		if not is_instance_valid(d.root):
+			_dying.remove_at(i)
+			continue
+		if _die_step(d, delta):
+			_dying.remove_at(i)
 
 
-## 들이받혀 날아가는 동안 빙글빙글 (포물선), 내려앉으면 뒤로 누워 있다가 일어난다.
+func _pitch(a: Actor) -> float:
+	match a.kind:
+		"brute":
+			return 0.62
+		"bloated":
+			return 0.74
+		"runner", "crawler":
+			return 1.12
+		"screamer":
+			return 1.25
+	return 0.92
+
+
+# ---- 움직임 ----
+
+func _animate(a: Actor, delta: float) -> void:
+	var r: CreatureModel.Rig = a.rig
+	var g: Dictionary = GAIT.get(a.kind, GAIT["shambler"])
+	var top: float = 3.4 if a.kind == "runner" else 1.6
+	var go: float = clampf(a.speed / top, 0.0, 1.0)
+	a.phase = wrapf(a.phase + delta * a.speed * TAU / float(g["stride"]), 0.0, TAU * 4.0)
+	var ph: float = a.phase
+	var breathe: float = sin(a.t * 1.7)
+	# 경련: 가끔 고개 · 어깨가 갑자기 꺾였다가 천천히 돌아온다.
+	a.tw_next -= delta
+	if a.tw_next <= 0.0:
+		var nervous: bool = a.kind == "screamer"
+		a.tw_next = randf_range(0.35, 1.3) if nervous else randf_range(1.2, 3.6)
+		a.tw_goal = Vector4(randf_range(-0.45, 0.45), randf_range(-0.8, 0.8), randf_range(-0.7, 0.7), randf_range(-0.7, 0.7))
+		a.tw_hold = randf_range(0.1, 0.35)
+	if a.tw_hold > 0.0:
+		a.tw_hold -= delta
+		a.tw = a.tw.lerp(a.tw_goal, minf(1.0, delta * 38.0))
+	else:
+		a.tw = a.tw.lerp(Vector4.ZERO, minf(1.0, delta * 3.0))
+	# 신음 (가까울 때, 가끔).
+	a.groan_next -= delta
+	if a.groan_next <= 0.0:
+		a.groan_next = randf_range(5.0, 12.0)
+		if player_near(a.root.global_position, GROAN_RANGE) and a.emerge >= 1.0:
+			Audio.play_at("creature_groan_%d" % randi_range(1, 3), a.root.global_position, -4.0, _pitch(a))
+			a.groan = 1.0
+	a.groan = maxf(0.0, a.groan - delta * 0.7)
+	a.lunge = maxf(0.0, a.lunge - delta * 2.4)
+	a.punch = maxf(0.0, a.punch - delta * 3.5)
+	a.scream = maxf(0.0, a.scream - delta * 0.9)
+	var l: float = ease(a.lunge, 0.6)
+	var p: float = a.punch
+	# 다리.
+	var swing: float = float(g["swing"]) * go
+	var knee: float = float(g["knee"]) * go
+	var limp: bool = a.kind == "shambler"
+	if a.kind == "crawler":
+		_crawl(a, delta, go)
+	else:
+		r.thigh_l.rotation.x = sin(ph) * swing + 0.05
+		r.knee_l.rotation.x = -(0.08 + knee * maxf(0.0, cos(ph)))
+		var rs: float = swing * (0.4 if limp else 1.0)
+		r.thigh_r.rotation.x = sin(ph + PI) * rs + (0.12 if limp else 0.05)
+		r.knee_r.rotation.x = -(0.05 + knee * (0.15 if limp else 1.0) * maxf(0.0, cos(ph + PI)))
+		r.thigh_l.rotation.z = -0.04
+		r.thigh_r.rotation.z = 0.04 + (0.06 if limp else 0.0)
+		# 엉덩이: 걸음마다 오르내리고, 저는 다리 쪽으로 푹 꺼진다.
+		var bob: float = absf(sin(ph)) * 0.04 * go
+		var drop: float = (maxf(0.0, -sin(ph)) * 0.06 * go) if limp else 0.0
+		r.hips.position.y = r.parts.hip_y - 0.03 * go + bob - drop - 0.06 * l
+		r.hips.rotation.z = sin(ph) * (0.05 + (0.06 if limp else 0.0)) * go + (0.1 * sin(ph) * go if a.kind == "bloated" else 0.0)
+		r.hips.rotation.y = sin(ph) * 0.12 * go
+		# 몸통: 숙임 · 걸음 흔들림 · 숨 · 덮치기 (앞으로) · 맞기 (뒤로).
+		var hunch: float = float(g["hunch"]) * (0.55 + 0.45 * go) if a.kind == "runner" else float(g["hunch"])
+		r.spine.rotation.x = hunch + breathe * 0.025 - 0.45 * l + 0.5 * p - 0.03 * sin(ph * 2.0) * go
+		r.spine.rotation.z = -sin(ph) * 0.06 * go + a.tw.w * 0.15
+		r.spine.rotation.y = -sin(ph) * 0.14 * go
+		_arms(a, ph, go, l, p, breathe)
+	# 목 · 머리: 숙인 만큼 얼굴을 들고, 늘어져 흔들리고, 경련에 꺾인다.
+	var lift: float = -r.spine.rotation.x * 0.7
+	r.neck.rotation.x = lift + 0.1 * sin(a.t * 0.9) - 0.2 * l - 0.3 * p
+	r.head.rotation.x = 0.1 + a.tw.x - 0.25 * l + 0.45 * p + (0.7 * a.scream if a.kind == "screamer" else 0.0)
+	r.head.rotation.y = a.tw.y + sin(a.t * 0.6) * 0.15
+	var tilt: float = 0.45 if a.kind == "screamer" else 0.12
+	r.head.rotation.z = tilt + sin(a.t * 0.75) * 0.12 + a.tw.z + sin(ph) * 0.08 * go
+	# 턱: 늘 우물거리고, 신음하면 벌리고, 덮치면 쩍 (비명이는 빠질 듯).
+	var wide: float = 1.45 if a.kind == "screamer" else 0.85
+	var open: float = 0.12 + 0.08 * maxf(0.0, sin(a.t * 2.3)) + 0.35 * a.groan + wide * maxf(l, a.scream) + 0.3 * p
+	r.jaw.rotation.x = -open
+	# 독주머니가 숨쉬듯 부풀었다 오그라든다.
+	if r.sac != null:
+		r.sac.scale = Vector3.ONE * (1.0 + 0.14 * sin(a.t * 3.1) + 0.3 * l)
+	# 기어 나오기.
+	if a.emerge < 1.0:
+		_emerge_step(a, delta)
+	# 맞으면 뒤로 밀린다 · 덮치면 앞으로 튀어 나간다.
+	a.body.position.z = -0.32 * l + 0.14 * p
+
+
+## 팔: 종류마다 다른 자세.
+func _arms(a: Actor, ph: float, go: float, l: float, p: float, breathe: float) -> void:
+	var r: CreatureModel.Rig = a.rig
+	var sl: float = 0.0
+	var sr: float = 0.0
+	var el: float = 0.0
+	var er: float = 0.0
+	var zl: float = 0.0
+	var zr: float = 0.0
+	match a.kind:
+		"runner":
+			# 달리면 팔을 마구 휘젓고, 서 있으면 앞으로 늘어뜨린다.
+			sl = lerpf(0.35, sin(ph + PI) * 1.1 - 0.2, go)
+			sr = lerpf(0.5, sin(ph) * 1.1 - 0.2, go)
+			el = lerpf(0.3, 1.3, go)
+			er = lerpf(0.4, 1.3, go)
+			zl = -0.15
+			zr = 0.15
+		"bloated":
+			sl = 0.5 + sin(ph) * 0.2 * go
+			sr = 0.5 - sin(ph) * 0.2 * go
+			el = 0.5
+			er = 0.5
+			zl = -0.55
+			zr = 0.55
+		"brute":
+			sl = 0.15 + sin(ph + PI) * 0.35 * go
+			sr = 0.15 + sin(ph) * 0.35 * go
+			el = 0.35
+			er = 0.35
+			zl = -0.28
+			zr = 0.28
+		"screamer":
+			# 힘없이 늘어져 흔들린다. 비명이면 뒤로 활짝.
+			sl = sin(ph) * 0.18 * go + 0.08 - 0.9 * a.scream
+			sr = sin(ph + PI) * 0.18 * go + 0.05 - 0.9 * a.scream
+			el = 0.1
+			er = 0.15
+			zl = -0.06 - 0.8 * a.scream
+			zr = 0.06 + 0.8 * a.scream
+		"spitter":
+			sl = 0.55 + sin(ph) * 0.15 * go
+			sr = 0.6 + sin(ph + PI) * 0.15 * go
+			el = 0.7
+			er = 0.6
+			zl = -0.1
+			zr = 0.1
+		_:
+			# 어슬렁이: 두 팔을 앞으로 내밀고 (한쪽이 더 처졌다) 흔들린다.
+			sl = 1.25 + sin(ph) * 0.12 * go + breathe * 0.04
+			sr = 1.05 + sin(ph + PI) * 0.12 * go - breathe * 0.04
+			el = 0.18
+			er = 0.32
+			zl = 0.06
+			zr = -0.04
+	# 덮치기: 두 팔을 앞으로 쭉 · 할퀴듯. 맞기: 팔이 흔들려 벌어진다.
+	r.shoulder_l.rotation.x = lerpf(sl, 1.75, l) - 0.4 * p + a.tw.w * 0.5
+	r.shoulder_r.rotation.x = lerpf(sr, 1.55, l) - 0.4 * p
+	r.shoulder_l.rotation.z = zl - 0.35 * p
+	r.shoulder_r.rotation.z = zr + 0.35 * p
+	r.elbow_l.rotation.x = lerpf(el, 0.05, l)
+	r.elbow_r.rotation.x = lerpf(er, 0.25, l)
+
+
+## 기어미: 배를 땅에 깔고, 두 팔을 번갈아 앞으로 뻗어 땅을 짚고 몸을 끌어당긴다. 짓이겨진 다리는 뒤로 끌린다.
+func _crawl(a: Actor, _delta: float, go: float) -> void:
+	var r: CreatureModel.Rig = a.rig
+	var ph: float = a.phase
+	var l: float = ease(a.lunge, 0.6)
+	var pull: float = sin(ph)
+	r.hips.position.y = 0.2 + 0.03 * absf(pull) * go
+	r.hips.rotation.z = pull * 0.08 * go
+	r.spine.rotation.x = -1.32 + 0.06 * absf(sin(ph)) * go + 0.25 * l + 0.4 * a.punch
+	r.spine.rotation.z = pull * 0.1 * go
+	r.spine.rotation.y = pull * 0.16 * go
+	r.thigh_l.rotation.x = -1.4 + sin(ph * 0.5) * 0.08
+	r.thigh_r.rotation.x = -1.48 - sin(ph * 0.5) * 0.06
+	r.thigh_l.rotation.z = -0.18
+	r.thigh_r.rotation.z = 0.22
+	r.knee_l.rotation.x = 0.0
+	r.knee_r.rotation.x = 0.0
+	# 팔: 몸이 앞으로 누웠으니 어깨를 크게 돌려 머리 위(앞)로 뻗는다.
+	r.shoulder_l.rotation.x = 2.55 + pull * 0.45 * go + 0.3 * l
+	r.shoulder_r.rotation.x = 2.55 - pull * 0.45 * go + 0.3 * l
+	r.shoulder_l.rotation.z = -0.35
+	r.shoulder_r.rotation.z = 0.35
+	r.elbow_l.rotation.x = 0.5 - 0.35 * maxf(0.0, pull) * go
+	r.elbow_r.rotation.x = 0.5 - 0.35 * maxf(0.0, -pull) * go
+
+
+## 새로 나타나는 크리처: 땅을 헤집고 머리부터 기어 나온다.
+func _begin_emerge(a: Actor) -> void:
+	a.emerge = 0.0
+	a.body.position.y = -1.8
+	Puff.burst(self, a.root.global_position + Vector3(0.0, 0.1, 0.0), Color(0.32, 0.26, 0.2, 0.9), 14, 1.0, 0.5, 0.12, 0.9)
+	Audio.play_at("dig", a.root.global_position, -6.0, 0.6)
+	Audio.play_at("creature_groan_%d" % randi_range(1, 3), a.root.global_position, -3.0, _pitch(a) * 0.9)
+	# 갈라진 땅 (흙빛 원판, 잠시 뒤 사라진다).
+	var crack: MeshInstance3D = MeshInstance3D.new()
+	var st: SurfaceTool = ClayMesh.begin()
+	ClayMesh.add_ellipsoid(st, Vector3.ZERO, Vector3(0.75, 0.02, 0.75), Color("#2A2018"), 14, 2, Basis(), ClayMesh.blob_wobble(3, 0.25, 5))
+	crack.mesh = ClayMesh.commit(st)
+	crack.material_override = material
+	crack.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(crack)
+	crack.global_position = a.root.global_position + Vector3(0.0, 0.02, 0.0)
+	var tween: Tween = crack.create_tween()
+	tween.tween_interval(3.5)
+	tween.tween_property(crack, "scale", Vector3(0.01, 1.0, 0.01), 1.2)
+	tween.tween_callback(crack.queue_free)
+
+
+func _emerge_step(a: Actor, delta: float) -> void:
+	a.emerge = minf(1.0, a.emerge + delta / 1.6)
+	var k: float = ease(a.emerge, 0.45)
+	a.body.position.y = lerpf(-1.8, 0.0, k)
+	# 팔을 머리 위로 뻗어 허우적, 고개를 젖힌다.
+	var up: float = 1.0 - smoothstep(0.55, 1.0, a.emerge)
+	var r: CreatureModel.Rig = a.rig
+	r.shoulder_l.rotation.x = lerpf(r.shoulder_l.rotation.x, 2.7 + sin(a.t * 9.0) * 0.35, up)
+	r.shoulder_r.rotation.x = lerpf(r.shoulder_r.rotation.x, 2.5 + sin(a.t * 9.0 + 1.7) * 0.35, up)
+	r.head.rotation.x -= 0.5 * up
+	r.jaw.rotation.x = lerpf(r.jaw.rotation.x, -0.8, up)
+	if randf() < delta * 5.0 * up:
+		Puff.burst(self, a.root.global_position + Vector3(randf_range(-0.4, 0.4), 0.15, randf_range(-0.4, 0.4)), Color(0.3, 0.25, 0.2, 0.85), 4, 0.5, 0.4, 0.08, 0.6)
+
+
+## 들이받혀 날아가는 동안 빙글빙글 (포물선), 내려앉으면 누워 있다가 일어난다.
 func _tumble(a: Actor, delta: float) -> void:
+	var r: CreatureModel.Rig = a.rig
+	# 팔다리가 축 늘어져 흔들린다.
+	r.shoulder_l.rotation.x = lerpf(r.shoulder_l.rotation.x, 2.4 + sin(a.t * 11.0) * 0.4, minf(1.0, delta * 6.0))
+	r.shoulder_r.rotation.x = lerpf(r.shoulder_r.rotation.x, 2.2 + sin(a.t * 9.0) * 0.4, minf(1.0, delta * 6.0))
+	r.jaw.rotation.x = -0.7
 	if a.air_total > 0.0:
 		a.air_t += delta
 		var k: float = clampf(a.air_t / a.air_total, 0.0, 1.0)
@@ -151,6 +430,8 @@ func _on_hit(info: Dictionary) -> void:
 	if a == null:
 		return
 	a.punch = 1.0
+	a.tw_goal = Vector4(randf_range(-0.3, 0.3), randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), 0.0)
+	a.tw_hold = 0.12
 	_update_tag(a, int(info.get("hp", 0)))
 	if info.has("ram"):
 		var u: float = float(info.get("ram", 0.0))
@@ -162,8 +443,8 @@ func _on_hit(info: Dictionary) -> void:
 			a.air_h = clampf(u * u / 70.0, 0.2, 3.6)
 			a.spin = -u * 0.9
 			_float_text(a.root.global_position + Vector3(0.0, 2.2, 0.0), "쾅!", Color("#FF9A5A"))
-			Puff.burst(self, a.root.global_position + Vector3(0.0, 0.8, 0.0), Color(0.9, 0.85, 0.7, 0.9), 10, 0.9, 0.4, 0.12, 0.5)
-			Audio.play_sfx("chop", -2.0, 0.5)
+			_blood_spray(a, 14)
+			Audio.play_at("creature_hit", a.root.global_position, 0.0, 0.7)
 			Prefs.vibrate(90, 0.7)
 		else:
 			a.flag = 2
@@ -173,10 +454,16 @@ func _on_hit(info: Dictionary) -> void:
 	if int(info.get("wall", 0)) > 0:
 		_float_text(a.root.global_position + Vector3(0.0, 1.6, 0.0), "쿵! -%d" % int(info.get("wall", 0)), Color("#FF6A5A"))
 		Audio.play_sfx("chop", -3.0, 0.45)
-		Puff.burst(self, a.root.global_position + Vector3(0.0, 0.6, 0.0), Color(0.8, 0.8, 0.8, 0.9), 12, 1.0, 0.3, 0.12, 0.5)
+		_blood_spray(a, 8)
 		return
 	_float_text(a.root.global_position + Vector3(0.0, 2.0, 0.0), "퍽!", Color("#FFE08A"))
-	Audio.play_sfx("chop", -6.0, 0.7)
+	_blood_spray(a, 9)
+	Audio.play_at("creature_hit", a.root.global_position, -2.0, randf_range(0.85, 1.1))
+
+
+## 맞은 자리에서 검붉은 피가 튄다.
+func _blood_spray(a: Actor, n: int) -> void:
+	Puff.burst(self, a.root.global_position + Vector3(0.0, 1.2 * a.rig.parts.scale * a.root.scale.y, 0.0), Color(0.36, 0.03, 0.03, 0.95), n, 0.7, 0.9, 0.06, 0.5)
 
 
 func _on_dead(info: Dictionary) -> void:
@@ -189,14 +476,67 @@ func _on_dead(info: Dictionary) -> void:
 	a.root.set_meta(&"dying", true)
 	if a.tag != null:
 		a.tag.visible = false
-	var sun: bool = bool(info.get("sun", false)) or bool(info.get("gone", false))
-	if not sun:
+	a.dead_quiet = bool(info.get("sun", false)) or bool(info.get("gone", false))
+	a.dead_t = 0.0
+	if not a.dead_quiet:
 		_float_text(a.root.global_position + Vector3(0.0, 2.2, 0.0), "쓰러뜨렸다!", Color("#FFFFFF"))
-	var tween: Tween = a.root.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(a.root, "position:y", -1.6, 1.0 if not sun else 2.0).set_ease(Tween.EASE_IN)
-	tween.tween_property(a.root, "scale", Vector3(1.3, 0.2, 1.3), 1.0 if not sun else 2.0)
-	tween.chain().tween_callback(a.root.queue_free)
+		_blood_spray(a, 16)
+		if player_near(a.root.global_position, GROAN_RANGE):
+			Audio.play_at("creature_die", a.root.global_position, 0.0, _pitch(a))
+	_dying.append(a)
+
+
+## 쓰러지기: 무릎이 꺾이고 앞으로 고꾸라진다 → 피가 번진다 → 땅으로 꺼진다. 끝나면 true.
+func _die_step(a: Actor, delta: float) -> bool:
+	a.dead_t += delta
+	var t: float = a.dead_t
+	var r: CreatureModel.Rig = a.rig
+	if a.dead_quiet:
+		# 해가 떴거나 멀어졌다: 그대로 땅으로 꺼진다.
+		a.root.position.y = -1.9 * ease(clampf(t / 1.8, 0.0, 1.0), 2.0)
+		if t >= 1.8:
+			a.root.queue_free()
+			return true
+		return false
+	var fall: float = ease(clampf(t / 0.75, 0.0, 1.0), 2.4)
+	r.knee_l.rotation.x = lerpf(r.knee_l.rotation.x, -1.1, minf(1.0, delta * 8.0))
+	r.knee_r.rotation.x = lerpf(r.knee_r.rotation.x, -0.8, minf(1.0, delta * 8.0))
+	r.shoulder_l.rotation.x = lerpf(r.shoulder_l.rotation.x, 2.9, minf(1.0, delta * 4.0))
+	r.shoulder_r.rotation.x = lerpf(r.shoulder_r.rotation.x, 2.2, minf(1.0, delta * 4.0))
+	r.shoulder_l.rotation.z = lerpf(r.shoulder_l.rotation.z, -0.6, minf(1.0, delta * 4.0))
+	r.head.rotation.z = lerpf(r.head.rotation.z, 0.9, minf(1.0, delta * 5.0))
+	r.jaw.rotation.x = lerpf(r.jaw.rotation.x, -0.6, minf(1.0, delta * 5.0))
+	if a.kind != "crawler":
+		a.body.rotation.x = -1.42 * fall
+		a.body.position.y = 0.12 * fall
+	if t > 0.75 and a.pool == null:
+		Puff.burst(self, a.root.global_position + Vector3(0.0, 0.1, 0.0), Color(0.5, 0.45, 0.4, 0.7), 10, 0.9, 0.2, 0.1, 0.5)
+		Audio.play_at("chop", a.root.global_position, -8.0, 0.45)
+		a.pool = MeshInstance3D.new()
+		a.pool.mesh = _pool()
+		a.pool.material_override = material
+		a.pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		a.root.add_child(a.pool)
+		a.pool.position = Vector3(0.0, 0.015, -0.9 if a.kind != "crawler" else -0.5)
+		a.pool.scale = Vector3(0.05, 1.0, 0.05)
+	if a.pool != null:
+		var spread: float = clampf((t - 0.75) / 2.0, 0.0, 1.0)
+		a.pool.scale = Vector3.ONE * lerpf(0.05, 1.0, ease(spread, 0.4))
+		a.pool.scale.y = 1.0
+	if t > 3.6:
+		a.root.position.y = -1.2 * ease(clampf((t - 3.6) / 1.4, 0.0, 1.0), 2.0)
+	if t >= 5.0:
+		a.root.queue_free()
+		return true
+	return false
+
+
+static func _pool() -> ArrayMesh:
+	if _pool_mesh == null:
+		var st: SurfaceTool = ClayMesh.begin()
+		ClayMesh.add_ellipsoid(st, Vector3.ZERO, Vector3(0.7, 0.012, 0.55), CreatureModel.gore(Color("#3A0606")), 18, 2, Basis(), ClayMesh.blob_wobble(7, 0.22, 4))
+		_pool_mesh = ClayMesh.commit(st)
+	return _pool_mesh
 
 
 func _float_text(at: Vector3, text: String, color: Color) -> void:
@@ -224,6 +564,7 @@ func _update_tag(a: Actor, hp: int) -> void:
 	var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(a.kind)
 	var max_hp: int = a.max_hp if a.max_hp > 0 else (kind.hp if kind != null else maxi(hp, 1))
 	var title: String = a.boss if not a.boss.is_empty() else (kind.name if kind != null else a.kind)
+	a.hurt = hp < max_hp
 	if max_hp > 10:
 		# 체력이 많으면 10칸 막대로.
 		var full: int = ceili(10.0 * float(maxi(hp, 0)) / float(max_hp))
@@ -239,167 +580,26 @@ func _spawn(id: String, kind: String) -> Actor:
 	a.root.name = "Creature_%s" % id
 	add_child(a.root)
 	a.body = Node3D.new()
+	a.body.name = "Body"
 	a.root.add_child(a.body)
-	var parts: Array = _meshes_for(kind)
-	var torso: MeshInstance3D = MeshInstance3D.new()
-	torso.mesh = parts[0]
-	torso.material_override = material
-	a.body.add_child(torso)
-	a.arms = Node3D.new()
-	a.arms.position = Vector3(0.0, float(parts[3]), 0.0)
-	a.body.add_child(a.arms)
-	var arms: MeshInstance3D = MeshInstance3D.new()
-	arms.mesh = parts[1]
-	arms.material_override = material
-	arms.position = Vector3(0.0, -float(parts[3]), 0.0)
-	a.arms.add_child(arms)
-	for s: float in [-1.0, 1.0]:
-		var hip: Node3D = Node3D.new()
-		hip.position = Vector3(s * 0.13, float(parts[4]), 0.0)
-		a.root.add_child(hip)
-		var leg: MeshInstance3D = MeshInstance3D.new()
-		leg.mesh = parts[2]
-		leg.material_override = material
-		hip.add_child(leg)
-		a.legs.append(hip)
+	a.rig = CreatureModel.build(kind, material)
+	a.body.add_child(a.rig.root)
+	a.phase = randf() * TAU
+	a.t = randf() * 10.0
+	a.tw_next = randf_range(0.5, 3.0)
+	a.groan_next = randf_range(1.5, 9.0)
+	var p: CreatureModel.Parts = a.rig.parts
 	a.tag = Label3D.new()
-	a.tag.font_size = 40
-	a.tag.pixel_size = 0.007
-	a.tag.outline_size = 10
-	a.tag.modulate = Color("#FFB0A0")
-	a.tag.outline_modulate = Color("#2A1A1A")
+	a.tag.font_size = 30
+	a.tag.pixel_size = 0.0065
+	a.tag.outline_size = 8
+	a.tag.modulate = Color("#D8604A")
+	a.tag.outline_modulate = Color("#120606")
 	a.tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	a.tag.position = Vector3(0.0, 1.15 if kind == "crawler" else (2.3 if kind in ["bloated", "brute"] else 2.15), 0.0)
-	# v0.28.2 철갑이는 덩치가 크다.
-	if kind == "brute":
-		a.root.scale = Vector3.ONE * 1.22
+	a.tag.position = Vector3(0.0, 1.0 if kind == "crawler" else (p.hip_y + p.torso_h + p.neck_len + 0.45) * p.scale, 0.0)
 	a.root.add_child(a.tag)
 	_actors[id] = a
 	return a
-
-
-## 종류마다 [몸통 메시, 팔 메시, 다리 메시(엉덩이 기준, 아래로), 어깨 높이, 엉덩이 높이].
-func _meshes_for(kind: String) -> Array:
-	if _meshes.has(kind):
-		return _meshes[kind]
-	var skin: Color = Color("#8FA58A")
-	var shirt: Color = Color("#6B6F7A")
-	var pants: Color = Color("#4A4E58")
-	var belly: float = 0.0
-	var lean: float = 0.0
-	var thin: float = 1.0
-	match kind:
-		"runner":
-			skin = Color("#A3B39A")
-			shirt = Color("#8A3B33")
-			pants = Color("#3B4046")
-			lean = 0.35
-			thin = 0.8
-		"bloated":
-			skin = Color("#9AAE84")
-			shirt = Color("#C9C2A8")
-			pants = Color("#5A5E50")
-			belly = 0.22
-		"crawler":
-			return _crawler_meshes()
-		"screamer":
-			skin = Color("#C9CBB8")
-			shirt = Color("#3A3A46")
-			pants = Color("#2E2E36")
-			thin = 0.72
-			lean = 0.15
-		"brute":
-			skin = Color("#7E9070")
-			shirt = Color("#4A4A50")
-			pants = Color("#38383E")
-			thin = 1.35
-			belly = 0.08
-		"spitter":
-			skin = Color("#7FA868")
-			shirt = Color("#5A6A40")
-			pants = Color("#3E4632")
-			lean = 0.2
-	var hip_y: float = 0.72
-	var shoulder_y: float = 1.42
-	var st: SurfaceTool = ClayMesh.begin()
-	var tilt: Basis = Basis(Vector3.RIGHT, -lean)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, 1.08, -lean * 0.3), Vector3(0.5 * thin + belly, 0.68, 0.3 * thin + belly), 0.3, shirt, tilt)
-	if belly > 0.0:
-		ClayMesh.add_ellipsoid(st, Vector3(0.0, 1.0, -0.12), Vector3(0.36, 0.34, 0.34), skin.lightened(0.05))
-	# 해진 셔츠 자락 · 얼룩.
-	ClayMesh.add_box(st, Vector3(0.12, 0.76, -0.12 - lean * 0.2), Vector3(0.14, 0.12, 0.02), shirt.darkened(0.25), Basis(Vector3.BACK, 0.4))
-	ClayMesh.add_ellipsoid(st, Vector3(-0.1, 1.2, -0.16 - lean * 0.3), Vector3(0.08, 0.06, 0.02), Color("#5A3A2A"))
-	# 머리: 기운 머리 · 퀭한 눈(노랗게 빛나는 눈동자) · 벌린 입.
-	var head: Vector3 = Vector3(0.04, 1.68, -lean * 0.55)
-	ClayMesh.add_ellipsoid(st, head, Vector3(0.24, 0.25, 0.23), skin, 12, 8, Basis(Vector3.BACK, 0.2))
-	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, 0.17, 0.02), Vector3(0.22, 0.1, 0.2), Color("#3E3A30"))
-	for s: float in [-1.0, 1.0]:
-		ClayMesh.add_ellipsoid(st, head + Vector3(s * 0.09, 0.03, -0.2), Vector3(0.06, 0.05, 0.03), Color("#2A2620"))
-		ClayMesh.add_ellipsoid(st, head + Vector3(s * 0.09, 0.03, -0.225), Vector3(0.025, 0.025, 0.015), Color("#F4E04A"))
-	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.11, -0.19), Vector3(0.07, 0.04, 0.03), Color("#4A2A2A"))
-	match kind:
-		"screamer":
-			# 찢어질 듯 벌린 입 · 긴 목.
-			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.13, -0.18), Vector3(0.1, 0.13, 0.05), Color("#3A0A0A"))
-			ClayMesh.add_capsule(st, Vector3(0.0, 1.42, -lean * 0.4), head + Vector3(0.0, -0.18, 0.02), 0.07, skin.darkened(0.08))
-		"brute":
-			# 철판 갑옷 (가슴 · 어깨) · 철모 · 리벳.
-			var steel: Color = Color("#6A6E74")
-			ClayMesh.add_rounded_box(st, Vector3(0.0, 1.12, -0.24), Vector3(0.62, 0.5, 0.08), 0.3, steel)
-			for sd: float in [-1.0, 1.0]:
-				ClayMesh.add_rounded_box(st, Vector3(sd * 0.36, 1.42, -0.02), Vector3(0.26, 0.12, 0.36), 0.4, steel.darkened(0.1), Basis(Vector3.BACK, sd * 0.35))
-				ClayMesh.add_ellipsoid(st, Vector3(sd * 0.2, 1.3, -0.29), Vector3(0.03, 0.03, 0.02), Color("#3A3E44"))
-			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, 0.1, 0.0), Vector3(0.27, 0.16, 0.26), steel.darkened(0.05))
-		"spitter":
-			# 부풀어 오른 독주머니 (목) · 초록 침.
-			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.24, -0.1), Vector3(0.17, 0.13, 0.15), Color("#B8D06A"))
-			ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.13, -0.21), Vector3(0.05, 0.05, 0.03), Color("#6AA83A"))
-	var torso: ArrayMesh = ClayMesh.commit(st)
-	# 팔: 어깨에서 앞으로 쭉 (좀비 자세).
-	st = ClayMesh.begin()
-	for s: float in [-1.0, 1.0]:
-		var sh: Vector3 = Vector3(s * (0.3 * thin + belly * 0.5), shoulder_y, -lean * 0.4)
-		ClayMesh.add_capsule(st, sh, sh + Vector3(s * 0.02, -0.08, -0.55), 0.07 * thin + 0.01, shirt)
-		ClayMesh.add_capsule(st, sh + Vector3(s * 0.02, -0.08, -0.5), sh + Vector3(s * 0.03, -0.12, -0.7), 0.06, skin)
-	var arms: ArrayMesh = ClayMesh.commit(st)
-	# 다리 (엉덩이 0 기준 아래로).
-	st = ClayMesh.begin()
-	ClayMesh.add_capsule(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, -0.58, 0.02), 0.09 * thin + 0.02, pants)
-	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.66, -0.06), Vector3(0.14, 0.1, 0.26), 0.4, Color("#3A3632"))
-	var leg: ArrayMesh = ClayMesh.commit(st)
-	_meshes[kind] = [torso, arms, leg, shoulder_y, hip_y]
-	return _meshes[kind]
-
-
-## v0.28.2 기어미: 배를 땅에 깔고 기어 온다 (몸통 · 머리가 낮고, 팔로 땅을 짚는다). 다리는 뒤로 끌린다.
-func _crawler_meshes() -> Array:
-	var skin: Color = Color("#8E9C86")
-	var rag: Color = Color("#5A4E44")
-	var st: SurfaceTool = ClayMesh.begin()
-	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.32, 0.05), Vector3(0.24, 0.16, 0.48), rag, 12, 6)
-	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.36, 0.3), Vector3(0.2, 0.12, 0.22), rag.darkened(0.15), 10, 5)
-	var head: Vector3 = Vector3(0.0, 0.42, -0.5)
-	ClayMesh.add_ellipsoid(st, head, Vector3(0.2, 0.18, 0.2), skin, 12, 8)
-	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, 0.12, 0.04), Vector3(0.18, 0.08, 0.16), Color("#3E3A30"))
-	for sd: float in [-1.0, 1.0]:
-		ClayMesh.add_ellipsoid(st, head + Vector3(sd * 0.08, 0.02, -0.17), Vector3(0.05, 0.04, 0.03), Color("#2A2620"))
-		ClayMesh.add_ellipsoid(st, head + Vector3(sd * 0.08, 0.02, -0.19), Vector3(0.022, 0.022, 0.014), Color("#F4E04A"))
-	ClayMesh.add_ellipsoid(st, head + Vector3(0.0, -0.08, -0.16), Vector3(0.07, 0.04, 0.03), Color("#4A2A2A"))
-	var torso: ArrayMesh = ClayMesh.commit(st)
-	# 팔: 앞으로 뻗어 땅을 짚는다 (어깨 0.36 기준).
-	st = ClayMesh.begin()
-	for sd: float in [-1.0, 1.0]:
-		var sh: Vector3 = Vector3(sd * 0.2, 0.36, -0.3)
-		ClayMesh.add_capsule(st, sh, sh + Vector3(sd * 0.18, -0.18, -0.32), 0.06, rag)
-		ClayMesh.add_capsule(st, sh + Vector3(sd * 0.18, -0.18, -0.32), sh + Vector3(sd * 0.22, -0.32, -0.46), 0.05, skin)
-	var arms: ArrayMesh = ClayMesh.commit(st)
-	# 다리: 뒤로 끌린다 (엉덩이 0 기준).
-	st = ClayMesh.begin()
-	ClayMesh.add_capsule(st, Vector3.ZERO, Vector3(0.0, -0.18, 0.55), 0.08, Color("#3A3E44"))
-	ClayMesh.add_rounded_box(st, Vector3(0.0, -0.2, 0.62), Vector3(0.12, 0.1, 0.2), 0.4, Color("#3A3632"))
-	var leg: ArrayMesh = ClayMesh.commit(st)
-	_meshes["crawler"] = [torso, arms, leg, 0.36, 0.3]
-	return _meshes["crawler"]
 
 
 func _on_message(msg: Dictionary) -> void:
@@ -477,5 +677,5 @@ func _scream(id: String) -> void:
 	tween.chain().tween_callback(l.queue_free)
 	for i: int in 3:
 		Puff.burst(self, at + Vector3(0.0, 1.8, 0.0), Color(1.0, 0.6, 0.5, 0.5), 10, 1.6 + i * 0.8, 0.1, 0.1, 0.6)
-	Audio.play_at("emote_hey", at, 2.0, 0.55)
-	a.punch = 1.0
+	Audio.play_at("creature_shriek", at, 3.0, 1.0)
+	a.scream = 1.0

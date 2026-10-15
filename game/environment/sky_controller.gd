@@ -176,6 +176,9 @@ func _apply(delta: float, instant: bool) -> void:
 			uenv.fog_enabled = false
 		RenderingServer.global_shader_parameter_set("world_wetness", 0.0)
 		RenderingServer.global_shader_parameter_set("lightning_flash", 0.0)
+		# 지하는 늘 밤처럼: 빛나는 것(마석 결정 · 크리처 눈 · 등)이 낮에도 빛난다.
+		RenderingServer.global_shader_parameter_set("night_light", 1.0)
+		night_light = 1.0
 	if rain != null:
 		rain.visible = rain_amount > 0.02 and not indoor and not underground
 		var material: ShaderMaterial = rain.material_override as ShaderMaterial

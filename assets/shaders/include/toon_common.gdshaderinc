@@ -45,11 +45,15 @@ varying float v_hair;
 // 표면 마감 (v21, 탈것 — VehicleShapes): 정점 색 알파 0.72 = 광택 도장, 0.82 = 크롬 · 연마 금속, 0.62 = 유리.
 // 하늘(위) · 땅(아래)을 비추는 반사를 더해 매끈한 칠 · 금속 · 유리처럼 보이게 한다. 그 밖의 메시(알파 1)는 그대로.
 varying float v_finish;
+// 크리처 살갗 (v0.28.3): 정점 색 알파 0.3 = 썩어 가는 살 (멍 · 얼룩 · 핏줄 무늬, 축축한 광택), 0.4 = 상처 · 피 (번들거리는 검붉은 살).
+// 무늬는 메시 로컬 좌표의 3D 잡음이라 폴리곤 · 텍스처 없이 그린다.
+varying float v_flesh;
 
 void vertex() {
 	v_local = VERTEX;
 	v_hair = 1.0 - step(0.02, abs(COLOR.a - 0.5));
 	v_finish = COLOR.a;
+	v_flesh = abs(COLOR.a - 0.3) < 0.03 ? 1.0 : (abs(COLOR.a - 0.4) < 0.03 ? 2.0 : 0.0);
 	VERTEX += world_curve_local_offset(MODEL_MATRIX, VERTEX);
 	// 정점 색(메시·MultiMesh 인스턴스 색)은 sRGB 로 칠해 두었다. 조명 계산은 선형 공간이라 여기서 바꾼다 (정점마다 한 번).
 	COLOR.rgb = mix(COLOR.rgb / 12.92, pow((COLOR.rgb + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), COLOR.rgb));
@@ -110,6 +114,25 @@ float sight_visible(vec2 p) {
 }
 #endif
 
+// 값 잡음 (0~1) · 겹친 잡음 — 크리처 살갗 무늬.
+float flesh_hash(vec3 p) {
+	p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float flesh_noise(vec3 x) {
+	vec3 i = floor(x);
+	vec3 f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(flesh_hash(i), flesh_hash(i + vec3(1, 0, 0)), f.x), mix(flesh_hash(i + vec3(0, 1, 0)), flesh_hash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(flesh_hash(i + vec3(0, 0, 1)), flesh_hash(i + vec3(1, 0, 1)), f.x), mix(flesh_hash(i + vec3(0, 1, 1)), flesh_hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+float flesh_fbm(vec3 x) {
+	return flesh_noise(x) * 0.55 + flesh_noise(x * 2.1 + 3.7) * 0.3 + flesh_noise(x * 4.3 + 7.1) * 0.15;
+}
+
 void fragment() {
 #ifdef SEE_THROUGH
 	if (sight_overlay) {
@@ -141,14 +164,37 @@ void fragment() {
 		base *= 1.0 - 0.11 * aa * strand;
 	}
 	float wet = clamp(world_wetness, 0.0, 1.0);
+	float flesh_gloss = 0.0;
+	if (v_flesh > 0.5) {
+		float blotch = flesh_fbm(v_local * 6.0);
+		float pores = flesh_noise(v_local * 38.0);
+		if (v_flesh < 1.5) {
+			// 멍 (보랏빛) · 곰팡이 핀 녹색 얼룩 · 핏줄 (갈라진 선) · 땀구멍.
+			float bruise = smoothstep(0.52, 0.78, flesh_fbm(v_local * 2.4 + 11.0));
+			float mold = smoothstep(0.6, 0.85, flesh_fbm(v_local * 3.1 + 23.0));
+			float vein = 1.0 - smoothstep(0.0, 0.045, abs(flesh_noise(v_local * 9.0 + 5.0) - 0.5));
+			vein *= smoothstep(0.35, 0.7, flesh_noise(v_local * 2.0 + 41.0));
+			base *= 0.6 + 0.62 * blotch;
+			base = mix(base, base * vec3(0.62, 0.42, 0.62), bruise * 0.75);
+			base = mix(base, base * vec3(0.7, 0.85, 0.45), mold * 0.5);
+			base = mix(base, vec3(0.16, 0.12, 0.22), vein * 0.55);
+			base *= 0.92 + 0.12 * pores;
+			flesh_gloss = 0.08;
+		} else {
+			// 상처 · 피: 검붉은 바탕에 더 짙은 응어리, 번들거린다.
+			base *= 0.7 + 0.5 * blotch;
+			base = mix(base, base * vec3(0.45, 0.2, 0.2), smoothstep(0.55, 0.8, pores) * 0.6);
+			flesh_gloss = 0.6;
+		}
+	}
 	ALBEDO = base * mix(1.0, 0.72, wet);
 	
 	// 비에 젖었을 때 표면 물기 광택 (수평 윗면일수록 물이 고여 매끄러움)
 	vec3 v_norm = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	float up_facing = max(v_norm.y * 0.7 + 0.3, 0.0);
 	
-	ROUGHNESS = mix(toon_softness, 0.22, wet * up_facing);
-	SPECULAR = mix(0.12, 0.78, wet * up_facing);
+	ROUGHNESS = mix(toon_softness, 0.22, max(wet * up_facing, flesh_gloss));
+	SPECULAR = mix(0.12, 0.78, max(wet * up_facing, flesh_gloss));
 	METALLIC = 0.0;
 	
 	vec3 emit_val = emission * emission_energy * night_light;
@@ -158,6 +204,11 @@ void fragment() {
 		// 번개 섬광 시 젖은 지붕/바위 표면 하이라이트 번쩍임
 		wet_sheen += vec3(0.85, 0.92, 1.0) * lightning_flash * wet * up_facing * 1.6;
 		emit_val += wet_sheen;
+	}
+	// 상처 · 피는 가장자리가 축축하게 번들거린다 (스펙큘러를 끈 셰이더에서도 보이게).
+	if (v_flesh > 1.5) {
+		float fr = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.5);
+		emit_val += base * fr * 0.6;
 	}
 	EMISSION = emit_val;
 	if (v_finish > 0.58 && v_finish < 0.86) {

@@ -1,4 +1,4 @@
-[gd_scene load_steps=83 format=3]
+[gd_scene load_steps=84 format=3]
 
 [ext_resource type="PackedScene" path="res://game/player/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://game/camera/follow_camera.gd" id="2_camera"]
@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" path="res://ui/inventory/inventory_window.tscn" id="21_inventory"]
 [ext_resource type="Script" path="res://game/trees/tree_field.gd" id="22_trees"]
 [ext_resource type="Material" path="res://assets/materials/foliage.tres" id="23_foliage"]
+[ext_resource type="Material" path="res://assets/materials/creature_flesh.tres" id="23_creature_flesh"]
 [ext_resource type="Script" path="res://game/npc/npc_crowd.gd" id="24_crowd"]
 [ext_resource type="PackedScene" path="res://game/npc/npc_actor.tscn" id="25_actor"]
 [ext_resource type="Script" path="res://game/shop/courier_field.gd" id="72_couriers"]
@@ -461,7 +462,7 @@ hud = NodePath("../HUD")
 toast_hud = NodePath("../HUD/FishingHud")
 clay_material = ExtResource("90_bclay")
 window_material = ExtResource("91_bwindow")
-creature_material = ExtResource("23_foliage")
+creature_material = ExtResource("23_creature_flesh")
 
 [node name="Waypoint" type="Node3D" parent="." node_paths=PackedStringArray("player", "hud", "toast_hud")]
 script = ExtResource("99_waypoint")
