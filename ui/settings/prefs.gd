@@ -25,6 +25,8 @@ const BEAT_OFFSET: String = "beat_offset"
 const APPS: String = "apps"
 ## 성능 표시 (프레임 시간 · 그리기 · 삼각형, PerfHud).
 const PERF_HUD: String = "perf_hud"
+## v0.28.7 떨어진 아이템 · 솔을 곁을 지나가면 저절로 줍기 (InteractionController).
+const AUTO_PICKUP: String = "auto_pickup"
 
 const FONT_SCALES: Dictionary[String, float] = {"small": 0.88, "normal": 1.0, "large": 1.14}
 const FONT_NAMES: Dictionary[String, String] = {"small": "작게", "normal": "보통", "large": "크게"}
@@ -45,6 +47,7 @@ const DEFAULTS: Dictionary[String, Variant] = {
 	"beat_offset": 0.0,
 	"apps": "",
 	"perf_hud": false,
+	"auto_pickup": true,
 }
 
 

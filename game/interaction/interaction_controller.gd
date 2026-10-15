@@ -97,7 +97,31 @@ func has_target() -> bool:
 	return target != Target.NONE
 
 
+## v0.28.7 저절로 줍기: 한 번 청한 것은 잠깐 다시 청하지 않는다 (id → 다시 청해도 되는 ms).
+var _auto_asked: Dictionary[String, int] = {}
+
+
+func _auto_pickup() -> void:
+	if drops == null or player.is_input_locked() or Net.state != Net.State.ONLINE or not bool(Prefs.get_value(Prefs.AUTO_PICKUP)):
+		return
+	var drop_id: String = drops.nearest(player.global_position, GameData.collect_range - safety_margin)
+	if drop_id.is_empty():
+		return
+	# 크리처 · 다른 사람이 떨군 물건만 (들판 채집 · 선물은 상황 버튼으로, 내가 내려놓은 것은 그대로 둔다).
+	var info: DropInfo = Net.drops.get(drop_id)
+	if info == null or info.kind != DropInfo.KIND_ITEM or info.dropped_by == Net.my_id:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now < int(_auto_asked.get(drop_id, 0)):
+		return
+	if _auto_asked.size() > 64:
+		_auto_asked.clear()
+	_auto_asked[drop_id] = now + 1500
+	Net.collect(drop_id)
+
+
 func _process(_delta: float) -> void:
+	_auto_pickup()
 	_pick_target()
 	if player.is_riding() and not target in RIDE_TARGETS:
 		# 차고 탈것은 HUD 탈것 단추(P)로 세우므로 상황 버튼에 "세우기"를 따로 띄우지 않는다. 킥보드만 "내리기".

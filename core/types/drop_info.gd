@@ -16,6 +16,8 @@ var item: String = ""
 ## 묶음 개수 (KIND_ITEM). 나머지는 1.
 var count: int = 1
 var position: Vector3 = Vector3.ZERO
+## 가방에서 내려놓은 사람 (서버 drop 의 by, 없으면 0). v0.28.7 저절로 줍기는 내가 내려놓은 것은 줍지 않는다.
+var dropped_by: int = 0
 
 
 static func from_dict(data: Dictionary) -> DropInfo:

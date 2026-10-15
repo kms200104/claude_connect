@@ -1349,6 +1349,7 @@ func _handle_text(text: String) -> void:
 			var dropped: Variant = msg.get("d", {})
 			if dropped is Dictionary:
 				var d: DropInfo = DropInfo.from_dict(dropped)
+				d.dropped_by = int(msg.get("by", 0))
 				var known: bool = drops.has(d.id)
 				drops[d.id] = d
 				if known:

@@ -29,6 +29,7 @@ var _pref_buttons: Dictionary[String, Dictionary] = {}
 var _vibration: CheckButton = null
 var _minimap: CheckButton = null
 var _perf: CheckButton = null
+var _auto_pickup: CheckButton = null
 var _bday_month: int = 1
 var _bday_day: int = 1
 var _bday_label: Label = null
@@ -99,6 +100,8 @@ func refresh() -> void:
 		_minimap.set_pressed_no_signal(Prefs.minimap())
 	if _perf != null:
 		_perf.set_pressed_no_signal(Prefs.perf_hud())
+	if _auto_pickup != null:
+		_auto_pickup.set_pressed_no_signal(bool(Prefs.get_value(Prefs.AUTO_PICKUP)))
 
 
 ## 닉네임 입력 칸 (테스트용).
@@ -313,6 +316,12 @@ func _build_play() -> void:
 		Prefs.set_value(Prefs.PERF_HUD, on)
 		Audio.play_ui(Audio.SFX_CLICK))
 	col.add_child(_perf)
+	_auto_pickup = _check("떨어진 것 저절로 줍기 (곁을 지나가면 아이템 · 솔을 줍는다)")
+	_auto_pickup.name = "AutoPickupToggle"
+	_auto_pickup.toggled.connect(func(on: bool) -> void:
+		Prefs.set_value(Prefs.AUTO_PICKUP, on)
+		Audio.play_ui(Audio.SFX_CLICK))
+	col.add_child(_auto_pickup)
 	_choice_row(col, "글자 크기", Prefs.FONT, Prefs.FONT_NAMES)
 	_choice_row(col, "조이스틱 자리", Prefs.STICK_SIDE, Prefs.STICK_SIDES)
 	_choice_row(col, "조이스틱 크기", Prefs.STICK_SIZE, Prefs.STICK_NAMES)
