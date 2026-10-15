@@ -42,6 +42,8 @@ export function stepNpcs(npcs, { dtMs, now, random, mode, speed, idleMinMs, idle
   let moved = false;
   for (const n of npcs.values()) {
     if (n.talkingWith !== null) continue;
+    // v0.28.2 크리처에게 쓰러진 주민은 일어날 때까지 누워 있다 (guardians.js).
+    if (n.down) continue;
     if (n.target === null) {
       if (n.approaching) continue;
       if (now < n.waitUntil) continue;
@@ -180,7 +182,7 @@ export function updateApproaches(npcs, players, { rules, now, dtMs, random, mode
 }
 
 export function npcWire(n) {
-  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0, m: n.mood, ap: n.approaching?.pid ?? 0, a: n.act ?? '' };
+  return { id: n.id, x: round(n.x), z: round(n.z), yaw: round(n.yaw), talk: n.talkingWith ?? 0, m: n.mood, ap: n.approaching?.pid ?? 0, a: n.act ?? '', dn: n.down ? 1 : 0 };
 }
 
 /**

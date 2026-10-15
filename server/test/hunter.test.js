@@ -120,7 +120,8 @@ describe('v0.28 헌터', () => {
     assert.equal(me.profile.sol, b.reward);
     assert.equal((await ask(c, { t: 'hunter_claim', b: b.id })).code, 'already_looted');
     // 빈집 냉장고 뒤지기 → loot 의뢰가 있으면 1 오른다.
-    const loot = w.hunter.bounties.find((x) => x.kind === 'loot');
+    // 위에서 보고한 의뢰가 마침 '빈집 수색'이면 (방 코드에 따라) 더는 세지 않는다 — 다른 것만 본다.
+    const loot = w.hunter.bounties.find((x) => x.kind === 'loot' && x.id !== b.id);
     const fridge = S.containers.get('h01_2');
     await moveTo(c, { x: fridge.x, z: fridge.z + 0.8 });
     c.send({ t: 'loot', c: 'h01_2', rid: 'lt-1' });

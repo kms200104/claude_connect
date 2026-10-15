@@ -18,6 +18,7 @@ import { inHours, HOUR_MS } from './clock.js';
 import { groundProblem } from './world.js';
 import { isLand } from './water.js';
 import { createGates } from './gates.js';
+import { createGuardians } from './guardians.js';
 
 const round = (v) => Math.round(v * 100) / 100;
 
@@ -673,6 +674,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     return w;
   };
   const broadcastCreatures = (room) => room.broadcast({ t: 'creatures', st: now(), c: [...(room.creatures?.values() ?? [])].map(creatureWire) });
+  const guardians = createGuardians({ data, worldMs, random, kill: (room, c, by) => kill(room, c, by), armorOf: (c) => S.creatures.kinds[c.k]?.armor ?? 0 });
   const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures });
 
   /** 놓인 가구로 막힌 곳 (바리케이드) · 불빛 (모닥불 · 든 횃불 · 손전등). */
@@ -894,6 +896,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed);
     const def = defenses(room);
     if (gates.tick(room, t, people, def)) changed = true;
+    // v0.28.2 가디언: 쏘기 · 부활, 쓰러진 주민 일어나기 (낮 · 밤).
+    if (guardians.tick(room, t)) changed = true;
     if (day && room.creatures.size === 0) {
       if (changed) broadcastCreatures(room);
       return;
@@ -938,6 +942,19 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         room.creatures.delete(c.id);
         room.broadcast({ t: 'creature_dead', id: c.id, by: 0, x: round(c.x), z: round(c.z), gone: true });
         changed = true;
+        continue;
+      }
+      // v0.28.2 사람보다 가까운 가디언 · 밖의 주민을 노린다 (소리를 듣고 쫓는 중이 아니면).
+      const ally = (c.alertUntil ?? 0) > t ? null : guardians.allyNear(room, c, kind, bestD, safeAt);
+      if (ally) {
+        if (moveToward(c, { x: ally.x, z: ally.z }, kind.reach * 0.8, kind.speed * dt, (x, z) => canStand(x, z, def))) changed = true;
+        c.yaw = Math.atan2(ally.x - c.x, ally.z - c.z);
+        if (Math.hypot(ally.x - c.x, ally.z - c.z) <= kind.reach + 0.3 && t >= c.nextAttack) {
+          c.nextAttack = t + kind.attack_ms;
+          c.attackAt = t;
+          guardians.hitAlly(room, ally, Math.round(kind.damage * (c.dmg ?? 1)));
+          changed = true;
+        }
         continue;
       }
       // 소리를 들었으면 소리 낸 사람을 쫓는다 (aggro 밖이라도).
@@ -1228,6 +1245,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       scent: (room.scent ?? []).map((s) => ({ id: s.id, x: s.x, z: s.z, left: Math.max(0, SC.trail_ms - (now() - s.t)) })),
       supply: [...(room.supply?.values() ?? [])].map((c) => supplyWire(room, c)),
       gates: gates.gatesWire(room),
+      guards: guardians.guardsWire(room),
+      npcDown: guardians.npcDownWire(room),
     };
   }
 

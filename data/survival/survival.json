@@ -13,6 +13,19 @@
     ]
   },
 
+  "guardians": {
+    "_comment": "v0.28.2 가디언: 주민이 다니는 시내 둘레 초소의 총을 든 아군. range m 안의 크리처를 shot_ms 마다 쏜다 (damage, 갑옷은 깎인다). 크리처는 사람보다 가까운 가디언 · 주민을 노리기도 한다. 가디언이 쓰러지면 세상 시간 respawn_world_min 분 뒤 초소에서 다시 선다. 주민은 npc_hp 를 넘게 맞으면 쓰러져 npc_down_world_min 분 동안 누워 있다 (밖을 다닐 때만 맞는다).",
+    "range": 16, "shot_ms": 1300, "damage": 3, "hp": 14, "respawn_world_min": 20, "npc_hp": 6, "npc_down_world_min": 30,
+    "posts": [
+      { "id": "gd1", "name": "서쪽 산책로", "x": -38, "z": 40 },
+      { "id": "gd2", "name": "동쪽 상가", "x": 22, "z": 40 },
+      { "id": "gd3", "name": "남서 공원", "x": -50, "z": 14 },
+      { "id": "gd4", "name": "광장 북쪽", "x": 8, "z": 84 },
+      { "id": "gd5", "name": "골목 북서", "x": -18, "z": 86 },
+      { "id": "gd6", "name": "식당 동쪽", "x": 40, "z": 66 }
+    ]
+  },
+
   "supply": {
     "_comment": "v0.27 보급 상자: 밤이 되고 first_ms(현실) 뒤부터 every_ms 마다 (한 밤에 per_night 번) 헬기가 바깥에 있는 사람 하나에게서 dist m 떨어진 땅에 낙하산 상자를 떨어뜨린다 (fall_ms 뒤 땅에 닿는다). 모두에게 알리고, 먼저 range 안에서 연 사람이 loot 를 다 갖는다. 누가 guard_near m 안에 처음 오면 둘레에 크리처 guards 마리가 기다리고 있다. 해가 뜨면 남은 상자는 회수된다.",
     "first_ms": 60000, "every_ms": 180000, "per_night": 2, "dist": [40, 90], "fall_ms": 9000, "range": 2.2,
