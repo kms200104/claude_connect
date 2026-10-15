@@ -67,6 +67,10 @@ class Actor:
 	var pool: MeshInstance3D
 	## 다쳤는지 (이름표는 다쳤거나 아주 가까울 때만).
 	var hurt: bool = false
+	## v0.28.5 우두머리: 기 모으는 중 ("slam" · "charge", 빈 글자 = 아님) · 남은 시간 · 돌진 중.
+	var cast: String = ""
+	var cast_t: float = 0.0
+	var dashing: bool = false
 	## v0.28.5 못 박힌 방망이에 맞아 비틀거리는 남은 시간 (초).
 	var stun: float = 0.0
 	## v0.28.5 어둠 속 눈빛: 몸이 보이는 정도 (0 = 어둠에 묻혀 눈만, 1 = 다 보임) · 다음 깜빡임까지.
@@ -155,7 +159,7 @@ func _process(delta: float) -> void:
 			continue
 		a.t += delta
 		var before: Vector3 = a.root.position
-		a.root.position = before.lerp(a.target, minf(1.0, delta * (follow * 2.0 if a.flag != 0 else follow)))
+		a.root.position = before.lerp(a.target, minf(1.0, delta * (follow * 2.0 if a.flag != 0 or a.dashing else follow)))
 		var moved: float = Vector2(a.root.position.x - before.x, a.root.position.z - before.z).length() / maxf(delta, 0.001)
 		a.speed = lerpf(a.speed, moved, minf(1.0, delta * 6.0))
 		if a.air_total > 0.0 or a.flag != 0:
@@ -353,6 +357,30 @@ func _animate(a: Actor, delta: float) -> void:
 		r.head.rotation.z += sin(a.t * 7.0) * 0.4 * k
 	elif a.body.rotation.z != 0.0:
 		a.body.rotation.z = move_toward(a.body.rotation.z, 0.0, delta * 2.0)
+	# 우두머리 기 모으기: 내려치기 = 두 팔을 머리 위로 치켜들고 몸을 젖힌다, 돌진 = 낮게 웅크리고 떤다.
+	if not a.cast.is_empty():
+		a.cast_t = maxf(0.0, a.cast_t - delta)
+		var shake: float = sin(a.t * 40.0) * 0.04
+		match a.cast:
+			"slam":
+				r.shoulder_l.rotation.x = 2.9
+				r.shoulder_r.rotation.x = 2.9
+				r.elbow_l.rotation.x = 0.4
+				r.elbow_r.rotation.x = 0.4
+				r.spine.rotation.x = 0.25 + shake
+				r.jaw.rotation.x = -1.0
+			"charge":
+				r.spine.rotation.x = -0.9 + shake
+				r.hips.position.y = r.parts.hip_y * 0.82
+				r.shoulder_l.rotation.x = -0.4
+				r.shoulder_r.rotation.x = -0.4
+				r.jaw.rotation.x = -0.9
+	if a.dashing:
+		r.spine.rotation.x = -0.85
+		r.shoulder_l.rotation.x = 1.6
+		r.shoulder_r.rotation.x = 1.6
+		if randf() < delta * 14.0:
+			Puff.burst(self, a.root.global_position + Vector3(0.0, 0.1, 0.0), Color(0.55, 0.5, 0.45, 0.8), 3, 0.6, 0.3, 0.1, 0.4)
 
 
 ## 팔: 종류마다 다른 자세.
@@ -724,6 +752,133 @@ func _on_message(msg: Dictionary) -> void:
 			_spit(str(msg.get("id", "")), int(msg.get("to", 0)))
 		"creature_scream":
 			_scream(str(msg.get("id", "")))
+		"boss_cast":
+			_boss_cast(msg)
+
+
+## v0.28.5 우두머리 패턴 (서버 boss_cast): 경고는 땅에 붉게 — 내려치기 = 대상 자리의 원 (가운데가 차오른다),
+## 돌진 = 우두머리에서 끝 자리까지 붉은 길. 터지면 충격파 · 화면 흔들림, 소환은 포효.
+func _boss_cast(msg: Dictionary) -> void:
+	var a: Actor = _actors.get(str(msg.get("id", "")))
+	var at: Vector3 = Vector3(float(msg.get("x", 0.0)), 0.03, float(msg.get("z", 0.0)))
+	var ms: float = float(msg.get("ms", 0)) / 1000.0
+	match str(msg.get("k", "")):
+		"slam":
+			if a != null:
+				a.cast = "slam"
+				a.cast_t = ms
+			_warn_circle(at, float(msg.get("r", 3.0)), ms)
+			Audio.play_at("creature_snarl", at, 2.0, 0.55)
+		"slam_hit":
+			if a != null:
+				a.cast = ""
+				a.punch = 0.6
+			for i: int in 3:
+				Puff.burst(self, at + Vector3(0.0, 0.1, 0.0), Color(0.5, 0.42, 0.36, 0.9), 14, float(msg.get("r", 3.0)) * (0.5 + i * 0.25), 0.4, 0.14, 0.6)
+			Audio.play_at("chop", at, 4.0, 0.35)
+			_shake_if_near(at, 0.28)
+		"charge":
+			if a != null:
+				a.cast = "charge"
+				a.cast_t = ms
+			_warn_path(Vector3(float(msg.get("sx", 0.0)), 0.03, float(msg.get("sz", 0.0))), at, float(msg.get("w", 1.5)), ms + 0.6)
+			Audio.play_at("creature_shriek", at, -2.0, 0.6)
+		"charge_end":
+			if a != null:
+				a.cast = ""
+				a.dashing = false
+		"summon":
+			if a != null:
+				a.scream = 1.0
+			_scream(str(msg.get("id", "")))
+			_shake_if_near(at, 0.18)
+	# 돌진 경고가 끝나면 내달린다.
+	if str(msg.get("k", "")) == "charge" and a != null:
+		get_tree().create_timer(ms).timeout.connect(func() -> void:
+			if is_instance_valid(a.root):
+				a.cast = ""
+				a.dashing = true)
+
+
+static var _warn_mat: StandardMaterial3D = null
+
+
+static func _warn_material() -> StandardMaterial3D:
+	if _warn_mat == null:
+		_warn_mat = StandardMaterial3D.new()
+		_warn_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_warn_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_warn_mat.albedo_color = Color(1.0, 0.12, 0.08, 0.32)
+		_warn_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return _warn_mat
+
+
+func _flat_disc(r: float) -> MeshInstance3D:
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	var cyl: CylinderMesh = CylinderMesh.new()
+	cyl.top_radius = r
+	cyl.bottom_radius = r
+	cyl.height = 0.02
+	cyl.radial_segments = 40
+	cyl.rings = 1
+	mi.mesh = cyl
+	mi.material_override = _warn_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## 내려치기 경고: 바깥 원 (테두리처럼 옅게) + 가운데서 차오르는 원 → 다 차면 터진다.
+func _warn_circle(at: Vector3, r: float, ms: float) -> void:
+	var holder: Node3D = Node3D.new()
+	holder.name = "BossWarn"
+	holder.add_to_group(&"boss_warn")
+	add_child(holder)
+	holder.global_position = at
+	var outer: MeshInstance3D = _flat_disc(r)
+	holder.add_child(outer)
+	var inner: MeshInstance3D = _flat_disc(r)
+	inner.position.y = 0.01
+	inner.scale = Vector3(0.05, 1.0, 0.05)
+	holder.add_child(inner)
+	var tween: Tween = holder.create_tween()
+	tween.tween_property(inner, "scale", Vector3.ONE, maxf(ms, 0.05))
+	tween.tween_interval(0.15)
+	tween.tween_callback(holder.queue_free)
+
+
+## 돌진 경고: 우두머리에서 끝 자리까지 붉은 길 (깜빡인다).
+func _warn_path(from: Vector3, to: Vector3, w: float, life: float) -> void:
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.name = "BossWarnPath"
+	mi.add_to_group(&"boss_warn")
+	var box: BoxMesh = BoxMesh.new()
+	var length: float = Vector2(to.x - from.x, to.z - from.z).length()
+	box.size = Vector3(w * 2.0, 0.02, maxf(length, 0.1))
+	mi.mesh = box
+	mi.material_override = _warn_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = (from + to) * 0.5
+	mi.rotation.y = atan2(to.x - from.x, to.z - from.z)
+	var tween: Tween = mi.create_tween()
+	tween.set_loops(int(ceil(life / 0.3)))
+	tween.tween_property(mi, "transparency", 0.6, 0.15)
+	tween.tween_property(mi, "transparency", 0.0, 0.15)
+	get_tree().create_timer(life).timeout.connect(mi.queue_free)
+
+
+## 경고 표시가 몇 개인지 (점검용).
+func warn_count() -> int:
+	return get_tree().get_nodes_in_group(&"boss_warn").size()
+
+
+func _shake_if_near(at: Vector3, strength: float) -> void:
+	if not player_near(at, 12.0):
+		return
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	if cam != null and cam.get_parent() is FollowCamera:
+		(cam.get_parent() as FollowCamera).shake(strength, 0.4)
+	Prefs.vibrate(90, 0.6)
 
 
 ## 독침이 침: 입에서 초록 덩어리가 포물선으로 날아가 맞은 자리에 튄다.

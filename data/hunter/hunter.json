@@ -57,6 +57,13 @@
     "first_ms": 90000, "every_ms": 420000, "max_open": 1, "life_ms": 900000,
     "enter_range": 4.0, "arena": 14, "abandon_ms": 45000,
     "break": { "ms": 120000, "every_ms": 5000, "per_player": 2 },
+    "boss_skills": {
+      "_comment": "v0.28.5 게이트 우두머리 패턴 (서버 권위, 경고는 클라이언트가 그린다). first_ms 뒤부터 every_ms 마다 하나: 대상이 charge.min_range ~ charge.dist 사이면 돌진, slam.range 안이면 내려치기. 내려치기 = 대상 자리에 r m 원이 windup_ms 동안 차오른 뒤 그 안 사람에게 damage. 돌진 = windup_ms 동안 붉은 길(너비 width)을 보이고 dist m 를 speed m/s 로 내달려 길 위 사람에게 damage. 소환 = 체력이 hp_at 비율 아래로 떨어질 때마다 부하 k 를 n 마리 (포효).",
+      "first_ms": 2500, "every_ms": 4500,
+      "slam": { "windup_ms": 1300, "r": 3.0, "damage": 3, "range": 5.5 },
+      "charge": { "windup_ms": 900, "dist": 9, "speed": 13, "width": 1.5, "damage": 3, "min_range": 3.5 },
+      "summon": { "hp_at": [0.6, 0.3], "n": 2, "k": "runner" }
+    },
     "dungeon": {
       "_comment": "v0.28.2 게이트 안 던전: 진입하면 도시 밖 먼 곳의 별도 공간으로 옮겨 간다. 던전 자리는 spots 순서 i 마다 (x0 + i × dx, z0) 가 가운데. 게이트가 열릴 때 maps 중 하나를 고른다. 지도 (로컬 좌표, 가운데 기준 m): w × d 바닥, spawn = 들어선 자리, exit = 나가는 균열 (exit_range 안에서 '나가기'), center = 웨이브가 나오는 곳 (spread m 둘레), pillars [x, z, r] · rubble [x, z, w, d] 는 막힌 곳. 공략하면 return_ms 뒤 모두 게이트 앞으로 돌아온다.",
       "x0": -1500, "dx": 100, "z0": 1300, "exit_range": 2.2, "return_ms": 8000,

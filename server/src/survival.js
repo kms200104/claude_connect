@@ -955,6 +955,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
         continue;
       }
+      // v0.28.5 게이트 우두머리 패턴 (내려치기 · 돌진 · 소환).
+      if (c.boss && bossStep(room, c, best, bestD, t, dt, def)) {
+        changed = true;
+        continue;
+      }
       // v0.28.2 사람보다 가까운 가디언 · 밖의 주민을 노린다 (소리를 듣고 쫓는 중이 아니면).
       const ally = (c.alertUntil ?? 0) > t ? null : guardians.allyNear(room, c, kind, bestD, safeAt);
       if (ally) {
@@ -1251,6 +1256,92 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge, n: hits.length });
     for (const { c } of hits) if (c.hp <= 0) kill(room, c, player.id);
     room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
+  }
+
+  /** v0.28.5 우두머리 패턴: 이번 틱을 우두머리가 썼으면 true (평소 걸음 · 공격을 건너뛴다). */
+  function bossStep(room, c, target, targetD, t, dt, def) {
+    const B = data.hunter?.gates?.boss_skills;
+    if (!B) return false;
+    const victims = () => [...room.players.values()].filter((p) => p.online && !p.downed && !hunter?.bonus.hidden(p));
+    // 소환: 체력이 기준 아래로 떨어질 때마다 (포효 · 부하가 기어 나온다).
+    const frac = c.hp / Math.max(1, c.max ?? c.hp);
+    c.summoned ??= 0;
+    if (B.summon && c.summoned < B.summon.hp_at.length && frac <= B.summon.hp_at[c.summoned]) {
+      c.summoned++;
+      for (let i = 0; i < B.summon.n; i++) {
+        for (let k = 0; k < 8; k++) {
+          const a = random() * Math.PI * 2;
+          const x = c.x + Math.cos(a) * (1.5 + random() * 1.5);
+          const z = c.z + Math.sin(a) * (1.5 + random() * 1.5);
+          if (!canStand(x, z, def)) continue;
+          const kind = S.creatures.kinds[B.summon.k];
+          room.creatureSeq = (room.creatureSeq ?? 0) + 1;
+          const hp = kind.hp;
+          room.creatures.set(`z${room.creatureSeq}`, { id: `z${room.creatureSeq}`, k: B.summon.k, x, z, yaw: c.yaw, hp, max: hp, target: target?.id ?? 0, nextAttack: 0, attackAt: 0, trapAt: {}, g: c.g, dmg: c.dmg ?? 1 });
+          break;
+        }
+      }
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'summon', x: round(c.x), z: round(c.z), ms: 0 });
+    }
+    // 돌진 중: 길을 따라 내달리고, 닿은 사람마다 한 번씩.
+    if (c.dash) {
+      const d = c.dash;
+      const left = Math.hypot(d.tx - c.x, d.tz - c.z);
+      const step = Math.min(left, B.charge.speed * dt);
+      const nx = c.x + ((d.tx - c.x) / Math.max(left, 0.001)) * step;
+      const nz = c.z + ((d.tz - c.z) / Math.max(left, 0.001)) * step;
+      if (left < 0.05 || t > d.until || !canStand(nx, nz, def)) {
+        c.dash = null;
+        c.nextCast = t + B.every_ms;
+        room.broadcast({ t: 'boss_cast', id: c.id, k: 'charge_end', x: round(c.x), z: round(c.z), ms: 0 });
+        return true;
+      }
+      c.x = nx;
+      c.z = nz;
+      for (const p of victims()) {
+        if (d.hit.has(p.id) || Math.hypot(p.x - c.x, p.z - c.z) > B.charge.width) continue;
+        d.hit.add(p.id);
+        hurt(room, p, Math.round(B.charge.damage * (c.dmg ?? 1)), c.id);
+      }
+      return true;
+    }
+    // 기 모으는 중 (경고가 보이는 동안 멈춰 선다) → 터진다.
+    if (c.cast) {
+      if (t < c.cast.at) return true;
+      const k = c.cast;
+      c.cast = null;
+      if (k.k === 'slam') {
+        for (const p of victims()) if (Math.hypot(p.x - k.x, p.z - k.z) <= B.slam.r) hurt(room, p, Math.round(B.slam.damage * (c.dmg ?? 1)), c.id);
+        room.broadcast({ t: 'boss_cast', id: c.id, k: 'slam_hit', x: round(k.x), z: round(k.z), r: B.slam.r, ms: 0 });
+        c.nextCast = t + B.every_ms;
+      } else if (k.k === 'charge') {
+        c.dash = { tx: k.x, tz: k.z, until: t + (B.charge.dist / B.charge.speed) * 1000 + 300, hit: new Set() };
+      }
+      return true;
+    }
+    if (!target) return false;
+    c.nextCast ??= t + B.first_ms;
+    if (t < c.nextCast) return false;
+    if (targetD >= B.charge.min_range && targetD <= B.charge.dist) {
+      // 돌진: 대상 쪽으로 dist 만큼 (막히면 그 앞까지).
+      const ux = (target.x - c.x) / targetD;
+      const uz = (target.z - c.z) / targetD;
+      let reach = B.charge.dist;
+      while (reach > 1 && !canStand(c.x + ux * reach, c.z + uz * reach, def)) reach -= 0.5;
+      const ex = c.x + ux * reach;
+      const ez = c.z + uz * reach;
+      c.yaw = Math.atan2(ux, uz);
+      c.cast = { k: 'charge', at: t + B.charge.windup_ms, x: ex, z: ez };
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'charge', x: round(ex), z: round(ez), sx: round(c.x), sz: round(c.z), w: B.charge.width, ms: B.charge.windup_ms });
+      return true;
+    }
+    if (targetD <= B.slam.range) {
+      c.yaw = Math.atan2(target.x - c.x, target.z - c.z);
+      c.cast = { k: 'slam', at: t + B.slam.windup_ms, x: target.x, z: target.z };
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'slam', x: round(target.x), z: round(target.z), r: B.slam.r, ms: B.slam.windup_ms });
+      return true;
+    }
+    return false;
   }
 
   function welcomeWire(room, player) {

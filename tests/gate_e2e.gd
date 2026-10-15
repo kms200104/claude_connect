@@ -159,6 +159,13 @@ func _run() -> void:
 			boss_shot[0] = true
 			var bc: Dictionary = Net.creatures[target]
 			await _teleport(Vector3(float(bc.get("x", 0.0)), 0.1, float(bc.get("z", 0.0)) + 5.0), PI)
+			# v0.28.5 우두머리 패턴 경고 (이 시험은 크리처가 멈춰 있어 서버가 쓰지 않으므로 메시지를 흉내 내 그림만 본다).
+			var field: CreatureField = _village.get_node("Survival").creatures
+			var me: Vector3 = (_village.get_node("Player") as Player).global_position
+			Net.message_received.emit({"t": "boss_cast", "id": target, "k": "slam", "x": me.x, "z": me.z, "r": 3.0, "ms": 1300})
+			Net.message_received.emit({"t": "boss_cast", "id": target, "k": "charge", "x": me.x + 4.0, "z": me.z + 2.0, "sx": float(bc.get("x", 0.0)), "sz": float(bc.get("z", 0.0)), "w": 1.5, "ms": 900})
+			_check(field.warn_count() >= 2, "우두머리 패턴 경고 (원 · 길) %d" % field.warn_count())
+			await get_tree().create_timer(0.6).timeout
 			await _shot("gate_boss")
 		var c: Dictionary = Net.creatures[target]
 		var at: Vector3 = Vector3(float(c.get("x", 0.0)), 0.1, float(c.get("z", 0.0)))
