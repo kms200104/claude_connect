@@ -240,7 +240,7 @@ func _run() -> void:
 	var action_button: Control = hud.get_node("ActionHud").get_node("%ActionButton")
 	_check(stick.idle_center().x > get_viewport().get_visible_rect().size.x * 0.5, "조이스틱이 오른쪽")
 	_check(action_button.anchor_left < 0.5, "상황 버튼은 왼쪽 아래로")
-	_check(is_equal_approx(stick.radius, 140.0 * Prefs.STICK_SCALES["large"]), "조이스틱 크게 (%.0f)" % stick.radius)
+	_check(is_equal_approx(stick.radius, 118.0 * Prefs.STICK_SCALES["large"]), "조이스틱 크게 (%.0f)" % stick.radius)
 	Prefs.set_value(Prefs.STICK_SIDE, "left")
 	Prefs.set_value(Prefs.STICK_SIZE, "normal")
 	await get_tree().process_frame
