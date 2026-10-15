@@ -108,6 +108,14 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return seen_popup[0] or popup.visible, 1.0), "HUD '%s'" % popup.text)
 	_check(popup.text.begins_with("헌터 점수 +"), "점수 안내 글자")
 	_check(await _wait_until(func() -> bool: return int(Net.hunter.get("kills", 0)) >= 1 and int(Net.hunter.get("pts", 0)) > 0, 2.0), "처치 %d · 점수 %d" % [int(Net.hunter.get("kills", 0)), int(Net.hunter.get("pts", 0))])
+	# v0.28.1 떨어진 것 곁이면 테두리가 빛난다.
+	var drops: DropField = _village.get_node("Drops") as DropField
+	_check(await _wait_until(func() -> bool:
+		for id: String in Net.drops:
+			if drops.is_glowing(id):
+				return true
+		return false, 3.0), "곁에 떨어진 것의 테두리가 빛난다")
+	await _shot("hunter_drop_glow")
 
 	# ---- 협회 출장소 ----
 	var rules: HunterRules = GameData.hunter

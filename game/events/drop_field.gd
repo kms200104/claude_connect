@@ -4,6 +4,7 @@ extends Node3D
 ## 가까이 가서 "줍기"·"채집"으로 줍는다. 보급품은 낙하산에 매달려 살랑살랑, 마나 조각은 빙글빙글 돌며 반짝이고,
 ## 먹거리는 풀숲 위로 아이템 모형이 살짝 흔들린다. 생길 때와 없어질 때 톡 튀는 연출.
 ## 사람이 내려놓은 물건(v13)은 그 아이템 모형을 손바닥만 하게 줄여 바닥에 둔다 (여러 개면 작게 쌓인다).
+## v0.28.1: 가까이(GLOW_RANGE) 가면 주울 수 있는 것의 테두리가 노랗게 빛나며 숨쉰다 (material_overlay — 뒤집은 껍질 한 겹).
 
 @export var clay_material: Material
 ## 밤에 빛나는 조각 머티리얼 (마나 조각은 이것을 푸르게 바꿔 쓴다).
@@ -22,6 +23,12 @@ static var _shadow_material: StandardMaterial3D = null
 
 ## 내려놓은 물건 모형의 가장 긴 변 (m).
 const ITEM_SIZE: float = 0.42
+## 테두리가 빛나는 거리 (m) · 빛 색.
+const GLOW_RANGE: float = 3.5
+const GLOW_COLOR: Color = Color("#FFE45A")
+static var _outline: StandardMaterial3D = null
+## 지금 테두리가 켜진 것.
+var _lit: Dictionary[String, bool] = {}
 
 var _nodes: Dictionary[String, Node3D] = {}
 var _time: float = 0.0
@@ -85,6 +92,7 @@ func drop_position(id: String) -> Vector3:
 
 func _process(delta: float) -> void:
 	_time += delta
+	_update_glow()
 	for id: String in _nodes:
 		var n: Node3D = _nodes[id]
 		var phase: float = float(id.hash() % 100) * 0.1
@@ -169,6 +177,8 @@ func _on_drop_changed(d: DropInfo) -> void:
 		_add(d, false)
 		return
 	_build_item(n.get_child(0) as MeshInstance3D, d)
+	# 새로 만든 모형에도 테두리를 다시 입힌다.
+	_lit.erase(d.id)
 
 
 ## 내려놓은 물건: 아이템 모형(물고기는 물고기 모형)을 ITEM_SIZE 에 맞춰 줄이고, 여러 개면 2~3개를 겹쳐 쌓는다.
@@ -309,3 +319,55 @@ static func _mana_material(base: Material) -> Material:
 		m.set_shader_parameter("emission_energy", 2.2)
 		_mana_glow = m
 	return _mana_glow if _mana_glow != null else base
+
+
+# ---- v0.28.1 가까이 가면 빛나는 테두리 ----
+
+## 뒤집은 껍질 한 겹 (앞면을 버리고 조금 부풀려, 모형 둘레만 빛난다). 모두 같은 머티리얼이라 함께 숨쉰다.
+static func outline_material() -> StandardMaterial3D:
+	if _outline == null:
+		_outline = StandardMaterial3D.new()
+		_outline.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline.cull_mode = BaseMaterial3D.CULL_FRONT
+		_outline.grow = true
+		_outline.grow_amount = 0.025
+		_outline.albedo_color = GLOW_COLOR
+	return _outline
+
+
+## 이 물건의 테두리가 켜져 있는지 (테스트용).
+func is_glowing(id: String) -> bool:
+	return _lit.has(id)
+
+
+func _update_glow() -> void:
+	var player: Node3D = get_tree().get_first_node_in_group(&"player") as Node3D
+	if player == null:
+		return
+	var pos: Vector3 = player.global_position
+	for id: String in _nodes:
+		var n: Node3D = _nodes[id]
+		var near: bool = Vector2(pos.x - n.global_position.x, pos.z - n.global_position.z).length() <= GLOW_RANGE
+		if near != _lit.has(id):
+			if near:
+				_lit[id] = true
+			else:
+				_lit.erase(id)
+			_set_overlay(n, outline_material() if near else null)
+	for id: String in _lit.keys():
+		if not _nodes.has(id):
+			_lit.erase(id)
+	if not _lit.is_empty():
+		var pulse: float = 0.5 + 0.5 * sin(_time * 5.0)
+		var m: StandardMaterial3D = outline_material()
+		m.grow_amount = 0.03 + pulse * 0.025
+		m.albedo_color = GLOW_COLOR.lerp(Color.WHITE, pulse * 0.45)
+
+
+func _set_overlay(n: Node, m: Material) -> void:
+	for c: Node in n.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = c as MeshInstance3D
+		# 바닥 그림자 원은 빼고.
+		if mi.mesh is CylinderMesh:
+			continue
+		mi.material_overlay = m
