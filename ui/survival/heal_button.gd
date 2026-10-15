@@ -9,6 +9,8 @@ const MEDICAL: PackedStringArray = ["bandage", "herb_salve", "first_aid_kit"]
 const SIZE: float = 124.0
 
 var toast_hud: FishingHud = null
+## 탈것을 타는 동안은 숨긴다 (운전 단추 자리).
+var player: Player = null
 var _icon: TextureRect = null
 var _count: Label = null
 var _style: StyleBoxFlat = null
@@ -119,7 +121,6 @@ func refresh() -> void:
 		return
 	var missing: int = maxi(0, Net.max_hp - Net.hp)
 	choice = pick(Net.inventory, rules.heal, maxi(missing, 1))
-	visible = Net.state == Net.State.ONLINE
 	if choice.is_empty():
 		_icon.texture = null
 		_count.text = "0"
@@ -159,6 +160,9 @@ func _toast(text: String) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	var show: bool = Net.state == Net.State.ONLINE and not (player != null and player.is_riding())
+	if visible != show:
+		visible = show
 	var low: bool = Net.max_hp > 0 and float(Net.hp) / float(Net.max_hp) <= 0.3 and not choice.is_empty()
 	var pulse: float = 0.5 + 0.5 * sin(_time * 7.0)
 	_style.border_color = Color("#FF3A2A").lerp(Color("#FFD0C0"), pulse * 0.4) if low else Color("#E8E0D0")

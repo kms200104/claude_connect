@@ -822,6 +822,7 @@ func _build_hud() -> void:
 	fear.player = player
 	heal_button = HealButton.new()
 	heal_button.toast_hud = toast_hud
+	heal_button.player = player
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
