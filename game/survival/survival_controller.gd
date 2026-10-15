@@ -41,6 +41,10 @@ var _supply_arrow: Label = null
 var _supply_label: Label = null
 var _hearts: HBoxContainer = null
 var _vignette: ColorRect = null
+var _hurt: HurtOverlay = null
+## v0.28.1 핏자국 머티리얼 (젖어 번들거리는 정점 색) · 마지막 핏자국 자리 (끌린 방향).
+static var _blood_material: StandardMaterial3D = null
+var _last_drop: Vector2 = Vector2.INF
 var _light: OmniLight3D = null
 var _was_night: bool = false
 var _swing_ready_at: float = 0.0
@@ -319,8 +323,13 @@ func _on_swung(info: Dictionary) -> void:
 
 
 func _on_hurt(info: Dictionary) -> void:
-	if _vignette != null:
-		_vignette.color.a = 0.45
+	# v0.28.1 화면 가장자리가 붉게 번지고 피가 튀며 화면이 흔들린다 (HurtOverlay).
+	var lost: float = 1.0 - float(Net.hp) / float(maxi(Net.max_hp, 1))
+	if _hurt != null:
+		_hurt.hit(0.4 + lost * 0.6)
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	if cam != null and cam.get_parent() is FollowCamera:
+		(cam.get_parent() as FollowCamera).shake(0.1 + lost * 0.12, 0.35)
 	Prefs.vibrate(120, 0.5)
 	Audio.play_sfx("chop", -4.0, 0.5)
 	var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(str(info.get("by", "")))
@@ -413,21 +422,71 @@ func _on_bleed(id: int) -> void:
 func _on_scent(drop: Dictionary) -> void:
 	if player == null:
 		return
-	var batch: BoxBatch = BoxBatch.new()
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = hash(Vector2(float(drop["x"]), float(drop["z"])))
-	for k: int in 4:
-		var size: float = rng.randf_range(0.08, 0.22)
-		batch.box(Vector3(rng.randf_range(-0.3, 0.3), 0.03, rng.randf_range(-0.3, 0.3)), Vector3(size, 0.02, size * rng.randf_range(0.6, 1.2)), Color("#7A1414").lightened(rng.randf() * 0.15), Basis(Vector3.UP, rng.randf() * TAU))
+	var at: Vector2 = Vector2(float(drop["x"]), float(drop["z"]))
+	# 걸어온 쪽 (앞 핏자국에서) — 피가 그쪽으로 끌린다.
+	var dir: Vector2 = (at - _last_drop).normalized() if _last_drop != Vector2.INF and _last_drop.distance_to(at) < 12.0 and _last_drop.distance_to(at) > 0.05 else Vector2.from_angle(float(hash(at) % 628) * 0.01)
+	_last_drop = at
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.name = "Scent"
-	mi.mesh = batch.commit()
-	mi.material_override = creature_material
+	mi.mesh = blood_mesh(hash(at), dir)
+	mi.material_override = _blood()
 	mi.visibility_range_end = 60.0
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	player.get_parent().add_child(mi)
-	mi.global_position = Vector3(float(drop["x"]), 0.0, float(drop["z"]))
+	mi.global_position = Vector3(at.x, _ground_y(Vector3(at.x, 0.0, at.y)) + 0.012, at.y)
 	_drops.append({"node": mi, "until": int(drop["until"]), "life": maxi(1, int(drop["until"]) - Time.get_ticks_msec())})
+
+
+## 핏자국 하나: 고르지 않은 웅덩이(가장자리는 옅고 가운데는 검붉게) · 둘레에 튄 방울 · 걸어온 쪽으로 끌린 자국.
+static func blood_mesh(seed_value: int, dir: Vector2) -> ArrayMesh:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var st: SurfaceTool = ClayMesh.begin()
+	var fwd: Vector3 = Vector3(dir.x, 0.0, dir.y)
+	var side: Vector3 = Vector3(-dir.y, 0.0, dir.x)
+	var dark: Color = Color("#1E0202")
+	var wet: Color = Color("#3A0504")
+	var thin: Color = Color("#561008")
+	# 웅덩이 (울퉁불퉁한 납작한 덩어리 둘을 겹친다).
+	var r: float = rng.randf_range(0.16, 0.26)
+	ClayMesh.add_ellipsoid(st, Vector3.ZERO, Vector3(r * 1.25, 0.002, r), thin, 16, 2, Basis(Vector3.UP, rng.randf() * TAU), ClayMesh.blob_wobble(seed_value, 0.28, 5))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.003, 0.0), Vector3(r * 0.8, 0.002, r * 0.62), wet, 14, 2, Basis(Vector3.UP, rng.randf() * TAU), ClayMesh.blob_wobble(seed_value + 7, 0.22, 4))
+	ClayMesh.add_ellipsoid(st, Vector3(0.0, 0.006, 0.0), Vector3(r * 0.35, 0.002, r * 0.3), dark, 10, 2, Basis(Vector3.UP, rng.randf() * TAU), ClayMesh.blob_wobble(seed_value + 13, 0.2, 3))
+	# 걸어온 반대쪽으로 끌린 자국 (가늘어지는 줄 두셋).
+	for k: int in rng.randi_range(1, 2):
+		var off: float = rng.randf_range(-r * 0.4, r * 0.4)
+		var length: float = rng.randf_range(0.08, 0.22)
+		var from: Vector3 = side * off - fwd * r * 0.3
+		var to: Vector3 = from - fwd * length + side * rng.randf_range(-0.06, 0.06)
+		ClayMesh.add_rod(st, from + Vector3(0.0, 0.004, 0.0), to + Vector3(0.0, 0.004, 0.0), rng.randf_range(0.025, 0.045), 0.006, wet, 5)
+	# 튄 방울 (진행 방향 쪽으로 더 멀리, 작을수록 멀리).
+	for k: int in rng.randi_range(5, 9):
+		var a: float = rng.randf_range(-1.2, 1.2)
+		var d: float = rng.randf_range(r * 1.1, r * 2.6)
+		var p: Vector3 = (fwd * cos(a) + side * sin(a)) * d
+		var s: float = rng.randf_range(0.012, 0.04) * (1.4 - d / (r * 2.6))
+		ClayMesh.add_ellipsoid(st, p + Vector3(0.0, 0.004, 0.0), Vector3(s * 1.4, 0.003, s), wet if rng.randf() < 0.6 else thin, 8, 2, Basis(Vector3.UP, atan2(p.x, p.z)))
+	return ClayMesh.commit(st)
+
+
+## 젖은 피: 정점 색 + 번들거림 (거칠기 낮게).
+static func _blood() -> StandardMaterial3D:
+	if _blood_material == null:
+		_blood_material = StandardMaterial3D.new()
+		_blood_material.vertex_color_use_as_albedo = true
+		_blood_material.vertex_color_is_srgb = true
+		_blood_material.roughness = 0.38
+		_blood_material.metallic_specular = 0.35
+	return _blood_material
+
+
+func _ground_y(at: Vector3) -> float:
+	if not is_inside_tree() or player == null:
+		return 0.0
+	var q: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(Vector3(at.x, player.global_position.y + 2.0, at.z), Vector3(at.x, player.global_position.y - 3.0, at.z))
+	q.exclude = [player.get_rid()]
+	var hit: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(q)
+	return float((hit["position"] as Vector3).y) if not hit.is_empty() else 0.0
 
 
 ## 핏자국은 시간이 지나면 작아져 사라진다.
@@ -444,8 +503,10 @@ func _update_scent() -> void:
 				mi.queue_free()
 			_drops.remove_at(i)
 			continue
-		var k: float = clampf(left * 1.5, 0.15, 1.0)
-		mi.scale = Vector3(k, 1.0, k)
+		# 거의 마를 때까지 그대로 있다가 마지막에 스며든다.
+		var k: float = clampf(left * 4.0, 0.0, 1.0)
+		mi.scale = Vector3(lerpf(0.55, 1.0, k), 1.0, lerpf(0.55, 1.0, k))
+		mi.visible = left > 0.02
 
 
 # ---- 판자 대는 중 · 소리 · 잠 · 집 안 알림 (v0.25) ----
@@ -609,6 +670,7 @@ func _build_hud() -> void:
 	_vignette.color = Color(0.7, 0.0, 0.0, 0.0)
 	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hurt = HurtOverlay.new()
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -713,6 +775,7 @@ func _build_hud() -> void:
 	stash_window = StashWindow.new()
 	if hud != null:
 		hud.add_child.call_deferred(_vignette)
+		hud.add_child.call_deferred(_hurt)
 		hud.add_child.call_deferred(_hearts)
 		hud.add_child.call_deferred(_down_panel)
 		hud.add_child.call_deferred(_job_panel)

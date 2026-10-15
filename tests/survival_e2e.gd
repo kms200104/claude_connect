@@ -126,6 +126,10 @@ func _run() -> void:
 	await _teleport(Vector3(-150.0, 0.1, 140.0))
 	_check(await _wait_until(func() -> bool: return not Net.creatures.is_empty() and survival.creatures.get_child_count() > 0, 5.0), "둔치에 크리처가 나타났다 (%d)" % Net.creatures.size())
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
+	# v0.28.1 맞으면 화면 가장자리가 붉게 번지고 피가 튄다.
+	var hurt: HurtOverlay = survival.get("_hurt")
+	_check(hurt != null and hurt.is_showing(), "맞은 화면 (붉은 가장자리 · 튄 피)")
+	await _shot("surv_hurt")
 	# v0.26 피 냄새: 다치면 피를 흘린다 (알림 · 땅의 핏자국).
 	_check(await _wait_until(func() -> bool: return Net.bleeding.has(Net.my_id) and (survival.get("_blood_chip") as Control).visible, 3.0), "피 냄새 알림")
 	_check(await _wait_until(func() -> bool: return not (survival.get("_drops") as Array).is_empty(), 5.0), "땅에 핏자국 (%d)" % Net.scent.size())

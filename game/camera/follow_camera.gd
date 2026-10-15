@@ -204,6 +204,19 @@ func set_point_focus(at: Vector3, amount: float = 1.0, duration: float = 0.9) ->
 	_point_tween.tween_property(self, "point_weight", clampf(amount, 0.0, 1.0), duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
+## v0.28.1 흔들기 (맞았을 때): strength m 만큼 화면이 떨리다 duration 초에 걸쳐 멎는다.
+var shake_amount: float = 0.0
+var _shake_tween: Tween = null
+
+
+func shake(strength: float = 0.12, duration: float = 0.35) -> void:
+	if _shake_tween != null and _shake_tween.is_valid():
+		_shake_tween.kill()
+	shake_amount = maxf(shake_amount, strength)
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(self, "shake_amount", 0.0, duration).set_ease(Tween.EASE_OUT)
+
+
 func clear_point_focus(duration: float = 0.6) -> void:
 	set_point_focus(point, 0.0, duration)
 
@@ -219,6 +232,8 @@ func _apply_framing() -> void:
 		dist = lerpf(dist, booth_distance, booth_view)
 		camera.position = Vector3(0.0, 0.0, dist)
 		camera.fov = fov
+		camera.h_offset = randf_range(-shake_amount, shake_amount) if shake_amount > 0.0 else 0.0
+		camera.v_offset = randf_range(-shake_amount, shake_amount) if shake_amount > 0.0 else 0.0
 
 
 ## 캐릭터와 찌가 가로로 다 들어오는 거리 (세로 화면은 가로 화각이 좁다).
