@@ -1863,6 +1863,8 @@ export function createServer(overrides = {}) {
       case 'guild_join':
       case 'guild_leave':
       case 'stat_up':
+      case 'awaken':
+      case 'awaken_use':
         return hunter.handle(ctx, msg, fail);
       case 'gate_enter':
       case 'gate_leave':
@@ -2116,6 +2118,8 @@ export function createServer(overrides = {}) {
       case 'guild_join':
       case 'guild_leave':
       case 'stat_up':
+      case 'awaken':
+      case 'awaken_use':
       case 'gate_enter':
       case 'gate_leave':
       case 'home_enter':

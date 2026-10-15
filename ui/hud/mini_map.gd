@@ -196,6 +196,19 @@ func _draw_map() -> void:
 				var f: Vector2 = _to_mini(Vector2(q.x, q.z), me)
 				_map.draw_circle(f, 8.0, Color.WHITE)
 				_map.draw_circle(f, 6.0, FRIEND)
+	# v0.28.5 각성 '기척 감지': 둘레 크리처가 붉은 점으로 (우두머리는 크게).
+	if Net.has_awaken("sense"):
+		var sense_range: float = float(GameData.hunter.awaken("sense").get("range", 40.0))
+		var inside: Rect2 = Rect2(Vector2.ZERO, s).grow(-6.0)
+		for cid: String in Net.creatures:
+			var cr: Dictionary = Net.creatures[cid]
+			var cw: Vector2 = Vector2(float(cr.get("x", 0.0)), float(cr.get("z", 0.0)))
+			if cw.distance_to(me) > sense_range:
+				continue
+			var cp: Vector2 = _to_mini(cw, me)
+			if inside.has_point(cp):
+				_map.draw_circle(cp, 9.0 if cr.has("b") else 6.0, Color("#1A0606"))
+				_map.draw_circle(cp, 7.0 if cr.has("b") else 4.5, Color("#FF3A2A"))
 	# v0.28.1 웨이포인트 (밖이면 가장자리에 붙여 방향만).
 	if Waypoint.is_set():
 		var wp: Vector2 = _to_mini(Waypoint.at, me)

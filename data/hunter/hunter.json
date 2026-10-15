@@ -122,7 +122,16 @@
     },
     "skills": [
       { "id": "run_attack", "name": "달리며 공격", "level": 3, "reach": 0.8, "desc": "달리면서 멈추지 않고 돌진해 벤다 (사거리 +0.8m). 배우기 전에는 달리다 휘두르면 잠깐 멈춘다." }
-    ]
+    ],
+      "awaken": {
+        "_comment": "v0.28.5 헌터 각성: slots 레벨이 될 때마다 하나씩 고른다 (헌터넷 · 능력치, 바꿀 수 없다). active 는 HUD 단추로 쓰고 cooldown_ms 뒤 다시 쓸 수 있다. shadow = ms 동안 크리처가 나를 보지 못하고 이동 +speed. shield = ms 동안 받는 공격 hits 번을 막는다. sense = 늘 켜짐, range m 안 크리처가 작은 지도에 보이고 어둠 속에서도 몸이 보인다 (그림만).",
+        "slots": [5, 10, 15],
+        "list": [
+          { "id": "shadow", "name": "그림자 걸음", "desc": "4초 동안 크리처가 나를 보지 못한다 (이동 +20%). 다시 쓰기까지 40초.", "active": true, "ms": 4000, "cooldown_ms": 40000, "speed": 0.2 },
+          { "id": "shield", "name": "마력 방패", "desc": "6초 동안 받는 공격을 3번까지 막는다. 다시 쓰기까지 45초.", "active": true, "ms": 6000, "cooldown_ms": 45000, "hits": 3 },
+          { "id": "sense", "name": "기척 감지", "desc": "늘 켜짐 — 40m 안 크리처가 작은 지도에 보이고, 어둠 속 크리처도 몸이 보인다.", "active": false, "range": 40 }
+        ]
+      }
   },
   "guild": {
     "_comment": "길드: 같은 방(마을) 둘이 만드는 2인 파티. 만든 사람이 이름을 짓고, 다른 사람은 '가입'. 길드원이 번 점수는 길드 점수로도 쌓여 길드 등급이 오른다. 함께 있으면(kill.party_range) 처치 점수가 늘고, 마석을 팔 때 sell_bonus 를 더 받는다.",

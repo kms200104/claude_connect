@@ -553,6 +553,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const t = now();
     if (player.downed || t < (player.hurtUntil ?? 0)) return;
     player.hurtUntil = t + (S.player.hurt_grace_ms ?? 700);
+    // v0.28.5 마력 방패가 막는다.
+    if (hunter?.bonus.block(player)) {
+      room.broadcast({ t: 'shield_block', id: player.id, left: player.shieldHits ?? 0 });
+      return;
+    }
     wake(room, player);
     setHp(player, hpOf(player) - damage);
     sendTo(player, { t: 'hurt', ...hpWire(player), by });
@@ -898,7 +903,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
       }
     }
-    const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed);
+    // v0.28.5 그림자 걸음 중인 사람은 크리처가 보지 못한다.
+    const people = [...room.players.values()].filter((p) => outdoors(p) && !p.downed && !hunter?.bonus.hidden(p));
     const def = defenses(room);
     if (gates.tick(room, t, people, def)) changed = true;
     // v0.28.2 가디언: 쏘기 · 부활, 쓰러진 주민 일어나기 (낮 · 밤).

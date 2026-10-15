@@ -197,6 +197,9 @@ func is_lit(a: Actor) -> bool:
 	var to: Vector3 = a.root.global_position - player.global_position
 	to.y = 0.0
 	var d: float = to.length()
+	# v0.28.5 각성 '기척 감지': 둘레 크리처는 어둠 속에서도 몸이 보인다.
+	if Net.has_awaken("sense") and d <= float(GameData.hunter.awaken("sense").get("range", 40.0)):
+		return true
 	match player.held_item:
 		"flashlight":
 			if d <= 4.6:

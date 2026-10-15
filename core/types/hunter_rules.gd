@@ -63,6 +63,9 @@ var dungeon_maps: Dictionary[String, DungeonMap] = {}
 var level_max: int = 50
 var level_stats: Dictionary[String, Dictionary] = {}
 var skills: Array[Dictionary] = []
+## v0.28.5 각성: 고르는 레벨들 · [{id, name, desc, active, ms, cooldown_ms, speed, hits, range}].
+var awaken_slots: Array[int] = []
+var awakens: Array[Dictionary] = []
 
 
 static func from_dict(d: Dictionary) -> HunterRules:
@@ -100,6 +103,12 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	for sk: Variant in level.get("skills", []):
 		if sk is Dictionary:
 			r.skills.append(sk)
+	var aw: Dictionary = level.get("awaken", {})
+	for l: Variant in aw.get("slots", []):
+		r.awaken_slots.append(int(l))
+	for e: Variant in aw.get("list", []):
+		if e is Dictionary:
+			r.awakens.append(e)
 	var gates: Dictionary = d.get("gates", {})
 	r.gate_enter_range = float(gates.get("enter_range", r.gate_enter_range))
 	r.gate_arena = float(gates.get("arena", r.gate_arena))
@@ -152,6 +161,14 @@ func dungeon_spot_at(pos: Vector3) -> String:
 		return ""
 	var i: int = roundi((pos.x - dungeon_x0) / dungeon_dx)
 	return gate_spots[i] if i >= 0 and i < gate_spots.size() else ""
+
+
+## 각성 하나 (없으면 빈 사전).
+func awaken(id: String) -> Dictionary:
+	for e: Dictionary in awakens:
+		if str(e.get("id", "")) == id:
+			return e
+	return {}
 
 
 func rank(id: String) -> Rank:

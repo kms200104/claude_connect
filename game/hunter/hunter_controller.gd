@@ -21,6 +21,8 @@ var office: HunterOffice = null
 var window: HunterWindow = null
 var gates: GateField = null
 var dungeon: DungeonField = null
+## v0.28.5 각성 단추 · 효과.
+var awaken_hud: AwakenHud = null
 var _gate_chip: HBoxContainer = null
 var _gate_arrow: Label = null
 var _gate_label: Label = null
@@ -49,11 +51,14 @@ func _ready() -> void:
 	_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_popup.visible = false
 	_build_gate_chip()
+	awaken_hud = AwakenHud.new()
+	awaken_hud.player = player
 	_build_level_label()
 	if hud != null:
 		hud.add_child.call_deferred(_level_label)
 		hud.add_child.call_deferred(_popup)
 		hud.add_child.call_deferred(_gate_chip)
+		hud.add_child.call_deferred(awaken_hud)
 		hud.add_child.call_deferred(window)
 	Net.hunter_done.connect(_on_done)
 	Net.guild_changed.connect(_on_guild)
@@ -180,6 +185,15 @@ func _on_done(info: Dictionary) -> void:
 				toast_hud.show_toast("레벨 업! Lv.%d — 스탯 포인트 %d (헌터넷 · 능력치)%s" % [int(info.get("lv", 1)), int(info.get("sp", 0)), skill_text], true)
 			Audio.play_sfx("level_up", -2.0)
 			Prefs.vibrate(120, 0.6)
+		"awaken":
+			if toast_hud != null:
+				var e: Dictionary = GameData.hunter.awaken(str(info.get("a", "")))
+				toast_hud.show_toast("각성! '%s' — %s" % [str(e.get("name", "")), str(e.get("desc", ""))], true)
+			Audio.play_sfx("level_up", -2.0, 0.8)
+			Prefs.vibrate(160, 0.7)
+		"awaken_use":
+			if toast_hud != null:
+				toast_hud.show_toast("%s!" % str(GameData.hunter.awaken(str(info.get("a", ""))).get("name", "")), true)
 		"remote_level":
 			if toast_hud != null and int(info.get("id", 0)) != Net.my_id:
 				toast_hud.show_toast("%s 님이 Lv.%d 가 됐어요" % [GameData.player_name(int(info.get("id", 0))), int(info.get("lv", 1))], true)
@@ -205,7 +219,7 @@ func _on_guild(msg: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
-	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind == "gate_enter" or kind == "gate_leave"):
+	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind == "gate_enter" or kind == "gate_leave"):
 		return
 	var text: String = ""
 	match code:
@@ -227,6 +241,12 @@ func _on_failed(kind: String, code: String) -> void:
 			text = "이미 보고한 의뢰예요"
 		NetProtocol.ERR_RANK_TOO_LOW:
 			text = "헌터 등급이 모자라요 — 협회 창구에서 재심사를 받아요"
+		"no_awaken_slot":
+			text = "아직 각성할 레벨이 아니에요 (Lv.5 · 10 · 15)"
+		"not_awakened":
+			text = "그 각성이 없어요"
+		"cooling_down":
+			text = "아직 다시 쓸 수 없어요"
 		NetProtocol.ERR_GATE_BROKEN:
 			text = "던전 브레이크 중이에요! 들어갈 수 없어요"
 		NetProtocol.ERR_NO_GATE:

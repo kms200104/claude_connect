@@ -5,6 +5,8 @@
 //   hunter_claim { b }                        현상금 의뢰 완료 보고 (헌터넷 앱, 다 채운 것만)
 //   guild_create { name } · guild_join {} · guild_leave {}   길드 (같은 방 둘)
 //   stat_up { s }                             v0.28.1 스탯 포인트 하나를 힘 · 체력 · 민첩 · 행운에 쓴다
+//   awaken { a }                              v0.28.5 각성 고르기 (level.awaken.slots 레벨마다 하나, 바꿀 수 없다)
+//   awaken_use { a }                          v0.28.5 쓰는 각성 (그림자 걸음 · 마력 방패) → 방 전체 awaken_fx { id, a, ms }
 // v0.28.1 레벨: 경험치(처치 · 게이트 · 의뢰 · 뒤지기 · 보급 상자)가 차면 레벨이 오르고 스탯 포인트를 받는다, 레벨이 되면 기술을 배운다.
 // 서버 → hunter { rank, pts, next, kills, bounties, guild } (나) · guild { … } (방 전체) · hunter_result { kind, … }.
 // 처치 · 뒤지기 · 보급 상자 · 게이트는 survival.js 가 onKill · onLoot · onSupply · onGate 로 알린다.
@@ -44,6 +46,8 @@ export function sanitizeHunter(raw, rules) {
     xp: Math.max(0, intOr(h.xp, 0)),
     sp: Math.max(0, intOr(h.sp, 0)),
     st: Object.fromEntries(Object.keys(rules?.level?.stats ?? {}).map((k) => [k, Math.max(0, Math.min(rules.level.stats[k].cap ?? 99, intOr(h.st?.[k], 0)))])),
+    // v0.28.5 고른 각성 (순서대로, 자리 수까지).
+    aw: Array.isArray(h.aw) ? [...new Set(h.aw.filter((a) => rules?.level?.awaken?.list?.some((x) => x.id === a)))].slice(0, rules?.level?.awaken?.slots?.length ?? 0) : [],
   };
 }
 
@@ -64,6 +68,16 @@ export function hasSkill(rules, profile, id) {
   return Boolean(sk) && (profile?.hunter?.lv ?? 1) >= sk.level;
 }
 
+/** v0.28.5 그 레벨에서 고를 수 있는 각성 자리 수. */
+export function awakenSlots(rules, lv) {
+  return (rules?.level?.awaken?.slots ?? []).filter((l) => lv >= l).length;
+}
+
+/** 고른 각성인지. */
+export function hasAwaken(profile, id) {
+  return Array.isArray(profile?.hunter?.aw) && profile.hunter.aw.includes(id);
+}
+
 /** 저장된 길드 { name, members: [uid], pts, since } (같은 방 둘). */
 export function sanitizeGuild(raw, profiles) {
   if (!raw || typeof raw.name !== 'string' || !raw.name.trim()) return null;
@@ -80,6 +94,10 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
 
   const rec = (player) => {
     player.profile.hunter = sanitizeHunter(player.profile.hunter, H);
+    if (cfg.startHunterLv > 1 && !player.startLvApplied) {
+      player.startLvApplied = true;
+      if (player.profile.hunter.lv < cfg.startHunterLv) player.profile.hunter.lv = Math.min(H.level?.max ?? 50, cfg.startHunterLv);
+    }
     return player.profile.hunter;
   };
   const rankOf = (h) => H.rankById.get(h.rank) ?? ranks[0];
@@ -141,6 +159,8 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       guild: guildWire(room),
       lv: h.lv, xp: h.xp, xpNext: h.lv >= (H.level?.max ?? 50) ? 0 : xpToNext(H, h.lv), sp: h.sp, st: { ...h.st },
       skills: (H.level?.skills ?? []).filter((sk) => h.lv >= sk.level).map((sk) => sk.id),
+      aw: [...h.aw], awSlots: awakenSlots(H, h.lv),
+      awReady: Object.fromEntries(h.aw.map((a) => [a, Math.max(0, (player.awReady?.[a] ?? 0) - now())])),
     };
   }
 
@@ -353,6 +373,36 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         saveRoom(room);
         return;
       }
+      case 'awaken': {
+        const def = H.level?.awaken?.list?.find((x) => x.id === msg.a);
+        const h = rec(player);
+        if (!def) return fail(ErrorCode.badItem);
+        if (h.aw.includes(def.id)) return fail(ErrorCode.alreadyLooted);
+        if (h.aw.length >= awakenSlots(H, h.lv)) return fail(ErrorCode.noAwakenSlot);
+        h.aw.push(def.id);
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'awaken', a: def.id });
+        sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'awaken_use': {
+        const def = H.level?.awaken?.list?.find((x) => x.id === msg.a);
+        if (!def || !def.active || !hasAwaken(player.profile, def.id)) return fail(ErrorCode.notAwakened);
+        if (player.downed) return fail(ErrorCode.downed);
+        const t = now();
+        player.awReady ??= {};
+        if (t < (player.awReady[def.id] ?? 0)) return fail(ErrorCode.coolingDown);
+        player.awReady[def.id] = t + def.cooldown_ms;
+        if (def.id === 'shadow') {
+          player.shadowUntil = t + def.ms;
+        } else if (def.id === 'shield') {
+          player.shieldUntil = t + def.ms;
+          player.shieldHits = def.hits;
+        }
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'awaken_use', a: def.id, ms: def.ms, cd: def.cooldown_ms });
+        room.broadcast({ t: 'awaken_fx', id: player.id, a: def.id, ms: def.ms });
+        return;
+      }
       case 'guild_create': {
         const name = typeof msg.name === 'string' ? msg.name.replace(/[\u0000-\u001f\u007f]/g, '').trim() : '';
         if ([...name].length < H.guild.name_min || [...name].length > H.guild.name_max) return fail(ErrorCode.badGuildName);
@@ -397,7 +447,14 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
   const bonus = {
     damage: (player) => 1 + statOf(H, player.profile, 'str') * (H?.level?.stats?.str?.damage ?? 0),
     hp: (player) => Math.floor(statOf(H, player.profile, 'vit') * (H?.level?.stats?.vit?.hp_per ?? 0)),
-    speed: (player) => 1 + statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.speed ?? 0),
+    speed: (player) => (1 + statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.speed ?? 0)) * ((player.shadowUntil ?? 0) > now() ? 1 + (H?.level?.awaken?.list?.find((x) => x.id === 'shadow')?.speed ?? 0) : 1),
+    // v0.28.5 각성: 그림자 걸음 중이면 크리처가 보지 못한다 · 마력 방패가 공격을 막는다 (막았으면 true).
+    hidden: (player) => (player.shadowUntil ?? 0) > now(),
+    block: (player) => {
+      if ((player.shieldUntil ?? 0) <= now() || (player.shieldHits ?? 0) <= 0) return false;
+      player.shieldHits--;
+      return true;
+    },
     cooldown: (player) => 1 - statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.cooldown ?? 0),
     skill: (player, id) => hasSkill(H, player.profile, id),
     skillDef: (id) => H?.level?.skills?.find((x) => x.id === id) ?? null,

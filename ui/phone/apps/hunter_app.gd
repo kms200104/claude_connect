@@ -211,6 +211,38 @@ func _build_stats() -> void:
 			Net.stat_up(key))
 		row.add_child(plus)
 		row_card.add_child(label("%s · 지금 %s%s" % [str(def.get("desc", "")), _stat_effect(key, v), " (최대)" if v >= cap else ""], 22, SOFT))
+	# v0.28.5 각성: 레벨 5 · 10 · 15 마다 하나 고른다 (바꿀 수 없다).
+	var rules: HunterRules = GameData.hunter
+	var picked: Array = h.get("aw", [])
+	var slots: int = int(h.get("awSlots", 0))
+	add_child(label("각성 %d / %d%s" % [picked.size(), rules.awaken_slots.size(), " — 고를 수 있어요!" if picked.size() < slots else ""], 30, WARN if picked.size() < slots else INK))
+	var next_lv: int = 0
+	for l: int in rules.awaken_slots:
+		if l > lv:
+			next_lv = l
+			break
+	if picked.size() >= slots and next_lv > 0:
+		add_child(label("다음 각성은 Lv.%d 에" % next_lv, 22, SOFT))
+	for e: Dictionary in rules.awakens:
+		var aid: String = str(e.get("id", ""))
+		var have: bool = picked.has(aid)
+		var ac: VBoxContainer = card()
+		ac.get_parent().name = "Awaken_%s" % aid
+		var arow: HBoxContainer = HBoxContainer.new()
+		ac.add_child(arow)
+		var an: Label = label("%s %s%s" % ["✔" if have else "◇", str(e.get("name", aid)), " (늘 켜짐)" if not bool(e.get("active", false)) else ""], 30, GOOD if have else INK, false)
+		an.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		arow.add_child(an)
+		if not have:
+			var pick: Button = button("각성", 28, INK, picked.size() < slots)
+			pick.name = "AwakenPick_%s" % aid
+			pick.custom_minimum_size = Vector2(130, 68)
+			pick.disabled = picked.size() >= slots
+			pick.pressed.connect(func() -> void:
+				Audio.play_ui(Audio.SFX_CLICK)
+				Net.awaken_pick(aid))
+			arow.add_child(pick)
+		ac.add_child(label(str(e.get("desc", "")), 22, SOFT))
 	add_child(label("기술", 30, INK))
 	for sk: Dictionary in GameData.hunter.skills:
 		var learned: bool = Net.has_skill(str(sk.get("id", "")))

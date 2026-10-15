@@ -66,6 +66,9 @@ signal supply_got(info: Dictionary)
 signal hunter_changed
 signal guild_changed(info: Dictionary)
 signal hunter_done(info: Dictionary)
+## v0.28.5 각성 효과 (누가 · 무엇을 · 얼마 동안 ms) · 마력 방패가 막았다 (누가 · 남은 횟수).
+signal awaken_fx(player_id: int, awaken_id: String, ms: int)
+signal shield_blocked(player_id: int, left: int)
 ## v0.28 게이트: 열림 · 상태가 바뀜 · 닫힘 (id, Net.gates 에 없으면 닫힘) · 내가 들어감 · 공략 보상 { g, rank, name, items, got, sol, pts }.
 signal gate_changed(gate_id: String)
 signal gate_entered(gate_id: String)
@@ -1092,6 +1095,9 @@ func _handle_text(text: String) -> void:
 			supply_got.emit(msg)
 		"hunter":
 			hunter = msg
+			var ready: Dictionary = msg.get("awReady", {}) if msg.get("awReady") is Dictionary else {}
+			for aid: Variant in ready:
+				awaken_ready_at[str(aid)] = Time.get_ticks_msec() + int(ready[aid])
 			hunter_ranks[my_id] = str(msg.get("rank", "E"))
 			var hg: Variant = msg.get("guild", null)
 			guild = hg if hg is Dictionary else {}
@@ -1106,7 +1112,13 @@ func _handle_text(text: String) -> void:
 			hunter_ranks[int(msg.get("id", 0))] = str(msg.get("rank", "E"))
 			hunter_done.emit({"kind": "remote_rank", "id": int(msg.get("id", 0)), "rank": str(msg.get("rank", "E"))})
 		"hunter_result":
+			if str(msg.get("kind", "")) == "awaken_use":
+				awaken_ready_at[str(msg.get("a", ""))] = Time.get_ticks_msec() + int(msg.get("cd", 0))
 			hunter_done.emit(msg)
+		"awaken_fx":
+			awaken_fx.emit(int(msg.get("id", 0)), str(msg.get("a", "")), int(msg.get("ms", 0)))
+		"shield_block":
+			shield_blocked.emit(int(msg.get("id", 0)), int(msg.get("left", 0)))
 		"gate":
 			var gw: Dictionary = msg.get("g", {}) if msg.get("g") is Dictionary else {}
 			var gid: String = str(gw.get("id", ""))
@@ -1627,6 +1639,24 @@ func stat_up(stat: String) -> void:
 ## 배운 기술인지 (서버 hunter.skills).
 func has_skill(skill_id: String) -> bool:
 	return (hunter.get("skills", []) as Array).has(skill_id)
+
+
+## v0.28.5 고른 각성인지 · 각성 고르기 · 쓰기 (판정은 서버). 다시 쓸 수 있는 때 (ticks ms).
+var awaken_ready_at: Dictionary[String, int] = {}
+
+
+func has_awaken(awaken_id: String) -> bool:
+	return (hunter.get("aw", []) as Array).has(awaken_id)
+
+
+func awaken_pick(awaken_id: String) -> void:
+	if state == State.ONLINE:
+		_request("awaken", {"a": awaken_id})
+
+
+func awaken_use(awaken_id: String) -> void:
+	if state == State.ONLINE:
+		_request("awaken_use", {"a": awaken_id})
 
 
 func use_item(slot: int) -> void:

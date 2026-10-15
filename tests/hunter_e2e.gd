@@ -158,6 +158,21 @@ func _run() -> void:
 	if app != null:
 		_check(app.find_child("LevelCard", true, false) != null and app.find_child("Stat_str", true, false) != null, "능력치 탭 (레벨 · 스탯)")
 		await _shot("hunter_stats")
+		# v0.28.5 각성 (Lv.10 → 두 자리): 마력 방패 · 기척 감지를 고르고, HUD 단추로 방패를 쓴다.
+		var pick: Button = app.find_child("AwakenPick_shield", true, false) as Button
+		_check(pick != null and not pick.disabled, "각성 고르기 단추 (마력 방패)")
+		if pick != null:
+			pick.pressed.emit()
+		_check(await _wait_until(func() -> bool: return Net.has_awaken("shield"), 3.0), "마력 방패 각성")
+		await get_tree().create_timer(0.3).timeout
+		var pick2: Button = phone.app_view().find_child("AwakenPick_sense", true, false) as Button
+		if pick2 != null:
+			pick2.pressed.emit()
+		_check(await _wait_until(func() -> bool: return Net.has_awaken("sense"), 3.0), "기척 감지 각성")
+		await get_tree().create_timer(0.3).timeout
+		var pick3: Button = phone.app_view().find_child("AwakenPick_shadow", true, false) as Button
+		_check(pick3 != null and pick3.disabled, "자리가 다 차면 더 고를 수 없다")
+		await _shot("hunter_awaken")
 		app.set("_tab", 1)
 		app.call("_build")
 		await get_tree().process_frame
@@ -175,4 +190,11 @@ func _run() -> void:
 			return c != null, 2.0), "길드 카드")
 		await _shot("hunter_guild")
 	phone.close()
+	# v0.28.5 HUD 각성 단추: 누르면 방패가 몸을 감싸고, 다시 쓰기까지 단추가 잠긴다.
+	var aw: AwakenHud = hunter.awaken_hud
+	_check(aw.has_button("shield") and not aw.has_button("sense"), "쓰는 각성만 HUD 단추 (방패)")
+	(aw.find_child("Awaken_shield", true, false) as Button).pressed.emit()
+	_check(await _wait_until(func() -> bool: return aw.fx_active(Net.my_id, "shield"), 3.0), "마력 방패가 몸을 감싼다")
+	_check(await _wait_until(func() -> bool: return (aw.find_child("Awaken_shield", true, false) as Button).disabled, 2.0), "다시 쓰기까지 단추가 잠긴다")
+	await _shot("hunter_shield")
 	_finished = true
