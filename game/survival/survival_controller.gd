@@ -56,6 +56,8 @@ var _light: OmniLight3D = null
 ## v0.28.4 손전등: 바라보는 쪽으로 비추는 원뿔 빛 (자기 몸에 가리지 않게 그림자는 끈다).
 var _spot: SpotLight3D = null
 var _light_t: float = 0.0
+## v0.28.4 맞으면 손전등(횃불)이 잠시 지직거리며 깜빡인다 — 남은 시간 (초).
+var flicker_left: float = 0.0
 var _was_night: bool = false
 var _swing_ready_at: float = 0.0
 ## 쓰러졌을 때 화면 안내.
@@ -171,6 +173,7 @@ func _process(_delta: float) -> void:
 		var dark: bool = night or not GameData.hunter.dungeon_spot_at(player.global_position).is_empty()
 		var held: String = player.held_item
 		_spot.visible = dark and held == "flashlight"
+		_spot.light_energy = 10.0
 		_light.visible = dark
 		if dark:
 			match held:
@@ -190,6 +193,7 @@ func _process(_delta: float) -> void:
 					_light.omni_range = 4.6
 					_light.light_energy = 0.8
 					_light.position = Vector3(0.0, 1.6, 0.0)
+			_flicker(_delta)
 	if _vignette != null and _vignette.color.a > 0.0:
 		_vignette.color.a = maxf(0.0, _vignette.color.a - _delta * 1.2)
 	_update_downed(_delta)
@@ -249,6 +253,20 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 		if bd <= rules.base_range - margin + 0.2 and bd < near_d:
 			best = TARGET_BED + house.id
 	return best
+
+
+## 맞은 뒤 잠시: 손전등이 지직거리며 꺼졌다 켜졌다 (불규칙), 횃불은 불꽃이 꺼질 듯 수그러든다.
+func _flicker(delta: float) -> void:
+	if flicker_left <= 0.0:
+		return
+	flicker_left = maxf(0.0, flicker_left - delta)
+	var k: float = sin(_light_t * 47.0) + sin(_light_t * 31.7 + 1.1) + sin(_light_t * 13.3 + 2.3) * 0.6
+	var off: bool = k > 0.35 or (flicker_left > 0.5 and randf() < 0.25)
+	if _spot.visible:
+		_spot.light_energy = 0.0 if off else 10.0 * randf_range(0.45, 1.0)
+		_light.light_energy *= 0.15 if off else 1.0
+	else:
+		_light.light_energy *= 0.35 if off else randf_range(0.6, 1.0)
 
 
 ## v0.28.4 자동 공격: 공격 범위 안에 크리처가 들면 (공격 간격이 찼을 때) 저절로 휘두른다. 상황 버튼은 그대로 (눌러도 된다).
@@ -430,6 +448,11 @@ func _on_hurt(info: Dictionary) -> void:
 	if cam != null and cam.get_parent() is FollowCamera:
 		(cam.get_parent() as FollowCamera).shake(0.1 + lost * 0.12, 0.35)
 	Prefs.vibrate(120, 0.5)
+	# 들고 있던 불빛이 지직거리며 깜빡인다 (체력이 적을수록 오래).
+	if _light != null and _light.visible:
+		flicker_left = 0.9 + lost * 0.9
+		if player != null and player.held_item == "flashlight":
+			Audio.play_sfx("light_flicker", -6.0, 1.0, 0.08)
 	Audio.play_sfx("chop", -4.0, 0.5)
 	var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(str(info.get("by", "")))
 	if toast_hud != null and Net.hp <= 3:

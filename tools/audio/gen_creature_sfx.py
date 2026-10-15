@@ -8,6 +8,7 @@
   creature_hit         맞을 때 살 터지는 소리 (0.3초)
   creature_die         쓰러질 때 꺼져 가는 꾸르륵 (1.7초)
   heartbeat            v0.28.4 공포 연출 심장 박동 한 번 (쿵-쿵, 0.5초)
+  light_flicker        v0.28.4 맞을 때 손전등이 지직거리는 소리 (0.6초)
   fear_sting           v0.28.4 크리처가 처음 다가올 때 섬뜩한 소리 (불협 화음이 부풀다 긁히는 소리, 2.4초)
 
 사용: python3 tools/audio/gen_creature_sfx.py  → assets/audio/sfx/*.wav (44.1kHz 16bit 모노)
@@ -225,6 +226,23 @@ def fear_sting():
     return room(finish(x, 1.8), rng, 0.35, 0.9)
 
 
+def light_flicker():
+    rng = np.random.default_rng(23)
+    dur = 0.6
+    n = int(dur * SR)
+    tt = np.arange(n) / SR
+    # 지직: 60Hz 전기 웅웅거림 + 접촉 불량 딸깍 (불규칙한 끊김).
+    hum = signal.sawtooth(2 * np.pi * 120 * tt) * 0.4 + rng.normal(0, 1, n) * 0.3
+    hum = signal.lfilter(*signal.butter(2, [200 / (SR / 2), 4000 / (SR / 2)], "band"), hum)
+    gate = (smooth_noise(n, 40, rng) > -0.1).astype(float)
+    clicks = np.zeros(n)
+    for c in rng.uniform(0, dur * 0.9, 9):
+        i = int(c * SR)
+        clicks[i:i + 120] += rng.normal(0, 1, min(120, n - i)) * np.exp(-np.arange(min(120, n - i)) / 25)
+    x = hum * gate * np.exp(-tt * 2.5) + clicks * 1.4
+    return finish(x, 1.5)
+
+
 def main():
     write("creature_groan_1", groan(1, 1.9, 82, 64))
     write("creature_groan_2", groan(2, 1.5, 96, 72))
@@ -235,6 +253,7 @@ def main():
     write("creature_die", die())
     write("heartbeat", heartbeat())
     write("fear_sting", fear_sting())
+    write("light_flicker", light_flicker())
 
 
 if __name__ == "__main__":

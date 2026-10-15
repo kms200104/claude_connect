@@ -189,6 +189,13 @@ func _run() -> void:
 	# 앞(북쪽, 화면 위)을 비추게 돌려서 찍는다.
 	player.body.rotation.y = 0.0
 	await _shot("surv_flashlight")
+	# v0.28.4 맞으면 손전등이 지직거리며 꺼졌다 켜졌다.
+	survival.call("_on_hurt", {})
+	var went_dark: Array = [false]
+	_check(await _wait_until(func() -> bool:
+		went_dark[0] = went_dark[0] or flash_spot.light_energy < 0.5
+		return went_dark[0], 1.5), "맞으면 손전등이 깜빡인다 (%.1f초)" % survival.flicker_left)
+	_check(await _wait_until(func() -> bool: return survival.flicker_left <= 0.0 and flash_spot.light_energy > 9.0, 3.0), "잠시 뒤 다시 켜진다")
 	Net.equip(held_before)
 	_check(await _wait_until(func() -> bool: return not flash_spot.visible, 2.0), "내려놓으면 꺼진다")
 
