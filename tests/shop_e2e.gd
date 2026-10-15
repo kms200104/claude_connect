@@ -126,6 +126,19 @@ func _run() -> void:
 	window.set_mode(ShopWindow.MODE_BUY)
 	await get_tree().process_frame
 	_check(window.row_count() == GameData.shop.stock_for(Net.shop_level).size(), "사기 목록 = 지금 단계까지 진열품 %d개" % window.row_count())
+	# v0.28.1 분류: "가구"를 누르면 가구만, "전체"로 돌아온다.
+	var furn: Button = window.find_child("Category_furniture", true, false) as Button
+	_check(furn != null and window.find_child("Category_all", true, false) != null, "분류 단추 (전체 · 가구 …)")
+	if furn != null:
+		furn.pressed.emit()
+		await get_tree().process_frame
+		var n_furn: int = 0
+		for id: String in GameData.shop.stock_for(Net.shop_level):
+			if ShopWindow.category_of(id) == "furniture":
+				n_furn += 1
+		_check(window.category == "furniture" and window.row_count() == n_furn, "가구만 %d줄" % window.row_count())
+		window.set_category("")
+		await get_tree().process_frame
 	for item_id: String in ["straw_hat", "log_stool"]:
 		var sol_now: int = Net.sol
 		var buy: Button = _buy_button(window, item_id)

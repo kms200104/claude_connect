@@ -5,6 +5,7 @@ extends Control
 ## 떠돌이 상인 모드(at = AT_MERCHANT): 상인의 보따리 물건을 사고, 상인이 찾는 물건만 2배 값에 판다 (포인트는 쌓이지 않음).
 ## 특가 매입의 날에는 고른 물건 줄에 "×2 특가" 표시와 두 배 값을 보여 준다.
 ## 공항 모드(at = AT_AIRPORT): 조종사의 여행 기념품(씨앗·소품)만 산다 (팔기 없음, 포인트 없음).
+## v0.28.1: 목록 위 분류 단추 (전체 · 가구 · 옷 · 소품 · 재료 · 식재료 · 도구 · 물고기 — 지금 목록에 있는 것만).
 
 signal closed
 
@@ -26,6 +27,13 @@ const AT_AIRPORT: String = "airport"
 @onready var _message: Label = %MessageLabel
 
 var mode: String = MODE_BUY
+## 분류 (아이템 kind, "" = 전체) · 분류 단추 줄.
+var category: String = ""
+var _categories: HBoxContainer = null
+const CATEGORY_NAMES: Dictionary[String, String] = {
+	"": "전체", "furniture": "가구", "clothing": "옷", "goods": "소품", "material": "재료",
+	"ingredient": "식재료", "tool": "도구", "fish": "물고기",
+}
 ## 거래 상대: "" = 상점, AT_MERCHANT = 떠돌이 상인.
 var at: String = ""
 
@@ -45,6 +53,64 @@ func _ready() -> void:
 	Net.shop_traded.connect(_on_traded)
 	Net.request_failed.connect(_on_request_failed)
 	Net.state_changed.connect(_on_net_state_changed)
+	_build_category_row()
+
+
+## 목록 바로 위 분류 단추 줄 (가로로 굴러간다).
+func _build_category_row() -> void:
+	var scroll: Node = _list.get_parent()
+	var box: Node = scroll.get_parent() if scroll != null else null
+	if box == null:
+		return
+	var holder: ScrollContainer = ScrollContainer.new()
+	holder.name = "CategoryScroll"
+	holder.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	holder.custom_minimum_size = Vector2(0, 76)
+	_categories = HBoxContainer.new()
+	_categories.name = "Categories"
+	_categories.add_theme_constant_override("separation", 8)
+	holder.add_child(_categories)
+	box.add_child(holder)
+	box.move_child(holder, scroll.get_index())
+
+
+## 아이템 분류 (물고기는 "fish").
+static func category_of(item_id: String) -> String:
+	if GameData.fish.has(item_id):
+		return "fish"
+	var info: ItemInfo = GameData.item(item_id)
+	return info.kind if info != null else "goods"
+
+
+func set_category(kind: String) -> void:
+	category = kind
+	_refresh()
+
+
+func _refresh_categories(present: Dictionary) -> void:
+	if _categories == null:
+		return
+	for c: Node in _categories.get_children():
+		c.queue_free()
+	if present.size() <= 1:
+		_categories.get_parent().visible = false
+		return
+	_categories.get_parent().visible = true
+	for kind: String in CATEGORY_NAMES:
+		if kind != "" and not present.has(kind):
+			continue
+		var b: Button = Button.new()
+		b.name = "Category_%s" % (kind if kind != "" else "all")
+		b.text = CATEGORY_NAMES[kind] + ("" if kind == "" else " %d" % int(present[kind]))
+		b.focus_mode = Control.FOCUS_NONE
+		b.toggle_mode = true
+		b.button_pressed = kind == category
+		b.custom_minimum_size = Vector2(110, 64)
+		b.add_theme_font_size_override("font_size", 26)
+		b.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			set_category(kind))
+		_categories.add_child(b)
 
 
 func _fit() -> void:
@@ -93,6 +159,7 @@ func close() -> void:
 
 func set_mode(new_mode: String) -> void:
 	mode = MODE_BUY if at == AT_AIRPORT else new_mode
+	category = ""
 	_buy_tab.disabled = mode == MODE_BUY
 	_sell_tab.disabled = mode == MODE_SELL
 	_sell_tab.visible = at != AT_AIRPORT
@@ -127,19 +194,36 @@ func _refresh() -> void:
 	_refresh_points()
 	for child: Node in _list.get_children():
 		child.queue_free()
+	var present: Dictionary = {}
 	if mode == MODE_BUY:
 		var stock: PackedStringArray = merchant.stock if merchant != null else (GameData.airport.stock if at == AT_AIRPORT else shop.stock_for(Net.shop_level))
 		for item_id: String in stock:
-			_list.add_child(_buy_row(GameData.item(item_id)))
+			var kind: String = category_of(item_id)
+			present[kind] = int(present.get(kind, 0)) + 1
+		if not category.is_empty() and not present.has(category):
+			category = ""
+		for item_id: String in stock:
+			if category.is_empty() or category_of(item_id) == category:
+				_list.add_child(_buy_row(GameData.item(item_id)))
+		_refresh_categories(present)
 	else:
 		var any: bool = false
+		var rows: Array[Array] = []
 		for i: int in Net.inventory.size():
 			var item: InventoryItem = Net.inventory[i]
 			var info: ItemInfo = GameData.item(item.id) if item != null else null
 			if info == null or info.price <= 0 or Net.sell_multiplier(info.id, at) <= 0.0:
 				continue
-			_list.add_child(_sell_row(i, item, info))
-			any = true
+			var kind: String = category_of(item.id)
+			present[kind] = int(present.get(kind, 0)) + 1
+			rows.append([i, item, info, kind])
+		if not category.is_empty() and not present.has(category):
+			category = ""
+		for r: Array in rows:
+			if category.is_empty() or str(r[3]) == category:
+				_list.add_child(_sell_row(int(r[0]), r[1], r[2]))
+				any = true
+		_refresh_categories(present)
 		if not any:
 			if merchant != null:
 				var who_note: String = merchant.info().npc.display_name if merchant.info() != null and merchant.info().npc != null else "상인"
