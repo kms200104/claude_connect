@@ -182,6 +182,11 @@ func _on_done(info: Dictionary) -> void:
 				for sk: Dictionary in GameData.hunter.skills:
 					if learned.has(str(sk.get("id", ""))):
 						skill_text += " · 기술 '%s' 를 배웠어요!" % str(sk.get("name", ""))
+				# v0.28.8 전직했으면 기술 포인트도, 전직할 레벨이 되면 알림.
+				if not Net.job_id().is_empty():
+					skill_text += " · 기술 포인트 +%d" % GameData.hunter.job_per_level
+				elif int(info.get("lv", 1)) == GameData.hunter.job_level:
+					skill_text += " · 전직할 수 있어요! (헌터넷 · 전직)"
 				toast_hud.show_toast("레벨 업! Lv.%d — 스탯 포인트 %d (헌터넷 · 능력치)%s" % [int(info.get("lv", 1)), int(info.get("sp", 0)), skill_text], true)
 			Audio.play_sfx("level_up", -2.0)
 			Prefs.vibrate(120, 0.6)
@@ -194,6 +199,20 @@ func _on_done(info: Dictionary) -> void:
 		"awaken_use":
 			if toast_hud != null:
 				toast_hud.show_toast("%s!" % str(GameData.hunter.awaken(str(info.get("a", ""))).get("name", "")), true)
+		"job":
+			if toast_hud != null:
+				var job: Dictionary = GameData.hunter.job(str(info.get("j", "")))
+				toast_hud.show_toast("전직! %s — 기술 포인트 %d (헌터넷 · 전직)" % [str(job.get("name", "")), int(info.get("jp", 0))], true)
+			Audio.play_sfx("fanfare_big", -4.0)
+			Prefs.vibrate(200, 0.8)
+		"skill":
+			if toast_hud != null:
+				var node: Dictionary = GameData.hunter.job_node(Net.job_id(), str(info.get("n", "")))
+				toast_hud.show_toast("'%s' %d단계!" % [str(node.get("name", "")), int(info.get("v", 1))], true)
+			Audio.play_sfx("level_up", -6.0, 1.2)
+		"skill_reset":
+			if toast_hud != null:
+				toast_hud.show_toast("기술을 초기화했어요 — 포인트 %d" % int(info.get("jp", 0)), true)
 		"remote_level":
 			if toast_hud != null and int(info.get("id", 0)) != Net.my_id:
 				toast_hud.show_toast("%s 님이 Lv.%d 가 됐어요" % [GameData.player_name(int(info.get("id", 0))), int(info.get("lv", 1))], true)
@@ -219,7 +238,7 @@ func _on_guild(msg: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
-	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind == "gate_enter" or kind == "gate_leave"):
+	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind.begins_with("skill_") or kind == "class_pick" or kind == "gate_enter" or kind == "gate_leave"):
 		return
 	var text: String = ""
 	match code:
@@ -247,6 +266,22 @@ func _on_failed(kind: String, code: String) -> void:
 			text = "그 각성이 없어요"
 		"cooling_down":
 			text = "아직 다시 쓸 수 없어요"
+		"job_taken":
+			text = "이미 전직했어요"
+		"job_level":
+			text = "전직은 Lv.%d 부터예요" % GameData.hunter.job_level
+		"no_skill_point":
+			text = "기술 포인트가 없어요 — 레벨이 오르면 받아요"
+		"skill_maxed":
+			text = "끝까지 배운 기술이에요"
+		"skill_locked":
+			text = "아직 배울 수 없어요 — 앞 기술 · 이 나무에 쓴 포인트를 확인해요"
+		"no_active":
+			text = "그 기술을 배우지 않았어요"
+		"no_ammo":
+			text = "석궁을 들고 화살이 있어야 해요"
+		NetProtocol.ERR_NOT_ENOUGH_SOL:
+			text = "솔이 모자라요"
 		NetProtocol.ERR_GATE_BROKEN:
 			text = "던전 브레이크 중이에요! 들어갈 수 없어요"
 		NetProtocol.ERR_NO_GATE:

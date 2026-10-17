@@ -1865,7 +1865,12 @@ export function createServer(overrides = {}) {
       case 'stat_up':
       case 'awaken':
       case 'awaken_use':
+      case 'class_pick':
+      case 'skill_up':
+      case 'skill_reset':
         return hunter.handle(ctx, msg, fail);
+      case 'skill_use':
+        return survival.handleSkill(ctx, msg, fail);
       case 'gate_enter':
       case 'gate_leave':
         return survival.handleGate(ctx, msg, fail);
@@ -2122,6 +2127,10 @@ export function createServer(overrides = {}) {
       case 'stat_up':
       case 'awaken':
       case 'awaken_use':
+      case 'class_pick':
+      case 'skill_up':
+      case 'skill_reset':
+      case 'skill_use':
       case 'gate_enter':
       case 'gate_leave':
       case 'dodge':

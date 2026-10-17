@@ -26,7 +26,18 @@ export function loadHunter(raw, isKnown) {
   const ranks = raw.ranks.list.map((r, i) => ({ ...r, index: i }));
   for (const list of Object.values(raw.kill?.mana ?? {})) for (const e of list) if (!isKnown(e.id)) throw new Error(`hunter mana: unknown item ${e.id}`);
   for (const id of raw.office?.sell_items ?? []) if (!isKnown(id)) throw new Error(`hunter office: unknown item ${id}`);
-  return { ...raw, ranks, rankById: new Map(ranks.map((r) => [r.id, r])), bountyById: new Map(raw.bounty.pool.map((b) => [b.id, b])) };
+  // v0.28.8 전직 · 기술 나무: 앞선 기술 · 액티브가 있어야 한다.
+  const J = raw.level?.jobs;
+  const jobById = new Map();
+  for (const job of J?.list ?? []) {
+    const ids = new Set(job.tree.map((n) => n.id));
+    for (const n of job.tree) {
+      for (const r of n.req ?? []) if (!ids.has(r)) throw new Error(`hunter job ${job.id}: ${n.id} needs unknown ${r}`);
+      if (n.active && !J.actives?.[n.active]) throw new Error(`hunter job ${job.id}: unknown active ${n.active}`);
+    }
+    jobById.set(job.id, { ...job, nodeById: new Map(job.tree.map((n) => [n.id, n])) });
+  }
+  return { ...raw, ranks, rankById: new Map(ranks.map((r) => [r.id, r])), bountyById: new Map(raw.bounty.pool.map((b) => [b.id, b])), jobById };
 }
 
 /** 저장된 헌터 기록 { rank, pts, kills, bday, bprog: { id: n }, bdone: [id] } (모양이 틀리면 새로). */
@@ -48,8 +59,47 @@ export function sanitizeHunter(raw, rules) {
     st: Object.fromEntries(Object.keys(rules?.level?.stats ?? {}).map((k) => [k, Math.max(0, Math.min(rules.level.stats[k].cap ?? 99, intOr(h.st?.[k], 0)))])),
     // v0.28.5 고른 각성 (순서대로, 자리 수까지).
     aw: Array.isArray(h.aw) ? [...new Set(h.aw.filter((a) => rules?.level?.awaken?.list?.some((x) => x.id === a)))].slice(0, rules?.level?.awaken?.slots?.length ?? 0) : [],
+    // v0.28.8 직업 · 남은 기술 포인트 · 배운 기술 (id → 단계).
+    ...sanitizeJob(h, rules, intOr),
   };
 }
+
+function sanitizeJob(h, rules, intOr) {
+  const job = typeof h.job === 'string' ? rules?.jobById?.get(h.job) : null;
+  if (!job) return { job: '', jp: 0, jt: {} };
+  const jt = {};
+  for (const [id, n] of Object.entries(h.jt ?? {})) {
+    const node = job.nodeById.get(id);
+    if (node && Number.isInteger(n) && n > 0) jt[id] = Math.min(n, node.max);
+  }
+  return { job: job.id, jp: Math.max(0, intOr(h.jp, 0)), jt };
+}
+
+/** v0.28.8 그 레벨에서 전직하면 받는 기술 포인트 (전직 레벨부터 레벨마다). */
+export function jobPointsAt(rules, lv) {
+  const J = rules?.level?.jobs;
+  return J ? Math.max(0, lv - J.level + 1) * J.per_level : 0;
+}
+
+/** 배운 기술이 주는 값의 합 (fx[key] × 단계). */
+export function jobFx(rules, profile, key) {
+  const h = profile?.hunter;
+  const job = h?.job ? rules?.jobById?.get(h.job) : null;
+  if (!job) return 0;
+  let sum = 0;
+  for (const [id, n] of Object.entries(h.jt ?? {})) sum += (job.nodeById.get(id)?.fx?.[key] ?? 0) * n;
+  return sum;
+}
+
+/** 그 액티브 기술을 배웠는지. */
+export function hasActive(rules, profile, active) {
+  const h = profile?.hunter;
+  const job = h?.job ? rules?.jobById?.get(h.job) : null;
+  return Boolean(job) && job.tree.some((n) => n.active === active && (h.jt?.[n.id] ?? 0) > 0);
+}
+
+/** 이 나무에 쓴 포인트. */
+const spentOf = (h) => Object.values(h.jt ?? {}).reduce((a, b) => a + b, 0);
 
 /** 다음 레벨까지 경험치. */
 export function xpToNext(rules, lv) {
@@ -161,6 +211,8 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       skills: (H.level?.skills ?? []).filter((sk) => h.lv >= sk.level).map((sk) => sk.id),
       aw: [...h.aw], awSlots: awakenSlots(H, h.lv),
       awReady: Object.fromEntries(h.aw.map((a) => [a, Math.max(0, (player.awReady?.[a] ?? 0) - now())])),
+      job: h.job, jp: h.jp, jt: { ...h.jt },
+      jReady: Object.fromEntries(Object.keys(H.level?.jobs?.actives ?? {}).filter((a) => hasActive(H, player.profile, a)).map((a) => [a, Math.max(0, (player.skReady?.[a] ?? 0) - now())])),
     };
   }
 
@@ -175,6 +227,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       h.xp -= xpToNext(H, h.lv);
       h.lv++;
       h.sp += L.points_per_level;
+      if (h.job) h.jp += L.jobs?.per_level ?? 0;
       ups++;
     }
     if (h.lv >= L.max) h.xp = 0;
@@ -403,6 +456,57 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         room.broadcast({ t: 'awaken_fx', id: player.id, a: def.id, ms: def.ms });
         return;
       }
+      // ---- v0.28.8 전직 · 기술 나무 ----
+      case 'class_pick': {
+        const J = H.level?.jobs;
+        const job = H.jobById?.get(msg.j);
+        const h = rec(player);
+        if (!J || !job) return fail(ErrorCode.badItem);
+        if (h.job) return fail(ErrorCode.jobTaken);
+        if (h.lv < J.level) return fail(ErrorCode.jobLevel);
+        h.job = job.id;
+        h.jp = jobPointsAt(H, h.lv);
+        h.jt = {};
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'job', j: job.id, jp: h.jp });
+        room.broadcast({ t: 'hunter_job', id: player.id, j: job.id }, player.id);
+        sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'skill_up': {
+        const J = H.level?.jobs;
+        const h = rec(player);
+        const job = h.job ? H.jobById?.get(h.job) : null;
+        const node = job?.nodeById.get(msg.n);
+        if (!J || !node) return fail(ErrorCode.badItem);
+        if (h.jp <= 0) return fail(ErrorCode.noSkillPoint);
+        if ((h.jt[node.id] ?? 0) >= node.max) return fail(ErrorCode.skillMaxed);
+        if (spentOf(h) < (node.row - 1) * J.row_gate || (node.req ?? []).some((r) => (h.jt[r] ?? 0) <= 0)) return fail(ErrorCode.skillLocked);
+        h.jp--;
+        h.jt[node.id] = (h.jt[node.id] ?? 0) + 1;
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'skill', n: node.id, v: h.jt[node.id], jp: h.jp });
+        sendHunter(room, player);
+        if (node.fx?.hp) onVit?.(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'skill_reset': {
+        const J = H.level?.jobs;
+        const h = rec(player);
+        if (!J || !h.job) return fail(ErrorCode.badItem);
+        const spent = spentOf(h);
+        if (spent <= 0) return fail(ErrorCode.badItem);
+        if ((player.profile.sol ?? 0) < J.reset_sol) return fail(ErrorCode.notEnoughSol);
+        player.profile.sol -= J.reset_sol;
+        h.jp += spent;
+        h.jt = {};
+        sendProfile(player);
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'skill_reset', jp: h.jp, cost: J.reset_sol });
+        sendHunter(room, player);
+        onVit?.(room, player);
+        saveRoom(room);
+        return;
+      }
       case 'guild_create': {
         const name = typeof msg.name === 'string' ? msg.name.replace(/[\u0000-\u001f\u007f]/g, '').trim() : '';
         if ([...name].length < H.guild.name_min || [...name].length > H.guild.name_max) return fail(ErrorCode.badGuildName);
@@ -444,10 +548,17 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
   const rankWire = (player) => (H ? rec(player).rank : '');
 
   /** 스탯이 주는 값 (survival · server 가 쓴다). */
+  const fx = (player, key) => jobFx(H, player.profile, key);
   const bonus = {
     damage: (player) => 1 + statOf(H, player.profile, 'str') * (H?.level?.stats?.str?.damage ?? 0),
-    hp: (player) => Math.floor(statOf(H, player.profile, 'vit') * (H?.level?.stats?.vit?.hp_per ?? 0)),
-    speed: (player) => (1 + statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.speed ?? 0)) * ((player.shadowUntil ?? 0) > now() ? 1 + (H?.level?.awaken?.list?.find((x) => x.id === 'shadow')?.speed ?? 0) : 1),
+    // v0.28.8 기술 나무: 무기 갈래 (근접 · 원거리) 와 모든 피해 배율.
+    weapon: (player, w) => 1 + fx(player, 'dmg') + (w?.ammo ? fx(player, 'ranged') : fx(player, 'melee')),
+    hp: (player) => Math.floor(statOf(H, player.profile, 'vit') * (H?.level?.stats?.vit?.hp_per ?? 0)) + fx(player, 'hp'),
+    speed: (player) => (1 + statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.speed ?? 0)) * (1 + fx(player, 'speed')) * ((player.shadowUntil ?? 0) > now() ? 1 + (H?.level?.awaken?.list?.find((x) => x.id === 'shadow')?.speed ?? 0) : 1),
+    fx,
+    active: (player, a) => hasActive(H, player.profile, a),
+    activeDef: (a) => H?.level?.jobs?.actives?.[a] ?? null,
+    critBase: () => H?.level?.jobs?.crit_base ?? 2,
     // v0.28.5 각성: 그림자 걸음 중이면 크리처가 보지 못한다 · 마력 방패가 공격을 막는다 (막았으면 true).
     hidden: (player) => (player.shadowUntil ?? 0) > now(),
     block: (player) => {
@@ -455,7 +566,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       player.shieldHits--;
       return true;
     },
-    cooldown: (player) => 1 - statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.cooldown ?? 0),
+    cooldown: (player) => (1 - statOf(H, player.profile, 'agi') * (H?.level?.stats?.agi?.cooldown ?? 0)) * Math.max(0.4, 1 - fx(player, 'cd')),
     skill: (player, id) => hasSkill(H, player.profile, id),
     skillDef: (id) => H?.level?.skills?.find((x) => x.id === id) ?? null,
   };

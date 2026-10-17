@@ -1,5 +1,5 @@
 // 클라이언트(core/protocol/net_protocol.gd)와 반드시 같은 값을 유지한다. 상세: docs/protocol.md
-export const PROTOCOL_VERSION = 30;
+export const PROTOCOL_VERSION = 31;
 
 // v12: 말풍선(say) — 한 사람이 보내는 대사 간격(ms)과 최대 글자 수.
 export const SAY_GAP_MS = 250;
@@ -154,6 +154,13 @@ export const ErrorCode = Object.freeze({
   noAwakenSlot: 'no_awaken_slot', // v0.28.5 각성을 고를 자리가 없다 (레벨)
   notAwakened: 'not_awakened', // v0.28.5 그 각성이 없다
   coolingDown: 'cooling_down', // v0.28.5 아직 다시 쓸 수 없다
+  jobTaken: 'job_taken', // v0.28.8 이미 전직했다
+  jobLevel: 'job_level', // v0.28.8 전직하기에 레벨이 모자란다
+  noSkillPoint: 'no_skill_point', // v0.28.8 기술 포인트가 없다
+  skillMaxed: 'skill_maxed', // v0.28.8 그 기술은 끝까지 배웠다
+  skillLocked: 'skill_locked', // v0.28.8 앞 기술 · 줄 조건이 모자란다
+  noActive: 'no_active', // v0.28.8 그 액티브 기술을 배우지 않았다
+  noAmmo: 'no_ammo', // v0.28.8 쏠 화살이 없다 (석궁을 들어야 한다)
   notHungry: 'not_hungry', // v0.28.7 배도 부르고 목도 마르지 않다
   notOnWater: 'not_on_water', // v20: 보트는 물 위(내 곁 park_range 안)에만 부를 수 있다
   noLanding: 'no_landing', // v20: 보트에서 내릴 땅이 곁에 없다

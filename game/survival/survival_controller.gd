@@ -135,6 +135,16 @@ func _ready() -> void:
 	Net.knocked_out.connect(_on_ko)
 	Net.looted.connect(_on_looted)
 	Net.swung.connect(_on_swung)
+	# v0.28.8 동료가 휘두르면 그 무기 궤적 · 소리, 직업 기술 · 버티기 그림.
+	Net.peer_action.connect(func(id: int, kind: String, item: String) -> void:
+		if kind != "swing":
+			return
+		var r: RemotePlayer = _remote_node(id)
+		if r != null:
+			var wid: String = item if GameData.survival.weapons.has(item) else "hands"
+			WeaponFx.swing(r.get_parent(), r, r.body, wid))
+	Net.skill_fx.connect(_on_skill_fx)
+	Net.guard_blocked.connect(_on_guard_blocked)
 	Net.request_failed.connect(_on_failed)
 	Net.boarded.connect(_on_boarded)
 	Net.sleep_changed.connect(_on_sleep_changed)
@@ -231,7 +241,9 @@ func pick_target(position: Vector3, margin: float = 0.3) -> String:
 		var w: SurvivalRules.Weapon = held_weapon()
 		# 기술이 있으면 달릴 때 더 먼 크리처도 노린다.
 		var reach: float = HunterApp.skill_reach("run_attack") if _is_running() and Net.has_skill("run_attack") else 0.0
-		var near: String = creatures.nearest(position, w.range_m + 0.4 + reach)
+		# v0.28.8 사수 '멀리 쏘기': 원거리 사거리 +.
+		var job_reach: float = Net.job_fx("range_ranged") if not w.ammo.is_empty() else 0.0
+		var near: String = creatures.nearest(position, w.range_m + 0.4 + reach + job_reach)
 		if not near.is_empty():
 			return TARGET_ATTACK + near
 	var best: String = ""
@@ -276,6 +288,12 @@ func _flicker(delta: float) -> void:
 
 
 ## 손에 든 무기 (v0.28.5 석궁은 화살이 없으면 맨손 — 서버와 같다).
+## 지금 휘두르는 무기 id (화살 없는 석궁 · 무기가 아닌 것은 hands).
+func held_weapon_id() -> String:
+	var w: SurvivalRules.Weapon = held_weapon()
+	return "hands" if w == GameData.survival.weapon_of("hands") else (player.held_item if player != null else "hands")
+
+
 func held_weapon() -> SurvivalRules.Weapon:
 	var rules: SurvivalRules = GameData.survival
 	var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item if player != null else "")
@@ -379,7 +397,7 @@ func activate(target: String, auto: bool = false) -> void:
 			return
 		var w: SurvivalRules.Weapon = held_weapon()
 		# 민첩만큼 공격 간격이 짧다.
-		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown"))
+		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown")) * maxf(0.4, 1.0 - Net.job_fx("cd"))
 		var at: Vector3 = creatures.actor_position(target.trim_prefix(TARGET_ATTACK))
 		var run: bool = _is_running()
 		# v0.28.1 달리며 공격: 기술이 있으면 멈추지 않고 돌진해 벤다, 없으면 달리다 휘두르면 잠깐 멈춘다.
@@ -397,7 +415,8 @@ func activate(target: String, auto: bool = false) -> void:
 				player.set_input_lock(SWING_LOCK, true)
 				get_tree().create_timer(0.35).timeout.connect(func() -> void: player.set_input_lock(SWING_LOCK, false))
 		player.play_chop()
-		Audio.play_sfx("chop", -10.0, 1.3)
+		# v0.28.8 무기마다 다른 바람 소리 · 궤적 (WeaponFx).
+		WeaponFx.swing(player.get_parent(), player, player.body, held_weapon_id())
 		Net.attack(run)
 		return
 	if target.begins_with(TARGET_REVIVE):
@@ -464,6 +483,67 @@ func _on_looted(info: Dictionary) -> void:
 func _on_swung(info: Dictionary) -> void:
 	if str(info.get("hit", "")).is_empty():
 		Audio.play_sfx("chop", -16.0, 1.6)
+
+
+## 그 사람 몸 (나 · 동료).
+func _who(id: int) -> Node3D:
+	return player if id == Net.my_id else _remote_node(id)
+
+
+## v0.28.8 직업 액티브 기술 그림 · 소리 (나 · 동료 모두). 피해 · 치유는 서버가 따로 알린다 (creature_hit · hp).
+func _on_skill_fx(info: Dictionary) -> void:
+	var id: int = int(info.get("id", 0))
+	var who: Node3D = _who(id)
+	var at: Vector3 = who.global_position if who != null else Vector3(float(info.get("x", 0.0)), 0.0, float(info.get("z", 0.0)))
+	var yaw: float = float(info.get("yaw", 0.0))
+	var parent: Node = player.get_parent() if player != null else self
+	var a: String = str(info.get("a", ""))
+	var def: Dictionary = GameData.hunter.job_actives.get(a, {})
+	var col: Color = Color(str(def.get("color", "#FFFFFF")))
+	match a:
+		"whirl":
+			Audio.play_at("skill_whirl", at, 0.0)
+			var r: float = float(info.get("r", 2.8))
+			Fx.slash(parent, at, yaw, col, r * 0.85, 360.0, 0.9, 0.34, 0.6, 0.0, true)
+			Fx.slash(parent, at, yaw + PI, Color("#FFD0A0"), r * 0.6, 300.0, 1.15, 0.3, 0.35, 0.0, true)
+			Fx.ring_wave(parent, at, col, r, 0.45)
+			Fx.dust_ring(parent, at, r * 0.5, Color("#8A7A66"))
+			if who != null and who.has_method("play_chop"):
+				who.call("play_chop")
+		"ambush":
+			Audio.play_at("skill_ambush", at, -2.0)
+			Fx.burst(parent, at + Vector3(0.0, 0.9, 0.0), false, 18, 0.9, Vector3.UP, 80.0, Vector2(0.3, 1.0), 0.6, Vector2(0.3, 0.6), Color(0.25, 0.1, 0.4, 0.75), Color(0.1, 0.0, 0.2, 0.4), true, 1.5, 0.4)
+			Fx.sparkle_column(parent, at, col, 0.5)
+		"pierce":
+			Audio.play_at("skill_pierce", at, 0.0)
+			var fwd: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+			var from: Vector3 = at + Vector3(0.0, 1.2, 0.0) + fwd * 0.5
+			Fx.beam(parent, from, from + fwd * float(info.get("len", 14.0)), col, 0.5, 0.4)
+			Fx.flash(parent, from, Color("#DFF2FF"), 1.0)
+		"mend":
+			Audio.play_at("skill_mend", at, -2.0)
+			var mr: float = float(info.get("r", 6.0))
+			Fx.ring_wave(parent, at, col, mr, 0.8, 0.6)
+			Fx.sparkle_column(parent, at, col, 0.6)
+			for hid: Variant in info.get("n", []):
+				var h: Node3D = _who(int(hid))
+				if h != null and h != who:
+					Fx.sparkle_column(parent, h.global_position, col, 0.5)
+	if id == Net.my_id and toast_hud != null and not def.is_empty():
+		toast_hud.show_toast("%s!" % str(def.get("name", a)), true)
+
+
+## v0.28.8 전사 '버티기' 로 막았다: 둔탁한 소리 · 번쩍 · '막음!'.
+func _on_guard_blocked(id: int) -> void:
+	var who: Node3D = _who(id)
+	if who == null:
+		return
+	var at: Vector3 = who.global_position + Vector3(0.0, 1.1, 0.0)
+	Audio.play_at("guard_block", at, -2.0)
+	Fx.flash(who.get_parent(), at, Color("#FFC890"), 1.0)
+	Fx.sparks(who.get_parent(), at, Vector3.UP, 10, Color("#FFB070"))
+	if id == Net.my_id and toast_hud != null:
+		toast_hud.show_toast("버티기 — 막았다!", true)
 
 
 func _on_hurt(info: Dictionary) -> void:

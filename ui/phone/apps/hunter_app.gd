@@ -9,6 +9,9 @@ const GOLD: Color = Color("#C89A20")
 var _tab: int = 0
 var _name_edit: LineEdit = null
 var _gate_states: Dictionary[String, String] = {}
+## v0.28.8 전직 탭에서 고른 기술 (설명 · 배우기) · 전직 전에 살펴보는 직업.
+var _node: String = ""
+var _peek_job: String = ""
 
 
 func _ready() -> void:
@@ -26,15 +29,17 @@ func _ready() -> void:
 func _build() -> void:
 	clear()
 	add_child(HunterWindow.license_card(false))
-	tabs(PackedStringArray(["능력치", "의뢰", "길드", "등급표"]), _tab, func(i: int) -> void:
+	tabs(PackedStringArray(["능력치", "전직", "의뢰", "길드", "등급표"]), _tab, func(i: int) -> void:
 		_tab = i
 		_build())
 	match _tab:
 		0:
 			_build_stats()
 		1:
-			_build_bounties()
+			_build_job()
 		2:
+			_build_bounties()
+		3:
 			_build_guild()
 		_:
 			_build_ranks()
@@ -250,6 +255,112 @@ func _build_stats() -> void:
 		kc.get_parent().name = "Skill_%s" % str(sk.get("id", ""))
 		kc.add_child(label("%s %s · Lv.%d" % ["✔" if learned else "🔒", str(sk.get("name", "")), int(sk.get("level", 1))], 28, GOOD if learned else SOFT))
 		kc.add_child(label(str(sk.get("desc", "")), 22, SOFT))
+
+
+# ---- v0.28.8 전직 · 기술 나무 ----
+
+func _build_job() -> void:
+	var rules: HunterRules = GameData.hunter
+	var lv: int = int(Net.hunter.get("lv", 1))
+	var job: String = Net.job_id()
+	if job.is_empty():
+		_build_job_pick(rules, lv)
+		return
+	var def: Dictionary = rules.job(job)
+	var jc: Color = Color(str(def.get("color", "#E0603A")))
+	var learned: Dictionary = Net.job_learned()
+	var jp: int = int(Net.hunter.get("jp", 0))
+	var head: VBoxContainer = card()
+	head.get_parent().name = "JobCard"
+	head.add_child(label("%s · Lv.%d" % [str(def.get("name", job)), lv], 40, jc))
+	var pts: Label = label("남은 기술 포인트 %d" % jp if jp > 0 else "레벨이 오를 때마다 기술 포인트 %d" % rules.job_per_level, 26, WARN if jp > 0 else SOFT)
+	pts.name = "SkillPoints"
+	head.add_child(pts)
+	head.add_child(label("줄을 내려갈수록 이 나무에 포인트를 %d씩 더 써야 해요. 마름모는 액티브 기술 (HUD 둥근 단추)." % rules.job_row_gate, 22, SOFT))
+	var tree: SkillTreeView = SkillTreeView.new()
+	tree.name = "SkillTree"
+	tree.setup(job, learned, jp, _node, view_width() - 40.0)
+	tree.picked.connect(func(id: String) -> void:
+		_node = id
+		_build())
+	add_child(tree)
+	if not _node.is_empty() and not rules.job_node(job, _node).is_empty():
+		var n: Dictionary = rules.job_node(job, _node)
+		var rank: int = int(learned.get(_node, 0))
+		var dc: VBoxContainer = card()
+		dc.get_parent().name = "NodeCard"
+		var row: HBoxContainer = HBoxContainer.new()
+		dc.add_child(row)
+		var nl: Label = label("%s  %d/%d" % [str(n.get("name", _node)), rank, int(n.get("max", 1))], 32, INK, false)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(nl)
+		var block: String = rules.job_node_block(job, learned, jp, _node)
+		var learn: Button = button("배우기", 28, INK, block.is_empty())
+		learn.name = "SkillUp"
+		learn.custom_minimum_size = Vector2(150, 72)
+		learn.disabled = not block.is_empty()
+		var nid: String = _node
+		learn.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Net.skill_up(nid))
+		row.add_child(learn)
+		dc.add_child(label(str(n.get("desc", "")), 24, INK))
+		var act: String = str(n.get("active", ""))
+		if not act.is_empty():
+			var ad: Dictionary = rules.job_actives.get(act, {})
+			dc.add_child(label("다시 쓰기까지 %d초" % roundi(float(ad.get("cooldown_ms", 0)) / 1000.0), 22, SOFT))
+		if not block.is_empty():
+			dc.add_child(label(block, 22, WARN if rank == 0 else SOFT))
+	else:
+		add_child(label("기술을 누르면 설명이 나와요.", 22, SOFT))
+	var spent: int = 0
+	for id: Variant in learned:
+		spent += int(learned[id])
+	if spent > 0:
+		var reset: Button = button("기술 초기화 (%s — 포인트를 돌려받아요, 직업은 그대로)" % Money.sol(rules.job_reset_sol), 24, INK)
+		reset.name = "SkillReset"
+		reset.disabled = Net.sol < rules.job_reset_sol
+		reset.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			_node = ""
+			Net.skill_reset())
+		add_child(reset)
+
+
+func _build_job_pick(rules: HunterRules, lv: int) -> void:
+	var ready: bool = lv >= rules.job_level
+	add_child(label("전직 %s" % ("— 직업 하나를 고르세요 (바꿀 수 없어요)" if ready else "은 Lv.%d 부터 (지금 Lv.%d)" % [rules.job_level, lv]), 30, WARN if ready else INK))
+	add_child(label("전직하면 Lv.%d 부터 레벨마다 기술 포인트 %d을 받아 기술 나무를 키워요 (지난 레벨 몫까지)." % [rules.job_level, rules.job_per_level], 22, SOFT))
+	for e: Dictionary in rules.jobs:
+		var jid: String = str(e.get("id", ""))
+		var jc: Color = Color(str(e.get("color", "#E0603A")))
+		var c: VBoxContainer = card()
+		c.get_parent().name = "Job_%s" % jid
+		var row: HBoxContainer = HBoxContainer.new()
+		c.add_child(row)
+		var nl: Label = label(str(e.get("name", jid)), 36, jc, false)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(nl)
+		var look: Button = button("나무 보기" if _peek_job != jid else "접기", 24, INK, _peek_job == jid)
+		look.custom_minimum_size = Vector2(140, 64)
+		look.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			_peek_job = "" if _peek_job == jid else jid
+			_build())
+		row.add_child(look)
+		var pick: Button = button("전직", 28, INK, ready)
+		pick.name = "JobPick_%s" % jid
+		pick.custom_minimum_size = Vector2(130, 64)
+		pick.disabled = not ready
+		pick.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Net.class_pick(jid))
+		row.add_child(pick)
+		c.add_child(label(str(e.get("desc", "")), 22, SOFT))
+		if _peek_job == jid:
+			for n: Variant in e.get("tree", []):
+				var node: Dictionary = n
+				c.add_child(label("%s %s (최대 %d) — %s" % ["◆" if not str(node.get("active", "")).is_empty() else "●", str(node.get("name", "")), int(node.get("max", 1)), str(node.get("desc", ""))], 22, INK))
 
 
 ## 스탯 값이 주는 효과 글자.

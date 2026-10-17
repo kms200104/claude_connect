@@ -529,14 +529,16 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const needWater = nour?.water && (pr.water ?? NE.max) < NE.max - 1;
     if (hpOf(player) >= maxOf(player) && !needFood && !needWater) return fail(nour ? ErrorCode.notHungry : ErrorCode.hpFull);
     removeAt(player.slots, msg.slot, 1);
-    if (heal) setHp(player, hpOf(player) + heal);
+    // v0.28.8 치유사 '응급 처치': 치료 아이템이 더 채운다.
+    const healed = heal ? heal + (hunter?.bonus.fx(player, 'heal') ?? 0) : 0;
+    if (heal) setHp(player, hpOf(player) + healed);
     if (nour) {
       pr.food = Math.min(NE.max, (pr.food ?? NE.max) + (nour.food ?? 0));
       pr.water = Math.min(NE.max, (pr.water ?? NE.max) + (nour.water ?? 0));
       sendTo(player, needsWire(player));
     }
     sendInventory(player);
-    send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal: heal ?? 0, food: nour?.food ?? 0, water: nour?.water ?? 0 });
+    send(ctx.ws, { t: 'hp', rid: msg.rid, ...hpWire(player), item: slot.id, heal: healed, food: nour?.food ?? 0, water: nour?.water ?? 0 });
     if ((SC?.stops ?? []).includes(slot.id) || hpOf(player) >= maxOf(player)) stopBleeding(ctx.room, player);
   }
 
@@ -549,9 +551,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (player.downed || player.sleeping) return fail(ErrorCode.downed);
     const t = now();
     if (t < (player.dodgeReadyAt ?? 0)) return fail(ErrorCode.coolingDown);
-    player.dodgeReadyAt = t + D.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) - 60;
+    player.dodgeReadyAt = t + D.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) * Math.max(0.4, 1 - (hunter?.bonus.fx(player, 'dodge_cd') ?? 0)) - 60;
     player.dodgeUntil = t + D.ms + 150;
-    player.dodgeIframeUntil = t + D.iframe_ms;
+    player.dodgeIframeUntil = t + D.iframe_ms + (hunter?.bonus.fx(player, 'iframe') ?? 0);
     send(ctx.ws, { t: 'dodge_ok', rid: msg.rid, ms: D.ms, dist: D.dist });
   }
 
@@ -601,6 +603,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       room.broadcast({ t: 'shield_block', id: player.id, left: player.shieldHits ?? 0 });
       return;
     }
+    // v0.28.8 전사 '버티기': 확률로 막는다.
+    const guard = hunter?.bonus.fx(player, 'block') ?? 0;
+    if (guard > 0 && random() < guard) {
+      room.broadcast({ t: 'guard_block', id: player.id });
+      return;
+    }
     wake(room, player);
     setHp(player, hpOf(player) - damage);
     sendTo(player, { t: 'hurt', ...hpWire(player), by });
@@ -648,9 +656,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (!target?.downed || target === player) return fail(ErrorCode.notDowned);
     if (Math.hypot(target.x - player.x, target.z - player.z) > D.revive_range + 0.3) return fail(ErrorCode.tooFar);
     target.downed.by = player.id;
-    target.downed.doneAt = now() + D.revive_ms;
-    send(ctx.ws, { t: 'reviving', rid: msg.rid, id: target.id, ms: D.revive_ms });
-    room.broadcast({ t: 'revive', id: target.id, by: player.id, ms: D.revive_ms });
+    // v0.28.8 치유사 '빠른 손'.
+    const ms = Math.round(D.revive_ms * Math.max(0.3, 1 - (hunter?.bonus.fx(player, 'revive') ?? 0)));
+    target.downed.doneAt = now() + ms;
+    send(ctx.ws, { t: 'reviving', rid: msg.rid, id: target.id, ms });
+    room.broadcast({ t: 'revive', id: target.id, by: player.id, ms });
   }
 
   function handleGiveUp(ctx, msg, fail) {
@@ -697,7 +707,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const perMs = (S.player.day_regen_per_world_hour ?? 1) * (clock.worldScale ?? 1) / HOUR_MS;
     for (const p of room.players.values()) {
       if (!p.online || p.downed || hpOf(p) >= maxOf(p) || starving(p)) continue;
-      p.regenAcc = (p.regenAcc ?? 0) + perMs * dtMs;
+      p.regenAcc = (p.regenAcc ?? 0) + perMs * dtMs * (1 + (hunter?.bonus.fx(p, 'regen') ?? 0));
       if (p.regenAcc >= 1) {
         const add = Math.floor(p.regenAcc);
         p.regenAcc -= add;
@@ -716,8 +726,10 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       if (!p.online || p.downed || p.sleeping) continue;
       const pr = p.profile;
       const before = [Math.round(pr.food ?? NE.max), Math.round(pr.water ?? NE.max)];
-      pr.food = Math.max(0, (pr.food ?? NE.max) - NE.food_per_world_hour * hours);
-      pr.water = Math.max(0, (pr.water ?? NE.max) - NE.water_per_world_hour * hours);
+      // v0.28.8 치유사 '절제': 덜 준다.
+      const slow = Math.max(0.2, 1 - (hunter?.bonus.fx(p, 'needs') ?? 0));
+      pr.food = Math.max(0, (pr.food ?? NE.max) - NE.food_per_world_hour * hours * slow);
+      pr.water = Math.max(0, (pr.water ?? NE.max) - NE.water_per_world_hour * hours * slow);
       if (Math.round(pr.food) !== before[0] || Math.round(pr.water) !== before[1]) sendTo(p, needsWire(p));
       if (starving(p)) {
         p.starveAcc = (p.starveAcc ?? 0) + hours;
@@ -835,6 +847,13 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     room.broadcast({ t: 'creature_dead', id: c.id, by, x: round(c.x), z: round(c.z) });
     // v0.28 헌터: 처치 점수 · 마석 · 의뢰.
     if (by) hunter?.onKill(room, room.players.get(by), c);
+    // v0.28.8 암살자 '사냥감': 쓰러뜨리면 확률로 체력 1.
+    const killer = by ? room.players.get(by) : null;
+    const reap = killer ? (hunter?.bonus.fx(killer, 'kill_heal') ?? 0) : 0;
+    if (reap > 0 && !killer.downed && hpOf(killer) < maxOf(killer) && random() < reap) {
+      setHp(killer, hpOf(killer) + 1);
+      sendTo(killer, { t: 'hp', ...hpWire(killer), reap: 1 });
+    }
     gates.onKill(room, c, by);
     const kind = S.creatures.kinds[c.k];
     if (kind && random() < (kind.drop_chance ?? 1)) {
@@ -1302,21 +1321,30 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     wake(room, player);
     noise(room, player, 'swing');
     // 닿는 크리처 (가까운 순). 소방도끼는 cleave 만큼 한 번에 벤다.
-    const limit = w.range + 0.3 + reach;
+    // v0.28.8 기술 나무: 원거리 사거리 · 근접 휩쓸기 · 화살 아끼기.
+    const fx = (k) => hunter?.bonus.fx(player, k) ?? 0;
+    const limit = w.range + 0.3 + reach + (w.ammo ? fx('range_ranged') : 0);
     const hits = [...(room.creatures?.values() ?? [])]
       .map((c) => ({ c, d: Math.hypot(c.x - ax, c.z - az) }))
       .filter((h) => h.d <= limit)
       .sort((a, b) => a.d - b.d)
-      .slice(0, Math.max(1, w.cleave ?? 1));
+      .slice(0, Math.max(1, (w.cleave ?? 1) + (w.ammo ? 0 : fx('cleave'))));
     if (hits.length === 0) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
-    if (ammo) {
+    if (ammo && !(fx('ammo_save') > 0 && random() < fx('ammo_save'))) {
       removeWhere(player.slots, (id) => id === ammo, 1);
       sendInventory(player);
     }
+    const wid = w === S.weapons.hands ? 'hands' : player.heldItem;
+    // v0.28.8 치명타 (암살자 '급소') · 그림자 일격 (다음 한 번은 반드시 치명타 × mult).
+    const amb = (player.ambushUntil ?? 0) > t ? hunter?.bonus.activeDef('ambush') : null;
+    if (amb) player.ambushUntil = 0;
+    const crit = Boolean(amb) || (fx('crit') > 0 && random() < fx('crit'));
+    const critMult = crit ? (hunter?.bonus.critBase() ?? 2) + fx('crit_mult') : 1;
+    const wmult = (hunter?.bonus.weapon(player, w) ?? 1) * critMult * (amb ? amb.mult : 1);
     const target = hits[0].c;
     for (const { c, d } of hits) {
       // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더). v0.28.2 철갑이: 갑옷만큼 덜 받는다 (최소 1).
-      const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1);
+      const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1) * wmult;
       const armor = S.creatures.kinds[c.k]?.armor ?? 0;
       c.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
       // 맞으면 밀려난다 (못 박힌 방망이는 크게) · 비틀거린다.
@@ -1339,11 +1367,100 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         c.stunUntil = t + stun;
         c.stunImmuneUntil = t + stun * 2.5;
       }
-      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, ...(ammo ? { shot: 1, sx: round(player.x), sz: round(player.z) } : {}), ...(stun ? { stun } : {}) });
+      room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, w: wid, ...(crit ? { crit: 1 } : {}), ...(ammo ? { shot: 1, sx: round(player.x), sz: round(player.z) } : {}), ...(stun ? { stun } : {}) });
     }
-    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge, n: hits.length });
+    send(ctx.ws, { t: 'swing', rid: msg.rid, hit: target.id, hp: Math.max(0, target.hp), run: lunge, n: hits.length, ...(crit ? { crit: 1 } : {}) });
     for (const { c } of hits) if (c.hp <= 0) kill(room, c, player.id);
     room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
+  }
+
+  /** v0.28.8 기술 한 대: 피해 (갑옷만큼 덜, 최소 1) · 밀쳐냄. creature_hit 에 kind (기술 id) 를 단다. */
+  function strike(room, player, c, dmg, push, kind) {
+    const armor = S.creatures.kinds[c.k]?.armor ?? 0;
+    c.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+    const d = Math.hypot(c.x - player.x, c.z - player.z);
+    if (push > 0 && d > 0.01) {
+      const nx = c.x + ((c.x - player.x) / d) * push;
+      const nz = c.z + ((c.z - player.z) / d) * push;
+      const ch = c.inside ? S.houseById.get(c.inside) : null;
+      const def = defenses(room);
+      if (ch ? standInside(ch, nx, nz, def) : canStand(nx, nz, def)) {
+        c.x = nx;
+        c.z = nz;
+      }
+    }
+    room.broadcast({ t: 'creature_hit', id: c.id, hp: Math.max(0, c.hp), by: player.id, w: kind, sk: 1 });
+  }
+
+  /**
+   * v0.28.8 직업 액티브 기술: skill_use { a } → skill_ok { a, cd } · 모두에게 skill_fx { id, a, x, z, yaw, ... }.
+   * whirl (전사) 둘레 r m 모두 무기 피해 × mult · 밀쳐냄 / ambush (암살자) ms 안 다음 공격이 치명타 × mult /
+   * pierce (사수) 석궁을 들고 보는 쪽 len m · 폭 width 의 모두에게 석궁 피해 × mult (화살 1) / mend (치유사) 나와 r m 안 동료 체력 + heal · 지혈.
+   */
+  function handleSkill(ctx, msg, fail) {
+    const { player, room } = ctx;
+    if (!player.acceptRid(msg.rid)) return;
+    const a = typeof msg.a === 'string' ? msg.a : '';
+    const def = hunter?.bonus.activeDef(a);
+    if (!def || !hunter.bonus.active(player, a)) return fail(ErrorCode.noActive);
+    if (player.downed || player.sleeping) return fail(ErrorCode.downed);
+    const t = now();
+    player.skReady ??= {};
+    if (t < (player.skReady[a] ?? 0)) return fail(ErrorCode.coolingDown);
+    const fx = (k) => hunter.bonus.fx(player, k);
+    const fwd = { x: -Math.sin(player.yaw ?? 0), z: -Math.cos(player.yaw ?? 0) };
+    const extra = {};
+    const struck = [];
+    if (a === 'whirl') {
+      const w = S.weapons[player.heldItem] && !S.weapons[player.heldItem].ammo ? S.weapons[player.heldItem] : S.weapons.hands;
+      const dmg = w.damage * hunter.bonus.damage(player) * hunter.bonus.weapon(player, w) * def.mult * (1 + fx('whirl'));
+      for (const c of [...(room.creatures?.values() ?? [])]) {
+        if (Math.hypot(c.x - player.x, c.z - player.z) > def.r) continue;
+        strike(room, player, c, dmg, def.push, 'whirl');
+        struck.push(c);
+      }
+      extra.r = def.r;
+    } else if (a === 'ambush') {
+      player.ambushUntil = t + def.ms;
+      extra.ms = def.ms;
+    } else if (a === 'pierce') {
+      const w = S.weapons[player.heldItem];
+      if (!w?.ammo || countWhere(player.slots, (id) => id === w.ammo) <= 0) return fail(ErrorCode.noAmmo);
+      removeWhere(player.slots, (id) => id === w.ammo, 1);
+      sendInventory(player);
+      const len = def.len + fx('range_ranged');
+      const dmg = w.damage * hunter.bonus.damage(player) * hunter.bonus.weapon(player, w) * def.mult * (1 + fx('pierce'));
+      for (const c of [...(room.creatures?.values() ?? [])]) {
+        const rx = c.x - player.x;
+        const rz = c.z - player.z;
+        const along = rx * fwd.x + rz * fwd.z;
+        if (along < 0 || along > len || Math.abs(rx * fwd.z - rz * fwd.x) > def.width) continue;
+        strike(room, player, c, dmg, 0.3, 'pierce');
+        struck.push(c);
+      }
+      extra.len = len;
+    } else if (a === 'mend') {
+      const amount = def.heal + fx('mend');
+      const healed = [];
+      for (const p of room.players.values()) {
+        if (!p.online || p.downed || Math.hypot(p.x - player.x, p.z - player.z) > def.r) continue;
+        setHp(p, hpOf(p) + amount);
+        sendTo(p, { t: 'hp', ...hpWire(p), mend: amount });
+        stopBleeding(room, p);
+        healed.push(p.id);
+      }
+      extra.r = def.r;
+      extra.n = healed;
+    } else {
+      return fail(ErrorCode.noActive);
+    }
+    player.skReady[a] = t + def.cooldown_ms;
+    wake(room, player);
+    if (a !== 'mend' && a !== 'ambush') noise(room, player, 'swing');
+    send(ctx.ws, { t: 'skill_ok', rid: msg.rid, a, cd: def.cooldown_ms, n: struck.length });
+    room.broadcast({ t: 'skill_fx', id: player.id, a, x: round(player.x), z: round(player.z), yaw: round(player.yaw ?? 0), ...extra });
+    for (const c of struck) if (c.hp <= 0 && room.creatures.has(c.id)) kill(room, c, player.id);
+    if (struck.length) room.broadcast({ t: 'creatures', st: t, c: [...room.creatures.values()].map(creatureWire) });
   }
 
   /** v0.28.5 우두머리 패턴: 이번 틱을 우두머리가 썼으면 true (평소 걸음 · 공격을 건너뛴다). */
@@ -1450,5 +1567,5 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   const isDowned = (player) => Boolean(player.downed);
 
-  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleDodge, dodgeSpeed, handleGate: (ctx, msg, fail) => (msg.t === 'gate_leave' ? gates.handleLeave(ctx, msg, fail) : gates.handleEnter(ctx, msg, fail)), fixDungeon: (room, player) => gates.fixPosition(room, player), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
+  return { handleRam, handleLoot, handleUse, handleAttack, handleBoard, handleRevive, handleGiveUp, handleStash, handleSleep, handleSupply, handleDodge, handleSkill, dodgeSpeed, handleGate: (ctx, msg, fail) => (msg.t === 'gate_leave' ? gates.handleLeave(ctx, msg, fail) : gates.handleEnter(ctx, msg, fail)), fixDungeon: (room, player) => gates.fixPosition(room, player), moved, tick, regen, welcomeWire, hpWire, hpOf, night, isDowned };
 }

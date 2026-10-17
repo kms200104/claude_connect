@@ -176,12 +176,40 @@ func _run() -> void:
 		var pick3: Button = phone.app_view().find_child("AwakenPick_shadow", true, false) as Button
 		_check(pick3 != null and pick3.disabled, "자리가 다 차면 더 고를 수 없다")
 		await _shot("hunter_awaken")
+		# v0.28.8 전직 (Lv.10): 직업 카드 → '전직' → 기술 나무, 첫 줄 기술을 배운다 (포인트 1).
 		app.set("_tab", 1)
+		app.call("_build")
+		await get_tree().process_frame
+		var jp_btn: Button = app.find_child("JobPick_warrior", true, false) as Button
+		_check(jp_btn != null and not jp_btn.disabled and app.find_child("Job_ranger", true, false) != null, "전직 카드 (전사 · 사수 …)")
+		await _shot("hunter_job_pick")
+		if jp_btn != null:
+			jp_btn.pressed.emit()
+		_check(await _wait_until(func() -> bool: return Net.job_id() == "warrior" and int(Net.hunter.get("jp", 0)) == 1, 3.0), "전사로 전직 · 기술 포인트 1")
+		await get_tree().create_timer(0.3).timeout
+		var tree: SkillTreeView = app.find_child("SkillTree", true, false) as SkillTreeView
+		_check(tree != null and tree.node_button("w_power") != null and tree.node_button("w_whirl") != null, "기술 나무 (강타 · 회전 베기)")
+		if tree != null:
+			tree.node_button("w_cleave").pressed.emit()
+			await get_tree().create_timer(0.2).timeout
+			var locked: Button = app.find_child("SkillUp", true, false) as Button
+			_check(locked != null and locked.disabled, "앞 기술이 없으면 '배우기' 를 못 누른다")
+			tree = app.find_child("SkillTree", true, false) as SkillTreeView
+			tree.node_button("w_power").pressed.emit()
+			await get_tree().create_timer(0.2).timeout
+			var up: Button = app.find_child("SkillUp", true, false) as Button
+			_check(up != null and not up.disabled, "강타 '배우기'")
+			if up != null:
+				up.pressed.emit()
+			_check(await _wait_until(func() -> bool: return int(Net.job_learned().get("w_power", 0)) == 1 and int(Net.hunter.get("jp", 0)) == 0, 3.0), "강타 1단계 · 포인트 0")
+			await get_tree().create_timer(0.3).timeout
+			await _shot("hunter_skill_tree")
+		app.set("_tab", 2)
 		app.call("_build")
 		await get_tree().process_frame
 		_check(app.find_child("Bounty_*", true, false) != null, "오늘의 의뢰 카드")
 		await _shot("hunter_app")
-		app.set("_tab", 2)
+		app.set("_tab", 3)
 		app.call("_build")
 		await get_tree().process_frame
 		var edit: LineEdit = app.find_child("GuildName", true, false) as LineEdit

@@ -66,6 +66,14 @@ var skills: Array[Dictionary] = []
 ## v0.28.5 각성: 고르는 레벨들 · [{id, name, desc, active, ms, cooldown_ms, speed, hits, range}].
 var awaken_slots: Array[int] = []
 var awakens: Array[Dictionary] = []
+## v0.28.8 전직 · 기술 나무 (hunter.json level.jobs): 전직 레벨 · 레벨마다 포인트 · 줄 조건 · 초기화 값 · 액티브 (id → {name, icon, color, cooldown_ms, …}) ·
+## 직업 [{id, name, color, desc, tree: [{id, name, row, col, max, desc, req, fx, active}]}].
+var job_level: int = 10
+var job_per_level: int = 1
+var job_row_gate: int = 2
+var job_reset_sol: int = 20000
+var job_actives: Dictionary[String, Dictionary] = {}
+var jobs: Array[Dictionary] = []
 
 
 static func from_dict(d: Dictionary) -> HunterRules:
@@ -109,6 +117,18 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	for e: Variant in aw.get("list", []):
 		if e is Dictionary:
 			r.awakens.append(e)
+	var jd: Dictionary = level.get("jobs", {})
+	r.job_level = int(jd.get("level", r.job_level))
+	r.job_per_level = int(jd.get("per_level", r.job_per_level))
+	r.job_row_gate = int(jd.get("row_gate", r.job_row_gate))
+	r.job_reset_sol = int(jd.get("reset_sol", r.job_reset_sol))
+	var acts: Dictionary = jd.get("actives", {})
+	for k: Variant in acts:
+		if acts[k] is Dictionary:
+			r.job_actives[str(k)] = acts[k]
+	for e: Variant in jd.get("list", []):
+		if e is Dictionary:
+			r.jobs.append(e)
 	var gates: Dictionary = d.get("gates", {})
 	r.gate_enter_range = float(gates.get("enter_range", r.gate_enter_range))
 	r.gate_arena = float(gates.get("arena", r.gate_arena))
@@ -169,6 +189,51 @@ func awaken(id: String) -> Dictionary:
 		if str(e.get("id", "")) == id:
 			return e
 	return {}
+
+
+## v0.28.8 직업 정의 ({} = 없음).
+func job(id: String) -> Dictionary:
+	for e: Dictionary in jobs:
+		if str(e.get("id", "")) == id:
+			return e
+	return {}
+
+
+## 그 직업 나무의 기술 하나 ({} = 없음).
+func job_node(job_id: String, node_id: String) -> Dictionary:
+	for n: Variant in job(job_id).get("tree", []):
+		if n is Dictionary and str((n as Dictionary).get("id", "")) == node_id:
+			return n
+	return {}
+
+
+## 배운 기술 (id → 단계) 이 주는 값의 합 (서버 jobFx 와 같은 셈).
+func job_fx(job_id: String, learned: Dictionary, key: String) -> float:
+	var sum: float = 0.0
+	for id: Variant in learned:
+		sum += float((job_node(job_id, str(id)).get("fx", {}) as Dictionary).get(key, 0.0)) * int(learned[id])
+	return sum
+
+
+## 기술을 지금 배울 수 있는지: "" = 된다, 아니면 까닭 (포인트 · 끝까지 · 앞 기술 · 줄).
+func job_node_block(job_id: String, learned: Dictionary, points: int, node_id: String) -> String:
+	var n: Dictionary = job_node(job_id, node_id)
+	if n.is_empty():
+		return "없는 기술"
+	if int(learned.get(node_id, 0)) >= int(n.get("max", 1)):
+		return "끝까지 배웠어요"
+	var spent: int = 0
+	for id: Variant in learned:
+		spent += int(learned[id])
+	var need: int = (int(n.get("row", 1)) - 1) * job_row_gate
+	if spent < need:
+		return "이 나무에 %d포인트를 더 써야 해요" % (need - spent)
+	for r: Variant in n.get("req", []):
+		if int(learned.get(str(r), 0)) <= 0:
+			return "먼저 '%s' 를 배워야 해요" % str(job_node(job_id, str(r)).get("name", r))
+	if points <= 0:
+		return "기술 포인트가 없어요"
+	return ""
 
 
 func rank(id: String) -> Rank:

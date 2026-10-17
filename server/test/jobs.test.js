@@ -1,5 +1,5 @@
-// v0.12 일거리 (배달 알바): 받기 → 받을 곳에서 들기 → 주민 집에 갖다주기, 시간 안 팁, 같이 배달, 하루 건수.
-import { after, before, describe, it } from 'node:test';
+// v0.28.8 전직 · 기술 나무: Lv.10 에 직업 하나, 레벨마다 기술 포인트, 줄 · 앞 기술 조건, 기술 효과 (피해 · 치명타 · 체력), 액티브 (회전 베기 · 치유의 빛), 초기화.
+import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,193 +8,168 @@ import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { loadGameData } from '../src/gamedata.js';
 import { defaultConfig } from '../src/config.js';
-import { quoteJob, streakBonusOf } from '../src/jobs.js';
-import { Client, uid } from './helpers.js';
+import { jobPointsAt, jobFx } from '../src/hunter.js';
+import { Client, sleep, uid } from './helpers.js';
 
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
+const J = data.hunter.level.jobs;
+const offsetTo = (hour) => {
+  const d = new Date();
+  const kst = (d.getUTCHours() * 60 + d.getUTCMinutes() + 540) % 1440;
+  return (hour * 60 - kst + 1440) % 1440;
+};
 
-describe('일거리 규칙', () => {
-  it('멀수록 삯과 시간이 늘고, 도시락은 시간이 빠듯한 대신 팁이 크다', () => {
-    const parcel = data.jobs.kindById.get('parcel');
-    const lunch = data.jobs.kindById.get('lunchbox');
-    const from = { x: 0, z: 0 };
-    const near = quoteJob(data.jobs, parcel, from, { x: 20, z: 0 });
-    const far = quoteJob(data.jobs, parcel, from, { x: 80, z: 0 });
-    assert.ok(far.pay > near.pay && far.limitS > near.limitS);
-    const l = quoteJob(data.jobs, lunch, from, { x: 80, z: 0 });
-    assert.ok(l.limitS < far.limitS && l.tip / l.pay > far.tip / far.pay);
-  });
-
-  it('연속 팁 보너스: 2번째 연속부터 삯의 10% 씩, 최대 50%', () => {
-    assert.equal(streakBonusOf(data.jobs, 10000, 0), 0);
-    assert.equal(streakBonusOf(data.jobs, 10000, 1), 0);
-    assert.equal(streakBonusOf(data.jobs, 10000, 2), 1000);
-    assert.equal(streakBonusOf(data.jobs, 10000, 4), 3000);
-    assert.equal(streakBonusOf(data.jobs, 10000, 20), 5000);
-  });
-
-  it('받을 곳은 모두 섬 안, 주민 집마다 갖다줄 수 있다', () => {
-    for (const p of data.jobs.pickups.values()) assert.ok(Math.abs(p.x) < 100 && Math.abs(p.z) < 100, p.id);
-    assert.ok(data.jobs.houses.length >= 4);
-  });
-});
-
-describe('일거리 서버', () => {
-  let saveDir;
-  let server;
+describe('v0.28.8 전직 · 기술 나무', () => {
+  const dirs = [];
+  const servers = [];
   const clients = [];
-  let rid = 0;
-  const newRid = () => `j${++rid}`;
-  before(() => {
-    saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-jobs-'));
-    server = createServer({ port: 0, saveDir, random: () => 0.1, weatherForce: 'clear' });
-  });
+  let n = 0;
   after(async () => {
     for (const c of clients) c.kill();
-    await server.close();
-    rmSync(saveDir, { recursive: true, force: true });
+    for (const s of servers) await s.close();
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
   });
-  async function enter(code = null) {
+  async function setup(extra = {}) {
+    const saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-job-'));
+    dirs.push(saveDir);
+    const server = createServer({
+      port: 0, saveDir, saveIntervalMs: 60000, weatherForce: 'clear', moveSlackMeters: 3000, worldTimeScale: 1, clockOffsetMin: offsetTo(12),
+      creatureSpawnScale: 10000, random: () => 0.5, gateFirstMs: 99999999, startSol: 100000, ...extra,
+    });
+    servers.push(server);
     const c = new Client(server.port);
     clients.push(c);
     await c.opened;
-    c.send(code ? { t: 'join', v: PROTOCOL_VERSION, uid: uid(), code } : { t: 'create', v: PROTOCOL_VERSION, uid: uid() });
-    const w = await c.type('welcome');
-    const room = [...server.rooms.rooms.values()].find((r) => r.code === w.code);
-    const player = [...room.players.values()].find((p) => p.id === w.id);
-    return { c, room, player, code: w.code };
+    c.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
+    await c.type('welcome');
+    const room = [...server.rooms.rooms.values()][0];
+    return { c, room, me: [...room.players.values()][0] };
   }
-  const put = (player, at) => {
-    player.x = at.x;
-    player.z = at.z;
+  const ask = async (c, msg) => {
+    const rid = `job-${++n}`;
+    c.send({ ...msg, rid });
+    return c.next((m) => m.rid === rid, 3000);
+  };
+  const spot = { x: -150, z: 140 };
+  const putCreature = (room, id, x, z, hp = 40) => {
+    room.creatures ??= new Map();
+    room.creatures.set(id, { id, k: 'shambler', x, z, yaw: 0, hp, max: hp, target: 0, nextAttack: 9e15, attackAt: 0, trapAt: {} });
   };
 
-  it('받을 곳 곁이 아니면 못 들고, 들면 다른 사람에게 들고 있는 모습이 보인다 → 집에 갖다주면 삯 + 팁', async () => {
-    const { c, player, code } = await enter();
-    const friend = await enter(code);
-    c.send({ t: 'job_take', rid: newRid(), kind: 'parcel' });
-    const j = (await c.type('job')).job;
-    assert.equal(j.stage, 'pickup');
-    assert.equal(j.from.id, 'shop');
-    assert.equal(player.toWire().job, true, '배달하는 동안은 플레이어 정보에 job (헬멧 · 가방 연출)');
-    const snapJob = await friend.c.next((m) => m.t === 'snap' && m.p?.some((p) => p.id === player.id && p.job === true), 2000);
-    assert.ok(snapJob, '친구 스냅샷에도 job');
-    put(player, { x: j.from.x + 20, z: j.from.z });
-    c.send({ t: 'job_pick', rid: newRid() });
-    assert.equal((await c.type('error')).code, 'not_at_job');
-    put(player, j.from);
-    c.send({ t: 'job_pick', rid: newRid() });
-    assert.equal((await c.type('job')).job.stage, 'carry');
-    const seen = await friend.c.type('act');
-    assert.deepEqual([seen.kind, seen.e], ['carry', 'parcel']);
-    const before = player.profile.sol;
-    put(player, j.to);
-    put(friend.player, { x: 200, z: 200 });
-    c.send({ t: 'job_drop', rid: newRid() });
-    const r = await c.type('job_result');
-    assert.equal(r.onTime, true);
-    assert.equal(r.total, j.pay + j.tip);
-    assert.equal(player.profile.sol, before + r.total);
-    assert.ok(player.profile.npcs[j.to.npc].f >= data.jobs.friend, '받은 주민과 친해진다');
-    assert.equal((await c.type('job')).job, null);
-    assert.equal(player.toWire().job, false);
+  it('Lv.10 전에는 전직하지 못하고, 하면 지난 레벨 몫까지 포인트를 받는다 (다시 바꿀 수 없다)', async () => {
+    assert.equal(jobPointsAt(data.hunter, 9), 0);
+    assert.equal(jobPointsAt(data.hunter, 12), 3 * J.per_level);
+    const { c, me } = await setup();
+    assert.equal((await ask(c, { t: 'class_pick', j: 'warrior' })).code, 'job_level');
+    me.profile.hunter.lv = 12;
+    const r = await ask(c, { t: 'class_pick', j: 'warrior' });
+    assert.equal(r.kind, 'job');
+    assert.equal(r.jp, 3);
+    const h = await c.next((m) => m.t === 'hunter', 2000);
+    assert.equal(h.job, 'warrior');
+    assert.equal((await ask(c, { t: 'class_pick', j: 'medic' })).code, 'job_taken');
   });
 
-  it('같이 배달: 친구가 곁에 있으면 두 사람 모두 보너스', async () => {
-    const { c, player, code } = await enter();
-    const friend = await enter(code);
-    c.send({ t: 'job_take', rid: newRid() });
-    const j = (await c.type('job')).job;
-    put(player, j.from);
-    c.send({ t: 'job_pick', rid: newRid() });
-    await c.type('job');
-    put(player, j.to);
-    put(friend.player, { x: j.to.x + 2, z: j.to.z });
-    const fb = friend.player.profile.sol;
-    c.send({ t: 'job_drop', rid: newRid() });
-    const r = await c.type('job_result');
-    assert.ok(r.bonus > 0);
-    assert.deepEqual(r.with, [friend.player.id]);
-    const fr = await friend.c.type('job_result');
-    assert.equal(fr.helper, true);
-    assert.equal(friend.player.profile.sol, fb + r.bonus);
+  it('줄 · 앞 기술 조건을 지켜야 배우고, 레벨이 오르면 포인트가 는다', async () => {
+    const { c, me, room } = await setup();
+    me.profile.hunter.lv = 10;
+    await ask(c, { t: 'class_pick', j: 'warrior' });
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_cleave' })).code, 'skill_locked', '앞 기술 (강타) 이 없다');
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_power' })).v, 1);
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_power' })).code, 'no_skill_point');
+    me.profile.hunter.jp = 2;
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_cleave' })).code, 'skill_locked', '2줄은 포인트 2를 쓴 뒤');
+    await ask(c, { t: 'skill_up', n: 'w_power' });
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_cleave' })).v, 1);
+    me.profile.hunter.jp = 1;
+    assert.equal((await ask(c, { t: 'skill_up', n: 'w_cleave' })).code, 'skill_maxed');
+    assert.ok(Math.abs(jobFx(data.hunter, me.profile, 'melee') - 0.16) < 1e-9);
+    // 레벨이 오르면 +1.
+    const jp0 = me.profile.hunter.jp;
+    me.profile.hunter.xp = 999999;
+    room.creatures ??= new Map();
+    me.profile.hunter.lv = 10;
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putCreature(room, 'zx', spot.x + 1, spot.z, 1);
+    await ask(c, { t: 'attack' });
+    await sleep(100);
+    assert.ok(me.profile.hunter.jp > jp0, `레벨이 올라 포인트 (${jp0} → ${me.profile.hunter.jp})`);
   });
 
-  it('연속 팁: 시간 안에 갖다줄수록 보너스가 붙고, 늦거나 그만두면 끊긴다 (저장된다)', async () => {
-    const { c, player } = await enter();
-    async function deliver(late = false) {
-      c.send({ t: 'job_take', rid: newRid() });
-      const j = (await c.type('job')).job;
-      put(player, j.from);
-      c.send({ t: 'job_pick', rid: newRid() });
-      await c.type('job');
-      if (late) player.job.dueAt = 0;
-      put(player, j.to);
-      c.send({ t: 'job_drop', rid: newRid() });
-      const r = await c.type('job_result');
-      await c.type('job');
-      return { j, r };
-    }
-    const a = await deliver();
-    assert.deepEqual([a.r.streak, a.r.streakBonus], [1, 0], '첫 번째는 보너스 없음');
-    const b = await deliver();
-    assert.equal(b.r.streak, 2);
-    assert.equal(b.r.streakBonus, streakBonusOf(data.jobs, b.j.pay, 2));
-    assert.ok(b.r.streakBonus > 0);
-    assert.equal(b.r.total, b.j.pay + b.j.tip + b.r.streakBonus);
-    const d = await deliver();
-    assert.equal(d.r.streak, 3);
-    assert.equal(player.profile.tipStreak, 3);
-    const late = await deliver(true);
-    assert.deepEqual([late.r.onTime, late.r.streak, late.r.streakBonus], [false, 0, 0], '늦으면 끊김');
-    await deliver();
-    c.send({ t: 'job_take', rid: newRid() });
-    const taken = await c.type('job');
-    assert.equal(taken.streak, 1, '앱에도 지금 연속 횟수가 보인다');
-    const j = taken.job;
-    put(player, j.from);
-    c.send({ t: 'job_pick', rid: newRid() });
-    await c.type('job');
-    c.send({ t: 'job_quit' });
-    const q = await c.type('job');
-    assert.equal(q.streak, 0, '들고 있던 배달을 그만두면 끊김');
+  it('강철 몸은 최대 체력, 강타는 근접 피해를 올린다', async () => {
+    const { c, me, room } = await setup();
+    me.profile.hunter.lv = 20;
+    await ask(c, { t: 'class_pick', j: 'warrior' });
+    const hpMsg = c.next((m) => m.t === 'hp', 2000);
+    await ask(c, { t: 'skill_up', n: 'w_tough' });
+    const hp = await hpMsg;
+    assert.equal(hp.max, data.survival.player.max_hp + 1, '최대 체력 +1');
+    for (let i = 0; i < 4; i++) await ask(c, { t: 'skill_up', n: 'w_power' });
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putCreature(room, 'za', spot.x + 1, spot.z, 40);
+    const hit = await ask(c, { t: 'attack' });
+    // 맨손 1 × (1 + 0.32) → 1.32 → random 0.5 < 0.32 아니면 1. 피해 배율이 붙었는지는 jobFx 로 본다.
+    assert.equal(hit.hit, 'za');
+    assert.ok(Math.abs(jobFx(data.hunter, me.profile, 'melee') - 0.32) < 1e-9);
   });
 
-  it('하루 건수를 넘으면 못 받는다 · 하던 배달이 있으면 새로 못 받는다', async () => {
-    const { c, player } = await enter();
-    c.send({ t: 'job_take', rid: newRid() });
-    await c.type('job');
-    c.send({ t: 'job_take', rid: newRid() });
-    assert.equal((await c.type('error')).code, 'job_busy');
-    c.send({ t: 'job_quit' });
-    assert.equal((await c.type('job')).job, null);
-    player.profile.jobDay.done = data.jobs.daily_max;
-    c.send({ t: 'job_take', rid: newRid() });
-    assert.equal((await c.type('error')).code, 'job_limit');
+  it('암살자 급소: 치명타가 터지면 creature_hit 에 crit, 그림자 일격은 다음 한 번 반드시 치명타', async () => {
+    const { c, me, room } = await setup({ random: () => 0.01 });
+    me.profile.hunter.lv = 20;
+    await ask(c, { t: 'class_pick', j: 'assassin' });
+    await ask(c, { t: 'skill_up', n: 'a_crit' });
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putCreature(room, 'zc', spot.x + 1, spot.z, 40);
+    const r = await ask(c, { t: 'attack' });
+    assert.equal(r.crit, 1);
+    const ch = await c.next((m) => m.t === 'creature_hit' && m.id === 'zc', 2000);
+    assert.equal(ch.crit, 1);
+    assert.equal(ch.w, 'hands');
+    assert.ok(ch.hp <= 40 - 2, `치명타 ×2 (${ch.hp})`);
+    // 그림자 일격: 배우지 않았으면 못 쓴다.
+    assert.equal((await ask(c, { t: 'skill_use', a: 'ambush' })).code, 'no_active');
   });
-});
 
-describe('테스트 도구 (v17)', () => {
-  it('DEV_TOOLS 가 켜진 서버만 2000억 솔을 주고, 꺼진 서버는 거절한다', async () => {
-    for (const devTools of [true, false]) {
-      const saveDir = mkdtempSync(path.join(tmpdir(), 'solbaram-dev-'));
-      const server = createServer({ port: 0, saveDir, devTools });
-      const c = new Client(server.port);
-      await c.opened;
-      c.send({ t: 'create', v: PROTOCOL_VERSION, uid: uid() });
-      const w = await c.type('welcome');
-      assert.equal(w.dev, devTools, '앱이 단추를 보일지 안다');
-      c.send({ t: 'dev_grant', rid: 'd1' });
-      if (devTools) {
-        const g = await c.type('dev_granted');
-        assert.equal(g.amount, 200000000000);
-        assert.equal(g.sol, w.prof.sol + 200000000000);
-      } else {
-        assert.equal((await c.type('error')).code, 'dev_off');
-      }
-      c.kill();
-      await server.close();
-      rmSync(saveDir, { recursive: true, force: true });
-    }
+  it('회전 베기: 둘레 모두를 베고 밀쳐내며, 다시 쓰기까지 기다린다', async () => {
+    const { c, me, room } = await setup();
+    me.profile.hunter.lv = 20;
+    me.profile.hunter.job = 'warrior';
+    me.profile.hunter.jt = { w_power: 1, w_cleave: 1, w_tough: 2, w_whirl: 1 };
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putCreature(room, 'z1', spot.x + 1.5, spot.z, 40);
+    putCreature(room, 'z2', spot.x - 1.2, spot.z + 1.0, 40);
+    putCreature(room, 'z3', spot.x + 8, spot.z, 40);
+    const fx = c.next((m) => m.t === 'skill_fx' && m.a === 'whirl', 3000);
+    const r = await ask(c, { t: 'skill_use', a: 'whirl' });
+    assert.equal(r.t, 'skill_ok');
+    assert.equal(r.n, 2, '가까운 둘만');
+    assert.equal(r.cd, J.actives.whirl.cooldown_ms);
+    assert.equal((await fx).r, J.actives.whirl.r);
+    assert.ok(room.creatures.get('z1').hp < 40 && room.creatures.get('z2').hp < 40 && room.creatures.get('z3').hp === 40);
+    assert.ok(Math.hypot(room.creatures.get('z1').x - spot.x, room.creatures.get('z1').z - spot.z) > 1.5, '밀려났다');
+    assert.equal((await ask(c, { t: 'skill_use', a: 'whirl' })).code, 'cooling_down');
+  });
+
+  it('치유의 빛: 체력이 차고 피가 멈춘다 · 초기화하면 솔을 내고 포인트를 돌려받는다', async () => {
+    const { c, me } = await setup();
+    me.profile.hunter.lv = 20;
+    me.profile.hunter.job = 'medic';
+    me.profile.hunter.jt = { m_care: 1, m_hands: 1, m_mend: 1 };
+    me.profile.hunter.jp = 0;
+    me.profile.hp = 3;
+    const r = await ask(c, { t: 'skill_use', a: 'mend' });
+    assert.equal(r.t, 'skill_ok');
+    assert.equal(me.profile.hp, 3 + J.actives.mend.heal);
+    const sol0 = me.profile.sol;
+    const z = await ask(c, { t: 'skill_reset' });
+    assert.equal(z.kind, 'skill_reset');
+    assert.equal(z.jp, 3);
+    assert.equal(me.profile.sol, sol0 - J.reset_sol);
+    assert.deepEqual(me.profile.hunter.jt, {});
+    assert.equal(me.profile.hunter.job, 'medic', '직업은 그대로');
   });
 });

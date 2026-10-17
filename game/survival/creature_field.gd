@@ -43,6 +43,9 @@ class Actor:
 	## v0.28.7 멀리 있으면 3프레임에 한 번만 몸짓을 계산한다 (밀린 시간을 모아서).
 	var anim_acc: float = 0.0
 	var anim_slot: int = 0
+	## v0.28.8 마지막으로 본 체력 (맞은 피해 숫자) · 맞고 멈칫하는 남은 시간.
+	var hp_seen: int = -1
+	var hitstop: float = 0.0
 	var speed: float = 0.0
 	var punch: float = 0.0
 	var lunge: float = 0.0
@@ -168,6 +171,10 @@ func _process(delta: float) -> void:
 	var frame: int = Engine.get_process_frames()
 	for a: Actor in _actors.values():
 		if not is_instance_valid(a.root):
+			continue
+		# v0.28.8 맞고 멈칫 (아주 잠깐 그 자리에 굳는다).
+		if a.hitstop > 0.0:
+			a.hitstop -= delta
 			continue
 		a.t += delta
 		var before: Vector3 = a.root.position
@@ -589,6 +596,7 @@ func _on_hit(info: Dictionary) -> void:
 		_bolt(Vector3(float(info.get("sx", 0.0)), 1.3, float(info.get("sz", 0.0))), a)
 	a.tw_goal = Vector4(randf_range(-0.3, 0.3), randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), 0.0)
 	a.tw_hold = 0.12
+	var hp_before: int = a.hp_seen
 	_update_tag(a, int(info.get("hp", 0)))
 	if info.has("ram"):
 		var u: float = float(info.get("ram", 0.0))
@@ -613,9 +621,47 @@ func _on_hit(info: Dictionary) -> void:
 		Audio.play_sfx("chop", -3.0, 0.45)
 		_blood_spray(a, 8)
 		return
-	_float_text(a.root.global_position + Vector3(0.0, 2.0, 0.0), "퍽!", Color("#FFE08A"))
-	_blood_spray(a, 9)
-	Audio.play_at("creature_hit", a.root.global_position, -2.0, randf_range(0.85, 1.1))
+	_weapon_hit(a, info, hp_before)
+
+
+## v0.28.8 무기 · 기술마다 다른 맞히기 (소리 · 효과 · 글자 · 흔들림 · 멈칫, WeaponFx). 치명타면 금빛 · 더 크게.
+func _weapon_hit(a: Actor, info: Dictionary, hp_before: int) -> void:
+	var s: WeaponFx.Style = WeaponFx.style(str(info.get("w", "hands")))
+	var crit: bool = int(info.get("crit", 0)) == 1
+	var at: Vector3 = a.root.global_position + Vector3(0.0, 1.15 * a.rig.parts.scale * a.root.scale.y, 0.0)
+	var by: int = int(info.get("by", 0))
+	var from: Vector3 = _attacker_position(by)
+	var dir: Vector3 = at - from if from != Vector3.INF else -a.root.global_basis.z
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	WeaponFx.impact(self, at, dir, s, crit)
+	var dmg: int = maxi(0, hp_before - int(info.get("hp", 0))) if hp_before >= 0 else 0
+	var amount: String = (" -%d" % dmg) if dmg > 0 else ""
+	if crit:
+		_float_text(at + Vector3(0.0, 0.95, 0.0), "치명타!%s" % amount, Color("#FFD24A"), 1.35)
+		Audio.play_at("hit_crit", at, -1.0, randf_range(0.95, 1.08))
+	else:
+		_float_text(at + Vector3(0.0, 0.85, 0.0), "%s%s" % [s.word, amount], Color("#FFE08A"))
+	Audio.play_at(s.hit_sfx, at, -2.0, randf_range(0.92, 1.08))
+	Audio.play_at("creature_hit", at, -9.0, randf_range(0.85, 1.1))
+	# 맞은 크리처가 잠깐 멈칫하고 뒤로 젖혀진다 (때린 게 나면 화면도 흔들린다).
+	a.hitstop = s.hitstop * (1.6 if crit else 1.0)
+	a.body.rotation.x = clampf(a.body.rotation.x + (0.22 if crit else 0.12), -0.6, 0.6)
+	if by == Net.my_id:
+		var cam: Camera3D = get_viewport().get_camera_3d()
+		if cam != null and cam.get_parent() is FollowCamera:
+			(cam.get_parent() as FollowCamera).shake(s.shake * (1.8 if crit else 1.0), 0.18)
+		Prefs.vibrate(35 if not crit else 70, 0.4)
+
+
+## 때린 사람 자리 (나 · 동료, 모르면 INF).
+func _attacker_position(player_id: int) -> Vector3:
+	if player_id == Net.my_id:
+		_refresh_light()
+		return _player.global_position if _player != null else Vector3.INF
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	var r: RemotePlayer = replicator.remote(player_id) if replicator != null else null
+	return r.global_position if r != null else Vector3.INF
 
 
 ## v0.28.5 석궁 화살: 쏜 자리에서 크리처까지 빠르게 날아가 꽂힌다 (잠시 뒤 사라진다).
@@ -644,7 +690,9 @@ func _bolt(from: Vector3, a: Actor) -> void:
 
 ## 맞은 자리에서 검붉은 피가 튄다.
 func _blood_spray(a: Actor, n: int) -> void:
-	Puff.burst(self, a.root.global_position + Vector3(0.0, 1.2 * a.rig.parts.scale * a.root.scale.y, 0.0), Color(0.36, 0.03, 0.03, 0.95), n, 0.7, 0.9, 0.06, 0.5)
+	# v0.28.8 점토 덩어리 대신 떨어지는 핏방울 · 피안개 (Fx).
+	var dir: Vector3 = Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0))
+	Fx.blood(self, a.root.global_position + Vector3(0.0, 1.2 * a.rig.parts.scale * a.root.scale.y, 0.0), dir, float(n) / 10.0)
 
 
 func _on_dead(info: Dictionary) -> void:
@@ -728,10 +776,10 @@ static func _pool() -> ArrayMesh:
 	return _pool_mesh
 
 
-func _float_text(at: Vector3, text: String, color: Color) -> void:
+func _float_text(at: Vector3, text: String, color: Color, scale: float = 1.0) -> void:
 	var l: Label3D = Label3D.new()
 	l.text = text
-	l.font_size = 72
+	l.font_size = int(72 * scale)
 	l.pixel_size = 0.008
 	l.outline_size = 16
 	l.modulate = color
@@ -748,6 +796,7 @@ func _float_text(at: Vector3, text: String, color: Color) -> void:
 
 
 func _update_tag(a: Actor, hp: int) -> void:
+	a.hp_seen = hp
 	if a.tag == null:
 		return
 	var kind: SurvivalRules.CreatureKind = GameData.survival.creature_kinds.get(a.kind)

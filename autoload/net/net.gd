@@ -73,6 +73,10 @@ signal hunter_done(info: Dictionary)
 ## v0.28.5 각성 효과 (누가 · 무엇을 · 얼마 동안 ms) · 마력 방패가 막았다 (누가 · 남은 횟수).
 signal awaken_fx(player_id: int, awaken_id: String, ms: int)
 signal shield_blocked(player_id: int, left: int)
+## v0.28.8 전사 '버티기' 로 막았다 · 직업 액티브 기술을 썼다 (나 · 남, 그림용) · 내 액티브가 허락됐다.
+signal guard_blocked(player_id: int)
+signal skill_fx(info: Dictionary)
+signal skill_used(active_id: String, cooldown_ms: int)
 ## v0.28 게이트: 열림 · 상태가 바뀜 · 닫힘 (id, Net.gates 에 없으면 닫힘) · 내가 들어감 · 공략 보상 { g, rank, name, items, got, sol, pts }.
 signal gate_changed(gate_id: String)
 signal gate_entered(gate_id: String)
@@ -1111,6 +1115,9 @@ func _handle_text(text: String) -> void:
 			var ready: Dictionary = msg.get("awReady", {}) if msg.get("awReady") is Dictionary else {}
 			for aid: Variant in ready:
 				awaken_ready_at[str(aid)] = Time.get_ticks_msec() + int(ready[aid])
+			var jready: Dictionary = msg.get("jReady", {}) if msg.get("jReady") is Dictionary else {}
+			for jid: Variant in jready:
+				skill_ready_at[str(jid)] = Time.get_ticks_msec() + int(jready[jid])
 			hunter_ranks[my_id] = str(msg.get("rank", "E"))
 			var hg: Variant = msg.get("guild", null)
 			guild = hg if hg is Dictionary else {}
@@ -1132,6 +1139,13 @@ func _handle_text(text: String) -> void:
 			awaken_fx.emit(int(msg.get("id", 0)), str(msg.get("a", "")), int(msg.get("ms", 0)))
 		"shield_block":
 			shield_blocked.emit(int(msg.get("id", 0)), int(msg.get("left", 0)))
+		"guard_block":
+			guard_blocked.emit(int(msg.get("id", 0)))
+		"skill_ok":
+			skill_ready_at[str(msg.get("a", ""))] = Time.get_ticks_msec() + int(msg.get("cd", 0))
+			skill_used.emit(str(msg.get("a", "")), int(msg.get("cd", 0)))
+		"skill_fx":
+			skill_fx.emit(msg)
 		"gate":
 			var gw: Dictionary = msg.get("g", {}) if msg.get("g") is Dictionary else {}
 			var gid: String = str(gw.get("id", ""))
@@ -1677,6 +1691,55 @@ func awaken_use(awaken_id: String) -> void:
 		_request("awaken_use", {"a": awaken_id})
 
 
+## v0.28.8 전직 · 기술 나무 (판정은 서버). 액티브 기술을 다시 쓸 수 있는 때 (ticks ms).
+var skill_ready_at: Dictionary[String, int] = {}
+
+
+func class_pick(job_id: String) -> void:
+	if state == State.ONLINE:
+		_request("class_pick", {"j": job_id})
+
+
+func skill_up(node_id: String) -> void:
+	if state == State.ONLINE:
+		_request("skill_up", {"n": node_id})
+
+
+func skill_reset() -> void:
+	if state == State.ONLINE:
+		_request("skill_reset", {})
+
+
+func skill_use(active_id: String) -> void:
+	if state == State.ONLINE:
+		_request("skill_use", {"a": active_id})
+
+
+## 내 직업 ("" = 아직) · 배운 기술 (id → 단계) · 남은 기술 포인트.
+func job_id() -> String:
+	return str(hunter.get("job", ""))
+
+
+func job_learned() -> Dictionary:
+	return hunter.get("jt", {}) if hunter.get("jt") is Dictionary else {}
+
+
+func job_fx(key: String) -> float:
+	return GameData.hunter.job_fx(job_id(), job_learned(), key) if GameData.hunter != null else 0.0
+
+
+## 배운 액티브 기술 id 들 (나무 순서).
+func job_actives() -> PackedStringArray:
+	var out: PackedStringArray = []
+	if GameData.hunter == null:
+		return out
+	for n: Variant in GameData.hunter.job(job_id()).get("tree", []):
+		var a: String = str((n as Dictionary).get("active", ""))
+		if not a.is_empty() and int(job_learned().get(str((n as Dictionary).get("id", "")), 0)) > 0:
+			out.append(a)
+	return out
+
+
 ## v0.28.7 회피 구르기 요청 (서버가 dodge_ok 로 허락해야 구른다). 이 시각 (ms) 전에는 다시 못 한다 (단추 표시용).
 var dodge_ready_at: int = 0
 
@@ -1690,7 +1753,7 @@ func dodge() -> void:
 func dodge_cool_mult() -> float:
 	var st: Dictionary = hunter.get("st", {}) if hunter.get("st") is Dictionary else {}
 	var per: float = float((GameData.hunter.level_stats.get("agi", {}) as Dictionary).get("cooldown", 0.0)) if GameData.hunter != null else 0.0
-	return maxf(0.3, 1.0 - float(st.get("agi", 0)) * per)
+	return maxf(0.3, 1.0 - float(st.get("agi", 0)) * per) * maxf(0.4, 1.0 - job_fx("cd")) * maxf(0.4, 1.0 - job_fx("dodge_cd"))
 
 
 func use_item(slot: int) -> void:

@@ -4,6 +4,7 @@ extends Control
 ## (그림자 걸음 · 마력 방패) — 누르면 Net.awaken_use, 다시 쓰기까지 남은 초를 단추 위에 덮어 보인다.
 ## 효과 (나 · 동료 모두, awaken_fx): 그림자 걸음 = 몸이 보랏빛으로 반쯤 비치고 걸음이 빨라진다 (내 것만 빠르기),
 ## 마력 방패 = 몸을 감싼 푸른 빛 껍질, 막을 때마다 번쩍 · 소리 (shield_blocked). 터치는 단추만 받는다.
+## v0.28.8 배운 직업 액티브 기술 (회전 베기 · 그림자 일격 · 관통 사격 · 치유의 빛) 도 같은 둥근 단추로 각성 단추 위에 (Net.skill_use, 이름 sk_<id>).
 
 const BTN: float = 110.0
 const ICONS: Dictionary[String, String] = {"shadow": "影", "shield": "盾"}
@@ -29,10 +30,16 @@ func _ready() -> void:
 
 func _rebuild() -> void:
 	var want: Array[String] = []
+	for a: String in Net.job_actives():
+		want.append("sk_" + a)
 	for e: Dictionary in GameData.hunter.awakens:
 		var aid: String = str(e.get("id", ""))
 		if bool(e.get("active", false)) and Net.has_awaken(aid):
 			want.append(aid)
+	var skills: int = 0
+	for k: String in want:
+		if k.begins_with("sk_"):
+			skills += 1
 	for aid: String in _buttons.keys():
 		if not want.has(aid):
 			_buttons[aid].queue_free()
@@ -45,16 +52,17 @@ func _rebuild() -> void:
 		var b: Button = _buttons[aid]
 		b.offset_left = -410.0
 		b.offset_right = -410.0 + BTN
-		b.offset_top = -440.0 + float(i) * (BTN + 14.0)
+		b.offset_top = -440.0 + float(i - skills) * (BTN + 14.0)
 		b.offset_bottom = b.offset_top + BTN
 		HudLayout.landscape_shift(b, -170.0)
 
 
 func _make_button(aid: String) -> Button:
-	var e: Dictionary = GameData.hunter.awaken(aid)
+	var skill: String = aid.trim_prefix("sk_") if aid.begins_with("sk_") else ""
+	var e: Dictionary = GameData.hunter.job_actives.get(skill, {}) if not skill.is_empty() else GameData.hunter.awaken(aid)
 	var b: Button = Button.new()
-	b.name = "Awaken_%s" % aid
-	b.text = ICONS.get(aid, "◆")
+	b.name = ("Skill_%s" % skill) if not skill.is_empty() else ("Awaken_%s" % aid)
+	b.text = str(e.get("icon", "◆")) if not skill.is_empty() else ICONS.get(aid, "◆")
 	b.tooltip_text = str(e.get("name", aid))
 	b.focus_mode = Control.FOCUS_NONE
 	b.anchor_left = 1.0
@@ -62,7 +70,7 @@ func _make_button(aid: String) -> Button:
 	b.anchor_top = 1.0
 	b.anchor_bottom = 1.0
 	b.add_theme_font_size_override("font_size", 44)
-	var col: Color = COLORS.get(aid, Color("#888888"))
+	var col: Color = Color(str(e.get("color", "#888888"))) if not skill.is_empty() else COLORS.get(aid, Color("#888888"))
 	var sb: StyleBoxFlat = StyleBoxFlat.new()
 	sb.bg_color = Color(col.darkened(0.45), 0.85)
 	sb.border_color = col.lightened(0.3)
@@ -82,7 +90,10 @@ func _make_button(aid: String) -> Button:
 	b.add_to_group(&"blocks_joystick")
 	b.pressed.connect(func() -> void:
 		Audio.play_ui(Audio.SFX_CLICK)
-		Net.awaken_use(aid))
+		if skill.is_empty():
+			Net.awaken_use(aid)
+		else:
+			Net.skill_use(skill))
 	var cool: Label = Label.new()
 	cool.name = "Cool"
 	cool.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -111,7 +122,7 @@ func fx_active(player_id: int, aid: String) -> bool:
 func _process(_delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
 	for aid: String in _buttons:
-		var left: int = int(Net.awaken_ready_at.get(aid, 0)) - now
+		var left: int = (int(Net.skill_ready_at.get(aid.trim_prefix("sk_"), 0)) if aid.begins_with("sk_") else int(Net.awaken_ready_at.get(aid, 0))) - now
 		_buttons[aid].disabled = left > 0 or Net.state != Net.State.ONLINE
 		_cool[aid].text = "%d" % ceili(left / 1000.0) if left > 0 else ""
 	for pid: int in _fx.keys():
