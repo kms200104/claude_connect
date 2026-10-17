@@ -27,4 +27,5 @@ static func from_dict(data: Dictionary) -> DropInfo:
 	d.item = str(data.get("item", ""))
 	d.count = maxi(1, int(data.get("n", 1)))
 	d.position = Vector3(float(data.get("x", 0.0)), 0.0, float(data.get("z", 0.0)))
+	d.dropped_by = int(data.get("by", 0))
 	return d

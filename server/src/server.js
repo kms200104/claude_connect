@@ -243,7 +243,7 @@ export function createServer(overrides = {}) {
   const eventsMessage = (room) => ({ t: 'ev', ...eventsWire(activeOf(room), clock.day()) });
   const dropWire = (d) => {
     if (d.kind === 'gift') return { id: d.id, kind: d.kind, x: d.x, z: d.z };
-    if (d.kind === 'item') return { id: d.id, kind: d.kind, item: d.item, n: d.n, x: d.x, z: d.z };
+    if (d.kind === 'item') return { id: d.id, kind: d.kind, item: d.item, n: d.n, x: d.x, z: d.z, ...(d.by ? { by: d.by } : {}) };
     return { id: d.id, kind: d.kind, item: d.item, x: d.x, z: d.z };
   };
 
@@ -656,7 +656,7 @@ export function createServer(overrides = {}) {
         if (!removeAt(player.slots, msg.slot, n)) return fail(ErrorCode.badItem);
         const at = groundSpot(ground, player.x, player.z);
         room.groundSeq += 1;
-        const d = { id: `g${room.groundSeq}`, kind: 'item', item, n, x: at.x, z: at.z };
+        const d = { id: `g${room.groundSeq}`, kind: 'item', item, n, x: at.x, z: at.z, by: player.id };
         room.drops.set(d.id, d);
         room.broadcast({ t: 'drop', d: dropWire(d), by: player.id });
         act(room, player, 'drop', item);

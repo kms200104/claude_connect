@@ -509,7 +509,7 @@ export class Room {
         notedDay: this.notedDay,
         deliveries: [...this.deliveries.values()].filter((d) => d.ph === 'wait' || d.ph === 'walk').map((d) => ({ id: d.id, uid: d.uid, pid: d.pid, items: d.items.map((it) => ({ ...it })), orders: d.orders })),
         delivSeq: this.delivSeq,
-        ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z })),
+        ground: [...this.drops.values()].filter((d) => d.kind === 'item').map((d) => ({ id: d.id, item: d.item, n: d.n, x: d.x, z: d.z, ...(d.by ? { by: d.by } : {}) })),
         groundSeq: this.groundSeq,
         // v0.23 뒤진 빈집 가구 → 다시 차는 세상 시각 (ms).
         looted: { ...(this.looted ?? {}) },
@@ -679,7 +679,8 @@ export function sanitizeGround(raw, data, cfg) {
     if (typeof g.item !== 'string' || !data.isKnown(g.item) || !Number.isFinite(g.x) || !Number.isFinite(g.z)) continue;
     const n = Number.isInteger(g.n) && g.n >= 1 ? Math.min(g.n, 999) : 1;
     seen.add(g.id);
-    out.push({ id: g.id, kind: 'item', item: g.item, n, x: g.x, z: g.z });
+    // v0.28.8 내려놓은 사람 자리 (by, 저절로 줍기가 내가 내려놓은 것은 줍지 않게).
+    out.push({ id: g.id, kind: 'item', item: g.item, n, x: g.x, z: g.z, ...(Number.isInteger(g.by) && g.by > 0 ? { by: g.by } : {}) });
   }
   return out;
 }
