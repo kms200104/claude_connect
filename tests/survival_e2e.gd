@@ -222,6 +222,9 @@ func _run() -> void:
 		if int(i.get("by", 0)) == Net.my_id:
 			dead[0] = true)
 	var drops_before: int = Net.drops.size()
+	# (저절로 줍기가 바로 주워 갈 수 있어, 떨어진 것은 도착 신호로 센다.)
+	var dropped: Array[int] = [0]
+	Net.drop_added.connect(func(_d: DropInfo) -> void: dropped[0] += 1)
 	# v0.28.4 범위 안에 들면 버튼을 누르지 않아도 저절로 공격한다.
 	var auto_hit: Array = [false]
 	Net.creature_hit.connect(func(i: Dictionary) -> void:
@@ -240,7 +243,7 @@ func _run() -> void:
 		await get_tree().create_timer(0.35).timeout
 	_check(dead[0], "'공격'으로 크리처를 쓰러뜨렸다")
 	_check(noises[0] > 0, "밤에 휘두르면 소리가 난다 (%d번)" % noises[0])
-	_check(await _wait_until(func() -> bool: return Net.drops.size() > drops_before, 2.0), "쓰러진 자리에 아이템이 떨어졌다")
+	_check(await _wait_until(func() -> bool: return dropped[0] > 0 or Net.drops.size() > drops_before, 2.0), "쓰러진 자리에 아이템이 떨어졌다")
 	await _shot("surv_drop")
 	# v0.28.4 손전등: 바라보는 쪽으로 원뿔 빛.
 	var fl: int = -1
