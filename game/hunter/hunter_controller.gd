@@ -72,7 +72,32 @@ func _ready() -> void:
 	Net.hunter_changed.connect(_on_hunter_changed)
 
 
+## v0.28.9 직업 겉모습 (스카프 · 휘장 · 동료 이름표 띠) 을 0.5초마다 맞춘다 (늦게 나타난 동료도).
+var _look_left: float = 0.0
+
+
+func _sync_job_looks() -> void:
+	if player != null and player.rig != null:
+		_apply_look(player, player.rig, Net.my_id, null)
+	var replicator: PlayerReplicator = get_tree().get_first_node_in_group(&"player_replicator") as PlayerReplicator
+	if replicator != null:
+		for r: RemotePlayer in replicator.remote_nodes():
+			_apply_look(r, r.rig, r.player_id, r.name_label)
+
+
+func _apply_look(who: Node3D, rig: CharacterRig, id: int, name_label: Label3D) -> void:
+	var key: String = "%s:%s" % [Net.job_of(id), Net.advanced_of(id)]
+	if str(who.get_meta(&"job_look", "")) == key:
+		return
+	who.set_meta(&"job_look", key)
+	JobLook.apply(who, rig, Net.job_of(id), Net.advanced_of(id), name_label)
+
+
 func _process(delta: float) -> void:
+	_look_left -= delta
+	if _look_left <= 0.0:
+		_look_left = 0.5
+		_sync_job_looks()
 	if _popup != null and _popup.visible:
 		_popup_t -= delta
 		_popup.modulate.a = clampf(_popup_t / 0.6, 0.0, 1.0)
@@ -210,6 +235,12 @@ func _on_done(info: Dictionary) -> void:
 				var node: Dictionary = GameData.hunter.job_node(Net.job_id(), str(info.get("n", "")))
 				toast_hud.show_toast("'%s' %d단계!" % [str(node.get("name", "")), int(info.get("v", 1))], true)
 			Audio.play_sfx("level_up", -6.0, 1.2)
+		"advance":
+			if toast_hud != null:
+				var adv: Dictionary = GameData.hunter.job(str(info.get("j", ""))).get("advance", {})
+				toast_hud.show_toast("2차 전직! %s — 기술 포인트 %d, 새 기술이 열렸어요" % [str(adv.get("name", "")), int(info.get("jp", 0))], true)
+			Audio.play_sfx("fanfare_big", -4.0)
+			Prefs.vibrate(220, 0.9)
 		"skill_reset":
 			if toast_hud != null:
 				toast_hud.show_toast("기술을 초기화했어요 — 포인트 %d" % int(info.get("jp", 0)), true)
@@ -238,7 +269,7 @@ func _on_guild(msg: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
-	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind.begins_with("skill_") or kind == "class_pick" or kind == "gate_enter" or kind == "gate_leave"):
+	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind.begins_with("skill_") or kind.begins_with("class_") or kind == "gate_enter" or kind == "gate_leave"):
 		return
 	var text: String = ""
 	match code:
@@ -280,6 +311,8 @@ func _on_failed(kind: String, code: String) -> void:
 			text = "그 기술을 배우지 않았어요"
 		"no_ammo":
 			text = "석궁을 들고 화살이 있어야 해요"
+		"no_job_yet":
+			text = "먼저 전직해요 (Lv.%d)" % GameData.hunter.job_level
 		NetProtocol.ERR_NOT_ENOUGH_SOL:
 			text = "솔이 모자라요"
 		NetProtocol.ERR_GATE_BROKEN:

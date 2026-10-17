@@ -75,6 +75,8 @@ signal awaken_fx(player_id: int, awaken_id: String, ms: int)
 signal shield_blocked(player_id: int, left: int)
 ## v0.28.8 전사 '버티기' 로 막았다 · 직업 액티브 기술을 썼다 (나 · 남, 그림용) · 내 액티브가 허락됐다.
 signal guard_blocked(player_id: int)
+## v0.28.9 누군가의 직업 · 2차 전직이 바뀌었다 (겉모습).
+signal hunter_job_changed(player_id: int)
 signal skill_fx(info: Dictionary)
 signal skill_used(active_id: String, cooldown_ms: int)
 ## v0.28 게이트: 열림 · 상태가 바뀜 · 닫힘 (id, Net.gates 에 없으면 닫힘) · 내가 들어감 · 공략 보상 { g, rank, name, items, got, sol, pts }.
@@ -963,6 +965,7 @@ func _handle_text(text: String) -> void:
 				faces[joined.id] = joined.face
 				names[joined.id] = joined.display_name
 				hunter_ranks[joined.id] = str((joined_data as Dictionary).get("hr", "E"))
+				_set_hunter_job(joined.id, str((joined_data as Dictionary).get("hj", "")), bool((joined_data as Dictionary).get("ha", false)))
 				peer_joined.emit(joined)
 		"peer_status":
 			var pid: int = int(msg.get("id", 0))
@@ -1119,6 +1122,7 @@ func _handle_text(text: String) -> void:
 			for jid: Variant in jready:
 				skill_ready_at[str(jid)] = Time.get_ticks_msec() + int(jready[jid])
 			hunter_ranks[my_id] = str(msg.get("rank", "E"))
+			_set_hunter_job(my_id, str(msg.get("job", "")), bool(msg.get("adv", false)))
 			var hg: Variant = msg.get("guild", null)
 			guild = hg if hg is Dictionary else {}
 			hunter_changed.emit()
@@ -1126,6 +1130,8 @@ func _handle_text(text: String) -> void:
 			var gg: Variant = msg.get("g", null)
 			guild = gg if gg is Dictionary else {}
 			guild_changed.emit(msg)
+		"hunter_job":
+			_set_hunter_job(int(msg.get("id", 0)), str(msg.get("j", "")), bool(msg.get("a", false)))
 		"hunter_level":
 			hunter_done.emit({"kind": "remote_level", "id": int(msg.get("id", 0)), "lv": int(msg.get("lv", 1))})
 		"hunter_rank":
@@ -1486,6 +1492,7 @@ func _on_welcome(msg: Dictionary) -> void:
 	for pv: Variant in msg.get("players", []):
 		if pv is Dictionary:
 			hunter_ranks[int(pv.get("id", 0))] = str(pv.get("hr", "E"))
+			_set_hunter_job(int(pv.get("id", 0)), str(pv.get("hj", "")), bool(pv.get("ha", false)))
 	guards.clear()
 	for gd: Variant in surv.get("guards", []):
 		if gd is Dictionary:
@@ -1693,6 +1700,34 @@ func awaken_use(awaken_id: String) -> void:
 
 ## v0.28.8 전직 · 기술 나무 (판정은 서버). 액티브 기술을 다시 쓸 수 있는 때 (ticks ms).
 var skill_ready_at: Dictionary[String, int] = {}
+
+
+## v0.28.9 다른 사람 (나 포함) 의 직업 · 2차 전직 (이름표 · 휘장): id → [job, adv].
+var hunter_jobs: Dictionary[int, Array] = {}
+
+
+func job_of(player_id: int) -> String:
+	return str((hunter_jobs.get(player_id, ["", false]) as Array)[0])
+
+
+func advanced_of(player_id: int) -> bool:
+	return bool((hunter_jobs.get(player_id, ["", false]) as Array)[1])
+
+
+func _set_hunter_job(player_id: int, job: String, adv: bool) -> void:
+	var before: Array = hunter_jobs.get(player_id, ["", false])
+	hunter_jobs[player_id] = [job, adv]
+	if str(before[0]) != job or bool(before[1]) != adv:
+		hunter_job_changed.emit(player_id)
+
+
+func class_advance() -> void:
+	if state == State.ONLINE:
+		_request("class_advance", {})
+
+
+func is_advanced() -> bool:
+	return bool(hunter.get("adv", false))
 
 
 func class_pick(job_id: String) -> void:

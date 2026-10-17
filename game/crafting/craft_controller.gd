@@ -104,6 +104,7 @@ func _on_failed(kind: String, code: String) -> void:
 		window.open(window.tier, window.own_bench)
 	var msg: String = {
 		NetProtocol.ERR_NOT_AT_BENCH: "더 좋은 작업대 곁에서 만들 수 있어요",
+		"job_only": "그 직업으로 전직한 사람만 만들 수 있어요",
 		NetProtocol.ERR_NOT_ENOUGH_ITEMS: "재료가 모자라요",
 		NetProtocol.ERR_INVENTORY_FULL: "가방이 가득 찼어요",
 	}.get(code, code)

@@ -57,6 +57,11 @@ static func style(weapon_id: String) -> Style:
 		_styles["fire_axe"] = _make("swing_heavy", "hit_blade", "쩌억!", "blade", Color("#FF7A5A"), 160.0, 1.45, 0.46, 0.55, 0.24, 0.16, 0.1, 1.8)
 		_styles["crossbow"] = _make("", "hit_bolt", "턱!", "bolt", Color("#E8E0C8"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.04, 0.8)
 		_styles["torch"] = _make("swing_fire", "hit_fire", "치익!", "fire", Color("#FF9A3A"), 130.0, 1.2, 0.34, 0.15, 0.22, 0.07, 0.05, 0.4)
+		# v0.28.9 직업 전용 무기.
+		_styles["greatsword"] = _make("swing_heavy", "hit_blade", "쩡!", "blade", Color("#BFE0FF"), 170.0, 1.75, 0.55, 0.4, 0.26, 0.18, 0.1, 1.6)
+		_styles["twin_daggers"] = _make("swing_blade", "hit_stab", "슥!", "blade", Color("#C8A8FF"), 100.0, 0.95, 0.2, -0.2, 0.1, 0.04, 0.03, 0.8)
+		_styles["repeater_crossbow"] = _make("", "hit_bolt", "탁!", "bolt", Color("#BFE6FF"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.06, 0.04, 0.9)
+		_styles["healing_staff"] = _make("swing_light", "hit_wood", "퉁!", "light", Color("#9AF0B0"), 120.0, 1.3, 0.3, 0.1, 0.18, 0.06, 0.04, 0.5)
 		# 직업 기술.
 		_styles["whirl"] = _make("skill_whirl", "hit_blade", "베기!", "whirl", Color("#E0603A"), 360.0, 2.6, 0.55, 0.0, 0.34, 0.12, 0.08, 1.2)
 		_styles["pierce"] = _make("skill_pierce", "hit_bolt", "관통!", "pierce", Color("#7AC8FF"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.08, 0.06, 1.0)

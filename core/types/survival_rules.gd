@@ -58,6 +58,9 @@ class Weapon:
 	var ammo: String = ""
 	var stun_ms: int = 0
 	var cleave: int = 1
+	## v0.28.9 직업 전용 (그 직업만, 아니면 맨손) · 치명타 확률 +.
+	var job: String = ""
+	var crit: float = 0.0
 
 
 class CreatureKind:
@@ -150,6 +153,8 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 		weapon.ammo = str(w.get("ammo", ""))
 		weapon.stun_ms = int(w.get("stun_ms", 0))
 		weapon.cleave = int(w.get("cleave", 1))
+		weapon.job = str(w.get("job", ""))
+		weapon.crit = float(w.get("crit", 0.0))
 		r.weapons[str(id)] = weapon
 	var defense: Dictionary = rules.get("defense", {})
 	for id: Variant in defense:

@@ -149,13 +149,19 @@ func _build() -> void:
 
 
 func _rank(r: CraftingRules.Recipe, bag: Dictionary) -> int:
-	if r.tier > tier:
+	if r.tier > tier or _job_locked(r):
 		return 2
 	return 0 if CraftingRules.can_make(r, bag) else 1
 
 
+## v0.28.9 다른 직업 전용 제작 (내 직업이 아니면 만들 수 없다).
+func _job_locked(r: CraftingRules.Recipe) -> bool:
+	return not r.job.is_empty() and Net.job_id() != r.job
+
+
 func _card(r: CraftingRules.Recipe, bag: Dictionary) -> PanelContainer:
-	var locked: bool = r.tier > tier
+	var job_lock: bool = _job_locked(r)
+	var locked: bool = r.tier > tier or job_lock
 	var ok: bool = not locked and CraftingRules.can_make(r, bag)
 	var card: PanelContainer = PanelContainer.new()
 	card.name = "Recipe_%s" % r.id
@@ -189,6 +195,9 @@ func _card(r: CraftingRules.Recipe, bag: Dictionary) -> PanelContainer:
 	var buttons: HBoxContainer = HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 10)
 	info.add_child(buttons)
+	if job_lock:
+		buttons.add_child(_label("%s 전용 — 헌터넷에서 %s 로 전직해야 만들어요" % [str(GameData.hunter.job(r.job).get("name", r.job)), str(GameData.hunter.job(r.job).get("name", r.job))], 24, WARN))
+		return card
 	if locked:
 		buttons.add_child(_label("%s 곁에서 만들어요" % ["", "작업대", "공구 창고(공용 작업대)"][r.tier], 24, WARN))
 		return card

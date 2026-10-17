@@ -13,6 +13,8 @@ const COLORS: Dictionary[String, Color] = {"shadow": Color("#7A4AD8"), "shield":
 var player: Player = null
 var _buttons: Dictionary[String, Button] = {}
 var _cool: Dictionary[String, Label] = {}
+## v0.28.9 다시 쓸 수 있게 되는 순간 단추가 반짝 (톡 커졌다 돌아오고 테두리 빛 · 작은 소리 · 진동).
+var _cooling: Dictionary[String, bool] = {}
 ## 효과: 플레이어 id → {a: {"until": ms, "node": Node3D}}.
 var _fx: Dictionary[int, Dictionary] = {}
 static var _shell_mat: StandardMaterial3D = null
@@ -109,6 +111,33 @@ func _make_button(aid: String) -> Button:
 	return b
 
 
+func _ready_flash(b: Button) -> void:
+	Audio.play_ui("twinkle")
+	Prefs.vibrate(25, 0.3)
+	b.pivot_offset = b.size * 0.5
+	var ring: Panel = Panel.new()
+	var sb: StyleBoxFlat = StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 0.0)
+	sb.border_color = Color("#FFE8A0")
+	sb.set_border_width_all(6)
+	sb.set_corner_radius_all(int(BTN * 0.5) + 8)
+	ring.add_theme_stylebox_override("panel", sb)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ring.offset_left = -8.0
+	ring.offset_top = -8.0
+	ring.offset_right = 8.0
+	ring.offset_bottom = 8.0
+	ring.pivot_offset = (b.size + Vector2(16.0, 16.0)) * 0.5
+	b.add_child(ring)
+	var tw: Tween = b.create_tween().set_parallel(true)
+	tw.tween_property(b, "scale", Vector2.ONE * 1.18, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ring, "scale", Vector2.ONE * 1.35, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ring, "modulate:a", 0.0, 0.5)
+	tw.chain().tween_property(b, "scale", Vector2.ONE, 0.18)
+	tw.chain().tween_callback(ring.queue_free)
+
+
 ## 단추 이름 (점검용): 이 각성 단추가 있는지.
 func has_button(aid: String) -> bool:
 	return _buttons.has(aid)
@@ -125,6 +154,11 @@ func _process(_delta: float) -> void:
 		var left: int = (int(Net.skill_ready_at.get(aid.trim_prefix("sk_"), 0)) if aid.begins_with("sk_") else int(Net.awaken_ready_at.get(aid, 0))) - now
 		_buttons[aid].disabled = left > 0 or Net.state != Net.State.ONLINE
 		_cool[aid].text = "%d" % ceili(left / 1000.0) if left > 0 else ""
+		if left > 0:
+			_cooling[aid] = true
+		elif bool(_cooling.get(aid, false)):
+			_cooling[aid] = false
+			_ready_flash(_buttons[aid])
 	for pid: int in _fx.keys():
 		var by: Dictionary = _fx[pid]
 		for aid: String in by.keys():

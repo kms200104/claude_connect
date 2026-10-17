@@ -272,14 +272,39 @@ func _build_job() -> void:
 	var jp: int = int(Net.hunter.get("jp", 0))
 	var head: VBoxContainer = card()
 	head.get_parent().name = "JobCard"
-	head.add_child(label("%s · Lv.%d" % [str(def.get("name", job)), lv], 40, jc))
+	var title: String = str((def.get("advance", {}) as Dictionary).get("name", def.get("name", job))) if Net.is_advanced() else str(def.get("name", job))
+	head.add_child(label("%s · Lv.%d" % [title, lv], 40, jc))
 	var pts: Label = label("남은 기술 포인트 %d" % jp if jp > 0 else "레벨이 오를 때마다 기술 포인트 %d" % rules.job_per_level, 26, WARN if jp > 0 else SOFT)
 	pts.name = "SkillPoints"
 	head.add_child(pts)
 	head.add_child(label("줄을 내려갈수록 이 나무에 포인트를 %d씩 더 써야 해요. 마름모는 액티브 기술 (HUD 둥근 단추)." % rules.job_row_gate, 22, SOFT))
+	# v0.28.9 2차 전직 (Lv.30): 직업마다 하나, 포인트를 더 받고 5 · 6줄이 열린다.
+	var adv: Dictionary = def.get("advance", {})
+	if not adv.is_empty():
+		var ac: Color = Color(str(adv.get("color", "#C8302A")))
+		if Net.is_advanced():
+			head.add_child(label("2차 전직 · %s" % str(adv.get("name", "")), 30, ac))
+		else:
+			var card_adv: VBoxContainer = card()
+			card_adv.get_parent().name = "AdvanceCard"
+			var arow: HBoxContainer = HBoxContainer.new()
+			card_adv.add_child(arow)
+			var an: Label = label("2차 전직 — %s" % str(adv.get("name", "")), 30, ac, false)
+			an.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			arow.add_child(an)
+			var ready: bool = lv >= rules.job_advance_level
+			var go: Button = button("전직", 28, INK, ready)
+			go.name = "Advance"
+			go.custom_minimum_size = Vector2(130, 64)
+			go.disabled = not ready
+			go.pressed.connect(func() -> void:
+				Audio.play_ui(Audio.SFX_CLICK)
+				Net.class_advance())
+			arow.add_child(go)
+			card_adv.add_child(label("%s%s" % [str(adv.get("desc", "")), "" if ready else " (Lv.%d 부터)" % rules.job_advance_level], 22, SOFT))
 	var tree: SkillTreeView = SkillTreeView.new()
 	tree.name = "SkillTree"
-	tree.setup(job, learned, jp, _node, view_width() - 40.0)
+	tree.setup(job, learned, jp, _node, view_width() - 40.0, Net.is_advanced())
 	tree.picked.connect(func(id: String) -> void:
 		_node = id
 		_build())
@@ -294,7 +319,7 @@ func _build_job() -> void:
 		var nl: Label = label("%s  %d/%d" % [str(n.get("name", _node)), rank, int(n.get("max", 1))], 32, INK, false)
 		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(nl)
-		var block: String = rules.job_node_block(job, learned, jp, _node)
+		var block: String = rules.job_node_block(job, learned, jp, _node, Net.is_advanced())
 		var learn: Button = button("배우기", 28, INK, block.is_empty())
 		learn.name = "SkillUp"
 		learn.custom_minimum_size = Vector2(150, 72)

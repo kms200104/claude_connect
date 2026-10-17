@@ -246,6 +246,8 @@ export class Player {
       name: this.profile.name ?? '',
       title: this.profile.title ?? '',
       hr: this.profile.hunter?.rank ?? 'E', // v0.28 헌터 등급 (이름표)
+      hj: this.profile.hunter?.job ?? '', // v0.28.9 직업 · 2차 전직 (겉모습)
+      ha: this.profile.hunter?.adv === true,
       x: this.x,
       y: this.y,
       z: this.z,

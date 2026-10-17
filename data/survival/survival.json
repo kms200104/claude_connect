@@ -174,7 +174,12 @@
     "fire_axe": { "damage": 7, "range": 1.9, "cooldown_ms": 1000, "cleave": 2 },
     "crossbow": { "damage": 5, "range": 9.0, "cooldown_ms": 1100, "ammo": "crossbow_bolt", "push": 0.3 },
     "torch": { "damage": 2, "range": 1.5, "cooldown_ms": 650, "light": 3.2 },
-    "flashlight": { "damage": 1, "range": 1.4, "cooldown_ms": 650, "light": 4.5 }
+    "flashlight": { "damage": 1, "range": 1.4, "cooldown_ms": 650, "light": 4.5 },
+    "_comment_job": "v0.28.9 직업 전용 무기: job 이 아닌 사람이 들면 맨손. crit = 치명타 확률 +, mend_hit = 맞힐 때마다 그 확률로 나와 6m 안 동료 체력 +1.",
+    "greatsword": { "damage": 9, "range": 2.2, "cooldown_ms": 1150, "cleave": 3, "push": 1.2, "job": "warrior" },
+    "twin_daggers": { "damage": 3, "range": 1.5, "cooldown_ms": 380, "crit": 0.12, "job": "assassin" },
+    "repeater_crossbow": { "damage": 6, "range": 11.0, "cooldown_ms": 750, "ammo": "crossbow_bolt", "push": 0.4, "job": "ranger" },
+    "healing_staff": { "damage": 3, "range": 2.0, "cooldown_ms": 650, "mend_hit": 0.3, "light": 2.6, "job": "medic" }
   },
 
   "defense": {

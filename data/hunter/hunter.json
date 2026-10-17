@@ -140,8 +140,8 @@
         ]
       },
       "jobs": {
-        "_comment": "v0.28.8 전직 · 기술 나무: level 이 되면 헌터넷에서 직업 하나를 고른다 (바꿀 수 없다). 그 레벨부터 레벨마다 기술 포인트 per_level (전직할 때 지난 레벨 몫까지). 나무는 줄 row 1~4, 줄 r 의 기술은 그 나무에 (r-1)×row_gate 포인트를 쓰고 req 를 한 번 이상 배웠어야 한다. fx 는 한 단계마다 더해진다: melee · ranged · dmg (피해 배율 +) · crit (치명타 확률, 치명타 = 피해 × crit_base) · crit_mult · hp (최대 체력) · block (막을 확률) · cd (공격 간격 -) · speed (이동 +) · cleave (더 벨 수) · ammo_save (화살 아낄 확률) · range_ranged (사거리 m) · dodge_cd · iframe (구르기 무적 ms) · kill_heal (처치 때 체력 1 확률) · heal (치료 아이템 회복 +) · regen (체력 차는 빠르기 +) · revive (일으키기 시간 -) · needs (배고픔 · 목마름 덜 줄기) · whirl · pierce · mend (액티브 세기 +). actives 는 HUD 둥근 단추로 쓴다 (skill_use, 서버 판정). reset_sol 을 내면 쓴 포인트를 돌려받는다 (직업은 그대로).",
-        "level": 10, "per_level": 1, "row_gate": 2, "crit_base": 2.0, "reset_sol": 20000,
+        "_comment": "v0.28.8 전직 · 기술 나무: level 이 되면 헌터넷에서 직업 하나를 고른다 (바꿀 수 없다). 그 레벨부터 레벨마다 기술 포인트 per_level (전직할 때 지난 레벨 몫까지). 나무는 줄 row 1~4, 줄 r 의 기술은 그 나무에 (r-1)×row_gate 포인트를 쓰고 req 를 한 번 이상 배웠어야 한다. fx 는 한 단계마다 더해진다: melee · ranged · dmg (피해 배율 +) · crit (치명타 확률, 치명타 = 피해 × crit_base) · crit_mult · hp (최대 체력) · block (막을 확률) · cd (공격 간격 -) · speed (이동 +) · cleave (더 벨 수) · ammo_save (화살 아낄 확률) · range_ranged (사거리 m) · dodge_cd · iframe (구르기 무적 ms) · kill_heal (처치 때 체력 1 확률) · heal (치료 아이템 회복 +) · regen (체력 차는 빠르기 +) · revive (일으키기 시간 -) · needs (배고픔 · 목마름 덜 줄기) · whirl · pierce · mend (액티브 세기 +). actives 는 HUD 둥근 단추로 쓴다 (skill_use, 서버 판정). reset_sol 을 내면 쓴 포인트를 돌려받는다 (직업은 그대로). v0.28.9 2차 전직: advance_level 이 되면 직업마다 advance 하나로 (바꿀 수 없다), 포인트 advance_points 를 더 받고 adv 기술 (5 · 6줄) 이 열린다. 2차 fx: rage (체력 절반 아래 피해 +) · execute (30% 아래 크리처 피해 +) · crit_ranged · whirl_r · pierce_w · ambush (일격 배율 +) · ambush_cd (ms) · mend_revive.",
+        "level": 10, "per_level": 1, "row_gate": 2, "crit_base": 2.0, "reset_sol": 20000, "advance_level": 30, "advance_points": 2,
         "actives": {
           "whirl": { "name": "회전 베기", "icon": "旋", "color": "#E0603A", "cooldown_ms": 12000, "r": 2.8, "mult": 1.5, "push": 1.4 },
           "ambush": { "name": "그림자 일격", "icon": "刺", "color": "#8A5AD8", "cooldown_ms": 15000, "ms": 6000, "mult": 3.0 },
@@ -149,37 +149,49 @@
           "mend": { "name": "치유의 빛", "icon": "癒", "color": "#4ABA6A", "cooldown_ms": 30000, "r": 6.0, "heal": 3 }
         },
         "list": [
-          { "id": "warrior", "name": "전사", "color": "#E0603A", "desc": "앞에서 버티며 베는 근접 직업. 근접 피해 · 체력 · 휩쓸기, 액티브 '회전 베기'.", "tree": [
+          { "id": "warrior", "name": "전사", "color": "#E0603A", "desc": "앞에서 버티며 베는 근접 직업. 근접 피해 · 체력 · 휩쓸기, 액티브 '회전 베기'.", "advance": { "id": "berserker", "name": "광전사", "color": "#C8302A", "desc": "피를 볼수록 강해진다. 체력이 반 아래면 피해가 커지고, 회전 베기가 땅을 가른다." }, "tree": [
             { "id": "w_power", "name": "강타", "row": 1, "col": 0, "max": 5, "desc": "근접 피해 +8%", "fx": { "melee": 0.08 } },
             { "id": "w_tough", "name": "강철 몸", "row": 1, "col": 1, "max": 4, "desc": "최대 체력 +1 (하트 반 칸)", "fx": { "hp": 1 } },
             { "id": "w_cleave", "name": "휩쓸기", "row": 2, "col": 0, "max": 1, "desc": "근접 공격이 한 마리 더 벤다", "req": ["w_power"], "fx": { "cleave": 1 } },
             { "id": "w_guard", "name": "버티기", "row": 2, "col": 1, "max": 3, "desc": "받는 공격을 8% 확률로 막는다", "req": ["w_tough"], "fx": { "block": 0.08 } },
             { "id": "w_whirl", "name": "회전 베기", "row": 3, "col": 0, "max": 1, "desc": "액티브 — 둘레 2.8m 모든 크리처에게 무기 피해 ×1.5 · 밀쳐낸다 (12초)", "req": ["w_cleave"], "active": "whirl" },
-            { "id": "w_fury", "name": "회오리", "row": 4, "col": 0, "max": 2, "desc": "회전 베기 피해 +30%", "req": ["w_whirl"], "fx": { "whirl": 0.3 } }
+            { "id": "w_fury", "name": "회오리", "row": 4, "col": 0, "max": 2, "desc": "회전 베기 피해 +30%", "req": ["w_whirl"], "fx": { "whirl": 0.3 } },
+            { "id": "b_rage", "name": "광기", "row": 5, "col": 0, "max": 2, "desc": "체력이 절반 아래일 때 피해 +25%", "adv": true, "req": ["w_fury"], "fx": { "rage": 0.25 } },
+            { "id": "b_iron", "name": "불굴", "row": 5, "col": 1, "max": 2, "desc": "최대 체력 +2 (하트 한 칸)", "adv": true, "req": ["w_guard"], "fx": { "hp": 2 } },
+            { "id": "b_quake", "name": "대지 가르기", "row": 6, "col": 0, "max": 1, "desc": "회전 베기 범위 +0.8m · 피해 +30%", "adv": true, "req": ["b_rage"], "fx": { "whirl": 0.3, "whirl_r": 0.8 } }
           ] },
-          { "id": "assassin", "name": "암살자", "color": "#8A5AD8", "desc": "빠르게 파고들어 급소를 찌르는 직업. 치명타 · 이동 · 구르기, 액티브 '그림자 일격'.", "tree": [
+          { "id": "assassin", "name": "암살자", "color": "#8A5AD8", "desc": "빠르게 파고들어 급소를 찌르는 직업. 치명타 · 이동 · 구르기, 액티브 '그림자 일격'.", "advance": { "id": "shadow_hunter", "name": "그림자 사냥꾼", "color": "#5A2A9A", "desc": "약해진 먹잇감을 끝낸다. 처형 · 질풍, 그림자 일격이 더 세고 자주 돈다." }, "tree": [
             { "id": "a_crit", "name": "급소", "row": 1, "col": 0, "max": 5, "desc": "치명타 확률 +6% (치명타 = 피해 ×2)", "fx": { "crit": 0.06 } },
             { "id": "a_swift", "name": "날렵함", "row": 1, "col": 1, "max": 3, "desc": "이동 +3% · 구르기 다시 쓰기 -8%", "fx": { "speed": 0.03, "dodge_cd": 0.08 } },
             { "id": "a_deep", "name": "깊은 상처", "row": 2, "col": 0, "max": 3, "desc": "치명타 피해 +25%", "req": ["a_crit"], "fx": { "crit_mult": 0.25 } },
             { "id": "a_ghost", "name": "그림자 밟기", "row": 2, "col": 1, "max": 2, "desc": "구르기 무적 +0.1초", "req": ["a_swift"], "fx": { "iframe": 100 } },
             { "id": "a_ambush", "name": "그림자 일격", "row": 3, "col": 0, "max": 1, "desc": "액티브 — 6초 안 다음 공격이 반드시 치명타 · 피해 ×3 (15초)", "req": ["a_deep"], "active": "ambush" },
-            { "id": "a_reap", "name": "사냥감", "row": 4, "col": 0, "max": 2, "desc": "쓰러뜨리면 25% 확률로 체력 1 회복", "req": ["a_ambush"], "fx": { "kill_heal": 0.25 } }
+            { "id": "a_reap", "name": "사냥감", "row": 4, "col": 0, "max": 2, "desc": "쓰러뜨리면 25% 확률로 체력 1 회복", "req": ["a_ambush"], "fx": { "kill_heal": 0.25 } },
+            { "id": "s_exec", "name": "처형", "row": 5, "col": 0, "max": 2, "desc": "체력 30% 아래 크리처에게 피해 +40%", "adv": true, "req": ["a_reap"], "fx": { "execute": 0.4 } },
+            { "id": "s_haste", "name": "질풍", "row": 5, "col": 1, "max": 2, "desc": "공격 간격 -8%", "adv": true, "req": ["a_ghost"], "fx": { "cd": 0.08 } },
+            { "id": "s_phantom", "name": "환영 일격", "row": 6, "col": 0, "max": 1, "desc": "그림자 일격 피해 +100% · 다시 쓰기 -5초", "adv": true, "req": ["s_exec"], "fx": { "ambush": 1.0, "ambush_cd": 5000 } }
           ] },
-          { "id": "ranger", "name": "사수", "color": "#3AA0E0", "desc": "멀리서 석궁으로 쏘는 직업. 원거리 피해 · 화살 아끼기 · 사거리, 액티브 '관통 사격'.", "tree": [
+          { "id": "ranger", "name": "사수", "color": "#3AA0E0", "desc": "멀리서 석궁으로 쏘는 직업. 원거리 피해 · 화살 아끼기 · 사거리, 액티브 '관통 사격'.", "advance": { "id": "sharpshooter", "name": "명사수", "color": "#1A6AB0", "desc": "한 발 한 발이 급소를 노린다. 원거리 치명타 · 가벼운 화살, 관통 사격이 넓어진다." }, "tree": [
             { "id": "r_aim", "name": "조준", "row": 1, "col": 0, "max": 5, "desc": "원거리 피해 +10%", "fx": { "ranged": 0.1 } },
             { "id": "r_quiver", "name": "화살 아끼기", "row": 1, "col": 1, "max": 3, "desc": "15% 확률로 화살을 쓰지 않는다", "fx": { "ammo_save": 0.15 } },
             { "id": "r_long", "name": "멀리 쏘기", "row": 2, "col": 0, "max": 2, "desc": "원거리 사거리 +1.5m", "req": ["r_aim"], "fx": { "range_ranged": 1.5 } },
             { "id": "r_quick", "name": "빠른 장전", "row": 2, "col": 1, "max": 3, "desc": "공격 간격 -6%", "req": ["r_quiver"], "fx": { "cd": 0.06 } },
             { "id": "r_pierce", "name": "관통 사격", "row": 3, "col": 0, "max": 1, "desc": "액티브 — 석궁을 들고, 보는 쪽 14m 일직선의 모든 크리처에게 피해 ×1.4 (화살 1, 10초)", "req": ["r_long"], "active": "pierce" },
-            { "id": "r_eagle", "name": "매의 눈", "row": 4, "col": 0, "max": 2, "desc": "관통 사격 피해 +30%", "req": ["r_pierce"], "fx": { "pierce": 0.3 } }
+            { "id": "r_eagle", "name": "매의 눈", "row": 4, "col": 0, "max": 2, "desc": "관통 사격 피해 +30%", "req": ["r_pierce"], "fx": { "pierce": 0.3 } },
+            { "id": "k_head", "name": "헤드샷", "row": 5, "col": 0, "max": 2, "desc": "원거리 치명타 확률 +10%", "adv": true, "req": ["r_eagle"], "fx": { "crit_ranged": 0.1 } },
+            { "id": "k_light", "name": "가벼운 화살", "row": 5, "col": 1, "max": 2, "desc": "화살을 아낄 확률 +15%", "adv": true, "req": ["r_quick"], "fx": { "ammo_save": 0.15 } },
+            { "id": "k_rain", "name": "화살비", "row": 6, "col": 0, "max": 1, "desc": "관통 사격 폭 +1m · 피해 +30%", "adv": true, "req": ["k_head"], "fx": { "pierce": 0.3, "pierce_w": 1.0 } }
           ] },
-          { "id": "medic", "name": "치유사", "color": "#4ABA6A", "desc": "둘이 오래 살아남게 돕는 직업. 치료 · 회복 · 일으키기, 액티브 '치유의 빛'.", "tree": [
+          { "id": "medic", "name": "치유사", "color": "#4ABA6A", "desc": "둘이 오래 살아남게 돕는 직업. 치료 · 회복 · 일으키기, 액티브 '치유의 빛'.", "advance": { "id": "archmedic", "name": "대치유사", "color": "#2A9A5A", "desc": "동료를 다시 일으켜 세운다. 보호막 · 활력, 치유의 빛이 쓰러진 동료를 바로 일으킨다." }, "tree": [
             { "id": "m_care", "name": "응급 처치", "row": 1, "col": 0, "max": 3, "desc": "치료 아이템 회복 +1", "fx": { "heal": 1 } },
             { "id": "m_life", "name": "생명력", "row": 1, "col": 1, "max": 3, "desc": "최대 체력 +1 · 체력이 15% 더 빨리 찬다", "fx": { "hp": 1, "regen": 0.15 } },
             { "id": "m_hands", "name": "빠른 손", "row": 2, "col": 0, "max": 2, "desc": "동료 일으키기 시간 -20%", "req": ["m_care"], "fx": { "revive": 0.2 } },
             { "id": "m_calm", "name": "절제", "row": 2, "col": 1, "max": 2, "desc": "배고픔 · 목마름이 20% 덜 준다", "req": ["m_life"], "fx": { "needs": 0.2 } },
             { "id": "m_mend", "name": "치유의 빛", "row": 3, "col": 0, "max": 1, "desc": "액티브 — 나와 6m 안 동료의 체력 +3 · 피를 멈춘다 (30초)", "req": ["m_hands"], "active": "mend" },
-            { "id": "m_bless", "name": "축복", "row": 4, "col": 0, "max": 2, "desc": "치유의 빛 회복 +1", "req": ["m_mend"], "fx": { "mend": 1 } }
+            { "id": "m_bless", "name": "축복", "row": 4, "col": 0, "max": 2, "desc": "치유의 빛 회복 +1", "req": ["m_mend"], "fx": { "mend": 1 } },
+            { "id": "h_ward", "name": "보호막", "row": 5, "col": 0, "max": 2, "desc": "받는 공격을 8% 확률로 막는다", "adv": true, "req": ["m_bless"], "fx": { "block": 0.08 } },
+            { "id": "h_vital", "name": "활력", "row": 5, "col": 1, "max": 2, "desc": "최대 체력 +2 (하트 한 칸)", "adv": true, "req": ["m_calm"], "fx": { "hp": 2 } },
+            { "id": "h_rebirth", "name": "부활의 빛", "row": 6, "col": 0, "max": 1, "desc": "치유의 빛이 6m 안 쓰러진 동료를 바로 일으킨다", "adv": true, "req": ["h_ward"], "fx": { "mend_revive": 1 } }
           ] }
         ]
       }

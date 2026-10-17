@@ -186,6 +186,13 @@ func _run() -> void:
 		if jp_btn != null:
 			jp_btn.pressed.emit()
 		_check(await _wait_until(func() -> bool: return Net.job_id() == "warrior" and int(Net.hunter.get("jp", 0)) == 1, 3.0), "전사로 전직 · 기술 포인트 1")
+		# v0.28.9 직업 겉모습: 목에 전사 색 스카프 · 등에 휘장.
+		var me: Player = _village.get_node("Player")
+		_check(await _wait_until(func() -> bool: return me.rig.neck.get_node_or_null("JobScarf") != null and me.rig.upper.get_node_or_null("JobEmblem") != null, 3.0), "전사 스카프 · 휘장")
+		# 2차 전직은 Lv.30 부터 (단추가 잠겨 있다).
+		await get_tree().create_timer(0.3).timeout
+		var adv_btn: Button = app.find_child("Advance", true, false) as Button
+		_check(adv_btn != null and adv_btn.disabled, "2차 전직 단추 (Lv.30 전에는 잠김)")
 		await get_tree().create_timer(0.3).timeout
 		var tree: SkillTreeView = app.find_child("SkillTree", true, false) as SkillTreeView
 		_check(tree != null and tree.node_button("w_power") != null and tree.node_button("w_whirl") != null, "기술 나무 (강타 · 회전 베기)")

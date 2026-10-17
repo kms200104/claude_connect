@@ -66,13 +66,14 @@ export function sanitizeHunter(raw, rules) {
 
 function sanitizeJob(h, rules, intOr) {
   const job = typeof h.job === 'string' ? rules?.jobById?.get(h.job) : null;
-  if (!job) return { job: '', jp: 0, jt: {} };
+  if (!job) return { job: '', adv: false, jp: 0, jt: {} };
   const jt = {};
   for (const [id, n] of Object.entries(h.jt ?? {})) {
     const node = job.nodeById.get(id);
     if (node && Number.isInteger(n) && n > 0) jt[id] = Math.min(n, node.max);
   }
-  return { job: job.id, jp: Math.max(0, intOr(h.jp, 0)), jt };
+  // v0.28.9 2차 전직 (advance 가 있는 직업만).
+  return { job: job.id, adv: h.adv === true && Boolean(job.advance), jp: Math.max(0, intOr(h.jp, 0)), jt };
 }
 
 /** v0.28.8 그 레벨에서 전직하면 받는 기술 포인트 (전직 레벨부터 레벨마다). */
@@ -211,7 +212,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       skills: (H.level?.skills ?? []).filter((sk) => h.lv >= sk.level).map((sk) => sk.id),
       aw: [...h.aw], awSlots: awakenSlots(H, h.lv),
       awReady: Object.fromEntries(h.aw.map((a) => [a, Math.max(0, (player.awReady?.[a] ?? 0) - now())])),
-      job: h.job, jp: h.jp, jt: { ...h.jt },
+      job: h.job, adv: h.adv, jp: h.jp, jt: { ...h.jt },
       jReady: Object.fromEntries(Object.keys(H.level?.jobs?.actives ?? {}).filter((a) => hasActive(H, player.profile, a)).map((a) => [a, Math.max(0, (player.skReady?.[a] ?? 0) - now())])),
     };
   }
@@ -465,10 +466,28 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         if (h.job) return fail(ErrorCode.jobTaken);
         if (h.lv < J.level) return fail(ErrorCode.jobLevel);
         h.job = job.id;
+        h.adv = false;
         h.jp = jobPointsAt(H, h.lv);
         h.jt = {};
         send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'job', j: job.id, jp: h.jp });
-        room.broadcast({ t: 'hunter_job', id: player.id, j: job.id }, player.id);
+        room.broadcast({ t: 'hunter_job', id: player.id, j: job.id, a: false }, player.id);
+        sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      // v0.28.9 2차 전직: advance_level 에, 직업의 advance 로 (바꿀 수 없다). 포인트를 더 받는다.
+      case 'class_advance': {
+        const J = H.level?.jobs;
+        const h = rec(player);
+        const job = h.job ? H.jobById?.get(h.job) : null;
+        if (!J || !job) return fail(ErrorCode.noJobYet);
+        if (!job.advance) return fail(ErrorCode.badItem);
+        if (h.adv) return fail(ErrorCode.jobTaken);
+        if (h.lv < (J.advance_level ?? 30)) return fail(ErrorCode.jobLevel);
+        h.adv = true;
+        h.jp += J.advance_points ?? 0;
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'advance', j: job.id, a: job.advance.id, jp: h.jp });
+        room.broadcast({ t: 'hunter_job', id: player.id, j: job.id, a: true }, player.id);
         sendHunter(room, player);
         saveRoom(room);
         return;
@@ -481,7 +500,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         if (!J || !node) return fail(ErrorCode.badItem);
         if (h.jp <= 0) return fail(ErrorCode.noSkillPoint);
         if ((h.jt[node.id] ?? 0) >= node.max) return fail(ErrorCode.skillMaxed);
-        if (spentOf(h) < (node.row - 1) * J.row_gate || (node.req ?? []).some((r) => (h.jt[r] ?? 0) <= 0)) return fail(ErrorCode.skillLocked);
+        if ((node.adv && !h.adv) || spentOf(h) < (node.row - 1) * J.row_gate || (node.req ?? []).some((r) => (h.jt[r] ?? 0) <= 0)) return fail(ErrorCode.skillLocked);
         h.jp--;
         h.jt[node.id] = (h.jt[node.id] ?? 0) + 1;
         send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'skill', n: node.id, v: h.jt[node.id], jp: h.jp });

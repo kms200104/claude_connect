@@ -172,4 +172,52 @@ describe('v0.28.8 전직 · 기술 나무', () => {
     assert.deepEqual(me.profile.hunter.jt, {});
     assert.equal(me.profile.hunter.job, 'medic', '직업은 그대로');
   });
+
+  it('v0.28.9 2차 전직: Lv.30 에, 포인트를 더 받고 5 · 6줄이 열린다', async () => {
+    const { c, me } = await setup();
+    assert.equal((await ask(c, { t: 'class_advance' })).code, 'no_job_yet');
+    me.profile.hunter.lv = 25;
+    await ask(c, { t: 'class_pick', j: 'warrior' });
+    assert.equal((await ask(c, { t: 'class_advance' })).code, 'job_level');
+    // 5줄 (불굴) 은 2차 전직 전에는 잠겨 있다 (앞 기술 · 줄 조건을 채워도).
+    me.profile.hunter.jt = { w_power: 5, w_tough: 4, w_cleave: 1, w_guard: 3, w_whirl: 1, w_fury: 2 };
+    me.profile.hunter.jp = 3;
+    assert.equal((await ask(c, { t: 'skill_up', n: 'b_iron' })).code, 'skill_locked');
+    me.profile.hunter.lv = 30;
+    const r = await ask(c, { t: 'class_advance' });
+    assert.equal(r.kind, 'advance');
+    assert.equal(r.a, 'berserker');
+    assert.equal(r.jp, 3 + J.advance_points);
+    assert.equal((await ask(c, { t: 'class_advance' })).code, 'job_taken');
+    assert.equal((await ask(c, { t: 'skill_up', n: 'b_iron' })).v, 1);
+    assert.equal(jobFx(data.hunter, me.profile, 'hp'), 4 + 2);
+  });
+
+  it('v0.28.9 직업 전용 무기: 그 직업만 쓰고 (아니면 맨손) 만든다', async () => {
+    const { c, me, room } = await setup();
+    me.profile.hunter.lv = 12;
+    assert.equal((await ask(c, { t: 'craft', recipe: 'greatsword' })).code, 'job_only');
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    const hold = () => {
+      me.profile.slots[4] = { id: 'greatsword', n: 1 };
+      me.profile.held = 4;
+    };
+    hold();
+    putCreature(room, 'g1', spot.x + 1, spot.z, 40);
+    await ask(c, { t: 'attack' });
+    const h1 = await c.next((m) => m.t === 'creature_hit' && m.id === 'g1', 2000);
+    assert.equal(h1.w, 'hands', '전사가 아니면 맨손');
+    await ask(c, { t: 'class_pick', j: 'warrior' });
+    hold();
+    await sleep(1300);
+    // (낮이라 크리처가 흩어지므로 휘두르기 바로 앞에 둔다.)
+    putCreature(room, 'g1', spot.x + 1, spot.z, 40);
+    putCreature(room, 'g2', spot.x + 1.2, spot.z, 40);
+    putCreature(room, 'g3', spot.x - 1.2, spot.z, 40);
+    const r = await ask(c, { t: 'attack' });
+    assert.equal(r.n, 3, '대검은 셋까지 벤다');
+    const h2 = await c.next((m) => m.t === 'creature_hit' && m.w === 'greatsword', 2000);
+    assert.ok(h2.hp < 40 - 5);
+  });
 });

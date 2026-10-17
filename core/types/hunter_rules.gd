@@ -72,6 +72,9 @@ var job_level: int = 10
 var job_per_level: int = 1
 var job_row_gate: int = 2
 var job_reset_sol: int = 20000
+## v0.28.9 2차 전직 레벨 · 받는 포인트 (직업마다 advance {id, name, color, desc}).
+var job_advance_level: int = 30
+var job_advance_points: int = 2
 var job_actives: Dictionary[String, Dictionary] = {}
 var jobs: Array[Dictionary] = []
 
@@ -122,6 +125,8 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	r.job_per_level = int(jd.get("per_level", r.job_per_level))
 	r.job_row_gate = int(jd.get("row_gate", r.job_row_gate))
 	r.job_reset_sol = int(jd.get("reset_sol", r.job_reset_sol))
+	r.job_advance_level = int(jd.get("advance_level", r.job_advance_level))
+	r.job_advance_points = int(jd.get("advance_points", r.job_advance_points))
 	var acts: Dictionary = jd.get("actives", {})
 	for k: Variant in acts:
 		if acts[k] is Dictionary:
@@ -216,10 +221,12 @@ func job_fx(job_id: String, learned: Dictionary, key: String) -> float:
 
 
 ## 기술을 지금 배울 수 있는지: "" = 된다, 아니면 까닭 (포인트 · 끝까지 · 앞 기술 · 줄).
-func job_node_block(job_id: String, learned: Dictionary, points: int, node_id: String) -> String:
+func job_node_block(job_id: String, learned: Dictionary, points: int, node_id: String, advanced: bool = false) -> String:
 	var n: Dictionary = job_node(job_id, node_id)
 	if n.is_empty():
 		return "없는 기술"
+	if bool(n.get("adv", false)) and not advanced:
+		return "2차 전직 (Lv.%d) 뒤에 열려요" % job_advance_level
 	if int(learned.get(node_id, 0)) >= int(n.get("max", 1)):
 		return "끝까지 배웠어요"
 	var spent: int = 0

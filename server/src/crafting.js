@@ -67,6 +67,8 @@ export function createCrafting({ data, cfg, send, sendInventory, inShop, homeIte
     if (!player.acceptRid(msg.rid)) return;
     const recipe = crafting?.recipes.get(msg.recipe);
     if (!recipe) return fail(ErrorCode.badItem);
+    // v0.28.9 직업 전용 (그 직업으로 전직한 사람만).
+    if (recipe.job && player.profile.hunter?.job !== recipe.job) return fail(ErrorCode.jobOnly);
     const n = Number.isInteger(msg.n) ? msg.n : 1;
     if (n < 1 || n > MAX_BATCH) return fail(ErrorCode.badItem);
     const tier = tierOf(room, player);

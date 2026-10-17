@@ -9,6 +9,8 @@ class Recipe:
 	var n: int = 1
 	var tier: int = 0
 	var category: String = ""
+	## v0.28.9 직업 전용 (그 직업으로 전직한 사람만 만든다, 빈 글자 = 누구나).
+	var job: String = ""
 	## [[아이템 id, 개수], …]
 	var needs: Array[Array] = []
 
@@ -42,6 +44,7 @@ static func from_dict(data: Dictionary) -> CraftingRules:
 			r.out = str(entry.get("out", r.id))
 			r.n = int(entry.get("n", 1))
 			r.tier = int(entry.get("tier", 0))
+			r.job = str(entry.get("job", ""))
 			r.category = str(entry.get("cat", ""))
 			for need: Variant in entry.get("needs", []):
 				if need is Dictionary:

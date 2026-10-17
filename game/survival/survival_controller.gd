@@ -297,6 +297,12 @@ func held_weapon_id() -> String:
 func held_weapon() -> SurvivalRules.Weapon:
 	var rules: SurvivalRules = GameData.survival
 	var w: SurvivalRules.Weapon = rules.weapon_of(player.held_item if player != null else "")
+	# v0.28.9 다른 직업 전용 무기는 맨손 (서버도 같다).
+	if not w.job.is_empty() and Net.job_id() != w.job:
+		if not _warned_job and toast_hud != null and Net.state == Net.State.ONLINE:
+			_warned_job = true
+			toast_hud.show_toast("%s 전용 무기예요 — 맨손으로 싸워요" % str(GameData.hunter.job(w.job).get("name", w.job)), false)
+		return rules.weapon_of("hands")
 	if not w.ammo.is_empty():
 		var have: int = 0
 		for it: InventoryItem in Net.inventory:
@@ -312,6 +318,7 @@ func held_weapon() -> SurvivalRules.Weapon:
 
 
 var _warned_ammo: bool = false
+var _warned_job: bool = false
 
 
 ## v0.28.4 자동 공격: 공격 범위 안에 크리처가 들면 (공격 간격이 찼을 때) 저절로 휘두른다. 상황 버튼은 그대로 (눌러도 된다).
@@ -520,6 +527,14 @@ func _on_skill_fx(info: Dictionary) -> void:
 			var from: Vector3 = at + Vector3(0.0, 1.2, 0.0) + fwd * 0.5
 			Fx.beam(parent, from, from + fwd * float(info.get("len", 14.0)), col, 0.5, 0.4)
 			Fx.flash(parent, from, Color("#DFF2FF"), 1.0)
+		"staff":
+			# v0.28.9 치유 지팡이: 맞힐 때 가끔 곁 동료와 함께 체력 +1 (작은 반짝이).
+			Audio.play_at("skill_mend", at, -12.0, 1.4)
+			for hid: Variant in info.get("n", []):
+				var sh: Node3D = _who(int(hid))
+				if sh != null:
+					Fx.sparkle_column(parent, sh.global_position, Color("#7AE89A"), 0.35)
+			return
 		"mend":
 			Audio.play_at("skill_mend", at, -2.0)
 			var mr: float = float(info.get("r", 6.0))

@@ -1866,6 +1866,7 @@ export function createServer(overrides = {}) {
       case 'awaken':
       case 'awaken_use':
       case 'class_pick':
+      case 'class_advance':
       case 'skill_up':
       case 'skill_reset':
         return hunter.handle(ctx, msg, fail);
@@ -2128,6 +2129,7 @@ export function createServer(overrides = {}) {
       case 'awaken':
       case 'awaken_use':
       case 'class_pick':
+      case 'class_advance':
       case 'skill_up':
       case 'skill_reset':
       case 'skill_use':

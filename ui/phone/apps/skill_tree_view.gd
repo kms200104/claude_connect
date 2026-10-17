@@ -16,17 +16,22 @@ var color: Color = Color("#E0603A")
 var learned: Dictionary = {}
 var points: int = 0
 var selected: String = ""
+## v0.28.9 2차 전직을 했는지 (5 · 6줄 adv 기술이 열린다) · 2차 직업 색.
+var advanced: bool = false
+var adv_color: Color = Color("#C8302A")
 var _buttons: Dictionary[String, Button] = {}
 var _time: float = 0.0
 
 
-func setup(p_job: String, p_learned: Dictionary, p_points: int, p_selected: String, width: float) -> void:
+func setup(p_job: String, p_learned: Dictionary, p_points: int, p_selected: String, width: float, p_advanced: bool = false) -> void:
 	job_id = p_job
 	learned = p_learned
 	points = p_points
 	selected = p_selected
+	advanced = p_advanced
 	var job: Dictionary = GameData.hunter.job(job_id)
 	color = Color(str(job.get("color", "#E0603A")))
+	adv_color = Color(str((job.get("advance", {}) as Dictionary).get("color", job.get("color", "#C8302A"))))
 	var rows: int = 1
 	var cols: int = 1
 	for n: Variant in job.get("tree", []):
@@ -73,6 +78,16 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	# 2차 전직 줄 (adv) 위에 구분선과 이름.
+	var first_adv: int = 99
+	for n: Variant in GameData.hunter.job(job_id).get("tree", []):
+		if bool((n as Dictionary).get("adv", false)):
+			first_adv = mini(first_adv, int((n as Dictionary).get("row", 99)))
+	if first_adv < 99:
+		var y: float = 20.0 + (float(first_adv) - 1.0) * ROW_H - 6.0
+		draw_dashed_line(Vector2(20.0, y), Vector2(size.x - 20.0, y), Color(adv_color, 0.7 if advanced else 0.35), 4.0, 16.0)
+		var adv_name: String = str((GameData.hunter.job(job_id).get("advance", {}) as Dictionary).get("name", "2차 전직"))
+		draw_string(get_theme_default_font(), Vector2(24.0, y + 30.0), "%s%s" % [adv_name, "" if advanced else " (Lv.%d)" % GameData.hunter.job_advance_level], HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(adv_color, 1.0 if advanced else 0.55))
 	# 앞 기술 → 뒤 기술 선 (배웠으면 직업 색, 아니면 흐린 회색).
 	for n: Variant in GameData.hunter.job(job_id).get("tree", []):
 		var node: Dictionary = n
@@ -93,13 +108,14 @@ func _draw_node(b: Button, node: Dictionary) -> void:
 	var id: String = str(node.get("id", ""))
 	var rank: int = int(learned.get(id, 0))
 	var mx: int = int(node.get("max", 1))
-	var block: String = GameData.hunter.job_node_block(job_id, learned, points, id)
+	var block: String = GameData.hunter.job_node_block(job_id, learned, points, id, advanced)
 	var can: bool = block.is_empty()
 	var locked: bool = rank == 0 and not can and not block.begins_with("기술 포인트")
+	var nc: Color = adv_color if bool(node.get("adv", false)) else color
 	var c: Vector2 = b.size * 0.5
 	var r: float = NODE * 0.46
 	var active: bool = not str(node.get("active", "")).is_empty()
-	var fill: Color = color if rank > 0 else (Color("#F6F0E4") if not locked else Color("#E2DCD2"))
+	var fill: Color = nc if rank > 0 else (Color("#F6F0E4") if not locked else Color("#E2DCD2"))
 	if active:
 		# 액티브 기술은 마름모.
 		var pts: PackedVector2Array = [c + Vector2(0, -r * 1.08), c + Vector2(r * 1.08, 0), c + Vector2(0, r * 1.08), c + Vector2(-r * 1.08, 0)]
