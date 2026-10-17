@@ -34,6 +34,14 @@ var drop_hover: bool = false:
 		drop_hover = value
 		queue_redraw()
 
+## v0.28.7 퀵슬롯에서 누르면 바로 쓰는 것 표시 (오른쪽 위 작은 띠: "먹기" · "치료" · "화살"). 빈 글자면 안 그린다.
+var badge: String = "":
+	set(value):
+		if badge != value:
+			badge = value
+			queue_redraw()
+var badge_color: Color = Color("#4A9A3A")
+
 var _item: InventoryItem = null
 var _info: ItemInfo = null
 
@@ -136,6 +144,15 @@ func _draw() -> void:
 		var label: String = _info.short_name if _info != null else _item.id.left(2)
 		var font_size: int = int(r.size.x * 0.24)
 		draw_string(font, center + Vector2(-radius, font_size * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size, Color.WHITE)
+	if not badge.is_empty():
+		var bs: int = int(r.size.x * 0.15)
+		var bw: float = font.get_string_size(badge, HORIZONTAL_ALIGNMENT_LEFT, -1, bs).x + 12.0
+		var br: Rect2 = Rect2(Vector2(r.end.x - bw - 2.0, r.position.y + 2.0), Vector2(bw, bs + 8.0))
+		var tag: StyleBoxFlat = StyleBoxFlat.new()
+		tag.bg_color = badge_color
+		tag.set_corner_radius_all(int(br.size.y * 0.5))
+		draw_style_box(tag, br)
+		draw_string(font, br.position + Vector2(6.0, bs + 1.0), badge, HORIZONTAL_ALIGNMENT_LEFT, -1, bs, Color.WHITE)
 	if _item.count > 1:
 		var count_size: int = int(r.size.x * 0.2)
 		draw_string_outline(font, r.end - Vector2(r.size.x * 0.5 + 8, 10), str(_item.count), HORIZONTAL_ALIGNMENT_RIGHT, r.size.x * 0.5, count_size, 8, BG)

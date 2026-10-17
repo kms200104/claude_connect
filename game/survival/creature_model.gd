@@ -223,6 +223,51 @@ static func _params(kind: String) -> Dictionary:
 static func parts(kind: String) -> Parts:
 	if _cache.has(kind):
 		return _cache[kind]
+	var p: Parts = _make_parts(kind)
+	_cache[kind] = p
+	return p
+
+
+## v0.28.7 미리 빚기: 크리처 종류마다 모형 (메시 · LOD) 을 일꾼 스레드에서 만들어 둔다 —
+## 밤에 그 종류가 처음 나타날 때 0.2초쯤 멈칫하지 않게. 다 되면 본 스레드에서 _cache 에 넣는다.
+static var _warming: bool = false
+
+
+static func prewarm(kinds: PackedStringArray) -> void:
+	if _warming:
+		return
+	_warming = true
+	var todo: PackedStringArray = PackedStringArray()
+	for k: String in kinds:
+		if not _cache.has(k):
+			todo.append(k)
+	if todo.is_empty():
+		return
+	_warm_left = todo.size()
+	_warm_task = WorkerThreadPool.add_group_task(func(i: int) -> void:
+		var built: Parts = _make_parts(todo[i])
+		_store.call_deferred(todo[i], built), todo.size(), -1, false, "creature_prewarm")
+
+
+static var _warm_task: int = -1
+static var _warm_left: int = 0
+
+
+static func _store(kind: String, p: Parts) -> void:
+	if not _cache.has(kind):
+		_cache[kind] = p
+	_warm_left -= 1
+	if _warm_left <= 0 and _warm_task >= 0:
+		WorkerThreadPool.wait_for_group_task_completion(_warm_task)
+		_warm_task = -1
+
+
+## 미리 빚어 둔 (또는 이미 쓴) 종류인지 (점검용).
+static func is_ready(kind: String) -> bool:
+	return _cache.has(kind)
+
+
+static func _make_parts(kind: String) -> Parts:
 	var d: Dictionary = _params(kind)
 	var p: Parts = Parts.new()
 	p.kind = kind
@@ -253,7 +298,6 @@ static func parts(kind: String) -> Parts:
 	# v0.28.7 멀리 있으면 엉성한 모양으로 (자동 LOD — 몸통 · 팔다리만, 눈 같은 빛나는 부위는 작아서 그대로).
 	for key: String in p.meshes.keys():
 		p.meshes[key] = with_lods(p.meshes[key])
-	_cache[kind] = p
 	return p
 
 

@@ -833,6 +833,9 @@ func _build_hud() -> void:
 	needs_bar.toast_hud = toast_hud
 	dodge_button = DodgeButton.new()
 	dodge_button.player = player
+	var hotbar: Hotbar = hud.get_node_or_null("Hotbar") as Hotbar if hud != null else null
+	if hotbar != null:
+		hotbar.toast_hud = toast_hud
 	_hearts = HBoxContainer.new()
 	_hearts.name = "Hearts"
 	_hearts.mouse_filter = Control.MOUSE_FILTER_IGNORE

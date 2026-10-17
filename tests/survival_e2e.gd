@@ -94,11 +94,14 @@ func _run() -> void:
 	_check(survival.dodge_button.visible, "구르기 단추")
 	survival.dodge_button.pressed.emit()
 	_check(await _wait_until(func() -> bool: return me.is_rolling(), 2.0), "구른다")
-	await _shot("surv_dodge_roll")
+	_check(Net.dodge_ready_at > Time.get_ticks_msec(), "재사용 대기 시작")
+	await get_tree().process_frame
+	_check((survival.dodge_button.get_node("Cool") as Label).visible or Net.dodge_ready_at <= Time.get_ticks_msec(), "재사용 대기 표시")
 	_check(await _wait_until(func() -> bool: return not me.is_rolling(), 2.0), "구르기 끝")
 	var rolled: float = Vector2(me.global_position.x - roll_from.x, me.global_position.z - roll_from.z).length()
 	_check(rolled > 2.0 and me.global_position.z < roll_from.z, "보는 쪽 (-Z) 으로 %.1fm" % rolled)
-	_check(Net.dodge_ready_at > Time.get_ticks_msec() and (survival.dodge_button.get_node("Cool") as Label).visible, "재사용 대기 표시")
+	await _shot("surv_dodge_roll")
+	Net.dodge_ready_at = Time.get_ticks_msec() + 1500
 	survival.dodge_button.pressed.emit()
 	await get_tree().create_timer(0.5).timeout
 	_check(not me.is_rolling(), "대기 중에는 못 구른다")
@@ -159,8 +162,9 @@ func _run() -> void:
 	# (맞는 순간을 잡아 둔다 — 스크린샷을 그리는 동안 맞으면 효과가 이미 사라졌을 수 있다.)
 	var hurt: HurtOverlay = survival.get("_hurt")
 	var hurt_seen: Array[bool] = [false]
+	# (SurvivalController._on_hurt 가 먼저 이어져 있어 이 때 이미 hit() 가 불렸다.)
 	var on_hurt: Callable = func(_info: Dictionary) -> void:
-		get_tree().process_frame.connect(func() -> void: hurt_seen[0] = hurt_seen[0] or hurt.is_showing(), CONNECT_ONE_SHOT)
+		hurt_seen[0] = hurt_seen[0] or hurt.is_showing()
 	Net.hurt.connect(on_hurt)
 	_check(await _wait_until(func() -> bool: return Net.hp < Net.max_hp, 40.0), "크리처가 다가와 때렸다 (체력 %d)" % Net.hp)
 	await get_tree().process_frame
@@ -188,6 +192,29 @@ func _run() -> void:
 	var band_q: int = _count("bandage")
 	hb.pressed.emit()
 	_check(await _wait_until(func() -> bool: return Net.hp > hp_q and _count("bandage") == band_q - 1, 3.0), "퀵버튼으로 붕대를 썼다 (체력 %d → %d)" % [hp_q, Net.hp])
+	# v0.28.7 퀵슬롯 바로 쓰기: 붕대를 3번 칸으로 옮기면 '치료' 띠, 누르면 손에 들지 않고 바로 쓴다 (체력이 가득하면 서버가 거절).
+	var qs_band: int = -1
+	for i: int in Net.inventory.size():
+		if Net.inventory[i] != null and Net.inventory[i].id == "bandage":
+			qs_band = i
+	var hotbar: Hotbar = _village.get_node("HUD/Hotbar") as Hotbar
+	if qs_band >= 0:
+		if qs_band != 2:
+			Net.move_item(qs_band, 2)
+		_check(await _wait_until(func() -> bool: return Net.inventory[2] != null and Net.inventory[2].id == "bandage" and hotbar.slot_button(2).badge == "치료", 2.0), "퀵슬롯 붕대에 '치료' 띠")
+		var held_before: int = Net.held_slot
+		var used: Array[String] = [""]
+		var on_fail: Callable = func(kind: String, code: String) -> void:
+			if kind == "use":
+				used[0] = code
+		Net.request_failed.connect(on_fail)
+		var hp_b: int = Net.hp
+		var band_b: int = _count("bandage")
+		hotbar.slot_button(2).pressed.emit()
+		_check(await _wait_until(func() -> bool: return not used[0].is_empty() or Net.hp > hp_b or _count("bandage") < band_b, 3.0) and Net.held_slot == held_before, "퀵슬롯 붕대를 누르면 바로 쓴다 (손에 들지 않음, %s)" % (used[0] if not used[0].is_empty() else "썼다"))
+		Net.request_failed.disconnect(on_fail)
+	else:
+		_check(false, "가방에 붕대가 남아 있다")
 	var noises: Array = [0]
 	Net.noise_made.connect(func(_i: Dictionary) -> void: noises[0] += 1)
 	var dead: Array = [false]

@@ -89,6 +89,9 @@ static var _pool_mesh: ArrayMesh = null
 
 func _ready() -> void:
 	add_to_group(&"creature_field")
+	# v0.28.7 첫 화면에 있는 동안 크리처 모형을 미리 빚어 둔다 (일꾼 스레드).
+	if GameData.survival != null:
+		CreatureModel.prewarm(PackedStringArray(GameData.survival.creature_kinds.keys()))
 	Net.creatures_updated.connect(_sync)
 	Net.creature_hit.connect(_on_hit)
 	Net.creature_dead.connect(_on_dead)
