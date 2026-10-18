@@ -51,6 +51,9 @@ export const defaultConfig = {
   quickSlots: num('QUICK_SLOTS', 5),
   inventoryCapacity: num('INVENTORY_CAPACITY', 30),
   inventoryStackSize: num('INVENTORY_STACK_SIZE', 99),
+  // v0.28.15 아공간 주머니 · 상자로 늘릴 수 있는 가장 많은 칸.
+  bagExtraMax: num('BAG_EXTRA_MAX', 40),
+  stashExtraMax: num('STASH_EXTRA_MAX', 24),
   // v13: 버린 물건은 사라지지 않고 발밑에 남는다. 마을 바닥에 둘 수 있는 묶음 수.
   groundItemMax: num('GROUND_ITEM_MAX', 150),
 
@@ -136,6 +139,8 @@ export const defaultConfig = {
   startSol: num('START_SOL', 0),
   // v0.28.5 시험용: 처음 만든 헌터 기록의 레벨 (각성 시험).
   startHunterLv: num('START_HUNTER_LV', 0),
+  // v0.28.15 시험용: 처음 들어올 때 헌터 마일리지를 이만큼 채운다 (0 이면 그대로).
+  startMileage: num('START_MILEAGE', 0),
   // v0.24 처음 들어온 사람의 체력 (시험용, 0 이면 가득).
   startHp: num('START_HP', 0),
   // 테스트 도구 (v0.13.7): 켜면 앱 설정의 "테스트: 2000억 솔 받기"가 동작한다. 서버 실행 파일(tools/server_app)은 켜서 띄운다. 실제 서비스에서는 끈다.

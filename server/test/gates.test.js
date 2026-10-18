@@ -109,6 +109,8 @@ describe('v0.28 게이트', () => {
     await c.next((m) => m.t === 'gate_gone' && m.g === opened.id && m.why === 'clear', 2000);
     assert.equal(me.profile.hunter.gates, 1);
     assert.ok(me.profile.hunter.pts >= G.ranks.E.pts);
+    // v0.28.15 마일리지: 받은 점수만큼 + 게이트 덤.
+    assert.ok(me.profile.hunter.mi >= me.profile.hunter.pts * data.hunter.mileage.per_point + data.hunter.mileage.gate.E - 0, `마일리지 ${me.profile.hunter.mi}`);
     assert.equal(room.gates.size, 0);
     assert.ok(waves.length >= 2);
   });

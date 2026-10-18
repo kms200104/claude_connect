@@ -79,6 +79,7 @@ function newProfile(uid, slot, cfg, data) {
     uid,
     slot,
     slots: ensureStarterTools(emptySlots(cfg), cfg),
+    bagExtra: 0, // v0.28.15 아공간 주머니로 늘린 가방 칸
     held: 0,
     sol: cfg.startSol ?? 0,
     catches: 0,
@@ -393,11 +394,14 @@ export class Room {
       if (slot < 1 || slot > maxPlayers || [...room.profiles.values()].some((q) => q.slot === slot)) continue;
       const base = newProfile(uid, slot, cfg, data);
       // schema 1 은 물고기 목록(items), schema 2 부터는 칸 배열(slots).
-      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf, Array.isArray(p.slots)), cfg);
+      // v0.28.15 아공간 주머니로 늘린 가방 칸.
+      const bagExtra = Math.max(0, Math.min(cfg.bagExtraMax ?? 40, intOr(p.bagExtra, 0)));
+      const slots = ensureStarterTools(sanitize(p.slots ?? p.items, cfg, data.isKnown, data.limitOf, Array.isArray(p.slots), bagExtra), cfg);
       const held = intOr(p.held, base.held);
       room.profiles.set(uid, {
         ...base,
         slots,
+        bagExtra,
         held: held >= -1 && held < cfg.quickSlots ? held : base.held,
         sol: Math.max(0, Math.trunc(finite(p.sol, 0) * money)),
         catches: Math.max(0, Math.trunc(finite(p.catches, 0))),
@@ -456,6 +460,8 @@ export class Room {
       .map(([h, box]) => [h, box.filter((e) => typeof e?.id === 'string' && data.items.has(e.id) && Number.isInteger(e.n) && e.n > 0)]));
     // v0.28 길드 (같은 방 둘).
     room.guild = sanitizeGuild(world.guild, room.profiles);
+    // v0.28.15 아공간 상자로 늘린 거점 상자 칸 (방 전체).
+    room.stashExtra = Math.max(0, Math.min(cfg.stashExtraMax ?? 24, intOr(world.stashExtra, 0)));
     room.householdSeq = Math.max(0, intOr(world.householdSeq, 0));
     for (const h of Array.isArray(world.households) ? world.households : []) {
       const members = Array.isArray(h?.members) ? h.members.filter((uid) => room.profiles.has(uid)) : [];
@@ -518,6 +524,7 @@ export class Room {
         // v0.24 빈집 현관 · 깨진 창에 댄 판자 ("집:자리" → 남은 hp).
         boards: { ...(this.boards ?? {}) },
         stash: structuredClone(this.stash ?? {}),
+        stashExtra: this.stashExtra ?? 0,
         guild: this.guild ? structuredClone(this.guild) : null,
       },
       profiles,

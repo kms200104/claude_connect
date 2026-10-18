@@ -37,9 +37,21 @@
     "sell_points": { "mana_stone_e": 0, "mana_stone_d": 1, "mana_stone_c": 3, "mana_stone_b": 10, "mana_stone_a": 30, "mana_stone_s": 100, "mana_shard": 1 }
   },
 
+  "mileage": {
+    "_comment": "v0.28.15 헌터 마일리지: 헌터 점수를 받을 때마다 per_point 배만큼 (처치 · 의뢰 · 마석 매각 · 게이트 · 협회 보상), 게이트를 깨면 gate[등급] 만큼 더. 협회 상점에서 쓴다 (등급 심사 점수는 줄지 않는다).",
+    "per_point": 1,
+    "gate": { "E": 10, "D": 30, "C": 80, "B": 200, "A": 500, "S": 1500 }
+  },
+
   "store": {
-    "_comment": "v0.28.14 협회 상점 (출장소 창구): 헌터 점수로 산다. 등급 심사는 지금까지 모은 점수 그대로 (pts), 상점은 아직 쓰지 않은 점수 (pts - 쓴 점수) 로. rank = 살 수 있는 가장 낮은 헌터 등급, job = 그 직업만, n = 한 번에 받는 수.",
+    "_comment": "v0.28.14 협회 상점 (출장소 창구): v0.28.15 헌터 마일리지 (cost) 로 산다 — 등급 심사 점수와 따로. rank = 살 수 있는 가장 낮은 헌터 등급, job = 그 직업만, n = 한 번에 받는 수. up 이 있으면 물건 대신 칸을 늘린다: bag = 내 가방 (아공간 주머니), stash = 방 전체 거점 상자 (아공간 상자). at = 지금까지 늘린 칸 수 (차례대로 산다), add = 늘어나는 칸.",
     "items": [
+      { "id": "subspace_pouch_s", "up": "bag", "at": 0, "add": 5, "cost": 80, "rank": "E" },
+      { "id": "subspace_pouch_m", "up": "bag", "at": 5, "add": 5, "cost": 250, "rank": "D" },
+      { "id": "subspace_pouch_l", "up": "bag", "at": 10, "add": 10, "cost": 800, "rank": "C" },
+      { "id": "subspace_pouch_xl", "up": "bag", "at": 20, "add": 10, "cost": 2500, "rank": "B" },
+      { "id": "subspace_crate", "up": "stash", "at": 0, "add": 6, "cost": 300, "rank": "D" },
+      { "id": "subspace_crate_l", "up": "stash", "at": 6, "add": 6, "cost": 1200, "rank": "B" },
       { "id": "first_aid_kit", "n": 1, "cost": 20, "rank": "E" },
       { "id": "crossbow_bolt", "n": 10, "cost": 12, "rank": "E" },
       { "id": "scrap_metal", "n": 5, "cost": 15, "rank": "E" },

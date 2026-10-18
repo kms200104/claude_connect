@@ -683,7 +683,7 @@ func _on_failed(kind: String, code: String) -> void:
 	elif (kind == "stash" or kind == "sleep") and code == NetProtocol.ERR_NOT_BASE:
 		toast_hud.show_toast("판자가 부서졌어요 — 다시 막아야 거점이 돼요", false)
 	elif kind == "stash" and code == NetProtocol.ERR_STASH_FULL:
-		toast_hud.show_toast("상자가 가득해요 (%d칸)" % GameData.survival.stash_slots, false)
+		toast_hud.show_toast("상자가 가득해요 (%d칸) — 협회 상점의 아공간 상자로 늘릴 수 있어요" % int(Net.hunter.get("stashCap", GameData.survival.stash_slots)), false)
 	elif kind == "stash" and code == NetProtocol.ERR_INVENTORY_FULL:
 		toast_hud.show_toast("가방이 가득해요", false)
 	elif kind == "sleep" and code == NetProtocol.ERR_HP_FULL:

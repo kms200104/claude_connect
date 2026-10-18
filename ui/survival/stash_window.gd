@@ -114,7 +114,8 @@ func close() -> void:
 
 func _build() -> void:
 	var items: Array = Net.stash.get(house_id, [])
-	_title.text = "거점 상자 · %d/%d칸" % [items.size(), GameData.survival.stash_slots]
+	# v0.28.15 아공간 상자로 늘린 칸까지 (서버 hunter 의 stashCap).
+	_title.text = "거점 상자 · %d/%d칸" % [items.size(), int(Net.hunter.get("stashCap", GameData.survival.stash_slots))]
 	if not vehicle_id.is_empty():
 		var v: Dictionary = Net.vehicle(vehicle_id)
 		var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))

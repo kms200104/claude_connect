@@ -301,6 +301,8 @@ func _build_slots() -> void:
 	for s: ItemSlot in _slots:
 		s.queue_free()
 	_slots.clear()
+	# v0.28.15 아공간 주머니로 가방이 늘면 (30 → 최대 60칸) 한 줄 칸을 늘린다 (5줄 남짓, 최대 8칸).
+	_grid.columns = clampi(ceili(float(Net.inventory_capacity) / 5.0), bag_columns, 8)
 	for i: int in total:
 		var slot: ItemSlot = ItemSlot.new()
 		slot.slot_index = i

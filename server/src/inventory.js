@@ -2,12 +2,13 @@
 // slots: Array<{ id: string, n: number } | null>
 // 한 칸에 쌓을 수 있는 개수는 아이템마다 다르다(limitOf). 도구는 1개, 목재는 30개, 물고기는 cfg.inventoryStackSize.
 
-export function slotCount(cfg) {
-  return cfg.quickSlots + cfg.inventoryCapacity;
+/** extra = v0.28.15 아공간 주머니로 늘린 가방 칸 (사람마다, profile.bagExtra). */
+export function slotCount(cfg, extra = 0) {
+  return cfg.quickSlots + cfg.inventoryCapacity + extra;
 }
 
-export function emptySlots(cfg) {
-  return Array.from({ length: slotCount(cfg) }, () => null);
+export function emptySlots(cfg, extra = 0) {
+  return Array.from({ length: slotCount(cfg, extra) }, () => null);
 }
 
 /** 새 아이템을 넣을 칸 순서: 가방 칸 → 퀵슬롯. (같은 아이템이 쌓인 칸은 이 순서로 먼저 채운다.) */
@@ -131,8 +132,8 @@ export function moveSlot(slots, from, to, limitOf) {
  *   있는 칸은 같은 자리에 두고, 줄어서 넘친 아이템만 빈 칸에 다시 넣는다.
  * - 옛 형식(schema 1): 물고기 목록 [{id, n}] → 차례로 넣는다
  */
-export function sanitize(raw, cfg, isKnown, limitOf, positional = Array.isArray(raw) && raw.length === slotCount(cfg)) {
-  const slots = emptySlots(cfg);
+export function sanitize(raw, cfg, isKnown, limitOf, positional = Array.isArray(raw) && raw.length === slotCount(cfg), extra = 0) {
+  const slots = emptySlots(cfg, extra);
   if (!Array.isArray(raw)) return slots;
   const clean = (it) => (it && typeof it.id === 'string' && isKnown(it.id) && Number.isInteger(it.n) && it.n >= 1 ? { id: it.id, n: Math.min(it.n, limitOf(it.id)) } : null);
   if (positional) {
@@ -154,5 +155,5 @@ export function sanitize(raw, cfg, isKnown, limitOf, positional = Array.isArray(
 
 /** held: 손에 든 퀵슬롯 번호(없으면 -1). */
 export function toWire(slots, cfg, held = -1) {
-  return { slots: slots.map((s) => (s === null ? null : { id: s.id, n: s.n })), quick: cfg.quickSlots, cap: cfg.inventoryCapacity, held };
+  return { slots: slots.map((s) => (s === null ? null : { id: s.id, n: s.n })), quick: cfg.quickSlots, cap: slots.length - cfg.quickSlots, held };
 }

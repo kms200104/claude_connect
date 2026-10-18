@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createServer } from '../src/server.js';
 import { PROTOCOL_VERSION } from '../src/protocol.js';
 import { loadGameData } from '../src/gamedata.js';
+import { Room } from '../src/rooms.js';
 import { defaultConfig } from '../src/config.js';
 import { Client, sleep, uid } from './helpers.js';
 
@@ -107,31 +108,66 @@ describe('v0.28 헌터', () => {
     assert.equal(more.amount, Math.round(28000 * 1.1));
   });
 
-  it('v0.28.14 협회 상점: 창구에서 쓰지 않은 점수로 산다 (등급 · 직업 조건), 등급 심사 점수는 줄지 않는다', async () => {
+  it('v0.28.15 헌터 마일리지: 점수를 받으면 쌓이고, 협회 상점에서 쓴다 (등급 · 직업 조건), 아공간 주머니 · 상자로 칸이 늘어난다 (저장된다)', async () => {
     const server = start(12, { startItems: 'pipe_spear:1' });
-    const { c } = await join(server);
+    const { c, w } = await join(server);
+    assert.equal(w.hunter.mi, 0);
     const room = roomOf(server);
     const me = [...room.players.values()][0];
     const kit = H.store.items.find((x) => x.id === 'first_aid_kit');
     assert.equal((await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' })).code, 'not_at_office');
     await moveTo(c, office);
-    assert.equal((await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' })).code, 'not_enough_points');
-    me.profile.hunter.pts = 100;
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' })).code, 'not_enough_mileage');
+    // 점수를 받으면 같은 만큼 마일리지 (마석 D 2개 = 점수 2).
+    me.slots[10] = { id: 'mana_stone_d', n: 2 };
+    await ask(c, { t: 'hunter_sell', slot: 10 });
+    assert.equal(me.profile.hunter.mi, 2 * H.mileage.per_point);
+    me.profile.hunter.mi = 5000;
     const got = await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' });
     assert.equal(got.kind, 'buy');
-    assert.equal(got.merit, 100 - kit.cost);
+    assert.equal(got.mi, 5000 - kit.cost);
     assert.ok(me.slots.some((x) => x?.id === 'first_aid_kit'));
-    const hu = await c.next((m) => m.t === 'hunter' && m.merit === 100 - kit.cost, 2000);
-    assert.equal(hu.pts, 100, '등급 심사 점수는 그대로');
+    const hu = await c.next((m) => m.t === 'hunter' && m.mi === 5000 - kit.cost, 2000);
+    assert.equal(hu.pts, 2, '등급 심사 점수는 그대로');
     // 등급이 모자라면 (D급 물건) · 직업 전용은 그 직업만.
     assert.equal((await ask(c, { t: 'hunter_buy', i: 'armor_plate' })).code, 'rank_too_low');
+    // 아공간 주머니: 차례대로 — 소 (+5) 를 사야 중을 산다. 가방 칸이 늘어난다.
+    const before = me.slots.length;
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'subspace_pouch_m' })).code, 'rank_too_low');
     me.profile.hunter.rank = 'C';
-    me.profile.hunter.pts = 1000;
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'subspace_pouch_m' })).code, 'bad_item', '소를 먼저');
+    const small = await ask(c, { t: 'hunter_buy', i: 'subspace_pouch_s' });
+    assert.deepEqual({ up: small.up, add: small.add }, { up: 'bag', add: 5 });
+    assert.equal(me.slots.length, before + 5);
+    assert.equal(me.profile.bagExtra, 5);
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'subspace_pouch_s' })).code, 'bad_item', '두 번은 못 산다');
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'subspace_pouch_m' })).kind, 'buy');
+    assert.equal(me.slots.length, before + 10);
+    // 늘어난 칸에도 들어간다.
+    me.slots[me.slots.length - 1] = { id: 'bandage', n: 1 };
+    // 아공간 상자: 방 전체 거점 상자 칸.
+    const cap0 = data.survival.base.slots;
+    const crate = await ask(c, { t: 'hunter_buy', i: 'subspace_crate' });
+    assert.equal(crate.up, 'stash');
+    assert.equal(room.stashExtra, 6);
+    await c.next((m) => m.t === 'hunter' && m.stashCap === cap0 + 6, 2000);
     assert.equal((await ask(c, { t: 'hunter_buy', i: 'greatsword' })).code, 'job_only');
     me.profile.hunter.job = 'warrior';
     assert.equal((await ask(c, { t: 'hunter_buy', i: 'greatsword' })).kind, 'buy');
     assert.equal((await ask(c, { t: 'hunter_buy', i: 'nope' })).code, 'bad_item');
-    assert.equal(me.profile.hunter.spent, kit.cost + H.store.items.find((x) => x.id === 'greatsword').cost);
+    // 저장했다 다시 읽어도 늘어난 칸 · 그 안의 물건 · 상자 칸이 그대로.
+    const saved = room.toSave();
+    assert.equal(saved.world.stashExtra, 6);
+    const prof = Object.values(saved.profiles)[0];
+    assert.equal(prof.bagExtra, 10);
+    assert.equal(prof.slots.length, before + 10);
+    assert.equal(prof.slots[prof.slots.length - 1].id, 'bandage');
+    const back = Room.fromSave(structuredClone(saved), 2, server.config, data);
+    const again = [...back.profiles.values()][0];
+    assert.equal(again.bagExtra, 10);
+    assert.equal(again.slots.length, before + 10);
+    assert.equal(again.slots[again.slots.length - 1]?.id, 'bandage');
+    assert.equal(back.stashExtra, 6);
   });
 
   it('현상금 의뢰: 다 채워야 보고, 한 번만 받는다 · 뒤지기도 센다', async () => {

@@ -396,7 +396,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       if (!slot) return fail(ErrorCode.badItem);
       const id = slot.id;
       const entry = box.find((e) => e.id === id);
-      if (!entry && box.length >= B.slots) return fail(ErrorCode.stashFull);
+      if (!entry && box.length >= B.slots + (room.stashExtra ?? 0)) return fail(ErrorCode.stashFull);
       const n = Math.min(Number.isInteger(msg.n) && msg.n > 0 ? msg.n : slot.n, slot.n, B.max - (entry?.n ?? 0));
       if (n <= 0) return fail(ErrorCode.stashFull);
       removeAt(player.slots, msg.slot, n);

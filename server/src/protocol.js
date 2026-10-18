@@ -149,7 +149,7 @@ export const ErrorCode = Object.freeze({
   noGate: 'no_gate', // v0.28 없는(닫힌) 게이트
   gateBroken: 'gate_broken', // v0.28 던전 브레이크 중이라 들어갈 수 없다
   rankTooLow: 'rank_too_low', // v0.28 헌터 등급이 게이트 등급보다 두 단계 넘게 낮다
-  notEnoughPoints: 'not_enough_points', // v0.28.14 협회 상점: 쓸 수 있는 헌터 점수가 모자란다
+  notEnoughMileage: 'not_enough_mileage', // v0.28.15 협회 상점: 헌터 마일리지가 모자란다
   noStatPoint: 'no_stat_point', // v0.28.1 남은 스탯 포인트가 없다
   statCapped: 'stat_capped', // v0.28.1 그 스탯은 더 올릴 수 없다
   noAwakenSlot: 'no_awaken_slot', // v0.28.5 각성을 고를 자리가 없다 (레벨)

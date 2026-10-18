@@ -3,7 +3,8 @@ extends Control
 ## v0.28 헌터 협회 출장소 창구 (판정은 서버 hunter_sell · hunter_rank):
 ## 위: 헌터 자격증 (등급 배지 · 점수 막대 · 처치 수 · 길드), 점수가 차면 "등급 재심사".
 ## 아래: 마석 매각 — 가방의 마석 · 마나 조각마다 값(등급 · 길드만큼 더) · "팔기", 맨 위 "모두 팔기".
-## v0.28.14 탭 '협회 상점': 쓰지 않은 헌터 점수로 장비 · 재료를 산다 (등급 · 직업 조건, 판정은 서버 hunter_buy).
+## v0.28.14 탭 '협회 상점': v0.28.15 헌터 마일리지로 장비 · 재료 · 아공간 주머니 (가방 칸) · 아공간 상자 (거점 상자 칸) 를 산다
+## (등급 · 직업 · 차례 조건, 판정은 서버 hunter_buy).
 
 signal closed
 
@@ -192,8 +193,8 @@ func _build() -> void:
 
 ## v0.28.14 협회 상점: 물건마다 그림 · 이름 × 수 · 점수 · 조건 (등급 · 직업), 살 수 있으면 '사기'.
 func _build_store() -> void:
-	var merit: int = int(Net.hunter.get("merit", 0))
-	_sell_title.text = "협회 상점 · 쓸 수 있는 점수 %d점" % merit
+	var merit: int = int(Net.hunter.get("mi", 0))
+	_sell_title.text = "협회 상점 · 마일리지 %s" % _mi(merit)
 	var rules: HunterRules = GameData.hunter
 	var mine: int = rules.rank(str(Net.hunter.get("rank", "E"))).index
 	var job: String = str(Net.hunter.get("job", ""))
@@ -203,12 +204,20 @@ func _build_store() -> void:
 		var need: HunterRules.Rank = rules.rank(str(it.get("rank", "E")))
 		var only: String = str(it.get("job", ""))
 		var why: String = ""
-		if mine < need.index:
+		# v0.28.15 칸을 늘리는 물건: 차례대로 (at = 지금까지 늘린 칸).
+		var up: String = str(it.get("up", ""))
+		var have: int = int(Net.hunter.get("bag", 0)) if up == "bag" else int(Net.hunter.get("stashCap", GameData.survival.stash_slots)) - GameData.survival.stash_slots
+		var at: int = int(it.get("at", 0))
+		if not up.is_empty() and have > at:
+			why = "샀어요"
+		elif not up.is_empty() and have < at:
+			why = "앞 단계 먼저"
+		elif mine < need.index:
 			why = "%s급부터" % need.id
 		elif not only.is_empty() and only != job:
 			why = "%s 전용" % str(rules.job(only).get("name", only))
 		elif merit < cost:
-			why = "점수가 모자라요"
+			why = "마일리지 부족"
 		var row: HBoxContainer = HBoxContainer.new()
 		row.name = "Store_%s" % id
 		row.add_theme_constant_override("separation", 10)
@@ -218,12 +227,17 @@ func _build_store() -> void:
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		row.add_child(icon)
-		var tags: PackedStringArray = ["%d점" % cost]
+		var tags: PackedStringArray = [_mi(cost)]
 		if need.index > 0:
 			tags.append("%s급부터" % need.id)
 		if not only.is_empty():
 			tags.append("%s 전용" % str(rules.job(only).get("name", only)))
-		var l: Label = _label("%s × %d\n%s" % [GameData.item_name(id), int(it.get("n", 1)), " · ".join(tags)], 26, INK if why.is_empty() else SOFT)
+		var what: String = "%s × %d" % [GameData.item_name(id), int(it.get("n", 1))]
+		if up == "bag":
+			what = "%s · 가방 +%d칸" % [GameData.item_name(id), int(it.get("add", 0))]
+		elif up == "stash":
+			what = "%s · 거점 상자 +%d칸 (마을 전체)" % [GameData.item_name(id), int(it.get("add", 0))]
+		var l: Label = _label("%s\n%s" % [what, " · ".join(tags)], 26, INK if why.is_empty() else SOFT)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(l)
 		var buy: Button = _button("사기" if why.is_empty() else why, 24)
@@ -234,7 +248,11 @@ func _build_store() -> void:
 			Net.hunter_buy(id))
 		row.add_child(buy)
 		_list.add_child(row)
-	_list.add_child(_label("점수를 써도 등급 심사 점수는 줄지 않아요 (지금까지 모은 %d점)." % int(Net.hunter.get("pts", 0)), 22, SOFT))
+	_list.add_child(_label("마일리지는 헌터 점수를 받을 때마다 같이 쌓이고, 게이트를 깨면 더 받아요. 마일리지를 써도 등급 심사 점수 (%d점) 는 줄지 않아요. 지금 가방 %d칸 · 거점 상자 %d칸." % [int(Net.hunter.get("pts", 0)), Net.inventory_capacity, int(Net.hunter.get("stashCap", GameData.survival.stash_slots))], 22, SOFT))
+
+
+static func _mi(n: int) -> String:
+	return "%s M" % Money.digits(n)
 
 
 ## 헌터 자격증 (협회 창구 · 헌터넷 앱이 같이 쓴다): 등급 배지 · 이름 · 점수 막대 · 처치 · 게이트 · 길드.
@@ -291,7 +309,7 @@ static func license_card(big: bool) -> Control:
 	var info: Label = Label.new()
 	info.name = "PointsLabel"
 	var guild_text: String = " · 길드 %s" % str(Net.guild.get("name", "")) if Net.in_guild() else ""
-	info.text = "%d점%s · 처치 %d · 게이트 %d%s" % [pts, " / %d (→ %s급)" % [next, str(Net.hunter.get("nextRank", ""))] if next > 0 else " (최고 등급)", int(Net.hunter.get("kills", 0)), int(Net.hunter.get("gates", 0)), guild_text]
+	info.text = "%d점%s · 처치 %d · 게이트 %d · 마일리지 %d%s" % [pts, " / %d (→ %s급)" % [next, str(Net.hunter.get("nextRank", ""))] if next > 0 else " (최고 등급)", int(Net.hunter.get("kills", 0)), int(Net.hunter.get("gates", 0)), int(Net.hunter.get("mi", 0)), guild_text]
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_theme_font_size_override("font_size", 24)
 	info.add_theme_color_override("font_color", Color("#D8E0F0"))

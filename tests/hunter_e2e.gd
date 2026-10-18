@@ -154,16 +154,32 @@ func _run() -> void:
 	await get_tree().process_frame
 	var plate: Button = hunter.window.find_child("BuyButton_armor_plate", true, false) as Button
 	_check(hunter.window.find_child("Store_first_aid_kit", true, false) != null and plate != null and plate.disabled and plate.text.contains("D급"), "협회 상점: 줄 · D급 물건은 잠김 (%s)" % (plate.text if plate != null else ""))
-	var merit: int = int(Net.hunter.get("merit", 0))
+	# v0.28.15 헌터 마일리지 (시험 서버 START_MILEAGE=500).
+	var merit: int = int(Net.hunter.get("mi", 0))
+	_check(merit >= 500, "마일리지 %d" % merit)
 	var bolt: Button = hunter.window.find_child("BuyButton_crossbow_bolt", true, false) as Button
-	if merit >= 12:
-		var bolts0: int = _count("crossbow_bolt")
-		bolt.pressed.emit()
-		_check(await _wait_until(func() -> bool: return _count("crossbow_bolt") >= bolts0 + 10 and int(Net.hunter.get("merit", 0)) == merit - 12, 3.0), "점수로 석궁 화살을 샀다 (점수 %d → %d)" % [merit, int(Net.hunter.get("merit", 0))])
-	else:
-		_check(bolt != null and bolt.disabled, "점수가 모자라면 꺼져 있다 (점수 %d)" % merit)
+	var bolts0: int = _count("crossbow_bolt")
+	bolt.pressed.emit()
+	_check(await _wait_until(func() -> bool: return _count("crossbow_bolt") >= bolts0 + 10 and int(Net.hunter.get("mi", 0)) == merit - 12, 3.0), "마일리지로 석궁 화살을 샀다 (%d → %d)" % [merit, int(Net.hunter.get("mi", 0))])
+	# 아공간 주머니 (소): 가방이 5칸 늘고, 단추는 '샀어요', 다음 단계 (중) 는 D급부터.
+	var cap0: int = Net.inventory_capacity
+	await get_tree().process_frame
+	(hunter.window.find_child("BuyButton_subspace_pouch_s", true, false) as Button).pressed.emit()
+	_check(await _wait_until(func() -> bool: return Net.inventory_capacity == cap0 + 5 and int(Net.hunter.get("bag", 0)) == 5, 3.0), "아공간 주머니: 가방 %d → %d칸" % [cap0, Net.inventory_capacity])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var pouch: Button = hunter.window.find_child("BuyButton_subspace_pouch_s", true, false) as Button
+	_check(pouch != null and pouch.disabled and pouch.text == "샀어요", "산 주머니는 '샀어요' (%s)" % (pouch.text if pouch != null else ""))
 	await _shot("hunter_store")
 	hunter.window.close()
+	# 가방 창에 늘어난 칸이 다 보인다.
+	var bag: InventoryWindow = _village.get_node("HUD/InventoryWindow")
+	bag.open()
+	await get_tree().create_timer(0.4).timeout
+	var grid: GridContainer = bag.find_child("BagGrid", true, false) as GridContainer
+	_check(grid != null and grid.get_child_count() == Net.inventory_capacity and grid.columns == 7, "가방 창 %d칸 (한 줄 %d칸)" % [grid.get_child_count() if grid != null else -1, grid.columns if grid != null else -1])
+	await _shot("hunter_bag")
+	bag.close()
 
 	# ---- 헌터넷 ----
 	var phone: PhoneWindow = economy.phone

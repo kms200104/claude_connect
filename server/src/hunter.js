@@ -6,7 +6,8 @@
 //   guild_create { name } · guild_join {} · guild_leave {}   길드 (같은 방 둘)
 //   stat_up { s }                             v0.28.1 스탯 포인트 하나를 힘 · 체력 · 민첩 · 행운에 쓴다
 //   awaken { a }                              v0.28.5 각성 고르기 (level.awaken.slots 레벨마다 하나, 바꿀 수 없다)
-//   hunter_buy { i }                          v0.28.14 협회 상점 (창구): 헌터 점수로 산다 (store.items 의 id)
+//   hunter_buy { i }                          v0.28.14 협회 상점 (창구): v0.28.15 헌터 마일리지로 산다 (store.items 의 id)
+//                                             up: bag (아공간 주머니 — 내 가방 칸) · stash (아공간 상자 — 방 전체 거점 상자 칸) 은 산 즉시 늘어난다
 //   awaken_use { a }                          v0.28.5 쓰는 각성 (그림자 걸음 · 마력 방패) → 방 전체 awaken_fx { id, a, ms }
 // v0.28.1 레벨: 경험치(처치 · 게이트 · 의뢰 · 뒤지기 · 보급 상자)가 차면 레벨이 오르고 스탯 포인트를 받는다, 레벨이 되면 기술을 배운다.
 // 서버 → hunter { rank, pts, next, kills, bounties, guild } (나) · guild { … } (방 전체) · hunter_result { kind, … }.
@@ -30,6 +31,7 @@ export function loadHunter(raw, isKnown) {
   for (const [rank, a] of Object.entries(raw.gates?.assoc?.by_gate ?? {})) for (const it of a.items ?? []) if (!isKnown(it.id)) throw new Error(`hunter assoc ${rank}: unknown item ${it.id}`);
   for (const it of raw.store?.items ?? []) {
     if (!isKnown(it.id)) throw new Error(`hunter store: unknown item ${it.id}`);
+    if (it.up && !['bag', 'stash'].includes(it.up)) throw new Error(`hunter store ${it.id}: unknown upgrade ${it.up}`);
     if (!ranks.some((r) => r.id === it.rank)) throw new Error(`hunter store ${it.id}: unknown rank ${it.rank}`);
     if (!Number.isInteger(it.cost) || it.cost <= 0) throw new Error(`hunter store ${it.id}: bad cost`);
   }
@@ -71,8 +73,8 @@ export function sanitizeHunter(raw, rules) {
     // v0.28.12 오늘 (UTC 날짜) 행동 경험치를 받은 수.
     actDay: intOr(h.actDay, -1),
     acts: Object.fromEntries(Object.entries(h.acts ?? {}).filter(([k, v]) => rules?.level?.xp?.acts?.[k] !== undefined && Number.isInteger(v) && v >= 0)),
-    // v0.28.14 협회 상점에서 쓴 점수 (등급 심사는 pts 그대로, 상점은 pts - spent).
-    spent: Math.max(0, Math.min(Math.max(0, intOr(h.pts, 0)), intOr(h.spent, 0))),
+    // v0.28.15 헌터 마일리지 (협회 상점에서 쓴다, 등급 심사 점수 pts 와 따로). 마일리지가 없던 기록은 모은 점수만큼 들고 시작한다.
+    mi: Number.isInteger(h.mi) ? Math.max(0, h.mi) : Math.max(0, intOr(h.pts, 0) - Math.max(0, intOr(h.spent, 0))),
   };
 }
 
@@ -161,6 +163,10 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
       player.startLvApplied = true;
       if (player.profile.hunter.lv < cfg.startHunterLv) player.profile.hunter.lv = Math.min(H.level?.max ?? 50, cfg.startHunterLv);
     }
+    if (cfg.startMileage > 0 && !player.startMiApplied) {
+      player.startMiApplied = true;
+      player.profile.hunter.mi = Math.max(player.profile.hunter.mi, cfg.startMileage);
+    }
     return player.profile.hunter;
   };
   const rankOf = (h) => H.rankById.get(h.rank) ?? ranks[0];
@@ -217,7 +223,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     const r = rankOf(h);
     const nx = nextRank(h);
     return {
-      rank: r.id, pts: h.pts, merit: Math.max(0, h.pts - h.spent), next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
+      rank: r.id, pts: h.pts, mi: h.mi, bag: player.profile.bagExtra ?? 0, stashCap: (data.survival?.base?.slots ?? 12) + (room.stashExtra ?? 0), next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
       bounties: todayBounties(room).map((b) => ({ id: b.id, kind: b.kind, k: b.k ?? '', n: b.n, got: Math.min(b.n, h.bprog[b.id] ?? 0), done: h.bdone.includes(b.id), reward: b.reward, pts: b.pts, name: b.name, desc: b.desc })),
       guild: guildWire(room),
       lv: h.lv, xp: h.xp, xpNext: h.lv >= (H.level?.max ?? 50) ? 0 : xpToNext(H, h.lv), sp: h.sp, st: { ...h.st },
@@ -259,6 +265,8 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
   function addPoints(room, player, pts) {
     if (pts <= 0) return;
     rec(player).pts += pts;
+    // v0.28.15 헌터 마일리지: 점수만큼 (mileage.per_point 배).
+    rec(player).mi += Math.round(pts * (H.mileage?.per_point ?? 1));
     const g = guildOf(room, player);
     if (g) {
       const before = guildLevel(g).level;
@@ -362,6 +370,8 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     if (!H || !player) return;
     rec(player).gates++;
     addPoints(room, player, pts);
+    // v0.28.15 게이트를 깨면 등급만큼 마일리지 덤.
+    rec(player).mi += H.mileage?.gate?.[rank] ?? 0;
     progress(room, player, 'gate');
     addXp(room, player, H.level?.xp?.gate?.[rank] ?? 0);
     sendHunter(room, player);
@@ -427,13 +437,22 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         const h = rec(player);
         if (rankOf(h).index < (H.rankById.get(it.rank)?.index ?? 0)) return fail(ErrorCode.rankTooLow);
         if (it.job && h.job !== it.job) return fail(ErrorCode.jobOnly);
-        if (h.pts - h.spent < it.cost) return fail(ErrorCode.notEnoughPoints);
+        if (h.mi < it.cost) return fail(ErrorCode.notEnoughMileage);
         const n = it.n ?? 1;
-        if (!addItem(player.slots, it.id, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
-        h.spent += it.cost;
+        if (it.up === 'bag') {
+          // 아공간 주머니: 차례대로 (at = 지금까지 늘린 칸).
+          if ((player.profile.bagExtra ?? 0) !== (it.at ?? 0)) return fail(ErrorCode.badItem);
+          player.profile.bagExtra = (player.profile.bagExtra ?? 0) + it.add;
+          for (let i = 0; i < it.add; i++) player.slots.push(null);
+        } else if (it.up === 'stash') {
+          if ((room.stashExtra ?? 0) !== (it.at ?? 0)) return fail(ErrorCode.badItem);
+          room.stashExtra = (room.stashExtra ?? 0) + it.add;
+        } else if (!addItem(player.slots, it.id, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+        h.mi -= it.cost;
         sendInventory(player);
-        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'buy', i: it.id, n, cost: it.cost, merit: h.pts - h.spent });
-        sendHunter(room, player);
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'buy', i: it.id, n, cost: it.cost, mi: h.mi, up: it.up ?? '', add: it.add ?? 0 });
+        if (it.up === 'stash') for (const p of room.players.values()) sendHunter(room, p);
+        else sendHunter(room, player);
         saveRoom(room);
         return;
       }
