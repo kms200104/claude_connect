@@ -3,7 +3,8 @@ extends Control
 ## v0.28.12 게이트 공략 보상 창 (gate_clear): 가운데 카드 — 게이트 이름 · 등급 · 공략 시간, 그리고 세 칸
 ## ① 처치 보상 (던전 안에서 내가 쓰러뜨린 수 · 경험치 · 헌터 점수 · 떨어진 마석)
 ## ② 공략 보상 (우두머리를 쓰러뜨리면 열리는 상자 — 아이템 · 솔 · 점수 · 경험치)
-## ③ 협회 지급 보상 (게이트 등급 × 내 헌터 등급 배율, 빠른 공략 · 우두머리 처치 덤 — 솔 · 경험치 · 점수 · 아이템).
+## ③ 협회 지급 보상 (게이트 등급 × 내 헌터 등급 배율, 빠른 공략 · 우두머리 처치 덤 — 솔 · 경험치 · 점수 · 아이템)
+## ④ (v0.28.13) 기여도 — 함께 들어간 사람마다 처치 · 준 피해 · 받은 피해 · 피해 몫 막대.
 ## 받는 것은 이미 서버가 넣어 두었다 (그림만). '확인' 으로 닫는다.
 
 const NAVY: Color = Color("#1E2A44")
@@ -69,6 +70,10 @@ func show_reward(info: Dictionary) -> void:
 		a.add_child(_label(" · ".join(why), 24, GOLD))
 		a.add_child(_label("%s · 경험치 +%d · 헌터 점수 +%d" % [Money.delta(int(assoc.get("sol", 0))), int(assoc.get("xp", 0)), int(assoc.get("pts", 0))], 28, INK))
 		_items(a, assoc.get("items", []), "")
+	# ④ v0.28.13 기여도 (함께 들어간 사람 비교).
+	var team: Array = info.get("team", []) if info.get("team") is Array else []
+	if not team.is_empty():
+		_team(team)
 	var total: int = int(info.get("sol", 0)) + int(assoc.get("sol", 0))
 	_body.add_child(_label("합계 %s" % Money.delta(total), 34, GOLD))
 	if int(info.get("back", 0)) > 0:
@@ -111,6 +116,40 @@ func _section(title: String, node_name: String) -> VBoxContainer:
 	p.add_child(v)
 	v.add_child(_label(title, 30, GOLD))
 	return v
+
+
+## v0.28.13 기여도 칸: 사람마다 이름 (우두머리를 쓰러뜨렸으면 ♛) · 처치 · 준 피해 · 받은 피해, 그리고 준 피해 몫 막대 (나는 금빛).
+func _team(team: Array) -> void:
+	var v: VBoxContainer = _section("기여도", "Team")
+	var total_dmg: int = 0
+	for m: Variant in team:
+		if m is Dictionary:
+			total_dmg += int((m as Dictionary).get("dmg", 0))
+	for m: Variant in team:
+		if not (m is Dictionary):
+			continue
+		var d: Dictionary = m
+		var id: int = int(d.get("id", 0))
+		var me: bool = id == Net.my_id
+		var who: String = "나" if me else Journal.display_name(id)
+		var share: float = float(d.get("dmg", 0)) / float(maxi(total_dmg, 1))
+		var row: VBoxContainer = VBoxContainer.new()
+		row.name = "Member%d" % id
+		row.add_theme_constant_override("separation", 4)
+		v.add_child(row)
+		row.add_child(_label("%s%s · 처치 %d · 준 피해 %d · 받은 피해 %d" % ["♛ " if bool(d.get("mvp", false)) else "", who, int(d.get("n", 0)), int(d.get("dmg", 0)), int(d.get("hurt", 0))], 26, GOLD if me else INK))
+		var bar: ProgressBar = ProgressBar.new()
+		bar.min_value = 0.0
+		bar.max_value = 1.0
+		bar.value = share
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(820, 22)
+		bar.add_theme_stylebox_override("background", EventHud._box(Color(1, 1, 1, 0.1), Color(1, 1, 1, 0.0), 11, 0, 0))
+		bar.add_theme_stylebox_override("fill", EventHud._box(GOLD if me else Color("#7AA8E8"), Color(1, 1, 1, 0.0), 11, 0, 0))
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(bar)
+		var pct: Label = _label("피해 몫 %d%%" % roundi(share * 100.0), 20, SOFT)
+		row.add_child(pct)
 
 
 ## 아이템 그림 줄 (그림 + ×개수).

@@ -42,10 +42,12 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     room.broadcast({ t: 'alert', id, level, sender: '헌터 협회', text, at: Date.now() });
   }
 
-  /** 게이트 등급 뽑기 (weight). */
-  function pickRank() {
+  /** 게이트 등급 뽑기 (weight). v0.28.13 need 가 있는 등급 (B · A · S) 은 방에 그 헌터 등급 이상인 사람이 있을 때만. */
+  function pickRank(room) {
     if (cfg.gateForceRank && G.ranks[cfg.gateForceRank]) return cfg.gateForceRank;
-    return pickEntry(Object.entries(G.ranks).map(([id, r]) => ({ id, w: r.weight })), random).id;
+    const best = Math.max(0, ...[...(room?.players?.values() ?? [])].map((p) => rankIndex(p.profile?.hunter?.rank ?? 'E')));
+    const ok = Object.entries(G.ranks).filter(([, r]) => !r.need || rankIndex(r.need) <= best);
+    return pickEntry(ok.map(([id, r]) => ({ id, w: r.weight })), random).id;
   }
 
   function open(room, t) {
@@ -54,7 +56,7 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     if (free.length === 0) return null;
     const spot = cfg.gateForceSpot ? (free.find((s) => s.id === cfg.gateForceSpot) ?? free[0]) : free[Math.floor(random() * free.length)];
     room.gateSeq = (room.gateSeq ?? 0) + 1;
-    const rank = pickRank();
+    const rank = pickRank(room);
     const g = { id: `gt${room.gateSeq}`, rank, spot: spot.id, name: spot.name, x: spot.x, z: spot.z, st: 'open', until: now() + lifeMs(), wave: 0, bossUp: false, raiders: new Set(), awayAt: 0, breakUntil: 0, nextBreakAt: 0 };
     if (D) {
       const maps = Object.keys(D.maps);
@@ -62,7 +64,7 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     }
     room.gates.set(g.id, g);
     broadcastGate(room, g);
-    alert(room, `gate_${g.id}`, rank === 'C' ? 'emergency' : 'safety', `[헌터 협회] ${spot.name}에 ${rank}급 게이트 발생. ${Math.round(lifeMs() / 60000)}분 안에 공략하지 못하면 던전 브레이크가 일어납니다. 일반인은 접근 금지.`);
+    alert(room, `gate_${g.id}`, rankIndex(rank) >= rankIndex('C') ? 'emergency' : 'safety', `[헌터 협회] ${spot.name}에 ${rank}급 게이트 발생. ${Math.round(lifeMs() / 60000)}분 안에 공략하지 못하면 던전 브레이크가 일어납니다. 일반인은 접근 금지.`);
     return g;
   }
 
@@ -158,11 +160,16 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
       sendInventory(p);
       sendProfile(p);
       const t = g.tally?.[id] ?? { n: 0, pts: 0, xp: 0, mana: {} };
+      // v0.28.13 기여도: 공략에 들어간 모두의 처치 수 · 준 피해 · 받은 피해 (보상 창 비교 칸).
+      const team = ids.map((rid) => {
+        const rt = g.tally?.[rid] ?? {};
+        return { id: rid, n: rt.n ?? 0, dmg: rt.dmg ?? 0, hurt: rt.hurt ?? 0, mvp: rid === by };
+      });
       sendTo(p, {
         t: 'gate_clear', g: g.id, rank: g.rank, name: g.name, by: ids, killer: by, items, got, sol: R.sol, pts: R.pts,
         xp: data.hunter?.level?.xp?.gate?.[g.rank] ?? 0,
         kills: { n: t.n, pts: t.pts, xp: t.xp, mana: Object.entries(t.mana).map(([mid, n]) => ({ id: mid, n })) },
-        assoc, time: Math.max(0, now() - (g.raidAt ?? now())),
+        assoc, team, time: Math.max(0, now() - (g.raidAt ?? now())),
         back: D && p.dungeon === g.id ? returnMs() : 0,
       });
       hunter?.onGate(room, p, R.pts, g.rank);
@@ -173,6 +180,26 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     if (D) for (const id of ids) room.dungeonReturns = [...(room.dungeonReturns ?? []), { id, at: now() + returnMs(), x: g.x, z: g.z + 3 }];
     remove(room, g, 'clear');
     saveRoom(room);
+  }
+
+  /** v0.28.13 공략 중인 게이트 크리처에 준 피해 · 공략에 들어간 사람이 받은 피해 (기여도). survival 이 부른다. */
+  function tallyOf(room, gid, id) {
+    const g = gid ? room.gates?.get(gid) : null;
+    if (!g || g.st !== 'raid' || !g.raiders.has(id)) return null;
+    g.tally ??= {};
+    return (g.tally[id] ??= { n: 0, pts: 0, xp: 0, mana: {} });
+  }
+  function onDamage(room, c, by, amount) {
+    if (!G || !c?.g || !by) return;
+    const t = tallyOf(room, c.g, by);
+    if (t) t.dmg = (t.dmg ?? 0) + Math.max(0, Math.min(amount, c.hp + amount));
+  }
+  function onHurt(room, player, amount) {
+    if (!G) return;
+    for (const g of room.gates?.values() ?? []) {
+      const t = tallyOf(room, g.id, player.id);
+      if (t) t.hurt = (t.hurt ?? 0) + amount;
+    }
   }
 
   /** survival.kill 이 부른다 (res = hunter.onKill 이 준 점수 · 경험치 · 마석 — 공략 보상 창의 '처치 보상'). */
@@ -399,5 +426,5 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     return dg ? dungeonStandLocal(dg.map, x - dg.o.x, z - dg.o.z) : false;
   }
 
-  return { tick, onKill, handleEnter, handleLeave, gatesWire, fixPosition, left, standAt };
+  return { tick, onKill, onDamage, onHurt, handleEnter, handleLeave, gatesWire, fixPosition, left, standAt };
 }

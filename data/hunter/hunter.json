@@ -62,7 +62,10 @@
       "by_gate": {
         "E": { "sol": 20000, "xp": 60, "pts": 15, "items": [{ "id": "bandage", "n": 2 }, { "id": "clean_water", "n": 1 }] },
         "D": { "sol": 60000, "xp": 160, "pts": 40, "items": [{ "id": "first_aid_kit", "n": 1 }, { "id": "canned_food", "n": 2 }, { "id": "mana_stone_d", "n": 1 }] },
-        "C": { "sol": 150000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] }
+        "C": { "sol": 150000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] },
+        "B": { "sol": 400000, "xp": 1000, "pts": 250, "items": [{ "id": "first_aid_kit", "n": 3 }, { "id": "mana_stone_b", "n": 1 }, { "id": "crossbow_bolt", "n": 20 }] },
+        "A": { "sol": 1200000, "xp": 2500, "pts": 700, "items": [{ "id": "first_aid_kit", "n": 4 }, { "id": "mana_stone_a", "n": 1 }, { "id": "armor_plate", "n": 1 }] },
+        "S": { "sol": 4000000, "xp": 6500, "pts": 2000, "items": [{ "id": "first_aid_kit", "n": 5 }, { "id": "mana_stone_a", "n": 3 }, { "id": "armor_plate", "n": 2 }] }
       },
       "hunter_mult": { "E": 1.0, "D": 1.1, "C": 1.25, "B": 1.4, "A": 1.6, "S": 2.0 },
       "fast_ms": 300000, "fast_bonus": 0.2, "mvp_bonus": 0.1
@@ -123,6 +126,28 @@
         "boss": { "k": "bloated", "name": "균열의 군주", "hp_mult": 6, "dmg_mult": 2, "scale": 1.9 },
         "sol": 200000, "pts": 200,
         "loot": { "rolls": 5, "empty": 0, "items": [ { "id": "mana_stone_c", "w": 40, "n": [1, 3] }, { "id": "mana_stone_b", "w": 10, "n": [1, 1] }, { "id": "armor_plate", "w": 12, "n": [1, 1] }, { "id": "bumper_spikes", "w": 12, "n": [1, 1] }, { "id": "first_aid_kit", "w": 14, "n": [1, 2] }, { "id": "battery_pack", "w": 12, "n": [1, 2] } ] }
+      },
+      "B": {
+        "_comment": "v0.28.13 B · A · S 게이트는 need (방에 그 헌터 등급 이상인 사람이 있을 때만 열린다).",
+        "need": "C", "weight": 1, "color": "#9A6AE0", "hp_mult": 2.0, "dmg_mult": 1.7,
+        "waves": [ [["runner", 4], ["spitter", 2]], [["brute", 2], ["screamer", 1], ["crawler", 2]], [["bloated", 2], ["spitter", 2], ["runner", 3]], [["brute", 2], ["runner", 4]] ],
+        "boss": { "k": "brute", "name": "철갑 거인", "hp_mult": 7, "dmg_mult": 2.2, "scale": 2.0 },
+        "sol": 500000, "pts": 500,
+        "loot": { "rolls": 5, "empty": 0, "items": [ { "id": "mana_stone_b", "w": 35, "n": [1, 2] }, { "id": "mana_stone_c", "w": 25, "n": [2, 3] }, { "id": "mana_stone_a", "w": 4, "n": [1, 1] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "first_aid_kit", "w": 14, "n": [1, 2] }, { "id": "battery_pack", "w": 10, "n": [1, 2] } ] }
+      },
+      "A": {
+        "need": "B", "weight": 1, "color": "#F0B040", "hp_mult": 2.6, "dmg_mult": 2.0,
+        "waves": [ [["runner", 5], ["screamer", 1]], [["brute", 2], ["spitter", 3]], [["crawler", 4], ["bloated", 2], ["brute", 1]], [["brute", 3], ["spitter", 2]] ],
+        "boss": { "k": "brute", "name": "균열의 왕", "hp_mult": 11, "dmg_mult": 2.6, "scale": 2.2 },
+        "sol": 1500000, "pts": 1500,
+        "loot": { "rolls": 6, "empty": 0, "items": [ { "id": "mana_stone_a", "w": 30, "n": [1, 2] }, { "id": "mana_stone_b", "w": 30, "n": [1, 3] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "bumper_spikes", "w": 10, "n": [1, 1] }, { "id": "first_aid_kit", "w": 18, "n": [2, 3] } ] }
+      },
+      "S": {
+        "need": "A", "weight": 1, "color": "#E8483A", "hp_mult": 3.2, "dmg_mult": 2.4,
+        "waves": [ [["runner", 6], ["screamer", 2]], [["brute", 3], ["spitter", 3]], [["crawler", 5], ["bloated", 3]], [["brute", 3], ["runner", 4]], [["brute", 4], ["spitter", 3]] ],
+        "boss": { "k": "brute", "name": "심연의 군주", "hp_mult": 16, "dmg_mult": 3, "scale": 2.5 },
+        "sol": 5000000, "pts": 5000,
+        "loot": { "rolls": 8, "empty": 0, "items": [ { "id": "mana_stone_a", "w": 45, "n": [2, 3] }, { "id": "mana_stone_b", "w": 25, "n": [2, 4] }, { "id": "armor_plate", "w": 10, "n": [2, 3] }, { "id": "first_aid_kit", "w": 20, "n": [3, 4] } ] }
       }
     }
   },
@@ -130,7 +155,7 @@
   "level": {
     "_comment": "v0.28.1 레벨 · 스탯 · 기술: 경험치(xp)는 처치 kill(우두머리는 × boss_mult) · 게이트 gate · 의뢰 보고(pts × claim_mult) · 빈집 뒤지기 loot · 보급 상자 supply 로 쌓인다. 다음 레벨까지 = round(base × 레벨 ^ power). 레벨마다 스탯 포인트 points_per_level — 힘(str 피해 +5%) · 체력(vit 2점마다 최대 체력 +1) · 민첩(agi 이동 속도 +2% · 공격 간격 -2%, 최대 cap) · 행운(luk 마석이 떨어질 확률 +4%). 기술은 레벨이 되면 저절로 배운다.",
     "max": 50, "base": 60, "power": 1.45, "points_per_level": 3,
-    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25, "crawler": 8, "screamer": 14, "brute": 35, "spitter": 14 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500 }, "claim_mult": 2, "loot": 3, "supply": 25,
+    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25, "crawler": 8, "screamer": 14, "brute": 35, "spitter": 14 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500, "B": 1200, "A": 3000, "S": 8000 }, "claim_mult": 2, "loot": 3, "supply": 25,
       "_comment_acts": "v0.28.12 여러 행동으로도 경험치: 낚시 · 나무 · 조개 캐기 · 심기 · 의뢰(마을 부탁) · 요리 내기 · 배달 · 제작 · 판자 대기 · 동료 일으키기 · 땅 파서 찾기. 하루 acts_cap 번까지 (반복 노가다 방지).",
       "acts": { "fish": 6, "chop": 2, "clam": 3, "plant": 3, "quest": 20, "serve": 6, "deliver": 12, "craft": 4, "board": 6, "revive": 25, "dig": 3 },
       "acts_cap": { "fish": 40, "chop": 60, "clam": 30, "plant": 20, "quest": 10, "serve": 40, "deliver": 15, "craft": 30, "board": 20, "revive": 10, "dig": 30 } },

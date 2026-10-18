@@ -100,11 +100,33 @@ describe('v0.28 게이트', () => {
     const mult = A.hunter_mult.E * (1 + A.fast_bonus + A.mvp_bonus);
     assert.equal(done.assoc.sol, Math.round(A.by_gate.E.sol * mult));
     assert.deepEqual(done.assoc.items.map((x) => x.id), A.by_gate.E.items.map((x) => x.id));
+    // v0.28.13 기여도: 들어간 사람 모두의 처치 수 · 준 피해 · 받은 피해.
+    assert.equal(done.team.length, 1);
+    assert.equal(done.team[0].n, done.kills.n);
+    assert.ok(done.team[0].dmg >= done.kills.n, `준 피해 ${done.team[0].dmg}`);
+    assert.equal(done.team[0].mvp, true);
+    assert.ok(done.team[0].hurt >= 0);
     await c.next((m) => m.t === 'gate_gone' && m.g === opened.id && m.why === 'clear', 2000);
     assert.equal(me.profile.hunter.gates, 1);
     assert.ok(me.profile.hunter.pts >= G.ranks.E.pts);
     assert.equal(room.gates.size, 0);
     assert.ok(waves.length >= 2);
+  });
+
+  it('v0.28.13 B · A · S 게이트는 그 등급에 들어갈 수 있는 헌터가 방에 있을 때만 열린다', async () => {
+    // random 0.99 → 가중치 목록의 맨 끝 등급. E급 헌터만 있으면 C 까지, A급 헌터가 있으면 S 까지.
+    const low = start(12, { gateForceRank: '', random: () => 0.99, gateFirstMs: 600 });
+    const a = await join(low);
+    await moveTo(a.c, { x: spot.x + 8, z: spot.z });
+    assert.equal((await a.c.next((m) => m.t === 'gate' && m.g.st === 'open', 3000)).g.rank, 'C');
+    const high = start(12, { gateForceRank: '', random: () => 0.99, gateFirstMs: 600 });
+    const b = await join(high);
+    [...roomOf(high).players.values()][0].profile.hunter.rank = 'A';
+    await moveTo(b.c, { x: spot.x + 8, z: spot.z });
+    const g = (await b.c.next((m) => m.t === 'gate' && m.g.st === 'open', 3000)).g;
+    assert.equal(g.rank, 'S');
+    const al = await b.c.next((m) => m.t === 'alert' && m.id === `gate_${g.id}`, 2000);
+    assert.equal(al.level, 'emergency');
   });
 
   it('등급이 모자라면 못 들어간다 · 시간이 지나면 던전 브레이크 (낮에도 크리처가 쏟아진다)', async () => {

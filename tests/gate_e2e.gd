@@ -184,7 +184,7 @@ func _run() -> void:
 	_check(int(assoc.get("sol", 0)) > 0 and str(assoc.get("hr", "")) == "E" and int((cleared[0].get("kills", {}) as Dictionary).get("n", 0)) > 0, "협회 지급 보상 %s · 처치 %s" % [str(assoc), str(cleared[0].get("kills", {}))])
 	_check(Net.sol >= sol0 + int(cleared[0].get("sol", 0)) + int(assoc.get("sol", 0)), "협회 보상 솔까지 받았다 (%d → %d)" % [sol0, Net.sol])
 	var reward: GateRewardWindow = hunter.reward_window
-	_check(reward != null and reward.is_open() and reward.find_child("SectionAssoc", true, false) != null and reward.find_child("SectionKills", true, false) != null, "보상 창이 떴다 (처치 · 공략 · 협회)")
+	_check(reward != null and reward.is_open() and reward.find_child("SectionAssoc", true, false) != null and reward.find_child("SectionKills", true, false) != null and reward.find_child("SectionTeam", true, false) != null, "보상 창이 떴다 (처치 · 공략 · 협회 · 기여도)")
 	if reward != null:
 		(reward.find_child("Confirm", true, false) as Button).pressed.emit()
 		_check(not reward.is_open(), "보상 창 '확인' 으로 닫힌다")

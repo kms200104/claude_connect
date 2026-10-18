@@ -618,6 +618,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     }
     wake(room, player);
     setHp(player, hpOf(player) - damage);
+    gates.onHurt(room, player, damage);
     sendTo(player, { t: 'hurt', ...hpWire(player), by });
     if (hpOf(player) > 0) {
       if (SC && !player.bleeding) {
@@ -1367,7 +1368,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       const exec = c.hp <= (c.max ?? c.hp) * 0.3 ? 1 + fx('execute') : 1;
       const dmg = w.damage * (hunter?.bonus.damage(player) ?? 1) * wmult * exec;
       const armor = S.creatures.kinds[c.k]?.armor ?? 0;
-      c.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+      const dealt = Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+      c.hp -= dealt;
+      gates.onDamage(room, c, player.id, dealt);
       // 맞으면 밀려난다 (못 박힌 방망이는 크게) · 비틀거린다.
       if (d > 0.01) {
         const push = w.push ?? 0.7;
@@ -1409,7 +1412,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   /** v0.28.8 기술 한 대: 피해 (갑옷만큼 덜, 최소 1) · 밀쳐냄. creature_hit 에 kind (기술 id) 를 단다. */
   function strike(room, player, c, dmg, push, kind) {
     const armor = S.creatures.kinds[c.k]?.armor ?? 0;
-    c.hp -= Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+    const dealt = Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
+    c.hp -= dealt;
+    gates.onDamage(room, c, player.id, dealt);
     const d = Math.hypot(c.x - player.x, c.z - player.z);
     if (push > 0 && d > 0.01) {
       const nx = c.x + ((c.x - player.x) / d) * push;
