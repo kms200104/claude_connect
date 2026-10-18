@@ -59,7 +59,9 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     const rank = pickRank(room);
     const g = { id: `gt${room.gateSeq}`, rank, spot: spot.id, name: spot.name, x: spot.x, z: spot.z, st: 'open', until: now() + lifeMs(), wave: 0, bossUp: false, raiders: new Set(), awayAt: 0, breakUntil: 0, nextBreakAt: 0 };
     if (D) {
-      const maps = Object.keys(D.maps);
+      // v0.28.14 그 등급 전용 지도 (ranks) 가 있으면 그중에서, 없으면 ranks 가 없는 지도에서.
+      const own = Object.keys(D.maps).filter((id) => D.maps[id].ranks?.includes(rank));
+      const maps = own.length > 0 ? own : Object.keys(D.maps).filter((id) => !D.maps[id].ranks);
       g.map = cfg.gateForceMap && D.maps[cfg.gateForceMap] ? cfg.gateForceMap : maps[Math.floor(random() * maps.length) % maps.length];
     }
     room.gates.set(g.id, g);

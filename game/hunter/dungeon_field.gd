@@ -2,7 +2,7 @@ class_name DungeonField
 extends Node3D
 ## v0.28.2 게이트 안 던전 (그림 · 바닥 · 벽 충돌만, 판정은 서버 gates.js · dungeon.js): 게이트에 들어가면 서버가
 ## 도시 밖 먼 곳(게이트 자리마다 하나, HunterRules.dungeon_origin)으로 옮겨 준다. 내 자리가 던전 영역이면 그 게이트의 지도
-## (무너진 지하철역 · 이끼 낀 동굴)를 짓고, 하늘은 지하처럼 어둡게 (SkyController.underground). 남쪽 끝에 "나가는 균열".
+## (무너진 지하철역 · 이끼 낀 동굴, v0.28.14 B · A · S 는 용암이 흐르는 균열 · 얼어붙은 지하 신전)를 짓고, 하늘은 지하처럼 어둡게 (SkyController.underground). 남쪽 끝에 "나가는 균열".
 ## 공략 뒤 서버가 게이트 앞으로 옮겨 주기 전까지는 (게이트가 사라져도) 지도를 그대로 둔다.
 
 const CLAY: Material = preload("res://assets/materials/foliage.tres")
@@ -99,10 +99,15 @@ func _build(spot: String, map_id: String) -> void:
 	add_child(_root)
 	_root.global_position = GameData.hunter.dungeon_origin(spot)
 	_collision(m)
-	if map_id == "cave":
-		_build_cave(m)
-	else:
-		_build_subway(m)
+	match map_id:
+		"cave":
+			_build_cave(m)
+		"lava":
+			_build_lava(m)
+		"ice":
+			_build_ice(m)
+		_:
+			_build_subway(m)
 	_build_exit(m)
 	var title: Label3D = Label3D.new()
 	title.name = "DungeonTitle"
@@ -424,6 +429,162 @@ func _build_cave(m: HunterRules.DungeonMap) -> void:
 	_light(Vector3(-6.0, 1.2, 11.0), Color("#3AE0C8"), 1.3, 9.0)
 	_light(Vector3(0.0, 2.2, -6.0), Color("#5AC0B0"), 1.2, 12.0, true)
 	_light(Vector3(9.0, 1.2, -2.0), Color("#3AE0C8"), 1.0, 8.0)
+
+
+# ---- v0.28.14 B · A · S 게이트 전용: 둘레 바위벽 (남쪽은 낮게, 나가는 균열 자리는 비운다) ----
+
+func _rock_edges(st: SurfaceTool, m: HunterRules.DungeonMap, rng: RandomNumberGenerator, dark: Color, light: Color, cap: Color, high: float) -> void:
+	var hw: float = m.size.x * 0.5
+	var hd: float = m.size.y * 0.5
+	var edges: Array[Array] = [[Vector2(-hw, -hd), Vector2(hw, -hd), high], [Vector2(-hw, -hd), Vector2(-hw, hd), high * 0.85], [Vector2(hw, -hd), Vector2(hw, hd), high * 0.85], [Vector2(-hw, hd), Vector2(hw, hd), 0.7]]
+	for e: Array in edges:
+		var a: Vector2 = e[0]
+		var c: Vector2 = e[1]
+		var h: float = e[2]
+		var n: int = int(a.distance_to(c) / 2.4)
+		for i: int in n + 1:
+			var p: Vector2 = a.lerp(c, float(i) / float(n))
+			if h < 1.0 and absf(p.x - m.exit.x) < 2.6:
+				continue
+			var r: float = rng.randf_range(1.4, 2.3) if h > 1.0 else rng.randf_range(0.7, 1.1)
+			var rh: float = h * rng.randf_range(0.7, 1.25)
+			ClayMesh.add_ellipsoid(st, Vector3(p.x, rh * 0.45, p.y), Vector3(r, rh * 0.6, r), dark.lerp(light, rng.randf()), 7, 4, Basis(Vector3.UP, rng.randf() * TAU))
+			if h > 1.0 and cap.a > 0.0:
+				ClayMesh.add_ellipsoid(st, Vector3(p.x, rh * 0.95, p.y), Vector3(r * 0.75, 0.22, r * 0.75), cap, 7, 3)
+
+
+# ---- 용암이 흐르는 균열 (B · A · S) ----
+
+func _build_lava(m: HunterRules.DungeonMap) -> void:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 2814
+	var hw: float = m.size.x * 0.5
+	var hd: float = m.size.y * 0.5
+	var b: BoxBatch = BoxBatch.new()
+	# 바닥: 검은 현무암 · 그을린 얼룩.
+	b.box(Vector3(0.0, -0.05, 0.0), Vector3(m.size.x + 2.0, 0.1, m.size.y + 2.0), Color("#4A3E38"))
+	_mesh(b.commit(), "Floor", CLAY, false)
+	var ash: SurfaceTool = ClayMesh.begin()
+	for i: int in 30:
+		var at: Vector3 = Vector3(rng.randf_range(-hw, hw), 0.0, rng.randf_range(-hd, hd))
+		_blob(ash, at, Vector2(rng.randf_range(0.8, 2.2), rng.randf_range(0.6, 1.6)), Color("#3A302C").lerp(Color("#5A4636"), rng.randf()), rng, 0.01 + float(i) * 0.0005)
+	_mesh(ClayMesh.commit(ash), "Ash", CLAY, false)
+	# 바닥의 갈라진 틈 (빛나는 주황 줄).
+	var cracks: SurfaceTool = ClayMesh.begin()
+	for i: int in 16:
+		var from: Vector3 = Vector3(rng.randf_range(-hw + 1.0, hw - 1.0), 0.03, rng.randf_range(-hd + 1.0, hd - 3.0))
+		var dir: float = rng.randf() * TAU
+		for k: int in 3:
+			var to: Vector3 = from + Vector3(cos(dir), 0.0, sin(dir)) * rng.randf_range(0.8, 1.8)
+			ClayMesh.add_rod(cracks, from, to, 0.035, 0.015, Color.WHITE, 3)
+			from = to
+			dir += rng.randf_range(-0.9, 0.9)
+	_mesh(ClayMesh.commit(cracks), "LavaCracks", glow(Color("#E0501A")), false)
+	var rocks: SurfaceTool = ClayMesh.begin()
+	_rock_edges(rocks, m, rng, Color("#4A3E38"), Color("#66544A"), Color(0, 0, 0, 0), 4.0)
+	# 현무암 기둥 (육각 기둥 다발).
+	for p: Vector3 in m.pillars:
+		var h: float = 2.4 + p.z * 1.5
+		ClayMesh.add_rod(rocks, Vector3(p.x, 0.0, p.y), Vector3(p.x, h, p.y), p.z, p.z * 0.85, Color("#564A44"), 6)
+		for k: int in 3:
+			var a: float = TAU * float(k) / 3.0 + rng.randf()
+			var off: Vector3 = Vector3(cos(a), 0.0, sin(a)) * p.z * 0.9
+			ClayMesh.add_rod(rocks, Vector3(p.x, 0.0, p.y) + off, Vector3(p.x, h * rng.randf_range(0.4, 0.7), p.y) + off * 1.05, p.z * 0.4, p.z * 0.35, Color("#62544C"), 6)
+	# 용암 웅덩이 둘레의 굳은 돌 테두리.
+	for r: Rect2 in m.rubble:
+		var c: Vector2 = r.get_center()
+		var n: int = int((r.size.x + r.size.y) * 1.2)
+		for i: int in n:
+			var a: float = TAU * float(i) / float(n)
+			var e: Vector2 = c + Vector2(cos(a) * r.size.x * 0.52, sin(a) * r.size.y * 0.52)
+			ClayMesh.add_ellipsoid(rocks, Vector3(e.x, 0.12, e.y), Vector3(0.45, 0.22, 0.45) * rng.randf_range(0.7, 1.3), Color("#3A302C"), 6, 3)
+	_mesh(ClayMesh.commit(rocks), "Rocks")
+	# 용암 (빛난다) — 웅덩이는 서 있을 수 없는 곳 (서버 rubble).
+	var lava: SurfaceTool = ClayMesh.begin()
+	for r: Rect2 in m.rubble:
+		var c: Vector2 = r.get_center()
+		ClayMesh.add_ellipsoid(lava, Vector3(c.x, 0.02, c.y), Vector3(r.size.x * 0.5, 0.05, r.size.y * 0.5), Color.WHITE, 16, 2)
+	_mesh(ClayMesh.commit(lava), "LavaPools", glow(Color("#FF5A10")), false)
+	var crust: SurfaceTool = ClayMesh.begin()
+	for r: Rect2 in m.rubble:
+		for i: int in 4:
+			var at: Vector2 = r.get_center() + Vector2((rng.randf() - 0.5) * r.size.x * 0.6, (rng.randf() - 0.5) * r.size.y * 0.6)
+			ClayMesh.add_ellipsoid(crust, Vector3(at.x, 0.06, at.y), Vector3(rng.randf_range(0.3, 0.6), 0.04, rng.randf_range(0.25, 0.5)), Color("#3A2A24"), 8, 2, Basis(Vector3.UP, rng.randf() * TAU))
+	_mesh(ClayMesh.commit(crust), "LavaCrust", CLAY, false)
+	# 붉은 마석 결정 · 불빛.
+	var cr: SurfaceTool = ClayMesh.begin()
+	_crystals(cr, Vector3(-14.0, 0.4, -20.0), rng, 7, 1.2)
+	_crystals(cr, Vector3(14.0, 0.4, 18.0), rng, 6, 1.0)
+	_crystals(cr, Vector3(-14.0, 0.4, 16.0), rng, 5, 0.9)
+	_mesh(ClayMesh.commit(cr), "ManaCrystals", glow(Color("#E8483A")), false)
+	for r: Rect2 in m.rubble:
+		_light(Vector3(r.get_center().x, 1.4, r.get_center().y), Color("#FF7A2A"), 1.8, 10.0, true)
+	_light(Vector3(0.0, 3.0, -8.0), Color("#FF8A4A"), 1.4, 18.0)
+	_light(Vector3(0.0, 2.8, 14.0), Color("#FFA06A"), 1.3, 16.0)
+	_light(Vector3(-10.0, 2.5, 8.0), Color("#FF8A4A"), 0.9, 12.0)
+	_light(Vector3(10.0, 2.5, -16.0), Color("#FF8A4A"), 0.9, 12.0)
+
+
+# ---- 얼어붙은 지하 신전 (B · A · S) ----
+
+func _build_ice(m: HunterRules.DungeonMap) -> void:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = 2815
+	var hw: float = m.size.x * 0.5
+	var hd: float = m.size.y * 0.5
+	var b: BoxBatch = BoxBatch.new()
+	# 바닥: 얼어붙은 돌판 (가운데 길은 큰 판석).
+	b.box(Vector3(0.0, -0.05, 0.0), Vector3(m.size.x + 2.0, 0.1, m.size.y + 2.0), Color("#7A94A8"))
+	var z: float = -hd + 1.0
+	while z < hd - 1.0:
+		b.box(Vector3(0.0, 0.01, z), Vector3(4.2, 0.04, 1.9), Color("#9AB4C8").lightened(rng.randf() * 0.08))
+		z += 2.1
+	# 북쪽 제단 계단.
+	for i: int in 3:
+		b.box(Vector3(0.0, 0.15 + float(i) * 0.3, -hd + 1.6 - float(i) * 0.5), Vector3(10.0 - float(i) * 2.4, 0.3, 1.2), Color("#8AA4B8").darkened(float(i) * 0.05))
+	_mesh(b.commit(), "Floor", CLAY, false)
+	var frost: SurfaceTool = ClayMesh.begin()
+	for i: int in 34:
+		var at: Vector3 = Vector3(rng.randf_range(-hw, hw), 0.0, rng.randf_range(-hd, hd))
+		_blob(frost, at, Vector2(rng.randf_range(0.6, 2.0), rng.randf_range(0.5, 1.5)), Color("#D8E8F4").lerp(Color("#B8D0E4"), rng.randf()), rng, 0.02 + float(i) * 0.0005)
+	_mesh(ClayMesh.commit(frost), "Frost", CLAY, false)
+	var stone: SurfaceTool = ClayMesh.begin()
+	_rock_edges(stone, m, rng, Color("#6A8098"), Color("#8AA0B4"), Color("#E8F2FA"), 3.8)
+	# 신전 기둥 (받침 · 기둥 · 머리, 고드름) — 큰 것은 얼음 결정 덩어리.
+	for p: Vector3 in m.pillars:
+		if p.z > 1.0:
+			continue
+		ClayMesh.add_rod(stone, Vector3(p.x, 0.0, p.y), Vector3(p.x, 3.4, p.y), p.z * 0.75, p.z * 0.7, Color("#A8BCCC"), 10)
+		ClayMesh.add_rod(stone, Vector3(p.x, 0.0, p.y), Vector3(p.x, 0.35, p.y), p.z, p.z, Color("#8A9EB0"), 10)
+		ClayMesh.add_rod(stone, Vector3(p.x, 3.2, p.y), Vector3(p.x, 3.6, p.y), p.z * 1.05, p.z * 1.05, Color("#8A9EB0"), 10)
+		for k: int in 4:
+			var a: float = TAU * float(k) / 4.0 + 0.4
+			var at: Vector3 = Vector3(p.x + cos(a) * p.z * 0.9, 3.2, p.y + sin(a) * p.z * 0.9)
+			ClayMesh.add_rod(stone, at, at - Vector3(0.0, rng.randf_range(0.35, 0.8), 0.0), 0.07, 0.0, Color("#E0F0FF"), 4)
+	# 얼어붙은 덩어리 (막힌 곳).
+	var blocks: BoxBatch = BoxBatch.new()
+	for r: Rect2 in m.rubble:
+		var c: Vector2 = r.get_center()
+		for i: int in 5:
+			var s: Vector3 = Vector3(r.size.x * rng.randf_range(0.35, 0.6), rng.randf_range(0.8, 1.9), r.size.y * rng.randf_range(0.35, 0.6))
+			var at: Vector2 = c + Vector2((rng.randf() - 0.5) * r.size.x * 0.5, (rng.randf() - 0.5) * r.size.y * 0.5)
+			blocks.box(Vector3(at.x, s.y * 0.45, at.y), s, Color("#B8D8EC").lerp(Color("#E4F2FA"), rng.randf()), Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, (rng.randf() - 0.5) * 0.3))
+	_mesh(ClayMesh.commit(stone), "Temple")
+	_mesh(blocks.commit(), "IceBlocks")
+	# 얼음 결정 (큰 기둥 자리) · 마석 (하늘빛, 빛난다).
+	var ice: SurfaceTool = ClayMesh.begin()
+	for p: Vector3 in m.pillars:
+		if p.z <= 1.0:
+			continue
+		_crystals(ice, Vector3(p.x, 0.0, p.y), rng, 9, p.z * 1.6)
+	_crystals(ice, Vector3(0.0, 1.0, -hd + 1.2), rng, 6, 1.0)
+	_mesh(ClayMesh.commit(ice), "IceCrystals", glow(Color("#7AD0FF")), false)
+	_light(Vector3(0.0, 2.6, -hd + 2.0), Color("#8AD8FF"), 1.6, 12.0)
+	for p: Vector3 in m.pillars:
+		if p.z > 1.0:
+			_light(Vector3(p.x, 1.8, p.y), Color("#6AC0FF"), 1.4, 10.0)
+	_light(Vector3(0.0, 3.0, -2.0), Color("#AACCEE"), 1.0, 16.0)
+	_light(Vector3(0.0, 2.5, 14.0), Color("#AACCEE"), 0.9, 12.0)
 
 
 # ---- 나가는 균열 ----

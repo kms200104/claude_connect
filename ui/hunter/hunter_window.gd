@@ -3,6 +3,7 @@ extends Control
 ## v0.28 헌터 협회 출장소 창구 (판정은 서버 hunter_sell · hunter_rank):
 ## 위: 헌터 자격증 (등급 배지 · 점수 막대 · 처치 수 · 길드), 점수가 차면 "등급 재심사".
 ## 아래: 마석 매각 — 가방의 마석 · 마나 조각마다 값(등급 · 길드만큼 더) · "팔기", 맨 위 "모두 팔기".
+## v0.28.14 탭 '협회 상점': 쓰지 않은 헌터 점수로 장비 · 재료를 산다 (등급 · 직업 조건, 판정은 서버 hunter_buy).
 
 signal closed
 
@@ -16,6 +17,10 @@ var _license: VBoxContainer = null
 var _list: VBoxContainer = null
 var _rank_button: Button = null
 var _sell_all: Button = null
+var _sell_title: Label = null
+var _tabs: Array[Button] = []
+## 0 = 마석 매각, 1 = 협회 상점.
+var _tab: int = 0
 
 
 func _ready() -> void:
@@ -60,10 +65,26 @@ func _ready() -> void:
 		Audio.play_ui(Audio.SFX_CLICK)
 		Net.hunter_rank_up())
 	box.add_child(_rank_button)
+	var tab_row: HBoxContainer = HBoxContainer.new()
+	tab_row.add_theme_constant_override("separation", 10)
+	box.add_child(tab_row)
+	for i: int in 2:
+		var t: Button = _button(["마석 매각", "협회 상점"][i], 28)
+		t.name = ["TabSell", "TabStore"][i]
+		t.toggle_mode = true
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var idx: int = i
+		t.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			_tab = idx
+			_build())
+		tab_row.add_child(t)
+		_tabs.append(t)
 	var sell_head: HBoxContainer = HBoxContainer.new()
 	box.add_child(sell_head)
 	var sell_title: Label = _label("마석 매각", 32, INK)
 	sell_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sell_title = sell_title
 	sell_head.add_child(sell_title)
 	_sell_all = _button("모두 팔기", 28)
 	_sell_all.name = "SellAll"
@@ -126,6 +147,13 @@ func _build() -> void:
 	var ready: bool = next > 0 and pts >= next
 	_rank_button.disabled = not ready
 	_rank_button.text = "등급 재심사 → %s급" % str(Net.hunter.get("nextRank", "")) if ready else ("최고 등급이에요" if next <= 0 else "재심사까지 %d점" % (next - pts))
+	for i: int in _tabs.size():
+		_tabs[i].set_pressed_no_signal(i == _tab)
+	_sell_all.visible = _tab == 0
+	if _tab == 1:
+		_build_store()
+		return
+	_sell_title.text = "마석 매각"
 	var bonus: float = sell_bonus()
 	var any: bool = false
 	for i: int in Net.inventory.size():
@@ -160,6 +188,53 @@ func _build() -> void:
 		_list.add_child(_label("가방에 마석이 없어요. 크리처를 쓰러뜨리면 마석이 떨어져요.", 26, SOFT))
 	elif bonus > 0.0:
 		_list.add_child(_label("등급%s 보너스 +%d%%" % [" · 길드" if Net.in_guild() else "", roundi(bonus * 100.0)], 24, Color("#3E8E4E")))
+
+
+## v0.28.14 협회 상점: 물건마다 그림 · 이름 × 수 · 점수 · 조건 (등급 · 직업), 살 수 있으면 '사기'.
+func _build_store() -> void:
+	var merit: int = int(Net.hunter.get("merit", 0))
+	_sell_title.text = "협회 상점 · 쓸 수 있는 점수 %d점" % merit
+	var rules: HunterRules = GameData.hunter
+	var mine: int = rules.rank(str(Net.hunter.get("rank", "E"))).index
+	var job: String = str(Net.hunter.get("job", ""))
+	for it: Dictionary in rules.store:
+		var id: String = str(it.get("id", ""))
+		var cost: int = int(it.get("cost", 0))
+		var need: HunterRules.Rank = rules.rank(str(it.get("rank", "E")))
+		var only: String = str(it.get("job", ""))
+		var why: String = ""
+		if mine < need.index:
+			why = "%s급부터" % need.id
+		elif not only.is_empty() and only != job:
+			why = "%s 전용" % str(rules.job(only).get("name", only))
+		elif merit < cost:
+			why = "점수가 모자라요"
+		var row: HBoxContainer = HBoxContainer.new()
+		row.name = "Store_%s" % id
+		row.add_theme_constant_override("separation", 10)
+		var icon: TextureRect = TextureRect.new()
+		icon.texture = GameData.item_icon(id)
+		icon.custom_minimum_size = Vector2(64, 64)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
+		var tags: PackedStringArray = ["%d점" % cost]
+		if need.index > 0:
+			tags.append("%s급부터" % need.id)
+		if not only.is_empty():
+			tags.append("%s 전용" % str(rules.job(only).get("name", only)))
+		var l: Label = _label("%s × %d\n%s" % [GameData.item_name(id), int(it.get("n", 1)), " · ".join(tags)], 26, INK if why.is_empty() else SOFT)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(l)
+		var buy: Button = _button("사기" if why.is_empty() else why, 24)
+		buy.name = "BuyButton_%s" % id
+		buy.disabled = not why.is_empty()
+		buy.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			Net.hunter_buy(id))
+		row.add_child(buy)
+		_list.add_child(row)
+	_list.add_child(_label("점수를 써도 등급 심사 점수는 줄지 않아요 (지금까지 모은 %d점)." % int(Net.hunter.get("pts", 0)), 22, SOFT))
 
 
 ## 헌터 자격증 (협회 창구 · 헌터넷 앱이 같이 쓴다): 등급 배지 · 이름 · 점수 막대 · 처치 · 게이트 · 길드.

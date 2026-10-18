@@ -148,6 +148,21 @@ func _run() -> void:
 	sell_all.pressed.emit()
 	_check(await _wait_until(func() -> bool: return _count("mana_stone") == 0, 3.0), "마석을 모두 팔았다")
 	_check(await _wait_until(func() -> bool: return Net.sol > sol0, 2.0), "솔이 올랐다 (%d → %d)" % [sol0, Net.sol])
+	# v0.28.14 협회 상점 탭: 물건마다 줄, 등급이 모자란 물건은 꺼져 있다, 점수가 되면 산다.
+	(hunter.window.find_child("TabStore", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var plate: Button = hunter.window.find_child("BuyButton_armor_plate", true, false) as Button
+	_check(hunter.window.find_child("Store_first_aid_kit", true, false) != null and plate != null and plate.disabled and plate.text.contains("D급"), "협회 상점: 줄 · D급 물건은 잠김 (%s)" % (plate.text if plate != null else ""))
+	var merit: int = int(Net.hunter.get("merit", 0))
+	var bolt: Button = hunter.window.find_child("BuyButton_crossbow_bolt", true, false) as Button
+	if merit >= 12:
+		var bolts0: int = _count("crossbow_bolt")
+		bolt.pressed.emit()
+		_check(await _wait_until(func() -> bool: return _count("crossbow_bolt") >= bolts0 + 10 and int(Net.hunter.get("merit", 0)) == merit - 12, 3.0), "점수로 석궁 화살을 샀다 (점수 %d → %d)" % [merit, int(Net.hunter.get("merit", 0))])
+	else:
+		_check(bolt != null and bolt.disabled, "점수가 모자라면 꺼져 있다 (점수 %d)" % merit)
+	await _shot("hunter_store")
 	hunter.window.close()
 
 	# ---- 헌터넷 ----

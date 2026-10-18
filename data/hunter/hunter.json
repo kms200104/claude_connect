@@ -33,8 +33,27 @@
     "_comment": "헌터 협회 솔바람 출장소 (동사무소 · 대피소 앞 컨테이너 사무소). 창구 = 앞 range m 안. 마석은 여기서만 판다.",
     "name": "헌터 협회 솔바람 출장소",
     "x": -58.0, "z": 79.0, "yaw": 0.0, "range": 2.6,
-    "sell_items": ["mana_stone_e", "mana_stone_d", "mana_stone_c", "mana_stone_b", "mana_stone_a", "mana_shard"],
-    "sell_points": { "mana_stone_e": 0, "mana_stone_d": 1, "mana_stone_c": 3, "mana_stone_b": 10, "mana_stone_a": 30, "mana_shard": 1 }
+    "sell_items": ["mana_stone_e", "mana_stone_d", "mana_stone_c", "mana_stone_b", "mana_stone_a", "mana_stone_s", "mana_shard"],
+    "sell_points": { "mana_stone_e": 0, "mana_stone_d": 1, "mana_stone_c": 3, "mana_stone_b": 10, "mana_stone_a": 30, "mana_stone_s": 100, "mana_shard": 1 }
+  },
+
+  "store": {
+    "_comment": "v0.28.14 협회 상점 (출장소 창구): 헌터 점수로 산다. 등급 심사는 지금까지 모은 점수 그대로 (pts), 상점은 아직 쓰지 않은 점수 (pts - 쓴 점수) 로. rank = 살 수 있는 가장 낮은 헌터 등급, job = 그 직업만, n = 한 번에 받는 수.",
+    "items": [
+      { "id": "first_aid_kit", "n": 1, "cost": 20, "rank": "E" },
+      { "id": "crossbow_bolt", "n": 10, "cost": 12, "rank": "E" },
+      { "id": "scrap_metal", "n": 5, "cost": 15, "rank": "E" },
+      { "id": "hardwood", "n": 3, "cost": 15, "rank": "E" },
+      { "id": "battery_pack", "n": 1, "cost": 30, "rank": "E" },
+      { "id": "fire_axe", "n": 1, "cost": 50, "rank": "D" },
+      { "id": "crossbow", "n": 1, "cost": 70, "rank": "D" },
+      { "id": "bumper_spikes", "n": 1, "cost": 50, "rank": "D" },
+      { "id": "armor_plate", "n": 1, "cost": 60, "rank": "D" },
+      { "id": "greatsword", "n": 1, "cost": 150, "rank": "C", "job": "warrior" },
+      { "id": "twin_daggers", "n": 1, "cost": 140, "rank": "C", "job": "assassin" },
+      { "id": "repeater_crossbow", "n": 1, "cost": 180, "rank": "C", "job": "ranger" },
+      { "id": "healing_staff", "n": 1, "cost": 150, "rank": "C", "job": "medic" }
+    ]
   },
 
   "bounty": {
@@ -65,7 +84,7 @@
         "C": { "sol": 150000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] },
         "B": { "sol": 400000, "xp": 1000, "pts": 250, "items": [{ "id": "first_aid_kit", "n": 3 }, { "id": "mana_stone_b", "n": 1 }, { "id": "crossbow_bolt", "n": 20 }] },
         "A": { "sol": 1200000, "xp": 2500, "pts": 700, "items": [{ "id": "first_aid_kit", "n": 4 }, { "id": "mana_stone_a", "n": 1 }, { "id": "armor_plate", "n": 1 }] },
-        "S": { "sol": 4000000, "xp": 6500, "pts": 2000, "items": [{ "id": "first_aid_kit", "n": 5 }, { "id": "mana_stone_a", "n": 3 }, { "id": "armor_plate", "n": 2 }] }
+        "S": { "sol": 4000000, "xp": 6500, "pts": 2000, "items": [{ "id": "first_aid_kit", "n": 5 }, { "id": "mana_stone_a", "n": 2 }, { "id": "mana_stone_s", "n": 1 }, { "id": "armor_plate", "n": 2 }] }
       },
       "hunter_mult": { "E": 1.0, "D": 1.1, "C": 1.25, "B": 1.4, "A": 1.6, "S": 2.0 },
       "fast_ms": 300000, "fast_bonus": 0.2, "mvp_bonus": 0.1
@@ -80,6 +99,7 @@
     "dungeon": {
       "_comment": "v0.28.2 게이트 안 던전: 진입하면 도시 밖 먼 곳의 별도 공간으로 옮겨 간다. 던전 자리는 spots 순서 i 마다 (x0 + i × dx, z0) 가 가운데. 게이트가 열릴 때 maps 중 하나를 고른다. 지도 (로컬 좌표, 가운데 기준 m): w × d 바닥, spawn = 들어선 자리, exit = 나가는 균열 (exit_range 안에서 '나가기'), center = 웨이브가 나오는 곳 (spread m 둘레), pillars [x, z, r] · rubble [x, z, w, d] 는 막힌 곳. 공략하면 return_ms 뒤 모두 게이트 앞으로 돌아온다.",
       "x0": -1500, "dx": 100, "z0": 1300, "exit_range": 2.2, "return_ms": 8000,
+      "_comment_ranks": "v0.28.14 지도에 ranks 가 있으면 그 등급 게이트 전용 (B · A · S 는 넓은 용암 · 얼음 지도). ranks 가 없는 지도는 전용 지도가 없는 등급이 쓴다. 용암 · 얼음 지도의 rubble 은 용암 웅덩이 · 얼음 덩어리 (막힌 곳).",
       "maps": {
         "subway": {
           "name": "무너진 지하철역", "w": 22, "d": 40, "spawn": [0, 16], "exit": [0, 18.2], "center": [-2, -6], "spread": 7,
@@ -90,6 +110,16 @@
           "name": "이끼 낀 동굴", "w": 28, "d": 38, "spawn": [0, 15], "exit": [0, 17.2], "center": [0, -6], "spread": 8,
           "pillars": [[-9, -13, 1.5], [8.5, -9, 1.3], [-4.5, 1, 1.0], [10, 5, 1.7], [-11, 8, 1.4], [3, -16, 1.1], [-7, -5, 0.9], [6, 10, 0.8]],
           "rubble": [[-12, -2, 3, 6], [12, -15, 3, 5]]
+        },
+        "lava": {
+          "name": "용암이 흐르는 균열", "ranks": ["B", "A", "S"], "w": 34, "d": 50, "spawn": [0, 21], "exit": [0, 23.2], "center": [0, -8], "spread": 9,
+          "pillars": [[-10, -18, 1.4], [9, -14, 1.2], [-12, 2, 1.3], [11, 6, 1.5], [-5, -6, 0.9], [6, -2, 0.8], [-8, 14, 1.0], [9, 16, 1.1]],
+          "rubble": [[-3, -21, 8, 3], [13, -6, 4, 8], [-13, -9, 4, 6], [3, 9, 5, 3]]
+        },
+        "ice": {
+          "name": "얼어붙은 지하 신전", "ranks": ["B", "A", "S"], "w": 32, "d": 50, "spawn": [0, 21], "exit": [0, 23.2], "center": [0, -7], "spread": 9,
+          "pillars": [[-6, -16, 0.8], [6, -16, 0.8], [-6, -6, 0.8], [6, -6, 0.8], [-6, 4, 0.8], [6, 4, 0.8], [-6, 14, 0.8], [6, 14, 0.8], [-12, -12, 1.6], [12, 0, 1.4]],
+          "rubble": [[-11, 10, 3, 4], [11, -18, 4, 3], [0, -21.5, 6, 2]]
         }
       }
     },
@@ -140,14 +170,14 @@
         "waves": [ [["runner", 5], ["screamer", 1]], [["brute", 2], ["spitter", 3]], [["crawler", 4], ["bloated", 2], ["brute", 1]], [["brute", 3], ["spitter", 2]] ],
         "boss": { "k": "brute", "name": "균열의 왕", "hp_mult": 11, "dmg_mult": 2.6, "scale": 2.2 },
         "sol": 1500000, "pts": 1500,
-        "loot": { "rolls": 6, "empty": 0, "items": [ { "id": "mana_stone_a", "w": 30, "n": [1, 2] }, { "id": "mana_stone_b", "w": 30, "n": [1, 3] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "bumper_spikes", "w": 10, "n": [1, 1] }, { "id": "first_aid_kit", "w": 18, "n": [2, 3] } ] }
+        "loot": { "rolls": 6, "empty": 0, "items": [ { "id": "mana_stone_s", "w": 2, "n": [1, 1] }, { "id": "mana_stone_a", "w": 30, "n": [1, 2] }, { "id": "mana_stone_b", "w": 30, "n": [1, 3] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "bumper_spikes", "w": 10, "n": [1, 1] }, { "id": "first_aid_kit", "w": 18, "n": [2, 3] } ] }
       },
       "S": {
         "need": "A", "weight": 1, "color": "#E8483A", "hp_mult": 3.2, "dmg_mult": 2.4,
         "waves": [ [["runner", 6], ["screamer", 2]], [["brute", 3], ["spitter", 3]], [["crawler", 5], ["bloated", 3]], [["brute", 3], ["runner", 4]], [["brute", 4], ["spitter", 3]] ],
         "boss": { "k": "brute", "name": "심연의 군주", "hp_mult": 16, "dmg_mult": 3, "scale": 2.5 },
         "sol": 5000000, "pts": 5000,
-        "loot": { "rolls": 8, "empty": 0, "items": [ { "id": "mana_stone_a", "w": 45, "n": [2, 3] }, { "id": "mana_stone_b", "w": 25, "n": [2, 4] }, { "id": "armor_plate", "w": 10, "n": [2, 3] }, { "id": "first_aid_kit", "w": 20, "n": [3, 4] } ] }
+        "loot": { "rolls": 8, "empty": 0, "items": [ { "id": "mana_stone_s", "w": 12, "n": [1, 1] }, { "id": "mana_stone_a", "w": 40, "n": [2, 3] }, { "id": "mana_stone_b", "w": 25, "n": [2, 4] }, { "id": "armor_plate", "w": 10, "n": [2, 3] }, { "id": "first_aid_kit", "w": 20, "n": [3, 4] } ] }
       }
     }
   },

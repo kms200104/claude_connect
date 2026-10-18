@@ -1879,6 +1879,7 @@ export function createServer(overrides = {}) {
         return survival.handleSupply(ctx, msg, fail);
       case 'hunter_sell':
       case 'hunter_rank':
+      case 'hunter_buy':
       case 'hunter_claim':
       case 'guild_create':
       case 'guild_join':
@@ -2142,6 +2143,7 @@ export function createServer(overrides = {}) {
       case 'supply_open':
       case 'hunter_sell':
       case 'hunter_rank':
+      case 'hunter_buy':
       case 'hunter_claim':
       case 'guild_create':
       case 'guild_join':

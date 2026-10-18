@@ -192,6 +192,10 @@ func _on_done(info: Dictionary) -> void:
 		"act":
 			# v0.28.12 행동 경험치 (낚시 · 벌목 · 제작 …, 하루 상한까지).
 			_show_points("경험치 +%d (%s)" % [int(info.get("xp", 0)), ACT_NAMES.get(str(info.get("a", "")), "활동")])
+		"buy":
+			if toast_hud != null:
+				toast_hud.show_toast("협회 상점: %s ×%d 을(를) 받았어요 (−%d점, 남은 점수 %d)" % [GameData.item_name(str(info.get("i", ""))), int(info.get("n", 1)), int(info.get("cost", 0)), int(info.get("merit", 0))], true)
+			Audio.play_sfx("coin", -6.0)
 		"sell":
 			if toast_hud != null:
 				var n: int = 0
@@ -322,6 +326,10 @@ func _on_failed(kind: String, code: String) -> void:
 			text = "석궁을 들고 화살이 있어야 해요"
 		"no_job_yet":
 			text = "먼저 전직해요 (Lv.%d)" % GameData.hunter.job_level
+		"not_enough_points":
+			text = "쓸 수 있는 헌터 점수가 모자라요 — 크리처 · 의뢰 · 게이트로 모아요"
+		"job_only":
+			text = "그 직업만 살 수 있어요"
 		NetProtocol.ERR_NOT_ENOUGH_SOL:
 			text = "솔이 모자라요"
 		NetProtocol.ERR_GATE_BROKEN:

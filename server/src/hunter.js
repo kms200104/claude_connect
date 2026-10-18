@@ -6,6 +6,7 @@
 //   guild_create { name } · guild_join {} · guild_leave {}   길드 (같은 방 둘)
 //   stat_up { s }                             v0.28.1 스탯 포인트 하나를 힘 · 체력 · 민첩 · 행운에 쓴다
 //   awaken { a }                              v0.28.5 각성 고르기 (level.awaken.slots 레벨마다 하나, 바꿀 수 없다)
+//   hunter_buy { i }                          v0.28.14 협회 상점 (창구): 헌터 점수로 산다 (store.items 의 id)
 //   awaken_use { a }                          v0.28.5 쓰는 각성 (그림자 걸음 · 마력 방패) → 방 전체 awaken_fx { id, a, ms }
 // v0.28.1 레벨: 경험치(처치 · 게이트 · 의뢰 · 뒤지기 · 보급 상자)가 차면 레벨이 오르고 스탯 포인트를 받는다, 레벨이 되면 기술을 배운다.
 // 서버 → hunter { rank, pts, next, kills, bounties, guild } (나) · guild { … } (방 전체) · hunter_result { kind, … }.
@@ -27,6 +28,11 @@ export function loadHunter(raw, isKnown) {
   for (const list of Object.values(raw.kill?.mana ?? {})) for (const e of list) if (!isKnown(e.id)) throw new Error(`hunter mana: unknown item ${e.id}`);
   for (const id of raw.office?.sell_items ?? []) if (!isKnown(id)) throw new Error(`hunter office: unknown item ${id}`);
   for (const [rank, a] of Object.entries(raw.gates?.assoc?.by_gate ?? {})) for (const it of a.items ?? []) if (!isKnown(it.id)) throw new Error(`hunter assoc ${rank}: unknown item ${it.id}`);
+  for (const it of raw.store?.items ?? []) {
+    if (!isKnown(it.id)) throw new Error(`hunter store: unknown item ${it.id}`);
+    if (!ranks.some((r) => r.id === it.rank)) throw new Error(`hunter store ${it.id}: unknown rank ${it.rank}`);
+    if (!Number.isInteger(it.cost) || it.cost <= 0) throw new Error(`hunter store ${it.id}: bad cost`);
+  }
   // v0.28.8 전직 · 기술 나무: 앞선 기술 · 액티브가 있어야 한다.
   const J = raw.level?.jobs;
   const jobById = new Map();
@@ -65,6 +71,8 @@ export function sanitizeHunter(raw, rules) {
     // v0.28.12 오늘 (UTC 날짜) 행동 경험치를 받은 수.
     actDay: intOr(h.actDay, -1),
     acts: Object.fromEntries(Object.entries(h.acts ?? {}).filter(([k, v]) => rules?.level?.xp?.acts?.[k] !== undefined && Number.isInteger(v) && v >= 0)),
+    // v0.28.14 협회 상점에서 쓴 점수 (등급 심사는 pts 그대로, 상점은 pts - spent).
+    spent: Math.max(0, Math.min(Math.max(0, intOr(h.pts, 0)), intOr(h.spent, 0))),
   };
 }
 
@@ -209,7 +217,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     const r = rankOf(h);
     const nx = nextRank(h);
     return {
-      rank: r.id, pts: h.pts, next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
+      rank: r.id, pts: h.pts, merit: Math.max(0, h.pts - h.spent), next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
       bounties: todayBounties(room).map((b) => ({ id: b.id, kind: b.kind, k: b.k ?? '', n: b.n, got: Math.min(b.n, h.bprog[b.id] ?? 0), done: h.bdone.includes(b.id), reward: b.reward, pts: b.pts, name: b.name, desc: b.desc })),
       guild: guildWire(room),
       lv: h.lv, xp: h.xp, xpNext: h.lv >= (H.level?.max ?? 50) ? 0 : xpToNext(H, h.lv), sp: h.sp, st: { ...h.st },
@@ -408,6 +416,23 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         sendInventory(player);
         sendProfile(player);
         send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'sell', sold, amount, pts, bonus });
+        sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'hunter_buy': {
+        if (!nearOffice(player)) return fail(ErrorCode.notAtOffice);
+        const it = (H.store?.items ?? []).find((x) => x.id === msg.i);
+        if (!it) return fail(ErrorCode.badItem);
+        const h = rec(player);
+        if (rankOf(h).index < (H.rankById.get(it.rank)?.index ?? 0)) return fail(ErrorCode.rankTooLow);
+        if (it.job && h.job !== it.job) return fail(ErrorCode.jobOnly);
+        if (h.pts - h.spent < it.cost) return fail(ErrorCode.notEnoughPoints);
+        const n = it.n ?? 1;
+        if (!addItem(player.slots, it.id, n, cfg, data.limitOf)) return fail(ErrorCode.inventoryFull);
+        h.spent += it.cost;
+        sendInventory(player);
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'buy', i: it.id, n, cost: it.cost, merit: h.pts - h.spent });
         sendHunter(room, player);
         saveRoom(room);
         return;

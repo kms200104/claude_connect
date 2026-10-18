@@ -1608,6 +1608,12 @@ func hunter_rank_up() -> void:
 		_request("hunter_rank", {})
 
 
+## v0.28.14 협회 상점에서 사기 (store.items 의 id, 헌터 점수로).
+func hunter_buy(item_id: String) -> void:
+	if state == State.ONLINE:
+		_request("hunter_buy", {"i": item_id})
+
+
 func hunter_claim(bounty_id: String) -> void:
 	if state == State.ONLINE:
 		_request("hunter_claim", {"b": bounty_id})

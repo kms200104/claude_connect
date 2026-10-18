@@ -43,6 +43,8 @@ var office_position: Vector3 = Vector3.ZERO
 var office_yaw: float = 0.0
 var office_range: float = 2.6
 var sell_items: PackedStringArray = []
+## v0.28.14 협회 상점 (store.items): { id, n, cost, rank, job } — 헌터 점수로 산다 (판정은 서버 hunter_buy).
+var store: Array[Dictionary] = []
 var guild_name_min: int = 2
 var guild_name_max: int = 12
 var guild_sell_bonus: float = 0.05
@@ -98,6 +100,9 @@ static func from_dict(d: Dictionary) -> HunterRules:
 	r.office_yaw = float(office.get("yaw", 0.0))
 	r.office_range = float(office.get("range", r.office_range))
 	r.sell_items = PackedStringArray(office.get("sell_items", []))
+	for it: Variant in (d.get("store", {}) as Dictionary).get("items", []):
+		if it is Dictionary:
+			r.store.append(it)
 	var guild: Dictionary = d.get("guild", {})
 	r.guild_name_min = int(guild.get("name_min", r.guild_name_min))
 	r.guild_name_max = int(guild.get("name_max", r.guild_name_max))

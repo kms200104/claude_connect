@@ -107,6 +107,33 @@ describe('v0.28 헌터', () => {
     assert.equal(more.amount, Math.round(28000 * 1.1));
   });
 
+  it('v0.28.14 협회 상점: 창구에서 쓰지 않은 점수로 산다 (등급 · 직업 조건), 등급 심사 점수는 줄지 않는다', async () => {
+    const server = start(12, { startItems: 'pipe_spear:1' });
+    const { c } = await join(server);
+    const room = roomOf(server);
+    const me = [...room.players.values()][0];
+    const kit = H.store.items.find((x) => x.id === 'first_aid_kit');
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' })).code, 'not_at_office');
+    await moveTo(c, office);
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' })).code, 'not_enough_points');
+    me.profile.hunter.pts = 100;
+    const got = await ask(c, { t: 'hunter_buy', i: 'first_aid_kit' });
+    assert.equal(got.kind, 'buy');
+    assert.equal(got.merit, 100 - kit.cost);
+    assert.ok(me.slots.some((x) => x?.id === 'first_aid_kit'));
+    const hu = await c.next((m) => m.t === 'hunter' && m.merit === 100 - kit.cost, 2000);
+    assert.equal(hu.pts, 100, '등급 심사 점수는 그대로');
+    // 등급이 모자라면 (D급 물건) · 직업 전용은 그 직업만.
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'armor_plate' })).code, 'rank_too_low');
+    me.profile.hunter.rank = 'C';
+    me.profile.hunter.pts = 1000;
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'greatsword' })).code, 'job_only');
+    me.profile.hunter.job = 'warrior';
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'greatsword' })).kind, 'buy');
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'nope' })).code, 'bad_item');
+    assert.equal(me.profile.hunter.spent, kit.cost + H.store.items.find((x) => x.id === 'greatsword').cost);
+  });
+
   it('현상금 의뢰: 다 채워야 보고, 한 번만 받는다 · 뒤지기도 센다', async () => {
     const server = start(12, { startSol: 0 });
     const { c, w } = await join(server);
