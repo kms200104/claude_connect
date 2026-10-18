@@ -93,6 +93,8 @@ export const defaultConfig = {
   creatureSpawnScale: num('CREATURE_SPAWN_SCALE', 1),
   // v0.26 시험용: 크리처가 걷지 않는다 (들이받기 시험이 서 있는 크리처를 겨눈다, 날아가는 건 그대로).
   creatureFreeze: process.env.CREATURE_FREEZE === '1',
+  // v0.28.16 시험용: 새 크리처가 기어 나오는 시간 (ms, 비우면 survival.json creatures.rise_ms).
+  creatureRiseMs: process.env.CREATURE_RISE_MS !== undefined ? Number(process.env.CREATURE_RISE_MS) : undefined,
   // v0.27 시험용: 밤이 되고 첫 보급 상자까지 · 떨어지는 시간 (ms, 비우면 survival.json supply).
   supplyFirstMs: num('SUPPLY_FIRST_MS', NaN),
   supplyFallMs: num('SUPPLY_FALL_MS', NaN),

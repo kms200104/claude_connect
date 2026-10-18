@@ -388,7 +388,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (!h || !B) return fail(ErrorCode.badItem);
     const at = stashAt(h);
     if (player.home || Math.hypot(player.x - at.x, player.z - at.z) > B.range + 0.3) return fail(ErrorCode.tooFar);
-    if (!isBase(room, h)) return fail(ErrorCode.notBase);
+    // v0.28.16 집 안 상자는 판자를 다 대지 않아도 연다 (침대는 그대로 거점이어야 잔다).
     room.stash ??= {};
     const box = (room.stash[h.id] ??= []);
     if (msg.op === 'put') {
@@ -756,6 +756,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   // ---- 크리처 ----
 
   // f: 1 = 날아가는 중 (들이받혀서), 2 = 넘어져 있음.
+  // v0.28.16 새로 나타나는 크리처: 기어 나오는 동안 (riseUntil) 맞지도 · 움직이지도 · 때리지도 않는다.
+  const riseMs = () => (Number.isFinite(cfg.creatureRiseMs) ? cfg.creatureRiseMs : (S.creatures?.rise_ms ?? 0));
+  const rising = (c) => (c.riseUntil ?? 0) > now();
   const creatureWire = (c) => {
     const w = { id: c.id, k: c.k, x: round(c.x), z: round(c.z), yaw: round(c.yaw), hp: c.hp, a: c.attackAt > now() - 350 ? 1 : 0, f: c.kb ? 1 : (c.downUntil ?? 0) > now() ? 2 : 0 };
     // v0.28 게이트 크리처: 게이트 id · 최대 hp · 우두머리 이름 · 크기.
@@ -771,7 +774,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
   };
   const broadcastCreatures = (room) => room.broadcast({ t: 'creatures', st: now(), c: [...(room.creatures?.values() ?? [])].map(creatureWire) });
   const guardians = createGuardians({ data, worldMs, random, kill: (room, c, by) => kill(room, c, by), armorOf: (c) => S.creatures.kinds[c.k]?.armor ?? 0 });
-  const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures, teleport, shelter });
+  const gates = createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand: (x, z, def) => canStand(x, z, def), pickEntry, rollLoot, broadcastCreatures, teleport, shelter, riseMs: () => riseMs() });
 
   /** 놓인 가구로 막힌 곳 (바리케이드) · 불빛 (모닥불 · 든 횃불 · 손전등). */
   function defenses(room) {
@@ -848,7 +851,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       const z = player.z + Math.sin(a) * r;
       if (!canStand(x, z, def) || groundProblem(data, x, z) !== null) continue;
       room.creatureSeq = (room.creatureSeq ?? 0) + 1;
-      const c = { id: `z${room.creatureSeq}`, k: kind.k, x, z, yaw: Math.atan2(player.x - x, player.z - z), hp: kind.hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {} };
+      const c = { id: `z${room.creatureSeq}`, k: kind.k, x, z, yaw: Math.atan2(player.x - x, player.z - z), hp: kind.hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {}, riseUntil: now() + riseMs() };
       room.creatures.set(c.id, c);
       return c;
     }
@@ -908,7 +911,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       if (!canStand(x, z, def) || groundProblem(data, x, z) !== null) continue;
       const kind = pickEntry(kinds, random);
       room.creatureSeq = (room.creatureSeq ?? 0) + 1;
-      const g = { id: `z${room.creatureSeq}`, k: kind.k, x, z, yaw: Math.atan2(c.x - x, c.z - z), hp: kind.hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {} };
+      const g = { id: `z${room.creatureSeq}`, k: kind.k, x, z, yaw: Math.atan2(c.x - x, c.z - z), hp: kind.hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {}, riseUntil: now() + riseMs() };
       room.creatures.set(g.id, g);
       n++;
     }
@@ -1033,7 +1036,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
         changed = true;
         continue;
       }
-      if ((c.downUntil ?? 0) > t || (c.stunUntil ?? 0) > t || cfg.creatureFreeze) continue;
+      if ((c.downUntil ?? 0) > t || (c.stunUntil ?? 0) > t || cfg.creatureFreeze || rising(c)) continue;
       if (c.wasDown) {
         c.wasDown = false;
         changed = true;
@@ -1343,7 +1346,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const limit = w.range + 0.3 + reach + (w.ammo ? fx('range_ranged') : 0);
     const hits = [...(room.creatures?.values() ?? [])]
       .map((c) => ({ c, d: Math.hypot(c.x - ax, c.z - az) }))
-      .filter((h) => h.d <= limit)
+      .filter((h) => h.d <= limit && !rising(h.c))
       .sort((a, b) => a.d - b.d)
       .slice(0, Math.max(1, (w.cleave ?? 1) + (w.ammo ? 0 : fx('cleave'))));
     if (hits.length === 0) return send(ctx.ws, { t: 'swing', rid: msg.rid, hit: '', run: lunge });
@@ -1411,6 +1414,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
 
   /** v0.28.8 기술 한 대: 피해 (갑옷만큼 덜, 최소 1) · 밀쳐냄. creature_hit 에 kind (기술 id) 를 단다. */
   function strike(room, player, c, dmg, push, kind) {
+    if (rising(c)) return;
     const armor = S.creatures.kinds[c.k]?.armor ?? 0;
     const dealt = Math.max(1, Math.floor(dmg) + (random() < dmg - Math.floor(dmg) ? 1 : 0) - armor);
     c.hp -= dealt;
@@ -1580,22 +1584,36 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     // 소환: 체력이 기준 아래로 떨어질 때마다 (포효 · 부하가 기어 나온다).
     const frac = c.hp / Math.max(1, c.max ?? c.hp);
     c.summoned ??= 0;
+    // v0.28.16 포효 (windup_ms) 동안 나올 자리를 붉게 보여 주고, 그 뒤에 부하가 기어 나온다 (riseUntil 동안은 맞지도 · 때리지도 않는다).
+    if (c.summonCast) {
+      if (t < c.summonCast.at) return true;
+      for (const sp of c.summonCast.spots) {
+        const kind = S.creatures.kinds[B.summon.k];
+        room.creatureSeq = (room.creatureSeq ?? 0) + 1;
+        const hp = kind.hp;
+        room.creatures.set(`z${room.creatureSeq}`, { id: `z${room.creatureSeq}`, k: B.summon.k, x: sp.x, z: sp.z, yaw: c.yaw, hp, max: hp, target: target?.id ?? 0, nextAttack: 0, attackAt: 0, trapAt: {}, g: c.g, dmg: c.dmg ?? 1, riseUntil: t + riseMs() });
+      }
+      c.summonCast = null;
+      c.nextCast = Math.max(c.nextCast ?? 0, t + 1500);
+      return true;
+    }
     if (B.summon && c.summoned < B.summon.hp_at.length && frac <= B.summon.hp_at[c.summoned]) {
       c.summoned++;
+      const spots = [];
       for (let i = 0; i < B.summon.n; i++) {
         for (let k = 0; k < 8; k++) {
           const a = random() * Math.PI * 2;
           const x = c.x + Math.cos(a) * (1.5 + random() * 1.5);
           const z = c.z + Math.sin(a) * (1.5 + random() * 1.5);
           if (!canStand(x, z, def)) continue;
-          const kind = S.creatures.kinds[B.summon.k];
-          room.creatureSeq = (room.creatureSeq ?? 0) + 1;
-          const hp = kind.hp;
-          room.creatures.set(`z${room.creatureSeq}`, { id: `z${room.creatureSeq}`, k: B.summon.k, x, z, yaw: c.yaw, hp, max: hp, target: target?.id ?? 0, nextAttack: 0, attackAt: 0, trapAt: {}, g: c.g, dmg: c.dmg ?? 1 });
+          spots.push({ x, z });
           break;
         }
       }
-      room.broadcast({ t: 'boss_cast', id: c.id, k: 'summon', x: round(c.x), z: round(c.z), ms: 0 });
+      const ms = B.summon.windup_ms ?? 0;
+      c.summonCast = { at: t + ms, spots };
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'summon', x: round(c.x), z: round(c.z), ms, spots: spots.map((sp) => [round(sp.x), round(sp.z)]) });
+      return true;
     }
     // 돌진 중: 길을 따라 내달리고, 닿은 사람마다 한 번씩.
     if (c.dash) {

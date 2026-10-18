@@ -100,7 +100,8 @@ func _ready() -> void:
 	Net.creature_dead.connect(_on_dead)
 	Net.welcomed.connect(func(_s: NetPlayerState, _o: Array[NetPlayerState], _r: bool) -> void:
 		_synced_once = false
-		_sync())
+		_sync()
+		_prewarm_fx.call_deferred())
 	# v0.28.2 독침이 침 · 비명이 비명 (그림 · 소리).
 	Net.message_received.connect(_on_message)
 
@@ -115,6 +116,9 @@ func nearest(p: Vector3, range_m: float) -> String:
 	var best: String = ""
 	var best_d: float = range_m
 	for id: String in _actors:
+		# v0.28.16 기어 나오는 중이면 아직 칠 수 없다 (서버 riseUntil).
+		if _actors[id].emerge < 1.0:
+			continue
 		var d: float = Vector2(_actors[id].root.global_position.x - p.x, _actors[id].root.global_position.z - p.z).length()
 		if d <= best_d:
 			best_d = d
@@ -213,6 +217,21 @@ var _light_frame: int = -1
 var _dark_now: bool = false
 var _sense_r: float = -1.0
 var _mates: Array[Vector3] = []
+
+
+## v0.28.16 처음 맞힐 때 멈칫하지 않게: 들어오자마자 카메라 앞에 맞히기 효과를 아주 작게 한 번 (WeaponFx.prewarm). 한 번만.
+static var _fx_warm: bool = false
+
+
+func _prewarm_fx() -> void:
+	if _fx_warm or not is_inside_tree():
+		return
+	await get_tree().process_frame
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	_fx_warm = true
+	WeaponFx.prewarm(self, cam.global_position - cam.global_basis.z * 3.0)
 
 
 func _refresh_light() -> void:
@@ -887,6 +906,10 @@ func _boss_cast(msg: Dictionary) -> void:
 				a.scream = 1.0
 			_scream(str(msg.get("id", "")))
 			_shake_if_near(at, 0.18)
+			# v0.28.16 포효하는 동안 부하가 기어 나올 자리를 붉게 (서버가 ms 뒤에 만든다).
+			for sp: Variant in msg.get("spots", []):
+				if sp is Array and (sp as Array).size() >= 2:
+					_warn_circle(Vector3(float(sp[0]), 0.03, float(sp[1])), 0.8, maxf(ms, 0.3))
 	# 돌진 경고가 끝나면 내달린다.
 	if str(msg.get("k", "")) == "charge" and a != null:
 		# (서버가 돌진을 미뤘으면 charge_end 가 먼저 와 cast 가 비어 있다. 늦어도 2.5초 뒤에는 멈춘 자세로.)

@@ -199,6 +199,8 @@
     "per_player": 3,
     "max_per_room": 10,
     "spawn_every_ms": 9000,
+    "_comment_rise": "v0.28.16 새로 나타나는 크리처 (밤 · 게이트 웨이브 · 우두머리 소환 · 던전 브레이크) 는 rise_ms 동안 땅에서 기어 나온다 (클라이언트 기어 나오기 1.6초와 같다) — 그동안 맞지도, 움직이거나 때리지도 않는다.",
+    "rise_ms": 1600,
     "spawn_min": 18,
     "spawn_max": 28,
     "despawn_far": 60,

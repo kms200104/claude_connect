@@ -23,6 +23,7 @@ func _ready() -> void:
 	offset_top = -595.0
 	offset_bottom = -595.0 + SIZE
 	add_to_group(&"blocks_joystick")
+	add_to_group(MultiTouch.GROUP)
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
 	style.border_color = Color("#E8E0D0")

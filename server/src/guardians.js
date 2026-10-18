@@ -89,7 +89,7 @@ export function createGuardians({ data, worldMs, random, kill, armorOf }) {
       let target = null;
       let bestD = G.range;
       for (const c of room.creatures?.values() ?? []) {
-        if (c.inside) continue;
+        if (c.inside || (c.riseUntil ?? 0) > t) continue;
         const d = Math.hypot(c.x - g.x, c.z - g.z);
         if (d < bestD) {
           bestD = d;

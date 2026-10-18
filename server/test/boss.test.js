@@ -82,9 +82,16 @@ describe('v0.28.5 우두머리 패턴', () => {
     c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
     await sleep(150);
     putBoss(room, { x: spot.x + 12, z: spot.z }, 30);
-    await c.next((m) => m.t === 'boss_cast' && m.k === 'summon', 3000);
+    const cast = await c.next((m) => m.t === 'boss_cast' && m.k === 'summon', 3000);
+    // v0.28.16 포효 (windup_ms) 동안 나올 자리를 먼저 알리고, 부하는 그 뒤에 나온다.
+    assert.equal(cast.ms, B.summon.windup_ms);
+    assert.equal(cast.spots.length, B.summon.n);
+    assert.equal([...room.creatures.values()].filter((x) => x.k === B.summon.k && x.g === 'gtX').length, 0, '포효하는 동안은 아직 없다');
+    await sleep(B.summon.windup_ms + 300);
     const minions = [...room.creatures.values()].filter((x) => x.k === B.summon.k && x.g === 'gtX');
     assert.equal(minions.length, B.summon.n);
+    // 기어 나오는 동안은 맞지 않는다.
+    assert.ok(minions.every((m) => Number.isFinite(m.riseUntil) && m.riseUntil > 0), '기어 나오는 동안 (riseUntil)');
     await sleep(600);
     assert.equal([...room.creatures.values()].filter((x) => x.k === B.summon.k).length, B.summon.n, '다시 부르지 않는다 (30% 전까지)');
   });

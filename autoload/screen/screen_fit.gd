@@ -36,6 +36,10 @@ func _ready() -> void:
 	var touch_scroll: TouchScroll = TouchScroll.new()
 	touch_scroll.name = "TouchScroll"
 	add_child(touch_scroll)
+	# v0.28.16 조이스틱을 쥔 채 다른 손가락으로 누르는 단추 (구르기 · 상황 · 기술).
+	var multi: MultiTouch = MultiTouch.new()
+	multi.name = "MultiTouch"
+	add_child(multi)
 	var perf: PerfHud = PerfHud.new()
 	perf.name = "PerfHud"
 	add_child(perf)

@@ -69,6 +69,8 @@ var _landing: Vector2 = Vector2.INF
 var _bob_t: float = 0.0
 ## v0.26 내구도 표시 · 크리처별 다시 들이받을 수 있는 시각 · 벽 충돌 알림 간격.
 var _hp_label: Label = null
+## v0.28.16 타는 중 '수리' (고장 전이라도 내구도가 줄었으면 재료로 고친다 — 서버 veh_repair kit).
+var _fix_button: Button = null
 var _rammed_at: Dictionary[String, int] = {}
 var _crash_at: int = 0
 ## 공구 창고 충전을 다시 청할 수 있는 시각 · 배터리 바닥 안내를 했는지.
@@ -589,6 +591,9 @@ func _process(delta: float) -> void:
 		_hp_label.text = "내구도 %d%%" % roundi(health * 100.0) + ("" if battery < 0.0 else " · 배터리 %d%%" % roundi(battery * 100.0))
 		_check_station()
 		_hp_label.add_theme_color_override("font_color", Color("#7EE08A") if health > 0.6 else (Color("#F2D05A") if health > 0.3 else Color("#FF6A5A")))
+		if _fix_button != null:
+			_fix_button.visible = _hp_label.visible and health < 0.999
+			_fix_button.tooltip_text = kit_text()
 
 
 ## 차고가 바뀌었다 (부품을 바꿨으면 타고 있는 모양도 바꾼다).
@@ -888,6 +893,26 @@ func _build_hud() -> void:
 	_hp_label.offset_bottom = -372.0
 	_hp_label.visible = false
 	hud.add_child.call_deferred(_hp_label)
+	_fix_button = Button.new()
+	_fix_button.name = "VehicleFix"
+	_fix_button.text = "수리"
+	_fix_button.focus_mode = Control.FOCUS_NONE
+	_fix_button.add_theme_font_size_override("font_size", 26)
+	_fix_button.anchor_left = 0.5
+	_fix_button.anchor_right = 0.5
+	_fix_button.anchor_top = 1.0
+	_fix_button.anchor_bottom = 1.0
+	_fix_button.offset_left = 168.0
+	_fix_button.offset_right = 288.0
+	_fix_button.offset_top = -420.0
+	_fix_button.offset_bottom = -364.0
+	_fix_button.visible = false
+	_fix_button.add_to_group(&"blocks_joystick")
+	_fix_button.add_to_group(MultiTouch.GROUP)
+	_fix_button.pressed.connect(func() -> void:
+		Audio.play_ui(Audio.SFX_CLICK)
+		repair_kit(vehicle_id))
+	hud.add_child.call_deferred(_fix_button)
 
 
 ## 단추 · 속도계 보이기 (휴대폰을 연 동안 · 집 안 · 탈것이 없으면 숨김). 그림은 상태가 바뀔 때만 다시 그린다.
@@ -906,6 +931,8 @@ func _update_hud(force: bool) -> void:
 		_button.queue_redraw()
 	_gauge.visible = state == State.RIDING
 	_hp_label.visible = state == State.RIDING
+	if _fix_button != null and state != State.RIDING:
+		_fix_button.visible = false
 
 
 ## 단추 그림: 자전거 (부르기 = 작은 종 · 곁에 있음 = 초록 바탕 · 타는 중 = 주황 바탕에 P).

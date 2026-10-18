@@ -203,6 +203,13 @@ describe('v0.26 차량 · 내구도 · 들이받기 · 보급 낙하', () => {
     c.send({ t: 'veh_crash', s: 10, rid: 'cr-1' });
     const hp = await c.next((x) => x.t === 'veh_hp' && x.why === 'crash', 2000);
     assert.equal(hp.max - hp.hp, Math.ceil((10 - data.garage.repair.crash_min) * data.garage.repair.crash_k));
+    // v0.28.16 고장 나기 전에도 타는 채로 재료로 고친다 (HUD '수리').
+    const early = await ask(c, { t: 'veh_repair', v, how: 'kit' });
+    assert.equal(early.kind, 'repair');
+    assert.equal(early.hp, Math.min(hp.max, hp.hp + Math.ceil(hp.max * data.garage.repair.kit_fix)));
+    assert.equal(me.mount, v, '타는 채로');
+    me.slots[10] = { id: 'scrap_metal', n: 1 };
+    me.slots[11] = { id: 'nails', n: 1 };
     const veh = me.profile.vehicles.find((x) => x.id === v);
     veh.hp = 5;
     await sleep(450);

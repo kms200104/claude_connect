@@ -128,7 +128,8 @@ func _run() -> void:
 	var counter: Vector3 = rules.counter_position()
 	await _teleport(counter + Vector3(0.0, 0.1, 6.5), PI)
 	await _shot("hunter_office")
-	await _teleport(counter + Vector3(0.0, 0.1, 0.4), PI)
+	# v0.28.16 창구 앞 1.8m (예전엔 창이 열려도 서버가 출장소 가운데에서 재서 막혔다).
+	await _teleport(counter + Vector3(0.0, 0.1, 1.8), PI)
 	_check(await _wait_until(func() -> bool: return interaction.target == InteractionController.Target.HUNTER, 2.0), "창구 앞 상황 버튼 '헌터 협회 창구' (%s)" % interaction.target_id)
 	interaction.action_hud.action_pressed.emit()
 	await get_tree().process_frame

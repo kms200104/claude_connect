@@ -375,7 +375,8 @@ func target_label(target: String) -> String:
 		return "%s · %s (%s)" % [verb, where, cost_text()]
 	if target.begins_with(TARGET_STASH):
 		var h: SurvivalRules.House = _house(target.trim_prefix(TARGET_STASH))
-		return "거점 상자 열기" if h != null and HouseField.is_base(h) else "상자 · 판자를 다 대면 열려요 (%s)" % _boarded_text(h)
+		# v0.28.16 판자를 다 대지 않아도 연다.
+		return "거점 상자 열기" if h != null and HouseField.is_base(h) else "상자 열기"
 	if target.begins_with(TARGET_BED):
 		var hb: SurvivalRules.House = _house(target.trim_prefix(TARGET_BED))
 		return "자기 · 빨리 회복" if hb != null and HouseField.is_base(hb) else "침대 · 판자를 다 대야 잘 수 있어요 (%s)" % _boarded_text(hb)
@@ -453,7 +454,7 @@ func activate(target: String, auto: bool = false) -> void:
 		var h: SurvivalRules.House = _house(target.trim_prefix(TARGET_BED if bed else TARGET_STASH))
 		if h == null:
 			return
-		if not HouseField.is_base(h):
+		if bed and not HouseField.is_base(h):
 			if toast_hud != null:
 				toast_hud.show_toast("현관과 깨진 창에 판자를 다 대야 거점이 돼요 (%s)" % _boarded_text(h), false)
 			return

@@ -121,7 +121,7 @@ describe('v0.25 소리 · 함께 판자 · 거점', () => {
     assert.equal(run.r, S.noise.run);
   });
 
-  it('거점(다 막은 빈집)에서만 상자를 쓰고, 침대에서 자면 빨리 회복하고 움직이면 깬다', async () => {
+  it('상자는 언제나 (v0.28.16), 침대는 거점(다 막은 빈집)에서만 — 자면 빨리 회복하고 움직이면 깬다', async () => {
     const server = start(12, { startItems: 'wood:5' });
     const { c } = await join(server);
     const room = roomOf(server);
@@ -129,8 +129,7 @@ describe('v0.25 소리 · 함께 판자 · 거점', () => {
     await moveTo(c, stash);
     const me = [...room.players.values()][0];
     const slot = me.slots.findIndex((x) => x?.id === 'wood');
-    assert.equal((await ask(c, { t: 'stash', h: 'h01', op: 'put', slot })).code, 'not_base');
-    room.boards = Object.fromEntries(H.breaches.map((b) => [b.key, b.max]));
+    // v0.28.16 판자를 다 대지 않아도 상자는 열린다.
     const put1 = await ask(c, { t: 'stash', h: 'h01', op: 'put', slot, n: 3 });
     assert.deepEqual(put1.items, [{ id: 'wood', n: 3 }]);
     assert.equal(count({ slots: me.slots }, 'wood'), 2);
@@ -140,8 +139,11 @@ describe('v0.25 소리 · 함께 판자 · 거점', () => {
     assert.equal((await ask(c, { t: 'stash', h: 'h02', op: 'take', id: 'wood' })).code, 'too_far');
     // 판자가 부서져도 넣어 둔 것은 남는다 (저장).
     assert.deepEqual(room.toSave().world.stash.h01, [{ id: 'wood', n: 2 }]);
-    // 침대.
+    // 침대 (거점이어야 잔다 — 판자를 다 대기 전엔 못 잔다).
     me.profile.hp = 4;
+    await moveTo(c, at(S.base.bed[0] + 1.1, S.base.bed[1]));
+    assert.equal((await ask(c, { t: 'sleep', on: true })).code, 'not_base');
+    room.boards = Object.fromEntries(H.breaches.map((b) => [b.key, b.max]));
     await moveTo(c, at(S.base.bed[0] + 1.1, S.base.bed[1]));
     assert.equal((await ask(c, { t: 'sleep', on: true })).t, 'slept');
     const hp = await c.next((m) => m.t === 'hp' && m.hp === 5, S.base.sleep_regen_ms + 1500);

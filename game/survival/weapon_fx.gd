@@ -70,6 +70,39 @@ static func style(weapon_id: String) -> Style:
 	return _styles.get(weapon_id, _styles["hands"])
 
 
+## v0.28.16 처음 맞힐 때 멈칫하지 않게 (입자 · 궤적 · 글자 머티리얼이 그때 처음 그려지며 셰이더를 짓고, 소리 파일을 읽는다 —
+## 시험에서 첫 대에 한 프레임 745ms): 카메라 앞 at 에 아주 작게 (안 보이게) 한 번씩 그리고, 무기 소리를 모두 읽어 둔다.
+static func prewarm(parent: Node, at: Vector3) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	style("hands")
+	var ids: PackedStringArray = ["creature_hit", "hit_crit"]
+	var words: String = "치명타! -0123456789"
+	for s: Style in _styles.values():
+		ids.append(s.swing_sfx)
+		ids.append(s.hit_sfx)
+		words += s.word
+	Audio.preload_sfx(ids)
+	var tiny: Vector2 = Vector2(0.001, 0.001)
+	for additive: bool in [true, false]:
+		Fx.burst(parent, at, additive, 1, 0.2, Vector3.UP, 0.0, Vector2.ZERO, 0.0, tiny, Color(1, 1, 1, 0.0), Color(1, 1, 1, 0.0))
+	Fx.slash(parent, at, 0.0, Color(1, 1, 1, 0.0), 0.01, 90.0, 0.0, 0.2, 0.002)
+	Fx.beam(parent, at, at + Vector3(0.0, 0.0, 0.01), Color(1, 1, 1, 0.0), 0.002, 0.2)
+	Fx.ring_wave(parent, at, Color(1, 1, 1, 0.0), 0.01, 0.2, 0.002)
+	# 떠오르는 글자 (보통 · 치명타 크기) — 글자 모양도 이때 굽는다.
+	for font_size: int in [72, int(72 * 1.35)]:
+		var l: Label3D = Label3D.new()
+		l.text = words
+		l.font_size = font_size
+		l.pixel_size = 0.00001
+		l.outline_size = 16
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.no_depth_test = true
+		parent.add_child(l)
+		l.global_position = at
+		l.get_tree().create_timer(0.3).timeout.connect(l.queue_free)
+
+
 ## 휘두르기: who (Player · RemotePlayer) 앞에 궤적 · 바람 소리. 몸이 보는 쪽은 body.rotation.y (정면 -Z).
 static func swing(parent: Node, who: Node3D, body: Node3D, weapon_id: String) -> void:
 	if parent == null or who == null or not who.is_inside_tree():

@@ -39,6 +39,14 @@ func _check(ok: bool, what: String) -> void:
 		_failures.append(what)
 
 
+func _touch(index: int, at: Vector2, down: bool) -> void:
+	var t: InputEventScreenTouch = InputEventScreenTouch.new()
+	t.index = index
+	t.position = get_viewport().get_final_transform() * at
+	t.pressed = down
+	Input.parse_input_event(t)
+
+
 func _wait_until(cond: Callable, timeout_s: float) -> bool:
 	var waited: float = 0.0
 	while not cond.call() and waited < timeout_s:
@@ -105,6 +113,23 @@ func _run() -> void:
 	survival.dodge_button.pressed.emit()
 	await get_tree().create_timer(0.5).timeout
 	_check(not me.is_rolling(), "대기 중에는 못 구른다")
+	# v0.28.16 조이스틱을 쥔 채 (첫 손가락) 두 번째 손가락으로 '구르기' — 움직이면서 구른다.
+	await get_tree().create_timer(2.0).timeout
+	Net.dodge_ready_at = 0
+	var stick_at: Vector2 = get_viewport().get_visible_rect().size * Vector2(0.2, 0.8)
+	_touch(0, stick_at, true)
+	await get_tree().process_frame
+	var drag: InputEventScreenDrag = InputEventScreenDrag.new()
+	drag.index = 0
+	drag.position = get_viewport().get_final_transform() * (stick_at + Vector2(0.0, -90.0))
+	Input.parse_input_event(drag)
+	await get_tree().create_timer(0.4).timeout
+	var moving: bool = Vector2(me.velocity.x, me.velocity.z).length() > 0.5
+	_touch(1, survival.dodge_button.get_global_rect().get_center(), true)
+	_check(moving and await _wait_until(func() -> bool: return me.is_rolling(), 2.0), "움직이며 (두 번째 손가락으로) 구른다 (걷는 중 %s)" % moving)
+	_touch(1, survival.dodge_button.get_global_rect().get_center(), false)
+	_touch(0, stick_at, false)
+	await get_tree().create_timer(0.6).timeout
 
 	# ---- 빈집 냉장고 뒤지기 ----
 	var fridge: SurvivalRules.LootBox = rules.containers["h01_2"]

@@ -248,6 +248,13 @@ func babble(character: String, voice: float, position: Vector3 = Vector3.INF, ma
 		play_at(id, position, -2.0, pitch, 0.03)
 
 
+## v0.28.16 미리 읽어 둔다 (처음 맞힐 때 파일을 읽느라 멈칫하지 않게).
+func preload_sfx(ids: PackedStringArray) -> void:
+	for id: String in ids:
+		if not id.is_empty():
+			_sfx(id)
+
+
 func _sfx(id: String) -> AudioStream:
 	return _stream("%s/%s.wav" % [SFX_DIR, id])
 

@@ -91,13 +91,15 @@ describe('v0.28 헌터', () => {
     const sol0 = me.profile.sol;
     const sold = await ask(c, { t: 'hunter_sell', all: true });
     assert.equal(sold.t, 'hunter_result');
-    assert.equal(sold.amount, 5 * 3000 + 2 * 9000);
+    assert.equal(sold.amount, 5 * data.items.get('mana_stone_e').price + 2 * data.items.get('mana_stone_d').price);
     assert.equal(sold.pts, 2);
     assert.equal(me.profile.sol, sol0 + sold.amount);
     assert.ok(!me.slots.some((s) => s?.id?.startsWith('mana_stone')));
 
     // 재심사.
     assert.equal((await ask(c, { t: 'hunter_rank' })).code, 'rank_not_ready');
+    // v0.28.16 창구 (출장소 앞 1.6m) 앞 2m 에 서 있어도 (클라이언트가 창구 창을 여는 거리) 된다.
+    await moveTo(c, { x: H.office.x, z: H.office.z + 1.6 + 2.0 });
     me.profile.hunter.pts = 700;
     const up = await ask(c, { t: 'hunter_rank' });
     assert.deepEqual({ from: up.from, rank: up.rank }, { from: 'E', rank: 'C' }, '여러 등급을 한꺼번에');
@@ -105,7 +107,7 @@ describe('v0.28 헌터', () => {
     // C급은 마석을 10% 더 받는다.
     me.slots[10] = { id: 'mana_stone_c', n: 1 };
     const more = await ask(c, { t: 'hunter_sell', slot: 10 });
-    assert.equal(more.amount, Math.round(28000 * 1.1));
+    assert.equal(more.amount, Math.round(data.items.get('mana_stone_c').price * 1.1));
   });
 
   it('v0.28.15 헌터 마일리지: 점수를 받으면 쌓이고, 협회 상점에서 쓴다 (등급 · 직업 조건), 아공간 주머니 · 상자로 칸이 늘어난다 (저장된다)', async () => {
@@ -168,6 +170,22 @@ describe('v0.28 헌터', () => {
     assert.equal(again.slots.length, before + 10);
     assert.equal(again.slots[again.slots.length - 1]?.id, 'bandage');
     assert.equal(back.stashExtra, 6);
+  });
+
+  it('v0.28.16 기어 나오는 크리처 (riseUntil) 는 맞지 않는다, 다 나오면 맞는다', async () => {
+    const server = start(23, { startItems: 'pipe_spear:1' });
+    const { c } = await join(server);
+    await moveTo(c, spot);
+    const room = roomOf(server);
+    const me = [...room.players.values()][0];
+    me.profile.held = me.slots.findIndex((x) => x?.id === 'pipe_spear');
+    put(room, 'zr1', { x: spot.x + 1, z: spot.z }, 'shambler', 3);
+    room.creatures.get('zr1').riseUntil = Number.MAX_SAFE_INTEGER;
+    assert.equal((await ask(c, { t: 'attack' })).hit, '', '기어 나오는 중');
+    assert.equal(room.creatures.get('zr1').hp, 3);
+    room.creatures.get('zr1').riseUntil = 0;
+    await sleep(800);
+    assert.equal((await ask(c, { t: 'attack' })).hit, 'zr1');
   });
 
   it('현상금 의뢰: 다 채워야 보고, 한 번만 받는다 · 뒤지기도 센다', async () => {

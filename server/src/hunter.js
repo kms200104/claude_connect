@@ -379,7 +379,14 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
 
   // ---- 요청 ----
 
-  const nearOffice = (player) => !player.home && !inShop(player) && Math.hypot(player.x - H.office.x, player.z - H.office.z) <= H.office.range + 0.4;
+  // v0.28.16 창구는 출장소 앞 1.6m (클라이언트 HunterRules.counter_position 과 같다) — 거기서 range 안 (+ 이동 여유).
+  // (예전에는 출장소 가운데에서 쟀다 — 창구 앞에서 창이 열려도 조금 떨어져 서면 재심사 · 매각이 '창구에서 해요' 로 막혔다.)
+  const counterOf = () => ({ x: H.office.x + Math.sin(H.office.yaw ?? 0) * 1.6, z: H.office.z + Math.cos(H.office.yaw ?? 0) * 1.6 });
+  const nearOffice = (player) => {
+    if (player.home || inShop(player)) return false;
+    const c = counterOf();
+    return Math.hypot(player.x - c.x, player.z - c.z) <= H.office.range + 0.8;
+  };
 
   function sellBonus(room, player) {
     return rankOf(rec(player)).sell_bonus + (guildOf(room, player) ? H.guild.sell_bonus : 0);

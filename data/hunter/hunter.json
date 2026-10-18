@@ -72,14 +72,14 @@
     "_comment": "현상금 의뢰: 날마다(마을 날짜) 방 시드로 per_day 개를 뽑는다 (사람마다 따로 진행 · 보고). kind: kill(크리처 k 를 n 마리, k 없으면 아무거나) · loot(빈집 가구 n 곳) · sell(마석 n 개 매각) · supply(보급 상자 n 개) · gate(게이트 공략, v0.28 게이트). 다 채우면 헌터넷 앱에서 '완료 보고' → reward 솔 · pts 점수.",
     "per_day": 3,
     "pool": [
-      { "id": "hunt_shambler", "kind": "kill", "k": "shambler", "n": 4, "reward": 30000, "pts": 15, "name": "어슬렁이 소탕", "desc": "밤마다 빈집촌을 어슬렁이는 크리처 4마리를 처치해 주세요." },
-      { "id": "hunt_runner", "kind": "kill", "k": "runner", "n": 3, "reward": 40000, "pts": 18, "name": "달리미 추적", "desc": "빠르게 달려드는 달리미 3마리. 탈것으로 들이받아도 인정돼요." },
-      { "id": "hunt_bloated", "kind": "kill", "k": "bloated", "n": 1, "reward": 60000, "pts": 25, "name": "퉁퉁이 토벌", "desc": "덩치 큰 퉁퉁이 1마리. 혼자는 위험하니 길드원과 함께." },
-      { "id": "hunt_any", "kind": "kill", "n": 8, "reward": 50000, "pts": 20, "name": "야간 순찰", "desc": "밤사이 크리처 8마리를 처치해 방어선을 지켜 주세요." },
-      { "id": "scavenge", "kind": "loot", "n": 5, "reward": 25000, "pts": 10, "name": "빈집 수색", "desc": "브레이크로 비어 버린 집 가구 5곳을 뒤져 남은 물자를 확인해 주세요." },
-      { "id": "mana_haul", "kind": "sell", "n": 6, "reward": 30000, "pts": 12, "name": "마석 납품", "desc": "협회 창구에 마석 6개를 팔아 주세요 (등급 상관없음)." },
-      { "id": "supply_run", "kind": "supply", "n": 1, "reward": 45000, "pts": 18, "name": "보급 상자 회수", "desc": "밤에 헬기가 떨어뜨리는 보급 상자 하나를 먼저 열어 주세요." },
-      { "id": "gate_clear", "kind": "gate", "n": 1, "reward": 80000, "pts": 30, "name": "게이트 공략", "desc": "도시에 열린 게이트 하나에 들어가 우두머리까지 쓰러뜨려 주세요." }
+      { "id": "hunt_shambler", "kind": "kill", "k": "shambler", "n": 4, "reward": 300000, "pts": 15, "name": "어슬렁이 소탕", "desc": "밤마다 빈집촌을 어슬렁이는 크리처 4마리를 처치해 주세요." },
+      { "id": "hunt_runner", "kind": "kill", "k": "runner", "n": 3, "reward": 400000, "pts": 18, "name": "달리미 추적", "desc": "빠르게 달려드는 달리미 3마리. 탈것으로 들이받아도 인정돼요." },
+      { "id": "hunt_bloated", "kind": "kill", "k": "bloated", "n": 1, "reward": 600000, "pts": 25, "name": "퉁퉁이 토벌", "desc": "덩치 큰 퉁퉁이 1마리. 혼자는 위험하니 길드원과 함께." },
+      { "id": "hunt_any", "kind": "kill", "n": 8, "reward": 500000, "pts": 20, "name": "야간 순찰", "desc": "밤사이 크리처 8마리를 처치해 방어선을 지켜 주세요." },
+      { "id": "scavenge", "kind": "loot", "n": 5, "reward": 250000, "pts": 10, "name": "빈집 수색", "desc": "브레이크로 비어 버린 집 가구 5곳을 뒤져 남은 물자를 확인해 주세요." },
+      { "id": "mana_haul", "kind": "sell", "n": 6, "reward": 300000, "pts": 12, "name": "마석 납품", "desc": "협회 창구에 마석 6개를 팔아 주세요 (등급 상관없음)." },
+      { "id": "supply_run", "kind": "supply", "n": 1, "reward": 450000, "pts": 18, "name": "보급 상자 회수", "desc": "밤에 헬기가 떨어뜨리는 보급 상자 하나를 먼저 열어 주세요." },
+      { "id": "gate_clear", "kind": "gate", "n": 1, "reward": 800000, "pts": 30, "name": "게이트 공략", "desc": "도시에 열린 게이트 하나에 들어가 우두머리까지 쓰러뜨려 주세요." }
     ]
   },
 
@@ -91,12 +91,12 @@
     "assoc": {
       "_comment": "v0.28.12 협회 지급 보상 (몹 처치 · 공략 상자와 따로): 게이트 등급마다 by_gate, 받는 헌터의 등급마다 hunter_mult 배 (sol · xp · pts). fast_ms 안에 공략하면 fast_bonus, 우두머리를 쓰러뜨린 사람은 mvp_bonus 를 더한다. items 는 그대로 (등급이 높을수록 좋은 것).",
       "by_gate": {
-        "E": { "sol": 20000, "xp": 60, "pts": 15, "items": [{ "id": "bandage", "n": 2 }, { "id": "clean_water", "n": 1 }] },
-        "D": { "sol": 60000, "xp": 160, "pts": 40, "items": [{ "id": "first_aid_kit", "n": 1 }, { "id": "canned_food", "n": 2 }, { "id": "mana_stone_d", "n": 1 }] },
-        "C": { "sol": 150000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] },
-        "B": { "sol": 400000, "xp": 1000, "pts": 250, "items": [{ "id": "first_aid_kit", "n": 3 }, { "id": "mana_stone_b", "n": 1 }, { "id": "crossbow_bolt", "n": 20 }] },
-        "A": { "sol": 1200000, "xp": 2500, "pts": 700, "items": [{ "id": "first_aid_kit", "n": 4 }, { "id": "mana_stone_a", "n": 1 }, { "id": "armor_plate", "n": 1 }] },
-        "S": { "sol": 4000000, "xp": 6500, "pts": 2000, "items": [{ "id": "first_aid_kit", "n": 5 }, { "id": "mana_stone_a", "n": 2 }, { "id": "mana_stone_s", "n": 1 }, { "id": "armor_plate", "n": 2 }] }
+        "E": { "sol": 200000, "xp": 60, "pts": 15, "items": [{ "id": "bandage", "n": 2 }, { "id": "clean_water", "n": 1 }] },
+        "D": { "sol": 600000, "xp": 160, "pts": 40, "items": [{ "id": "first_aid_kit", "n": 1 }, { "id": "canned_food", "n": 2 }, { "id": "mana_stone_d", "n": 1 }] },
+        "C": { "sol": 1500000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] },
+        "B": { "sol": 4000000, "xp": 1000, "pts": 250, "items": [{ "id": "first_aid_kit", "n": 3 }, { "id": "mana_stone_b", "n": 1 }, { "id": "crossbow_bolt", "n": 20 }] },
+        "A": { "sol": 12000000, "xp": 2500, "pts": 700, "items": [{ "id": "first_aid_kit", "n": 4 }, { "id": "mana_stone_a", "n": 1 }, { "id": "armor_plate", "n": 1 }] },
+        "S": { "sol": 40000000, "xp": 6500, "pts": 2000, "items": [{ "id": "first_aid_kit", "n": 5 }, { "id": "mana_stone_a", "n": 2 }, { "id": "mana_stone_s", "n": 1 }, { "id": "armor_plate", "n": 2 }] }
       },
       "hunter_mult": { "E": 1.0, "D": 1.1, "C": 1.25, "B": 1.4, "A": 1.6, "S": 2.0 },
       "fast_ms": 300000, "fast_bonus": 0.2, "mvp_bonus": 0.1
@@ -106,7 +106,7 @@
       "first_ms": 2500, "every_ms": 4500,
       "slam": { "windup_ms": 1300, "r": 3.0, "damage": 3, "range": 5.5 },
       "charge": { "windup_ms": 900, "dist": 9, "speed": 13, "width": 1.5, "damage": 3, "min_range": 3.5 },
-      "summon": { "hp_at": [0.6, 0.3], "n": 2, "k": "runner" }
+      "summon": { "hp_at": [0.6, 0.3], "n": 2, "k": "runner", "windup_ms": 1200 }
     },
     "dungeon": {
       "_comment": "v0.28.2 게이트 안 던전: 진입하면 도시 밖 먼 곳의 별도 공간으로 옮겨 간다. 던전 자리는 spots 순서 i 마다 (x0 + i × dx, z0) 가 가운데. 게이트가 열릴 때 maps 중 하나를 고른다. 지도 (로컬 좌표, 가운데 기준 m): w × d 바닥, spawn = 들어선 자리, exit = 나가는 균열 (exit_range 안에서 '나가기'), center = 웨이브가 나오는 곳 (spread m 둘레), pillars [x, z, r] · rubble [x, z, w, d] 는 막힌 곳. 공략하면 return_ms 뒤 모두 게이트 앞으로 돌아온다.",
@@ -152,21 +152,21 @@
         "weight": 5, "color": "#8FB8C8", "hp_mult": 1.0, "dmg_mult": 1.0,
         "waves": [ [["shambler", 3]], [["shambler", 2], ["runner", 1]] ],
         "boss": { "k": "shambler", "name": "어슬렁이 우두머리", "hp_mult": 5, "dmg_mult": 1.5, "scale": 1.6 },
-        "sol": 30000, "pts": 30,
+        "sol": 300000, "pts": 30,
         "loot": { "rolls": 3, "empty": 0, "items": [ { "id": "mana_stone_e", "w": 40, "n": [2, 4] }, { "id": "mana_stone_d", "w": 15, "n": [1, 1] }, { "id": "bandage", "w": 15, "n": [1, 2] }, { "id": "canned_food", "w": 15, "n": [1, 2] }, { "id": "scrap_metal", "w": 15, "n": [2, 3] } ] }
       },
       "D": {
         "weight": 3, "color": "#5AC08A", "hp_mult": 1.3, "dmg_mult": 1.2,
         "waves": [ [["runner", 3], ["crawler", 2]], [["spitter", 1], ["runner", 2], ["bloated", 1]] ],
         "boss": { "k": "bloated", "name": "퉁퉁이 우두머리", "hp_mult": 3, "dmg_mult": 1.5, "scale": 1.5 },
-        "sol": 80000, "pts": 80,
+        "sol": 800000, "pts": 80,
         "loot": { "rolls": 4, "empty": 0, "items": [ { "id": "mana_stone_d", "w": 40, "n": [1, 3] }, { "id": "mana_stone_c", "w": 12, "n": [1, 1] }, { "id": "first_aid_kit", "w": 15, "n": [1, 1] }, { "id": "battery_pack", "w": 15, "n": [1, 1] }, { "id": "armor_plate", "w": 5, "n": [1, 1] }, { "id": "nails", "w": 13, "n": [2, 4] } ] }
       },
       "C": {
         "weight": 1, "color": "#4A90E0", "hp_mult": 1.6, "dmg_mult": 1.4,
         "waves": [ [["runner", 4], ["screamer", 1]], [["brute", 1], ["spitter", 2], ["runner", 2]], [["crawler", 3], ["bloated", 2], ["shambler", 2]] ],
         "boss": { "k": "bloated", "name": "균열의 군주", "hp_mult": 6, "dmg_mult": 2, "scale": 1.9 },
-        "sol": 200000, "pts": 200,
+        "sol": 2000000, "pts": 200,
         "loot": { "rolls": 5, "empty": 0, "items": [ { "id": "mana_stone_c", "w": 40, "n": [1, 3] }, { "id": "mana_stone_b", "w": 10, "n": [1, 1] }, { "id": "armor_plate", "w": 12, "n": [1, 1] }, { "id": "bumper_spikes", "w": 12, "n": [1, 1] }, { "id": "first_aid_kit", "w": 14, "n": [1, 2] }, { "id": "battery_pack", "w": 12, "n": [1, 2] } ] }
       },
       "B": {
@@ -174,21 +174,21 @@
         "need": "C", "weight": 1, "color": "#9A6AE0", "hp_mult": 2.0, "dmg_mult": 1.7,
         "waves": [ [["runner", 4], ["spitter", 2]], [["brute", 2], ["screamer", 1], ["crawler", 2]], [["bloated", 2], ["spitter", 2], ["runner", 3]], [["brute", 2], ["runner", 4]] ],
         "boss": { "k": "brute", "name": "철갑 거인", "hp_mult": 7, "dmg_mult": 2.2, "scale": 2.0 },
-        "sol": 500000, "pts": 500,
+        "sol": 5000000, "pts": 500,
         "loot": { "rolls": 5, "empty": 0, "items": [ { "id": "mana_stone_b", "w": 35, "n": [1, 2] }, { "id": "mana_stone_c", "w": 25, "n": [2, 3] }, { "id": "mana_stone_a", "w": 4, "n": [1, 1] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "first_aid_kit", "w": 14, "n": [1, 2] }, { "id": "battery_pack", "w": 10, "n": [1, 2] } ] }
       },
       "A": {
         "need": "B", "weight": 1, "color": "#F0B040", "hp_mult": 2.6, "dmg_mult": 2.0,
         "waves": [ [["runner", 5], ["screamer", 1]], [["brute", 2], ["spitter", 3]], [["crawler", 4], ["bloated", 2], ["brute", 1]], [["brute", 3], ["spitter", 2]] ],
         "boss": { "k": "brute", "name": "균열의 왕", "hp_mult": 11, "dmg_mult": 2.6, "scale": 2.2 },
-        "sol": 1500000, "pts": 1500,
+        "sol": 15000000, "pts": 1500,
         "loot": { "rolls": 6, "empty": 0, "items": [ { "id": "mana_stone_s", "w": 2, "n": [1, 1] }, { "id": "mana_stone_a", "w": 30, "n": [1, 2] }, { "id": "mana_stone_b", "w": 30, "n": [1, 3] }, { "id": "armor_plate", "w": 12, "n": [1, 2] }, { "id": "bumper_spikes", "w": 10, "n": [1, 1] }, { "id": "first_aid_kit", "w": 18, "n": [2, 3] } ] }
       },
       "S": {
         "need": "A", "weight": 1, "color": "#E8483A", "hp_mult": 3.2, "dmg_mult": 2.4,
         "waves": [ [["runner", 6], ["screamer", 2]], [["brute", 3], ["spitter", 3]], [["crawler", 5], ["bloated", 3]], [["brute", 3], ["runner", 4]], [["brute", 4], ["spitter", 3]] ],
         "boss": { "k": "brute", "name": "심연의 군주", "hp_mult": 16, "dmg_mult": 3, "scale": 2.5 },
-        "sol": 5000000, "pts": 5000,
+        "sol": 50000000, "pts": 5000,
         "loot": { "rolls": 8, "empty": 0, "items": [ { "id": "mana_stone_s", "w": 12, "n": [1, 1] }, { "id": "mana_stone_a", "w": 40, "n": [2, 3] }, { "id": "mana_stone_b", "w": 25, "n": [2, 4] }, { "id": "armor_plate", "w": 10, "n": [2, 3] }, { "id": "first_aid_kit", "w": 20, "n": [3, 4] } ] }
       }
     }

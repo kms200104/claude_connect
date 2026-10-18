@@ -63,6 +63,7 @@ func _make_button(aid: String) -> Button:
 	var skill: String = aid.trim_prefix("sk_") if aid.begins_with("sk_") else ""
 	var e: Dictionary = GameData.hunter.job_actives.get(skill, {}) if not skill.is_empty() else GameData.hunter.awaken(aid)
 	var b: Button = Button.new()
+	b.add_to_group(MultiTouch.GROUP)
 	b.name = ("Skill_%s" % skill) if not skill.is_empty() else ("Awaken_%s" % aid)
 	b.text = str(e.get("icon", "◆")) if not skill.is_empty() else ICONS.get(aid, "◆")
 	b.tooltip_text = str(e.get("name", aid))

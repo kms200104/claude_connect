@@ -14,7 +14,7 @@ import { dungeonAt, dungeonOrigin, dungeonStandLocal } from './dungeon.js';
 
 const round = (v) => Math.round(v * 100) / 100;
 
-export function createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand, pickEntry, rollLoot, broadcastCreatures, teleport, shelter }) {
+export function createGates({ data, cfg, random, now, send, sendTo, sendInventory, sendProfile, saveRoom, dropAt, hunter, inShop, canStand, pickEntry, rollLoot, broadcastCreatures, teleport, shelter, riseMs = () => 0 }) {
   const G = data.hunter?.gates;
   const H = data.hunter;
   const S = data.survival;
@@ -87,7 +87,7 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
       if (dg ? !dungeonStandLocal(dg.map, x - dg.o.x, z - dg.o.z, 0.5) : !canStand(x, z, def) || groundProblem(data, x, z) !== null) continue;
       room.creatureSeq = (room.creatureSeq ?? 0) + 1;
       const hp = Math.round(kind.hp * (boss ? boss.hp_mult : R.hp_mult));
-      const c = { id: `z${room.creatureSeq}`, k, x, z, yaw: dg ? 0 : Math.atan2(g.x - x, g.z - z), hp, max: hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {}, g: g.id, dmg: boss ? boss.dmg_mult : R.dmg_mult };
+      const c = { id: `z${room.creatureSeq}`, k, x, z, yaw: dg ? 0 : Math.atan2(g.x - x, g.z - z), hp, max: hp, target: 0, nextAttack: 0, attackAt: 0, trapAt: {}, g: g.id, dmg: boss ? boss.dmg_mult : R.dmg_mult, riseUntil: now() + riseMs() };
       if (boss) {
         c.boss = boss.name;
         c.scale = boss.scale;
@@ -398,7 +398,7 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
               const kind = S.creatures.kinds[k];
               room.creatureSeq = (room.creatureSeq ?? 0) + 1;
               const hp = Math.round(kind.hp * R.hp_mult);
-              room.creatures.set(`z${room.creatureSeq}`, { id: `z${room.creatureSeq}`, k, x, z, yaw: Math.atan2(p.x - x, p.z - z), hp, max: hp, target: p.id, nextAttack: 0, attackAt: 0, trapAt: {}, brk: true, dmg: R.dmg_mult });
+              room.creatures.set(`z${room.creatureSeq}`, { id: `z${room.creatureSeq}`, k, x, z, yaw: Math.atan2(p.x - x, p.z - z), hp, max: hp, target: p.id, nextAttack: 0, attackAt: 0, trapAt: {}, brk: true, dmg: R.dmg_mult, riseUntil: now() + riseMs() });
               changed = true;
             }
           }
