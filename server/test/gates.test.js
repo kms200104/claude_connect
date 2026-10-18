@@ -90,6 +90,16 @@ describe('v0.28 게이트', () => {
     const done = await c.next((m) => m.t === 'gate_clear', 3000);
     assert.equal(done.sol, G.ranks.E.sol);
     assert.ok(done.items.length >= 1);
+    // v0.28.12 처치 보상 (던전 안에서 잡은 수) · 협회 지급 보상 (E급 게이트 × E급 헌터, 빨리 깼고 우두머리를 쓰러뜨렸다).
+    const A = G.assoc;
+    assert.ok(done.kills.n >= 3, `처치 ${done.kills.n}`);
+    assert.ok(done.kills.xp > 0);
+    assert.equal(done.assoc.hr, 'E');
+    assert.equal(done.assoc.fast, true);
+    assert.equal(done.assoc.mvp, true);
+    const mult = A.hunter_mult.E * (1 + A.fast_bonus + A.mvp_bonus);
+    assert.equal(done.assoc.sol, Math.round(A.by_gate.E.sol * mult));
+    assert.deepEqual(done.assoc.items.map((x) => x.id), A.by_gate.E.items.map((x) => x.id));
     await c.next((m) => m.t === 'gate_gone' && m.g === opened.id && m.why === 'clear', 2000);
     assert.equal(me.profile.hunter.gates, 1);
     assert.ok(me.profile.hunter.pts >= G.ranks.E.pts);

@@ -351,6 +351,7 @@ func set_back(item_id: String) -> void:
 		_upper_root().add_child(_back)
 	var info: ItemInfo = GameData.item(item_id)
 	_back.mesh = PartMesh.get_mesh(item_id, info.model)
+	set_glow(_back, info.model)
 	# 쥐는 자리를 등 가운데에 두고, 자루가 오른쪽 아래 → 날이 왼쪽 위로 비스듬히 (등 쪽 +Z).
 	var grip: Transform3D = weapon_grip(item_id)
 	var slant: Basis = Basis(Vector3.BACK, deg_to_rad(-38.0)) * Basis(Vector3.UP, PI * 0.5)
@@ -713,8 +714,73 @@ func _set_swing(tool_id: String) -> void:
 		var info: ItemInfo = GameData.item(tool_id)
 		swing.mesh = PartMesh.get_mesh(tool_id, info.model)
 		swing.transform = weapon_grip(tool_id)
+		set_glow(swing, info.model)
 		return
+	set_glow(swing, [])
 	swing.transform = Transform3D(_swing_basis(tool_id, false), Vector3.ZERO)
+
+
+## v0.28.12 모형 도형 중 "glow" 색이 있는 구 (치유 지팡이 끝 마석): 스스로 빛나는 알맹이 + 숨 쉬는 빛무리를 그 자리에 붙인다.
+## 빛무리는 더하기 섞기 투명 머티리얼 하나를 모두가 함께 쓴다. glow 가 없으면 떼어 낸다.
+static var _glow_core: Dictionary[String, StandardMaterial3D] = {}
+static var _glow_halo: Dictionary[String, StandardMaterial3D] = {}
+
+
+static func set_glow(holder: Node3D, model: Array) -> void:
+	var old: Node = holder.get_node_or_null("Glow")
+	if old != null:
+		holder.remove_child(old)
+		old.queue_free()
+	for part: Variant in model:
+		if not (part is Dictionary) or not (part as Dictionary).has("glow"):
+			continue
+		var d: Dictionary = part
+		var hex: String = str(d.get("glow", "#FFFFFF"))
+		var c: Color = Color(hex)
+		if not _glow_core.has(hex):
+			var core: StandardMaterial3D = StandardMaterial3D.new()
+			core.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			core.albedo_color = c
+			_glow_core[hex] = core
+			var halo: StandardMaterial3D = StandardMaterial3D.new()
+			halo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			halo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			halo.cull_mode = BaseMaterial3D.CULL_FRONT
+			halo.albedo_color = Color(c, 0.35)
+			_glow_halo[hex] = halo
+		var size: Array = d.get("size", [0.05]) if d.get("size") is Array else [0.05]
+		var r: float = float(size[0]) if not size.is_empty() else 0.05
+		var at: Vector3 = _v3(d.get("at", [0, 0, 0]))
+		var glow: Node3D = Node3D.new()
+		glow.name = "Glow"
+		glow.position = at
+		holder.add_child(glow)
+		var ball: SphereMesh = SphereMesh.new()
+		ball.radius = r * 1.04
+		ball.height = r * 2.08
+		ball.radial_segments = 12
+		ball.rings = 6
+		var core_mi: MeshInstance3D = MeshInstance3D.new()
+		core_mi.mesh = ball
+		core_mi.material_override = _glow_core[hex]
+		core_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow.add_child(core_mi)
+		var halo_mesh: SphereMesh = SphereMesh.new()
+		halo_mesh.radius = r * 1.9
+		halo_mesh.height = r * 3.8
+		halo_mesh.radial_segments = 12
+		halo_mesh.rings = 6
+		var halo_mi: MeshInstance3D = MeshInstance3D.new()
+		halo_mi.name = "Halo"
+		halo_mi.mesh = halo_mesh
+		halo_mi.material_override = _glow_halo[hex]
+		halo_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow.add_child(halo_mi)
+		var tw: Tween = halo_mi.create_tween().set_loops()
+		tw.tween_property(halo_mi, "scale", Vector3.ONE * 1.25, 0.9).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(halo_mi, "scale", Vector3.ONE * 0.85, 0.9).set_trans(Tween.TRANS_SINE)
+		return
 
 
 ## 휘두르는 도구의 쥐는 방향 (carry = 들고 다닐 때: 자루 축 돌림만 남긴다).

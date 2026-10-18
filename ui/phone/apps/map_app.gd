@@ -191,7 +191,9 @@ func _collect() -> void:
 				continue
 			var p: Vector3 = rep.remote_position(slot)
 			if p != Vector3.INF and _on_map(p):
-				_add("friend", "pl:%d" % slot, Journal.display_name(slot), "같은 마을 친구", Vector2(p.x, p.z), GameData.player_name(slot).left(1))
+				var job: String = Net.job_of(slot)
+				var about: String = "같은 마을 친구" if job.is_empty() else "같은 마을 친구 · %s %s" % [JobLook.icon_of(job), JobLook.title_of(job, Net.advanced_of(slot))]
+				_add("friend", "pl:%d" % slot, Journal.display_name(slot), about, Vector2(p.x, p.z), GameData.player_name(slot).left(1))
 	# v0.28 게이트 (등급 · 브레이크).
 	for gid: String in Net.gates:
 		var g: Dictionary = Net.gates[gid]
@@ -385,8 +387,17 @@ func _draw_marker(m: Marker, font: Font) -> void:
 					_canvas.draw_colored_polygon(PackedVector2Array([tip, p + dir * (r + 2.0) + side, p + dir * (r + 2.0) - side]), color)
 		"friend", "npc":
 			var r: float = 15.0 if m.kind == "friend" else 11.0
+			# v0.28.12 동료는 직업 색 (2차 전직이면 금빛 테두리).
+			var ring: Color = Color.WHITE
+			if m.kind == "friend" and m.key.begins_with("pl:"):
+				var slot: int = int(m.key.trim_prefix("pl:"))
+				var job: String = Net.job_of(slot)
+				if not job.is_empty():
+					color = JobLook.color_of(job, Net.advanced_of(slot))
+					if Net.advanced_of(slot):
+						ring = JobLook.GOLD
 			_canvas.draw_circle(p + Vector2(0, 2), r + 2.0, Color(0, 0, 0, 0.2))
-			_canvas.draw_circle(p, r + 2.0, Color.WHITE)
+			_canvas.draw_circle(p, r + (3.5 if ring != Color.WHITE else 2.0), ring)
 			_canvas.draw_circle(p, r, color)
 			var fs: int = 18 if m.kind == "friend" else 14
 			var w: float = font.get_string_size(m.glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

@@ -59,9 +59,13 @@ export function cleanBirthday(raw) {
   return raw.d <= days ? { m: raw.m, d: raw.d } : null;
 }
 
+/** v0.28.12 bump 될 때마다 부르는 것들 (server.js 가 헌터 경험치를 건다). */
+export const bumpHooks = [];
+
 export function bump(profile, key, n = 1) {
   profile.stats ??= sanitizeStats(null);
   profile.stats[key] = (profile.stats[key] ?? 0) + n;
+  for (const hook of bumpHooks) hook(profile, key, n);
 }
 
 /** 낚은 물고기를 도감에 (수를 센다). */

@@ -59,6 +59,8 @@ func _ready() -> void:
 		hud.add_child.call_deferred(_popup)
 		hud.add_child.call_deferred(_gate_chip)
 		hud.add_child.call_deferred(awaken_hud)
+		reward_window = GateRewardWindow.new()
+		hud.add_child.call_deferred(reward_window)
 		hud.add_child.call_deferred(window)
 	Net.hunter_done.connect(_on_done)
 	Net.guild_changed.connect(_on_guild)
@@ -166,6 +168,10 @@ func activate(target: String) -> void:
 	window.open()
 
 
+## v0.28.12 행동 경험치 이름 (hunter.json level.xp.acts).
+const ACT_NAMES: Dictionary[String, String] = {"fish": "낚시", "chop": "나무 베기", "clam": "조개 캐기", "plant": "심기", "quest": "의뢰", "serve": "손님 대접", "deliver": "배달", "craft": "제작", "board": "판자 막기", "revive": "동료 살리기", "dig": "땅 파기"}
+
+
 func _show_points(text: String) -> void:
 	if _popup == null:
 		return
@@ -183,6 +189,9 @@ func _on_done(info: Dictionary) -> void:
 			if not mana.is_empty():
 				extra = " · %s" % GameData.item_name(str((mana[0] as Dictionary).get("id", "")))
 			_show_points("헌터 점수 +%d · 경험치 +%d%s" % [int(info.get("pts", 0)), int(info.get("xp", 0)), extra])
+		"act":
+			# v0.28.12 행동 경험치 (낚시 · 벌목 · 제작 …, 하루 상한까지).
+			_show_points("경험치 +%d (%s)" % [int(info.get("xp", 0)), ACT_NAMES.get(str(info.get("a", "")), "활동")])
 		"sell":
 			if toast_hud != null:
 				var n: int = 0
@@ -427,7 +436,13 @@ func _on_gate_changed(id: String) -> void:
 		Prefs.vibrate(160, 0.7)
 
 
+## v0.28.12 게이트 공략 보상 창.
+var reward_window: GateRewardWindow = null
+
+
 func _on_gate_cleared(info: Dictionary) -> void:
+	if reward_window != null:
+		reward_window.show_reward(info)
 	if toast_hud == null:
 		return
 	var parts: PackedStringArray = []

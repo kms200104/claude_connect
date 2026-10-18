@@ -33,7 +33,7 @@ import { createJobs } from './jobs.js';
 import { createDelivery, storeIngredients } from './delivery.js';
 import { SWIM, createSwimmers } from './swimmers.js';
 import { zoneWeight } from './fishing.js';
-import { bump, canWearTitle, checkAchievements, cleanBirthday, dateOfDay, noteFish, noteItems, parseMonthDay, progressWire, sameDay, statValues } from './progress.js';
+import { bump, bumpHooks, canWearTitle, checkAchievements, cleanBirthday, dateOfDay, noteFish, noteItems, parseMonthDay, progressWire, sameDay, statValues } from './progress.js';
 import { calendarWire } from './calendar.js';
 import { GUESTBOOK, addEntry, cleanEntryText, guestbookWire } from './guestbook.js';
 import { PHOTO_RULES, createPhotoStore } from './photos.js';
@@ -160,7 +160,27 @@ export function createServer(overrides = {}) {
   const hunter = createHunter({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt });
   const survival = createSurvival({ data, cfg, clock, random, now, send, sendTo, sendInventory, sendProfile, inShop, saveRoom: (room) => rooms.save(room), dropAt, act: (...a) => act(...a), garage, hunter, teleport: (player, room, x, z) => teleport({ player, room }, x, z) });
   // v0.22 제작대.
-  const crafting = createCrafting({ data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId), act: (...a) => act(...a) });
+  const crafting = createCrafting({
+    data, cfg, send, sendInventory, inShop, homeItemsOf: (room, unitId) => homeList(room, unitId),
+    act: (room, player, kind, e) => {
+      act(room, player, kind, e);
+      if (kind === 'craft') hunter?.act(room, player, 'craft');
+    },
+  });
+  // v0.28.12 업적 수 (bump) 가 오를 때 헌터 행동 경험치도 (낚시 · 나무 · 조개 · 심기 · 의뢰 · 요리 · 배달). 그 프로필의 사람을 찾는다.
+  const ACT_KEYS = new Set(['fish', 'chop', 'clam', 'plant', 'quest', 'serve', 'deliver']);
+  const bumpHook = (profile, key, n) => {
+    if (!ACT_KEYS.has(key)) return;
+    for (const room of rooms.rooms.values()) {
+      for (const p of room.players.values()) {
+        if (p.profile === profile) {
+          hunter?.act(room, p, key, n);
+          return;
+        }
+      }
+    }
+  };
+  bumpHooks.push(bumpHook);
   /** v19: 차고 탈것을 탈 수 없는 곳 · 때 (오류 코드, 탈 수 있으면 null): 집 · 상점 안, 낚시 중. */
   const rideBlocked = (player) => (player.home || inShop(player) || player.fishing !== null || player.aqua ? ErrorCode.cantRide : null);
   const aqua = createAqua({ data, send, sendProfile, now, boardMs: cfg.aquaBoardMs, speedScale: cfg.aquaSpeedScale });
@@ -1573,6 +1593,7 @@ export function createServer(overrides = {}) {
     room.broadcast({ t: 'tile', x, z, s: now_?.s ?? '' });
     room.broadcast({ t: 'act', id: player.id, kind: 'dig', e: mode }, player.id);
     send(ctx.ws, { t: 'dig_result', rid: msg.rid, kind: mode, x, z, s: now_?.s ?? '', item: found });
+    if (found) hunter?.act(room, player, 'dig');
     if (found) {
       sendInventory(player);
       sendProfile(player);
@@ -2433,6 +2454,8 @@ export function createServer(overrides = {}) {
     },
     /** 종료: 타이머를 멈추고, 메모리의 방을 전부 저장한 뒤 닫는다. */
     async close() {
+      const hookAt = bumpHooks.indexOf(bumpHook);
+      if (hookAt >= 0) bumpHooks.splice(hookAt, 1);
       clearInterval(tick);
       clearInterval(npcTick);
       clearInterval(worldTick);

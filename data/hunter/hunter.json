@@ -57,6 +57,16 @@
     "first_ms": 90000, "every_ms": 420000, "max_open": 1, "life_ms": 900000,
     "enter_range": 4.0, "arena": 14, "abandon_ms": 45000,
     "break": { "ms": 120000, "every_ms": 5000, "per_player": 2 },
+    "assoc": {
+      "_comment": "v0.28.12 협회 지급 보상 (몹 처치 · 공략 상자와 따로): 게이트 등급마다 by_gate, 받는 헌터의 등급마다 hunter_mult 배 (sol · xp · pts). fast_ms 안에 공략하면 fast_bonus, 우두머리를 쓰러뜨린 사람은 mvp_bonus 를 더한다. items 는 그대로 (등급이 높을수록 좋은 것).",
+      "by_gate": {
+        "E": { "sol": 20000, "xp": 60, "pts": 15, "items": [{ "id": "bandage", "n": 2 }, { "id": "clean_water", "n": 1 }] },
+        "D": { "sol": 60000, "xp": 160, "pts": 40, "items": [{ "id": "first_aid_kit", "n": 1 }, { "id": "canned_food", "n": 2 }, { "id": "mana_stone_d", "n": 1 }] },
+        "C": { "sol": 150000, "xp": 400, "pts": 100, "items": [{ "id": "first_aid_kit", "n": 2 }, { "id": "mana_stone_c", "n": 1 }, { "id": "crossbow_bolt", "n": 10 }] }
+      },
+      "hunter_mult": { "E": 1.0, "D": 1.1, "C": 1.25, "B": 1.4, "A": 1.6, "S": 2.0 },
+      "fast_ms": 300000, "fast_bonus": 0.2, "mvp_bonus": 0.1
+    },
     "boss_skills": {
       "_comment": "v0.28.5 게이트 우두머리 패턴 (서버 권위, 경고는 클라이언트가 그린다). first_ms 뒤부터 every_ms 마다 하나: 대상이 charge.min_range ~ charge.dist 사이면 돌진, slam.range 안이면 내려치기. 내려치기 = 대상 자리에 r m 원이 windup_ms 동안 차오른 뒤 그 안 사람에게 damage. 돌진 = windup_ms 동안 붉은 길(너비 width)을 보이고 dist m 를 speed m/s 로 내달려 길 위 사람에게 damage. 소환 = 체력이 hp_at 비율 아래로 떨어질 때마다 부하 k 를 n 마리 (포효).",
       "first_ms": 2500, "every_ms": 4500,
@@ -120,7 +130,10 @@
   "level": {
     "_comment": "v0.28.1 레벨 · 스탯 · 기술: 경험치(xp)는 처치 kill(우두머리는 × boss_mult) · 게이트 gate · 의뢰 보고(pts × claim_mult) · 빈집 뒤지기 loot · 보급 상자 supply 로 쌓인다. 다음 레벨까지 = round(base × 레벨 ^ power). 레벨마다 스탯 포인트 points_per_level — 힘(str 피해 +5%) · 체력(vit 2점마다 최대 체력 +1) · 민첩(agi 이동 속도 +2% · 공격 간격 -2%, 최대 cap) · 행운(luk 마석이 떨어질 확률 +4%). 기술은 레벨이 되면 저절로 배운다.",
     "max": 50, "base": 60, "power": 1.45, "points_per_level": 3,
-    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25, "crawler": 8, "screamer": 14, "brute": 35, "spitter": 14 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500 }, "claim_mult": 2, "loot": 3, "supply": 25 },
+    "xp": { "kill": { "shambler": 10, "runner": 12, "bloated": 25, "crawler": 8, "screamer": 14, "brute": 35, "spitter": 14 }, "boss_mult": 6, "gate": { "E": 80, "D": 200, "C": 500 }, "claim_mult": 2, "loot": 3, "supply": 25,
+      "_comment_acts": "v0.28.12 여러 행동으로도 경험치: 낚시 · 나무 · 조개 캐기 · 심기 · 의뢰(마을 부탁) · 요리 내기 · 배달 · 제작 · 판자 대기 · 동료 일으키기 · 땅 파서 찾기. 하루 acts_cap 번까지 (반복 노가다 방지).",
+      "acts": { "fish": 6, "chop": 2, "clam": 3, "plant": 3, "quest": 20, "serve": 6, "deliver": 12, "craft": 4, "board": 6, "revive": 25, "dig": 3 },
+      "acts_cap": { "fish": 40, "chop": 60, "clam": 30, "plant": 20, "quest": 10, "serve": 40, "deliver": 15, "craft": 30, "board": 20, "revive": 10, "dig": 30 } },
     "stats": {
       "str": { "name": "힘", "desc": "공격 피해 +5%", "damage": 0.05, "cap": 60 },
       "vit": { "name": "체력", "desc": "2점마다 최대 체력 +1 (하트 반 칸)", "hp_per": 0.5, "cap": 40 },

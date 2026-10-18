@@ -120,6 +120,21 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     room.broadcast({ t: 'gate_gone', g: g.id, why });
   }
 
+  /** v0.28.12 협회 지급 보상 (그 사람 몫). */
+  function assocReward(g, p, killer) {
+    const A = G.assoc;
+    const base = A?.by_gate?.[g.rank];
+    if (!base) return { sol: 0, xp: 0, pts: 0, items: [], mult: 1, hr: 'E', fast: false, mvp: false };
+    const hr = p.profile.hunter?.rank ?? 'E';
+    const fast = now() - (g.raidAt ?? now()) <= (A.fast_ms ?? 0);
+    const mvp = killer === p.id;
+    const mult = (A.hunter_mult?.[hr] ?? 1) * (1 + (fast ? A.fast_bonus ?? 0 : 0) + (mvp ? A.mvp_bonus ?? 0 : 0));
+    return {
+      sol: Math.round(base.sol * mult), xp: Math.round(base.xp * mult), pts: Math.round(base.pts * mult),
+      items: (base.items ?? []).map((it) => ({ id: it.id, n: it.n })), mult: Math.round(mult * 100) / 100, hr, fast, mvp,
+    };
+  }
+
   /** 우두머리를 쓰러뜨렸다: 진입한 사람마다 보상. */
   function clear(room, g, by) {
     const R = G.ranks[g.rank];
@@ -135,10 +150,23 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
       }
       p.profile.sol += R.sol;
       earn(p.profile, R.sol);
+      // v0.28.12 협회 지급 보상: 게이트 등급 × 내 헌터 등급 배율 (+ 빨리 깼으면 · 우두머리를 쓰러뜨렸으면 더).
+      const assoc = assocReward(g, p, by);
+      p.profile.sol += assoc.sol;
+      earn(p.profile, assoc.sol);
+      for (const it of assoc.items) if (!addItem(p.slots, it.id, it.n, cfg, data.limitOf)) dropAt(room, it.id, it.n, p.x, p.z);
       sendInventory(p);
       sendProfile(p);
-      sendTo(p, { t: 'gate_clear', g: g.id, rank: g.rank, name: g.name, by: ids, killer: by, items, got, sol: R.sol, pts: R.pts, back: D && p.dungeon === g.id ? returnMs() : 0 });
+      const t = g.tally?.[id] ?? { n: 0, pts: 0, xp: 0, mana: {} };
+      sendTo(p, {
+        t: 'gate_clear', g: g.id, rank: g.rank, name: g.name, by: ids, killer: by, items, got, sol: R.sol, pts: R.pts,
+        xp: data.hunter?.level?.xp?.gate?.[g.rank] ?? 0,
+        kills: { n: t.n, pts: t.pts, xp: t.xp, mana: Object.entries(t.mana).map(([mid, n]) => ({ id: mid, n })) },
+        assoc, time: Math.max(0, now() - (g.raidAt ?? now())),
+        back: D && p.dungeon === g.id ? returnMs() : 0,
+      });
       hunter?.onGate(room, p, R.pts, g.rank);
+      hunter?.grant(room, p, { pts: assoc.pts, xp: assoc.xp });
     }
     alert(room, `gate_${g.id}_clear`, 'safety', `[헌터 협회] ${g.name} ${g.rank}급 게이트 공략 완료. 협조해 주신 헌터께 감사드립니다.`);
     // 던전 안 사람은 return_ms 뒤 게이트 앞으로 (떨어진 것을 주울 틈).
@@ -147,11 +175,19 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     saveRoom(room);
   }
 
-  /** survival.kill 이 부른다. */
-  function onKill(room, c, by) {
+  /** survival.kill 이 부른다 (res = hunter.onKill 이 준 점수 · 경험치 · 마석 — 공략 보상 창의 '처치 보상'). */
+  function onKill(room, c, by, res = null) {
     if (!G || !c.g) return;
     const g = room.gates?.get(c.g);
     if (!g || g.st !== 'raid') return;
+    if (by) {
+      g.tally ??= {};
+      const t = (g.tally[by] ??= { n: 0, pts: 0, xp: 0, mana: {} });
+      t.n++;
+      t.pts += res?.pts ?? 0;
+      t.xp += res?.xp ?? 0;
+      for (const m of res?.mana ?? []) t.mana[m.id] = (t.mana[m.id] ?? 0) + m.n;
+    }
     if (c.boss) return clear(room, g, by);
     const left = [...room.creatures.values()].some((x) => x.g === g.id);
     if (!left) {
@@ -177,6 +213,8 @@ export function createGates({ data, cfg, random, now, send, sendTo, sendInventor
     g.awayAt = 0;
     if (g.st === 'open') {
       g.st = 'raid';
+      g.raidAt = now();
+      g.tally = {};
       g.wave = 0;
       g.bossUp = false;
       spawnWave(room, g, room.gateDef ?? { blocks: [], traps: [], lights: [] });

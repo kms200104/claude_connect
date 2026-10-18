@@ -285,4 +285,17 @@ describe('v0.28.8 전직 · 기술 나무', () => {
     const n3 = room.creatures.get('n3');
     assert.ok(n3 && Math.hypot(n3.x - me.x, n3.z - me.z) >= J.actives.sanctuary.r - 0.3, `밖의 크리처는 들어오지 못한다 (${n3 ? Math.hypot(n3.x - me.x, n3.z - me.z).toFixed(2) : '-'}m)`);
   });
+
+  it('v0.28.12 행동 경험치: 낚시 같은 행동마다 (업적 수가 오를 때), 하루 상한까지만', async () => {
+    const { me } = await setup();
+    const X = data.hunter.level.xp;
+    const h0 = me.profile.hunter.xp + 0;
+    // 업적 수 (bump) 로 오르는 행동: 낚시.
+    const { bump } = await import('../src/progress.js');
+    bump(me.profile, 'fish');
+    assert.equal(me.profile.hunter.xp, h0 + X.acts.fish);
+    me.profile.hunter.acts.fish = X.acts_cap.fish;
+    bump(me.profile, 'fish');
+    assert.equal(me.profile.hunter.xp, h0 + X.acts.fish, '하루 상한');
+  });
 });

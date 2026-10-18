@@ -4,7 +4,13 @@
   "range": 2.6,
   "public_benches": [
     { "id": "downtown", "name": "주민 공구 창고", "x": -74.0, "z": 70.0, "yaw": 1.5708, "tier": 2 },
-    { "id": "riverpark", "name": "리버파크 공구 창고", "x": -150.0, "z": -66.0, "yaw": 0.0, "tier": 2 }
+    { "id": "riverpark", "name": "리버파크 공구 창고", "x": -150.0, "z": -66.0, "yaw": 0.0, "tier": 2 },
+    { "id": "shanty_north", "name": "빈집 마을 공구 창고 (북)", "x": -340.0, "z": -42.0, "yaw": 0.0, "tier": 2 },
+    { "id": "shanty_south", "name": "빈집 마을 공구 창고 (남)", "x": -331.0, "z": -180.0, "yaw": 0.0, "tier": 2 },
+    { "id": "gate_east", "name": "동쪽 게이트 앞 작업대", "x": 49.0, "z": -15.0, "yaw": 1.5708, "tier": 2 },
+    { "id": "gate_river", "name": "강 건너 게이트 앞 작업대", "x": 121.0, "z": 153.0, "yaw": 3.1416, "tier": 2 },
+    { "id": "gate_south", "name": "남동 게이트 앞 작업대", "x": 137.0, "z": -135.0, "yaw": 0.0, "tier": 2 },
+    { "id": "gate_west", "name": "서쪽 게이트 앞 작업대", "x": -247.0, "z": 57.0, "yaw": -1.5708, "tier": 2 }
   ],
   "bench_items": { "workbench": 1 },
   "categories": [

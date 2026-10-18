@@ -179,6 +179,15 @@ func _run() -> void:
 	_check(await _wait_until(func() -> bool: return not Net.gates.has(gid), 2.0), "게이트가 닫혔다")
 	_check(await _wait_until(func() -> bool: return Net.sol >= sol0 + int(cleared[0].get("sol", 0)), 2.0), "보상 솔 (%d → %d)" % [sol0, Net.sol])
 	_check(await _wait_until(func() -> bool: return int(Net.hunter.get("gates", 0)) == 1, 2.0), "헌터 기록: 게이트 1")
+	# v0.28.12 보상 창: 처치 · 공략 · 협회 지급 보상, '확인' 으로 닫힌다.
+	var assoc: Dictionary = cleared[0].get("assoc", {})
+	_check(int(assoc.get("sol", 0)) > 0 and str(assoc.get("hr", "")) == "E" and int((cleared[0].get("kills", {}) as Dictionary).get("n", 0)) > 0, "협회 지급 보상 %s · 처치 %s" % [str(assoc), str(cleared[0].get("kills", {}))])
+	_check(Net.sol >= sol0 + int(cleared[0].get("sol", 0)) + int(assoc.get("sol", 0)), "협회 보상 솔까지 받았다 (%d → %d)" % [sol0, Net.sol])
+	var reward: GateRewardWindow = hunter.reward_window
+	_check(reward != null and reward.is_open() and reward.find_child("SectionAssoc", true, false) != null and reward.find_child("SectionKills", true, false) != null, "보상 창이 떴다 (처치 · 공략 · 협회)")
+	if reward != null:
+		(reward.find_child("Confirm", true, false) as Button).pressed.emit()
+		_check(not reward.is_open(), "보상 창 '확인' 으로 닫힌다")
 	_check(dungeon.inside() and chip.visible and chip_label.text.contains("공략 완료"), "공략 뒤 잠시 던전에 남는다 (HUD '%s')" % chip_label.text)
 	_check(await _wait_until(func() -> bool: return not dungeon.inside() and Vector2(player.global_position.x - spot.x, player.global_position.z - spot.z).length() < 5.0, 6.0), "잠시 뒤 게이트 앞으로 돌아왔다")
 	_check(await _wait_until(func() -> bool: return not chip.visible, 1.0), "HUD 게이트 안내가 사라졌다")

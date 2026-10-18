@@ -248,6 +248,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     for (const id of j.helpers) {
       const p = room.players.get(id);
       if (p) sendTo(p, { t: 'boarded', h: b.house, o: b.id, hp: b.max, max: b.max, repaired: j.repaired, helpers: j.helpers.length });
+      if (p) hunter?.act(room, p, 'board');
     }
     room.broadcast({ t: 'board_job', h: b.house, o: b.id, done: true });
     room.broadcast({ t: 'board', h: b.house, o: b.id, hp: b.max, max: b.max, by: j.payer, helpers: j.helpers.length });
@@ -692,6 +693,8 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
           setHp(p, D.revive_hp);
           p.hurtUntil = t + 2000;
           getUp(room, p, r.id, false);
+          // v0.28.12 동료를 일으키면 경험치.
+          hunter?.act(room, r, 'revive');
           sendTo(p, { t: 'hp', ...hpWire(p) });
           room.dirty = true;
           continue;
@@ -855,7 +858,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     room.creatures.delete(c.id);
     room.broadcast({ t: 'creature_dead', id: c.id, by, x: round(c.x), z: round(c.z) });
     // v0.28 헌터: 처치 점수 · 마석 · 의뢰.
-    if (by) hunter?.onKill(room, room.players.get(by), c);
+    const killRes = by ? hunter?.onKill(room, room.players.get(by), c) : null;
     // v0.28.8 암살자 '사냥감': 쓰러뜨리면 확률로 체력 1.
     const killer = by ? room.players.get(by) : null;
     const reap = killer ? (hunter?.bonus.fx(killer, 'kill_heal') ?? 0) : 0;
@@ -863,7 +866,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       setHp(killer, hpOf(killer) + 1);
       sendTo(killer, { t: 'hp', ...hpWire(killer), reap: 1 });
     }
-    gates.onKill(room, c, by);
+    gates.onKill(room, c, by, killRes);
     const kind = S.creatures.kinds[c.k];
     if (kind && random() < (kind.drop_chance ?? 1)) {
       const e = pickEntry(kind.drops, random);

@@ -194,8 +194,11 @@ func _draw_map() -> void:
 			var q: Vector3 = rep.remote_position(slot)
 			if q != Vector3.INF:
 				var f: Vector2 = _to_mini(Vector2(q.x, q.z), me)
-				_map.draw_circle(f, 8.0, Color.WHITE)
-				_map.draw_circle(f, 6.0, FRIEND)
+				# v0.28.12 직업이 있으면 직업 색 점 (2차 전직이면 금빛 테두리).
+				var job: String = Net.job_of(slot)
+				var adv: bool = Net.advanced_of(slot)
+				_map.draw_circle(f, 9.0 if adv else 8.0, JobLook.GOLD if adv and not job.is_empty() else Color.WHITE)
+				_map.draw_circle(f, 6.0, FRIEND if job.is_empty() else JobLook.color_of(job, adv))
 	# v0.28.5 각성 '기척 감지': 둘레 크리처가 붉은 점으로 (우두머리는 크게).
 	if Net.has_awaken("sense"):
 		var sense_range: float = float(GameData.hunter.awaken("sense").get("range", 40.0))

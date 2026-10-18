@@ -26,6 +26,7 @@ export function loadHunter(raw, isKnown) {
   const ranks = raw.ranks.list.map((r, i) => ({ ...r, index: i }));
   for (const list of Object.values(raw.kill?.mana ?? {})) for (const e of list) if (!isKnown(e.id)) throw new Error(`hunter mana: unknown item ${e.id}`);
   for (const id of raw.office?.sell_items ?? []) if (!isKnown(id)) throw new Error(`hunter office: unknown item ${id}`);
+  for (const [rank, a] of Object.entries(raw.gates?.assoc?.by_gate ?? {})) for (const it of a.items ?? []) if (!isKnown(it.id)) throw new Error(`hunter assoc ${rank}: unknown item ${it.id}`);
   // v0.28.8 전직 · 기술 나무: 앞선 기술 · 액티브가 있어야 한다.
   const J = raw.level?.jobs;
   const jobById = new Map();
@@ -61,6 +62,9 @@ export function sanitizeHunter(raw, rules) {
     aw: Array.isArray(h.aw) ? [...new Set(h.aw.filter((a) => rules?.level?.awaken?.list?.some((x) => x.id === a)))].slice(0, rules?.level?.awaken?.slots?.length ?? 0) : [],
     // v0.28.8 직업 · 남은 기술 포인트 · 배운 기술 (id → 단계).
     ...sanitizeJob(h, rules, intOr),
+    // v0.28.12 오늘 (UTC 날짜) 행동 경험치를 받은 수.
+    actDay: intOr(h.actDay, -1),
+    acts: Object.fromEntries(Object.entries(h.acts ?? {}).filter(([k, v]) => rules?.level?.xp?.acts?.[k] !== undefined && Number.isInteger(v) && v >= 0)),
   };
 }
 
@@ -297,6 +301,37 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     const xp = (H.level?.xp?.kill?.[c.k] ?? 8) * (c.boss ? (H.level?.xp?.boss_mult ?? 1) : 1);
     sendTo(player, { t: 'hunter_result', kind: 'kill', k: c.k, pts, mana: got, xp });
     addXp(room, player, xp);
+    sendHunter(room, player);
+    return { pts, xp, mana: got };
+  }
+
+  /** v0.28.12 행동 경험치 (level.xp.acts[kind], 하루 acts_cap 번까지). 받은 경험치 (0 = 없음 · 다 찼음). */
+  function act(room, player, kind, n = 1) {
+    const X = H?.level?.xp;
+    const per = X?.acts?.[kind];
+    if (!per || !player || !room) return 0;
+    const h = rec(player);
+    const day = Math.floor(Date.now() / 86400000);
+    if (h.actDay !== day) {
+      h.actDay = day;
+      h.acts = {};
+    }
+    h.acts ??= {};
+    const cap = X.acts_cap?.[kind] ?? Infinity;
+    const take = Math.max(0, Math.min(n, cap - (h.acts[kind] ?? 0)));
+    if (take <= 0) return 0;
+    h.acts[kind] = (h.acts[kind] ?? 0) + take;
+    const xp = per * take;
+    sendTo(player, { t: 'hunter_result', kind: 'act', a: kind, xp });
+    grant(room, player, { xp });
+    return xp;
+  }
+
+  /** v0.28.12 협회 지급 · 여러 행동의 점수 · 경험치를 더한다 (레벨이 오르면 알린다). */
+  function grant(room, player, { pts = 0, xp = 0 } = {}) {
+    if (!H || !player) return;
+    if (pts > 0) addPoints(room, player, pts);
+    if (xp > 0) addXp(room, player, xp);
     sendHunter(room, player);
   }
 
@@ -590,5 +625,5 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     skillDef: (id) => H?.level?.skills?.find((x) => x.id === id) ?? null,
   };
 
-  return { handle, wire, sendHunter, guildWire, onKill, onLoot, onSupply, onGate, rankWire, sellBonus, bonus, setOnVit: (fn) => { onVit = fn; } };
+  return { handle, wire, sendHunter, guildWire, onKill, onLoot, onSupply, onGate, grant, act, rankWire, sellBonus, bonus, setOnVit: (fn) => { onVit = fn; } };
 }
