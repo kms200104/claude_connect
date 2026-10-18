@@ -9,6 +9,8 @@ var fishing: bool = false
 var phone: bool = false
 ## 손에 든 아이템 id (없으면 빈 문자열).
 var held: String = ""
+## v0.28.9 등에 멘 무기 (그림만, 빈 글자 = 없음).
+var back: String = ""
 ## 입은 모자·상의 아이템 id (없으면 빈 문자열).
 var hat: String = ""
 var top: String = ""
@@ -34,6 +36,7 @@ static func from_dict(data: Dictionary) -> NetPlayerState:
 	state.fishing = bool(data.get("fishing", false))
 	state.phone = bool(data.get("phone", false))
 	state.held = str(data.get("held", ""))
+	state.back = str(data.get("bk", ""))
 	state.hat = str(data.get("hat", ""))
 	state.top = str(data.get("top", ""))
 	state.job = bool(data.get("job", false))

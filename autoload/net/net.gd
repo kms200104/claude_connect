@@ -74,7 +74,7 @@ signal hunter_done(info: Dictionary)
 signal awaken_fx(player_id: int, awaken_id: String, ms: int)
 signal shield_blocked(player_id: int, left: int)
 ## v0.28.8 전사 '버티기' 로 막았다 · 직업 액티브 기술을 썼다 (나 · 남, 그림용) · 내 액티브가 허락됐다.
-signal guard_blocked(player_id: int)
+signal guard_blocked(player_id: int, sanctuary: bool)
 ## v0.28.9 누군가의 직업 · 2차 전직이 바뀌었다 (겉모습).
 signal hunter_job_changed(player_id: int)
 signal skill_fx(info: Dictionary)
@@ -1146,7 +1146,7 @@ func _handle_text(text: String) -> void:
 		"shield_block":
 			shield_blocked.emit(int(msg.get("id", 0)), int(msg.get("left", 0)))
 		"guard_block":
-			guard_blocked.emit(int(msg.get("id", 0)))
+			guard_blocked.emit(int(msg.get("id", 0)), int(msg.get("sanct", 0)) == 1)
 		"skill_ok":
 			skill_ready_at[str(msg.get("a", ""))] = Time.get_ticks_msec() + int(msg.get("cd", 0))
 			skill_used.emit(str(msg.get("a", "")), int(msg.get("cd", 0)))
@@ -1700,6 +1700,8 @@ func awaken_use(awaken_id: String) -> void:
 
 ## v0.28.8 전직 · 기술 나무 (판정은 서버). 액티브 기술을 다시 쓸 수 있는 때 (ticks ms).
 var skill_ready_at: Dictionary[String, int] = {}
+## v0.28.9 내 '피의 광란' 이 끝나는 때 (ticks ms, 공격 간격 표시용 — 판정은 서버).
+var frenzy_until: int = 0
 
 
 ## v0.28.9 다른 사람 (나 포함) 의 직업 · 2차 전직 (이름표 · 휘장): id → [job, adv].

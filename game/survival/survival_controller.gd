@@ -144,6 +144,8 @@ func _ready() -> void:
 			var wid: String = item if GameData.survival.weapons.has(item) else "hands"
 			WeaponFx.swing(r.get_parent(), r, r.body, wid))
 	Net.skill_fx.connect(_on_skill_fx)
+	# v0.28.9 내 등에 멘 무기 (서버 backOf 와 같은 셈).
+	Net.inventory_updated.connect(func(_inv: Array, _held: int) -> void: _update_back())
 	Net.guard_blocked.connect(_on_guard_blocked)
 	Net.request_failed.connect(_on_failed)
 	Net.boarded.connect(_on_boarded)
@@ -404,7 +406,7 @@ func activate(target: String, auto: bool = false) -> void:
 			return
 		var w: SurvivalRules.Weapon = held_weapon()
 		# 민첩만큼 공격 간격이 짧다.
-		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown")) * maxf(0.4, 1.0 - Net.job_fx("cd"))
+		_swing_ready_at = now_s + float(w.cooldown_ms) / 1000.0 * (1.0 - float((Net.hunter.get("st", {}) as Dictionary).get("agi", 0)) * HunterApp.stat_value("agi", "cooldown")) * maxf(0.4, 1.0 - Net.job_fx("cd")) * ((1.0 - float(GameData.hunter.job_actives.get("frenzy", {}).get("cd", 0.0))) if Time.get_ticks_msec() < Net.frenzy_until else 1.0)
 		var at: Vector3 = creatures.actor_position(target.trim_prefix(TARGET_ATTACK))
 		var run: bool = _is_running()
 		# v0.28.1 달리며 공격: 기술이 있으면 멈추지 않고 돌진해 벤다, 없으면 달리다 휘두르면 잠깐 멈춘다.
@@ -492,6 +494,19 @@ func _on_swung(info: Dictionary) -> void:
 		Audio.play_sfx("chop", -16.0, 1.6)
 
 
+func _update_back() -> void:
+	if player == null or player.rig == null or GameData.survival == null:
+		return
+	var back: String = ""
+	for i: int in Net.inventory.size():
+		var it: InventoryItem = Net.inventory[i]
+		if i != Net.held_slot and it != null and GameData.survival.back_items.has(it.id):
+			back = it.id
+			break
+	if player.rig.back_item != back:
+		player.rig.set_back(back)
+
+
 ## 그 사람 몸 (나 · 동료).
 func _who(id: int) -> Node3D:
 	return player if id == Net.my_id else _remote_node(id)
@@ -535,6 +550,43 @@ func _on_skill_fx(info: Dictionary) -> void:
 				if sh != null:
 					Fx.sparkle_column(parent, sh.global_position, Color("#7AE89A"), 0.35)
 			return
+		"frenzy":
+			# v0.28.9 피의 광란: 붉은 기운이 솟구치고 심장이 쿵.
+			Audio.play_at("skill_ambush", at, 0.0, 0.7)
+			Audio.play_at("heartbeat", at, -2.0, 1.2)
+			Fx.ring_wave(parent, at, col, 2.2, 0.4)
+			Fx.burst(parent, at + Vector3(0.0, 0.9, 0.0), true, 24, 0.9, Vector3.UP, 30.0, Vector2(1.0, 2.6), 0.5, Vector2(0.08, 0.16), Color(1.0, 0.4, 0.3, 1.0), Color(0.6, 0.0, 0.0, 0.8), false, 0.8, 0.45)
+			if id == Net.my_id:
+				Net.frenzy_until = Time.get_ticks_msec() + int(info.get("ms", 8000))
+				_frenzy_fx(who, int(info.get("ms", 8000)))
+		"shadow_dash":
+			# v0.28.9 암영 질주: 지나간 자리에 보랏빛 그림자 줄 · 연기.
+			var from: Vector3 = Vector3(float(info.get("sx", at.x)), 0.0, float(info.get("sz", at.z)))
+			var fwd2: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+			var to: Vector3 = from + fwd2 * float(info.get("len", 6.0))
+			Audio.play_at("swing_blade", from, 0.0, 0.8)
+			Audio.play_at("skill_ambush", to, -4.0, 1.3)
+			Fx.beam(parent, from + Vector3(0.0, 0.9, 0.0), to + Vector3(0.0, 0.9, 0.0), col, 0.9, 0.35)
+			for k: int in 4:
+				var p2: Vector3 = from.lerp(to, float(k) / 3.0)
+				Fx.burst(parent, p2 + Vector3(0.0, 0.7, 0.0), false, 6, 0.7, Vector3.UP, 70.0, Vector2(0.2, 0.7), 0.4, Vector2(0.3, 0.55), Color(0.25, 0.1, 0.4, 0.6), Color(0.08, 0.0, 0.15, 0.3), true, 1.5, 0.3)
+		"arrow_rain":
+			# v0.28.9 화살 폭우: 하늘에서 쏟아지는 빛줄기들 · 땅에 퍼지는 고리.
+			var c2: Vector3 = Vector3(float(info.get("cx", at.x)), 0.0, float(info.get("cz", at.z)))
+			var rr: float = float(info.get("r", 3.0))
+			Audio.play_at("skill_pierce", at, -2.0, 1.1)
+			Fx.ring_wave(parent, c2, col, rr, 0.6)
+			for k: int in 14:
+				var off: Vector3 = Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)).limit_length(1.0) * rr
+				var top: Vector3 = c2 + off + Vector3(-0.8, 6.0, -0.4)
+				get_tree().create_timer(0.03 * k).timeout.connect(func() -> void:
+					Fx.beam(parent, top, c2 + off + Vector3(0.0, 0.05, 0.0), Color("#BFE6FF"), 0.12, 0.22)
+					Fx.burst(parent, c2 + off + Vector3(0.0, 0.1, 0.0), false, 3, 0.4, Vector3.UP, 60.0, Vector2(0.5, 1.2), -6.0, Vector2(0.06, 0.12), Color(0.6, 0.55, 0.45, 0.8), Color(0.4, 0.35, 0.3, 0.4)))
+			get_tree().create_timer(0.25).timeout.connect(func() -> void: Audio.play_at("hit_bolt", c2, 0.0, 0.9))
+		"sanctuary":
+			# v0.28.9 성역: 그 자리에 ms 동안 빛 고리 (안에서는 맞지 않는다).
+			Audio.play_at("skill_mend", at, 0.0, 0.8)
+			_sanctuary_fx(parent, at, float(info.get("r", 4.5)), int(info.get("ms", 8000)), col)
 		"mend":
 			Audio.play_at("skill_mend", at, -2.0)
 			var mr: float = float(info.get("r", 6.0))
@@ -548,8 +600,28 @@ func _on_skill_fx(info: Dictionary) -> void:
 		toast_hud.show_toast("%s!" % str(def.get("name", a)), true)
 
 
+## v0.28.9 피의 광란 동안 내 몸에서 붉은 불씨가 피어오른다.
+func _frenzy_fx(who: Node3D, ms: int) -> void:
+	if who == null:
+		return
+	var n: int = maxi(1, ms / 400)
+	for k: int in n:
+		get_tree().create_timer(0.4 * k).timeout.connect(func() -> void:
+			if is_instance_valid(who):
+				Fx.burst(who.get_parent(), who.global_position + Vector3(0.0, 0.8, 0.0), true, 5, 0.6, Vector3.UP, 25.0, Vector2(0.6, 1.4), 0.4, Vector2(0.05, 0.1), Color(1.0, 0.45, 0.3, 0.9), Color(0.6, 0.0, 0.0, 0.6), false, 0.5, 0.3))
+
+
+## v0.28.9 성역: 땅 위 빛 고리가 ms 동안 머물다 사라진다 (고리 하나 + 1초마다 퍼지는 물결 · 반짝이).
+func _sanctuary_fx(parent: Node, at: Vector3, r: float, ms: int, col: Color) -> void:
+	var secs: int = maxi(1, ms / 1000)
+	for k: int in secs:
+		get_tree().create_timer(float(k)).timeout.connect(func() -> void:
+			Fx.ring_wave(parent, at, col, r, 1.0, 0.5)
+			Fx.sparkle_column(parent, at, col, r * 0.6))
+
+
 ## v0.28.8 전사 '버티기' 로 막았다: 둔탁한 소리 · 번쩍 · '막음!'.
-func _on_guard_blocked(id: int) -> void:
+func _on_guard_blocked(id: int, sanctuary: bool) -> void:
 	var who: Node3D = _who(id)
 	if who == null:
 		return
@@ -558,7 +630,7 @@ func _on_guard_blocked(id: int) -> void:
 	Fx.flash(who.get_parent(), at, Color("#FFC890"), 1.0)
 	Fx.sparks(who.get_parent(), at, Vector3.UP, 10, Color("#FFB070"))
 	if id == Net.my_id and toast_hud != null:
-		toast_hud.show_toast("버티기 — 막았다!", true)
+		toast_hud.show_toast("성역이 막았다!" if sanctuary else "버티기 — 막았다!", true)
 
 
 func _on_hurt(info: Dictionary) -> void:

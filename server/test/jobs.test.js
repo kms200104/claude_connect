@@ -220,4 +220,39 @@ describe('v0.28.8 전직 · 기술 나무', () => {
     const h2 = await c.next((m) => m.t === 'creature_hit' && m.w === 'greatsword', 2000);
     assert.ok(h2.hp < 40 - 5);
   });
+
+  it('v0.28.9 2차 액티브: 암영 질주 (질주하며 벤다) · 성역 (안에서는 맞지 않고 크리처가 못 들어온다) · 피의 광란', async () => {
+    const { c, me, room } = await setup();
+    me.profile.hunter.lv = 30;
+    me.profile.hunter.job = 'assassin';
+    me.profile.hunter.adv = true;
+    me.profile.hunter.jt = { s_dash: 1 };
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    // yaw 0 → 앞은 -Z.
+    putCreature(room, 'd1', spot.x + 0.3, spot.z - 3, 40);
+    putCreature(room, 'd2', spot.x + 4, spot.z - 3, 40);
+    const corr = c.next((m) => m.t === 'correct', 3000);
+    const r = await ask(c, { t: 'skill_use', a: 'shadow_dash' });
+    assert.equal(r.t, 'skill_ok');
+    assert.equal(r.n, 1, '길 위의 하나만');
+    const at = await corr;
+    assert.ok(spot.z - at.z > 2, `앞으로 질주 (${(spot.z - at.z).toFixed(1)}m)`);
+    assert.ok(room.creatures.get('d1').hp < 40 && room.creatures.get('d2').hp === 40);
+    // 성역.
+    me.profile.hunter.job = 'medic';
+    me.profile.hunter.jt = { h_sanct: 1 };
+    const s2 = await ask(c, { t: 'skill_use', a: 'sanctuary' });
+    assert.equal(s2.t, 'skill_ok');
+    assert.equal(room.sanctuaries.length, 1);
+    const hp0 = me.profile.hp;
+    room.creatures.set('d3', { id: 'd3', k: 'shambler', x: me.x + 0.6, z: me.z, yaw: 0, hp: 40, max: 40, target: me.id, nextAttack: 0, attackAt: 0, trapAt: {} });
+    await sleep(1200);
+    assert.equal(me.profile.hp, hp0, '성역 안에서는 맞지 않는다');
+    // 피의 광란: 공격 간격이 짧아진다.
+    me.profile.hunter.job = 'warrior';
+    me.profile.hunter.jt = { b_frenzy: 1 };
+    assert.equal((await ask(c, { t: 'skill_use', a: 'frenzy' })).t, 'skill_ok');
+    assert.ok(me.frenzyUntil > 0);
+  });
 });

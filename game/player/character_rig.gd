@@ -278,10 +278,104 @@ const TOOL_GRIPS: Dictionary[String, Vector2] = {
 ## 도끼 자리 도구의 각도 (도): x = 앞뒤로 숙임, y = 자루를 축으로 돌림 (뜰채 입구가 휘두르는 쪽을 보게),
 ## z = 바깥(캐릭터 오른쪽)으로 눕힘 — 1m 가까운 뜰채·삽을 세워 들면 망·날이 얼굴을 가린다.
 const SWING_GRIPS: Dictionary[String, Vector3] = {"fishing_net": Vector3(0.0, 180.0, -25.0), "shovel": Vector3(0.0, 0.0, -25.0)}
+## v0.28.9 생존 무기 (survival.json weapons 에 있고 모형이 있는 아이템): 도끼 자리에 끼워 휘두른다.
+## 모형의 첫 막대 (자루) 의 끝 쪽을 손에 쥐고 자루가 +Y (도끼 자루와 같은 쪽) 로 뻗게 돌린다. 쌍단검은 왼손에도 하나.
+const WEAPON_SKIP: PackedStringArray = ["hands", "axe", "shovel", "rod", "fishing_net"]
+const OFFHAND_ITEMS: PackedStringArray = ["twin_daggers"]
+## 등에 메는 무기 (들고 있지 않을 때, 대각선으로).
+var back_item: String = ""
+var _back: MeshInstance3D = null
+var _offhand: MeshInstance3D = null
+static var _weapon_grips: Dictionary[String, Transform3D] = {}
+
+
+## 무기 아이템인지 (도끼 자리에 들고 휘두른다).
+static func is_weapon_item(item_id: String) -> bool:
+	if item_id.is_empty() or item_id in WEAPON_SKIP or GameData.survival == null or not GameData.survival.weapons.has(item_id):
+		return false
+	var info: ItemInfo = GameData.item(item_id)
+	return info != null and not info.model.is_empty()
+
+
+func _in_axe_slot(item_id: String) -> bool:
+	return item_id == "axe" or item_id in SWING_TOOLS or is_weapon_item(item_id)
+
+
+## 모형에서 쥐는 자리: 첫 막대 (at → to) 의 at 쪽 15% 지점을 손에, 자루를 +Y 로. 막대가 없으면 (석궁) 몸통을 앞 (-Z) 으로 눕혀 든다.
+static func weapon_grip(item_id: String) -> Transform3D:
+	if _weapon_grips.has(item_id):
+		return _weapon_grips[item_id]
+	var info: ItemInfo = GameData.item(item_id)
+	var t: Transform3D = Transform3D.IDENTITY
+	var first: Dictionary = info.model[0] if info != null and not info.model.is_empty() and info.model[0] is Dictionary else {}
+	if str(first.get("s", "")) == "rod" and first.has("to"):
+		var a: Vector3 = _v3(first.get("at", [0, 0, 0]))
+		var b: Vector3 = _v3(first.get("to", [0, 1, 0]))
+		var dir: Vector3 = (b - a).normalized()
+		var g: Vector3 = a + (b - a) * 0.15
+		var rot: Basis = Basis(Quaternion(dir, Vector3.UP))
+		t = Transform3D(rot, -(rot * g))
+	else:
+		# 쏘는 무기: 손잡이 (가운데 아래) 를 쥐고 앞으로 겨눈다 (도끼 자리는 들 때 위로 서므로 앞으로 90° 눕힌다).
+		var at: Vector3 = _v3(first.get("at", [0, 0, 0]))
+		var rot2: Basis = Basis(Vector3.RIGHT, -PI * 0.5)
+		t = Transform3D(rot2, -(rot2 * (at + Vector3(0.0, -0.03, 0.08))))
+	_weapon_grips[item_id] = t
+	return t
+
+
+static func _v3(v: Variant) -> Vector3:
+	var a: Array = v if v is Array else [0, 0, 0]
+	return Vector3(float(a[0]), float(a[1]), float(a[2])) if a.size() >= 3 else Vector3.ZERO
+
+
+## v0.28.9 등에 멘 무기 (빈 글자 = 없음, 손에 든 것과 같으면 숨긴다).
+func set_back(item_id: String) -> void:
+	back_item = item_id
+	var show: bool = not item_id.is_empty() and item_id != held_item and is_weapon_item(item_id)
+	if not show:
+		if _back != null:
+			_back.visible = false
+		return
+	if _back == null:
+		_back = MeshInstance3D.new()
+		_back.name = "BackWeapon"
+		_back.material_override = clay_material
+		_upper_root().add_child(_back)
+	var info: ItemInfo = GameData.item(item_id)
+	_back.mesh = PartMesh.get_mesh(item_id, info.model)
+	# 쥐는 자리를 등 가운데에 두고, 자루가 오른쪽 아래 → 날이 왼쪽 위로 비스듬히 (등 쪽 +Z).
+	var grip: Transform3D = weapon_grip(item_id)
+	var slant: Basis = Basis(Vector3.BACK, deg_to_rad(-38.0)) * Basis(Vector3.UP, PI * 0.5)
+	_back.transform = Transform3D(slant, Vector3(0.06, -0.32, 0.23)) * grip
+	_back.visible = true
+
+
+func _set_offhand(item_id: String) -> void:
+	var want: bool = item_id in OFFHAND_ITEMS and (elbow_left != null or arm_left != null)
+	if not want:
+		if _offhand != null:
+			_offhand.visible = false
+		return
+	if _offhand == null:
+		_offhand = MeshInstance3D.new()
+		_offhand.name = "OffHand"
+		_offhand.material_override = clay_material
+		var hand_parent: Node3D = elbow_left if elbow_left != null else arm_left
+		hand_parent.add_child(_offhand)
+	var info: ItemInfo = GameData.item(item_id)
+	_offhand.mesh = PartMesh.get_mesh(item_id, info.model)
+	# 왼손에서 앞으로 (역수로) 쥔다.
+	var hand_at: Vector3 = CharacterModel.HAND_OFFSET - (elbow_left.position if elbow_left != null else Vector3.ZERO)
+	var grip: Transform3D = weapon_grip(item_id)
+	_offhand.transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(200.0)), hand_at) * grip
+	_offhand.visible = true
 
 
 func set_held(item_id: String) -> void:
 	held_item = item_id
+	_set_offhand(item_id)
+	set_back(back_item)
 	if _show_target > 0.5:
 		_held_before_show = item_id
 		return
@@ -289,8 +383,8 @@ func set_held(item_id: String) -> void:
 	if rod != null:
 		rod.visible = item_id == "rod" and free
 	if axe != null:
-		axe.visible = (item_id == "axe" or item_id in SWING_TOOLS) and free
-	_set_swing(item_id if item_id in SWING_TOOLS else "")
+		axe.visible = _in_axe_slot(item_id) and free
+	_set_swing(item_id if item_id in SWING_TOOLS or is_weapon_item(item_id) else "")
 	if free:
 		_set_tool(item_id if item_id in HAND_TOOLS else "")
 
@@ -355,7 +449,7 @@ func set_cooking(anim: String, tool_id: String = "") -> void:
 	if rod != null:
 		rod.visible = not active and held_item == "rod" and _show_target < 0.5 and _phone_target < 0.5
 	if axe != null:
-		axe.visible = not active and (held_item == "axe" or held_item in SWING_TOOLS) and _show_target < 0.5 and _phone_target < 0.5
+		axe.visible = not active and _in_axe_slot(held_item) and _show_target < 0.5 and _phone_target < 0.5
 
 
 func is_cooking() -> bool:
@@ -374,7 +468,7 @@ func set_rummaging(active: bool) -> void:
 	if rod != null:
 		rod.visible = not hide and held_item == "rod"
 	if axe != null:
-		axe.visible = not hide and (held_item == "axe" or held_item in SWING_TOOLS)
+		axe.visible = not hide and _in_axe_slot(held_item)
 	if tool != null and active:
 		tool.visible = false
 	elif not active and _cook_target < 0.5 and _phone_target < 0.5:
@@ -608,7 +702,12 @@ func _set_swing(tool_id: String) -> void:
 			swing.mesh = CharacterModel.shovel()
 		_:
 			swing.mesh = null
-	swing.basis = _swing_basis(tool_id, false)
+	if is_weapon_item(tool_id):
+		var info: ItemInfo = GameData.item(tool_id)
+		swing.mesh = PartMesh.get_mesh(tool_id, info.model)
+		swing.transform = weapon_grip(tool_id)
+		return
+	swing.transform = Transform3D(_swing_basis(tool_id, false), Vector3.ZERO)
 
 
 ## 휘두르는 도구의 쥐는 방향 (carry = 들고 다닐 때: 자루 축 돌림만 남긴다).
@@ -745,7 +844,7 @@ func _update_carry(delta: float) -> void:
 	tree.set("parameters/CarryAxe/blend_position", _move_value)
 	# 삽 · 뜰채: 쓰는 동작(뜨기 · 삽질)의 기울기는 들고 다닐 때 빼서 도끼 · 낚싯대와 같은 방향으로.
 	var swing: MeshInstance3D = axe.get_node_or_null("Swing") if axe != null else null
-	if swing != null and swing.mesh != null:
+	if swing != null and swing.mesh != null and not is_weapon_item(held_item):
 		var using: bool = is_chopping() or bool(tree.get("parameters/DigShot/active"))
 		swing.basis = _swing_basis(held_item, _carry_value > 0.5 and not using)
 

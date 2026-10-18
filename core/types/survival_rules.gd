@@ -87,6 +87,8 @@ var nourish: Dictionary[String, Dictionary] = {}
 var dodge_ms: int = 380
 var dodge_cooldown_ms: int = 1800
 var weapons: Dictionary[String, Weapon] = {}
+## v0.28.9 들고 있지 않을 때 등에 메는 무기 (가방 앞 칸부터 처음 것).
+var back_items: PackedStringArray = []
 var lights: Dictionary[String, float] = {}
 var creature_kinds: Dictionary[String, CreatureKind] = {}
 var night: Vector2i = Vector2i(20, 5)
@@ -140,6 +142,7 @@ static func from_dicts(rules: Dictionary, house_doc: Dictionary) -> SurvivalRule
 	for id: Variant in heal:
 		if not str(id).begins_with("_"):
 			r.heal[str(id)] = int(heal[id])
+	r.back_items = PackedStringArray(rules.get("back_items", []))
 	var weapons: Dictionary = rules.get("weapons", {})
 	for id: Variant in weapons:
 		if str(id).begins_with("_"):

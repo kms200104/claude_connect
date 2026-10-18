@@ -288,6 +288,8 @@ func setup(state: NetPlayerState) -> void:
 		body.rotation.y = state.yaw
 	set_online(state.online)
 	_apply_held(state.held)
+	if rig != null:
+		rig.set_back(state.back)
 	# 처음 나타날 때는 탈의소 없이 바로 (복장을 먼저 — 옷을 입히면 그다음부터 바뀔 때 탈의소).
 	set_uniform(state.job)
 	set_ride(state.ride)

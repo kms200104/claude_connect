@@ -508,7 +508,7 @@ export function createServer(overrides = {}) {
       code: room.code,
       resumed,
       st: now(),
-      players: [...room.players.values()].map((p) => p.toWire()),
+      players: [...room.players.values()].map((p) => ({ ...p.toWire(), bk: backOf(p) })),
       inv: inventoryToWire(player.slots, cfg, player.profile.held),
       prof: profileWire(player),
       clock: clockWire(),
@@ -542,7 +542,7 @@ export function createServer(overrides = {}) {
       // v17: 테스트 도구가 켜진 서버면 앱이 "테스트: 솔 받기" 단추를 보인다.
       dev: cfg.devTools,
     });
-    room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: player.toWire() }, player.id);
+    room.broadcast(resumed ? { t: 'peer_status', id: player.id, online: true } : { t: 'peer_joined', p: { ...player.toWire(), bk: backOf(player) } }, player.id);
     // v16: 들어올 때 가진 가구 · 옷을 도감에 올리고 업적을 확인한다 (바뀌었으면 프로필을 다시).
     if (checkProgress(player, room)) sendTo(player, { t: 'profile', ...profileWire(player) });
     celebrate(room, player);
@@ -2209,6 +2209,14 @@ export function createServer(overrides = {}) {
     ws.ctx = ctx;
   });
 
+  // v0.28.9 등에 멘 무기: 들고 있지 않은 back_items 가운데 가방 앞 칸부터 처음 것 (그림만).
+  const BACK_ITEMS = new Set(data.survival?.back_items ?? []);
+  const backOf = (p) => {
+    const slots = p.profile.slots ?? [];
+    for (let i = 0; i < slots.length; i++) if (i !== p.profile.held && slots[i] && BACK_ITEMS.has(slots[i].id)) return slots[i].id;
+    return '';
+  };
+
   // 위치 스냅샷: 바뀐 방만 방송한다.
   const tick = setInterval(() => {
     for (const room of rooms.rooms.values()) {
@@ -2223,6 +2231,7 @@ export function createServer(overrides = {}) {
           fishing: p.fishing !== null,
           phone: p.phone,
           held: jobs.carried(p) ?? p.heldItem,
+          bk: backOf(p),
           hat: p.profile.outfit.hat,
           top: p.profile.outfit.top,
           job: p.job !== null,

@@ -181,6 +181,8 @@
     "repeater_crossbow": { "damage": 6, "range": 11.0, "cooldown_ms": 750, "ammo": "crossbow_bolt", "push": 0.4, "job": "ranger" },
     "healing_staff": { "damage": 3, "range": 2.0, "cooldown_ms": 650, "mend_hit": 0.3, "light": 2.6, "job": "medic" }
   },
+  "_comment_back": "v0.28.9 들고 있지 않을 때 등에 메는 무기 (가방 앞 칸부터 처음 것 하나, 그림만 — 서버가 snap 의 bk 로 알린다).",
+  "back_items": ["greatsword", "healing_staff", "repeater_crossbow", "crossbow", "fire_axe", "nail_bat", "pipe_spear"],
 
   "defense": {
     "_comment": "마을에 놓은 가구: block = 크리처가 이 반경 안으로 못 들어온다 (바리케이드), light = 모닥불 둘레, trap = 밟으면 trap_damage (trap_cooldown_ms 마다).",

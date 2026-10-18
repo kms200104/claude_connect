@@ -597,6 +597,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (player.downed || t < (player.hurtUntil ?? 0)) return;
     // v0.28.7 구르는 동안은 맞지 않는다.
     if (t < (player.dodgeIframeUntil ?? 0)) return;
+    // v0.28.9 성역 안이면 맞지 않는다.
+    if ((room.sanctuaries ?? []).some((sa) => sa.until > t && Math.hypot(player.x - sa.x, player.z - sa.z) <= sa.r)) {
+      room.broadcast({ t: 'guard_block', id: player.id, sanct: 1 });
+      player.hurtUntil = t + (S.player.hurt_grace_ms ?? 700);
+      return;
+    }
     player.hurtUntil = t + (S.player.hurt_grace_ms ?? 700);
     // v0.28.5 마력 방패가 막는다.
     if (hunter?.bonus.block(player)) {
@@ -779,6 +785,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       const w = S.weapons[p.heldItem];
       if (p.online && w?.light) lights.push({ x: p.x, z: p.z, r: w.light });
     }
+    // v0.28.9 대치유사 '성역': 크리처가 들어오지 못한다.
+    const t = now();
+    for (const sa of room.sanctuaries ?? []) if (sa.until > t) lights.push({ x: sa.x, z: sa.z, r: sa.r });
     return { blocks, lights, traps, room };
   }
 
@@ -1313,7 +1322,9 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (w.ammo && !ammo) w = S.weapons.hands;
     const t = now();
     if (t < (player.attackReadyAt ?? 0)) return fail(ErrorCode.tooFast);
-    player.attackReadyAt = t + w.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) - 60;
+    // v0.28.9 광전사 '피의 광란': 공격 간격 · 피해.
+    const frenzy = (player.frenzyUntil ?? 0) > t ? hunter?.bonus.activeDef('frenzy') : null;
+    player.attackReadyAt = t + w.cooldown_ms * (hunter?.bonus.cooldown(player) ?? 1) * (frenzy ? 1 - frenzy.cd : 1) - 60;
     // v0.28.1 달리며 공격 (기술): 멈추지 않고 돌진해 벤다 — 사거리가 늘고, 달리는 쪽으로 조금 앞서 본다.
     const lunge = msg.run === true && hunter?.bonus.skill(player, 'run_attack');
     const reach = lunge ? (hunter.bonus.skillDef('run_attack')?.reach ?? 0) : 0;
@@ -1345,7 +1356,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const critMult = crit ? (hunter?.bonus.critBase() ?? 2) + fx('crit_mult') : 1;
     // v0.28.9 광전사 '광기': 체력이 절반 아래면 피해 +.
     const rage = hpOf(player) * 2 <= maxOf(player) ? 1 + fx('rage') : 1;
-    const wmult = (hunter?.bonus.weapon(player, w) ?? 1) * critMult * (amb ? amb.mult + fx('ambush') : 1) * rage;
+    const wmult = (hunter?.bonus.weapon(player, w) ?? 1) * critMult * (amb ? amb.mult + fx('ambush') : 1) * rage * (frenzy ? 1 + frenzy.dmg : 1);
     const target = hits[0].c;
     for (const { c, d } of hits) {
       // 힘 스탯만큼 피해 (소수는 그만큼의 확률로 1 더). v0.28.2 철갑이: 갑옷만큼 덜 받는다 (최소 1).
@@ -1483,12 +1494,70 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       }
       extra.r = def.r;
       extra.n = healed;
+    } else if (a === 'frenzy') {
+      player.frenzyUntil = t + def.ms;
+      extra.ms = def.ms;
+    } else if (a === 'shadow_dash') {
+      // 보는 쪽으로 서 있을 수 있는 데까지 (0.4m 씩), 지나간 길 둘레의 크리처를 벤다.
+      if (houseAt(player.x, player.z)) return fail(ErrorCode.tooFar);
+      const def2 = defenses(room);
+      let dist = 0;
+      for (let d = 0.4; d <= def.len + 1e-6; d += 0.4) {
+        const nx = player.x + fwd.x * d;
+        const nz = player.z + fwd.z * d;
+        if (!canStand(nx, nz, { ...def2, lights: [] }) || houseAt(nx, nz)) break;
+        dist = d;
+      }
+      if (dist < 0.8) return fail(ErrorCode.tooFar);
+      const held = S.weapons[player.heldItem];
+      const w = held && !held.ammo && !(held.job && player.profile.hunter?.job !== held.job) ? held : S.weapons.hands;
+      const dmg = w.damage * hunter.bonus.damage(player) * hunter.bonus.weapon(player, w) * def.mult;
+      const sx = player.x;
+      const sz = player.z;
+      for (const c of [...(room.creatures?.values() ?? [])]) {
+        const rx = c.x - sx;
+        const rz = c.z - sz;
+        const along = rx * fwd.x + rz * fwd.z;
+        if (along < -0.5 || along > dist + 0.8 || Math.abs(rx * fwd.z - rz * fwd.x) > def.width) continue;
+        strike(room, player, c, dmg, 0.6, 'shadow_dash');
+        struck.push(c);
+      }
+      player.x = sx + fwd.x * dist;
+      player.z = sz + fwd.z * dist;
+      player.dodgeIframeUntil = t + 350;
+      player.dodgeUntil = t + 600;
+      sendTo(player, { t: 'correct', x: player.x, y: player.y, z: player.z });
+      room.dirty = true;
+      extra.sx = round(sx);
+      extra.sz = round(sz);
+      extra.len = round(dist);
+    } else if (a === 'arrow_rain') {
+      const w = S.weapons[player.heldItem];
+      if (!w?.ammo || (w.job && player.profile.hunter?.job !== w.job) || countWhere(player.slots, (id) => id === w.ammo) <= 0) return fail(ErrorCode.noAmmo);
+      removeWhere(player.slots, (id) => id === w.ammo, Math.min(def.ammo ?? 1, countWhere(player.slots, (id) => id === w.ammo)));
+      sendInventory(player);
+      const cx = player.x + fwd.x * def.dist;
+      const cz = player.z + fwd.z * def.dist;
+      const dmg = w.damage * hunter.bonus.damage(player) * hunter.bonus.weapon(player, w) * def.mult;
+      for (const c of [...(room.creatures?.values() ?? [])]) {
+        if (Math.hypot(c.x - cx, c.z - cz) > def.r) continue;
+        strike(room, player, c, dmg, 0.2, 'arrow_rain');
+        struck.push(c);
+      }
+      extra.cx = round(cx);
+      extra.cz = round(cz);
+      extra.r = def.r;
+    } else if (a === 'sanctuary') {
+      room.sanctuaries = (room.sanctuaries ?? []).filter((sa) => sa.until > t);
+      room.sanctuaries.push({ x: player.x, z: player.z, r: def.r, until: t + def.ms, by: player.id });
+      extra.r = def.r;
+      extra.ms = def.ms;
     } else {
       return fail(ErrorCode.noActive);
     }
     player.skReady[a] = t + Math.max(1000, def.cooldown_ms - (a === 'ambush' ? fx('ambush_cd') : 0));
     wake(room, player);
-    if (a !== 'mend' && a !== 'ambush') noise(room, player, 'swing');
+    if (!['mend', 'ambush', 'frenzy', 'sanctuary'].includes(a)) noise(room, player, 'swing');
     send(ctx.ws, { t: 'skill_ok', rid: msg.rid, a, cd: player.skReady[a] - t, n: struck.length });
     room.broadcast({ t: 'skill_fx', id: player.id, a, x: round(player.x), z: round(player.z), yaw: round(player.yaw ?? 0), ...extra });
     for (const c of struck) if (c.hp <= 0 && room.creatures.has(c.id)) kill(room, c, player.id);

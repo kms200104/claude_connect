@@ -64,6 +64,8 @@ static func style(weapon_id: String) -> Style:
 		_styles["healing_staff"] = _make("swing_light", "hit_wood", "퉁!", "light", Color("#9AF0B0"), 120.0, 1.3, 0.3, 0.1, 0.18, 0.06, 0.04, 0.5)
 		# 직업 기술.
 		_styles["whirl"] = _make("skill_whirl", "hit_blade", "베기!", "whirl", Color("#E0603A"), 360.0, 2.6, 0.55, 0.0, 0.34, 0.12, 0.08, 1.2)
+		_styles["shadow_dash"] = _make("", "hit_blade", "베임!", "blade", Color("#8A5AD8"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.08, 1.2)
+		_styles["arrow_rain"] = _make("", "hit_bolt", "푹!", "bolt", Color("#7AC8FF"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.06, 0.05, 0.9)
 		_styles["pierce"] = _make("skill_pierce", "hit_bolt", "관통!", "pierce", Color("#7AC8FF"), 0.0, 0.0, 0.0, 0.0, 0.0, 0.08, 0.06, 1.0)
 	return _styles.get(weapon_id, _styles["hands"])
 
