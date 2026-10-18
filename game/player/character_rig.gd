@@ -282,6 +282,13 @@ const SWING_GRIPS: Dictionary[String, Vector3] = {"fishing_net": Vector3(0.0, 18
 ## 모형의 첫 막대 (자루) 의 끝 쪽을 손에 쥐고 자루가 +Y (도끼 자루와 같은 쪽) 로 뻗게 돌린다. 쌍단검은 왼손에도 하나.
 const WEAPON_SKIP: PackedStringArray = ["hands", "axe", "shovel", "rod", "fishing_net"]
 const OFFHAND_ITEMS: PackedStringArray = ["twin_daggers"]
+## v0.28.10 무기 모형 배율 (아이템 모형은 실제 크기라 큰 머리 캐릭터 손에서는 작아 보인다).
+const WEAPON_SCALE: float = 1.6
+## 들고 다닐 때 어깨에 걸치는 긴 무기 (낚싯대처럼, 휘두를 때만 도끼처럼 앞으로).
+const SHOULDER_WEAPONS: PackedStringArray = ["greatsword", "healing_staff", "pipe_spear", "fire_axe"]
+## 어깨에 걸칠 때 날 · 머리를 위로 세우는 각도 (도끼 자리 기준 X · Z 축, 라디안).
+static var shoulder_tilt: Vector2 = Vector2(-0.45, 0.85)
+static var ranged_aim: Vector2 = Vector2.ZERO
 ## 등에 메는 무기 (들고 있지 않을 때, 대각선으로).
 var back_item: String = ""
 var _back: MeshInstance3D = null
@@ -313,12 +320,12 @@ static func weapon_grip(item_id: String) -> Transform3D:
 		var b: Vector3 = _v3(first.get("to", [0, 1, 0]))
 		var dir: Vector3 = (b - a).normalized()
 		var g: Vector3 = a + (b - a) * 0.15
-		var rot: Basis = Basis(Quaternion(dir, Vector3.UP))
+		var rot: Basis = Basis(Quaternion(dir, Vector3.UP)).scaled(Vector3.ONE * WEAPON_SCALE)
 		t = Transform3D(rot, -(rot * g))
 	else:
 		# 쏘는 무기: 손잡이 (가운데 아래) 를 쥐고 앞으로 겨눈다 (도끼 자리는 들 때 위로 서므로 앞으로 90° 눕힌다).
 		var at: Vector3 = _v3(first.get("at", [0, 0, 0]))
-		var rot2: Basis = Basis(Vector3.RIGHT, -PI * 0.5)
+		var rot2: Basis = (Basis(Vector3.RIGHT, ranged_aim.x) * Basis(Vector3.UP, ranged_aim.y)).scaled(Vector3.ONE * WEAPON_SCALE)
 		t = Transform3D(rot2, -(rot2 * (at + Vector3(0.0, -0.03, 0.08))))
 	_weapon_grips[item_id] = t
 	return t
@@ -844,6 +851,11 @@ func _update_carry(delta: float) -> void:
 	tree.set("parameters/CarryAxe/blend_position", _move_value)
 	# 삽 · 뜰채: 쓰는 동작(뜨기 · 삽질)의 기울기는 들고 다닐 때 빼서 도끼 · 낚싯대와 같은 방향으로.
 	var swing: MeshInstance3D = axe.get_node_or_null("Swing") if axe != null else null
+	# v0.28.10 어깨에 걸치는 긴 무기: 들고 다닐 때는 날을 위로 세워 어깨에 걸친다 (휘두르는 동안은 도끼처럼).
+	if swing != null and swing.mesh != null and held_item in SHOULDER_WEAPONS and is_weapon_item(held_item):
+		var swinging: bool = is_chopping()
+		var tilt: Basis = Basis() if swinging or _carry_value < 0.5 else Basis(Vector3.BACK, shoulder_tilt.y) * Basis(Vector3.RIGHT, shoulder_tilt.x)
+		swing.transform = Transform3D(tilt, Vector3.ZERO) * weapon_grip(held_item)
 	if swing != null and swing.mesh != null and not is_weapon_item(held_item):
 		var using: bool = is_chopping() or bool(tree.get("parameters/DigShot/active"))
 		swing.basis = _swing_basis(held_item, _carry_value > 0.5 and not using)
@@ -854,7 +866,7 @@ func carry_kind() -> String:
 	if rod != null and rod.visible and rod.scale.x > 0.5:
 		return "rod"
 	if axe != null and axe.visible and axe.scale.x > 0.5:
-		return "rod" if held_item == "fishing_net" else "axe"
+		return "rod" if held_item == "fishing_net" or held_item in SHOULDER_WEAPONS else "axe"
 	return ""
 
 

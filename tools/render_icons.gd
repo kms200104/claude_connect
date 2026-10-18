@@ -151,6 +151,35 @@ func _shoot_head(id: String, look: CharacterLook) -> void:
 	torso.queue_free()
 
 
+## v0.28.10 화면에 꼭 맞추기: 메시 꼭짓점을 보는 쪽 평면에 비춰, 화면 가운데에 두고 fill 만큼 차게 거리를 잡는다
+## (예전엔 상자를 감싼 공 × 0.82 — 대검처럼 길고 비스듬한 물건은 잘렸다). [카메라 자리, 바라볼 점].
+static func fit_camera(points: PackedVector3Array, view: Vector3, fov_deg: float, fill: float) -> Array:
+	var back: Vector3 = view.normalized()
+	var right: Vector3 = Vector3.UP.cross(back).normalized()
+	if right.length() < 0.01:
+		right = Vector3.RIGHT
+	var up: Vector3 = back.cross(right).normalized()
+	var lo: Vector2 = Vector2(INF, INF)
+	var hi: Vector2 = Vector2(-INF, -INF)
+	var depth_sum: float = 0.0
+	for p: Vector3 in points:
+		depth_sum += p.dot(back)
+		var q: Vector2 = Vector2(p.dot(right), p.dot(up))
+		lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
+		hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
+	# 화면 가운데 = 비춘 상자의 가운데 (상자 가운데 깊이에서).
+	var mid: Vector2 = (lo + hi) * 0.5
+	var center: Vector3 = right * mid.x + up * mid.y + back * (depth_sum / maxf(float(points.size()), 1.0))
+	var tan_half: float = tan(deg_to_rad(fov_deg * 0.5)) * fill
+	var distance: float = 0.0
+	for v: Vector3 in points:
+		var p: Vector3 = v - center
+		var reach: float = maxf(absf(p.dot(right)), absf(p.dot(up)))
+		# 카메라에 가까운 꼭짓점일수록 크게 보이므로 그 깊이만큼 더 물러난다.
+		distance = maxf(distance, reach / tan_half + p.dot(back))
+	return [center + back * maxf(distance, 0.05), center]
+
+
 func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -> void:
 	_holder.mesh = mesh
 	# 물고기는 살갗 텍스처를 입힌다 (v0.16, FishModel.material — 아이콘은 같은 텍스처를 빛 받는 셰이더로).
@@ -162,11 +191,11 @@ func _shoot(id: String, mesh: ArrayMesh, view: Vector3, dir: String = OUT_DIR) -
 		_holder.material_override = lit
 	else:
 		_holder.material_override = _material
-	var box: AABB = mesh.get_aabb()
-	var radius: float = box.size.length() * 0.5
-	var center: Vector3 = box.get_center()
-	var distance: float = radius / sin(deg_to_rad(_camera.fov * 0.5)) * 0.82
-	_camera.look_at_from_position(center + view.normalized() * distance, center)
+	var points: PackedVector3Array = PackedVector3Array()
+	for si: int in mesh.get_surface_count():
+		points.append_array(mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX])
+	var fit: Array = fit_camera(points, view, _camera.fov, 0.92)
+	_camera.look_at_from_position(fit[0], fit[1])
 	for i: int in 3:
 		await RenderingServer.frame_post_draw
 	var image: Image = _viewport.get_texture().get_image()

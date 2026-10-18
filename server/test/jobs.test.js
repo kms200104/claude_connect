@@ -255,4 +255,34 @@ describe('v0.28.8 전직 · 기술 나무', () => {
     assert.equal((await ask(c, { t: 'skill_use', a: 'frenzy' })).t, 'skill_ok');
     assert.ok(me.frenzyUntil > 0);
   });
+
+  it('v0.28.9 성역은 밤에 실제로 막는다: 없으면 맞고, 있으면 안 맞고 (guard_block sanct), 밖의 크리처는 못 들어온다', async () => {
+    const { c, me, room } = await setup({ clockOffsetMin: offsetTo(23) });
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    const biter = (id, dx, dz) => room.creatures.set(id, { id, k: 'shambler', x: me.x + dx, z: me.z + dz, yaw: 0, hp: 40, max: 40, target: me.id, nextAttack: 0, attackAt: 0, trapAt: {} });
+    room.creatures ??= new Map();
+    // 대조: 성역이 없으면 곁의 크리처에게 맞는다.
+    const hp0 = me.profile.hp;
+    biter('n1', 0.5, 0);
+    await c.next((m) => m.t === 'hurt', 4000);
+    assert.ok(me.profile.hp < hp0, '성역 없이는 맞는다');
+    room.creatures.delete('n1');
+    // 성역을 펴면 곁의 크리처가 때려도 막는다.
+    me.profile.hunter.lv = 30;
+    me.profile.hunter.job = 'medic';
+    me.profile.hunter.adv = true;
+    me.profile.hunter.jt = { h_sanct: 1 };
+    me.hurtUntil = 0;
+    assert.equal((await ask(c, { t: 'skill_use', a: 'sanctuary' })).t, 'skill_ok');
+    const hp1 = me.profile.hp;
+    biter('n2', 0.5, 0);
+    biter('n3', 7, 0);
+    const blocked = await c.next((m) => m.t === 'guard_block' && m.sanct === 1, 4000);
+    assert.equal(blocked.id, me.id);
+    await sleep(1500);
+    assert.equal(me.profile.hp, hp1, '성역 안에서는 맞지 않는다');
+    const n3 = room.creatures.get('n3');
+    assert.ok(n3 && Math.hypot(n3.x - me.x, n3.z - me.z) >= J.actives.sanctuary.r - 0.3, `밖의 크리처는 들어오지 못한다 (${n3 ? Math.hypot(n3.x - me.x, n3.z - me.z).toFixed(2) : '-'}m)`);
+  });
 });
