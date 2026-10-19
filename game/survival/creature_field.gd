@@ -148,6 +148,10 @@ func _sync() -> void:
 				a.root.add_child(aura)
 			elif c.has("g"):
 				a.tag.modulate = Color("#A8D8FF")
+		# v0.28.17 2페이즈: 우두머리가 커진다 (s).
+		if c.has("b") and absf(a.root.scale.x - float(c.get("s", a.root.scale.x))) > 0.01:
+			var grow: Tween = a.root.create_tween()
+			grow.tween_property(a.root, "scale", Vector3.ONE * float(c.get("s", 1.5)), 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			if _synced_once and int(c.get("f", 0)) == 0 and player_near(a.root.global_position, 30.0):
 				_begin_emerge(a)
 		a.target = Vector3(float(c.get("x", 0.0)), 0.0, float(c.get("z", 0.0)))
@@ -901,6 +905,36 @@ func _boss_cast(msg: Dictionary) -> void:
 			if a != null:
 				a.cast = ""
 				a.dashing = false
+		"pool":
+			# v0.28.17 독 장판 경고: 원마다 차오르는 붉은 원.
+			if a != null:
+				a.cast = "slam"
+				a.cast_t = ms
+			for sp: Variant in msg.get("spots", []):
+				if sp is Array and (sp as Array).size() >= 2:
+					_warn_circle(Vector3(float(sp[0]), 0.03, float(sp[1])), float(msg.get("r", 2.0)), ms)
+			Audio.play_at("creature_snarl", at, 0.0, 0.5)
+		"pool_on":
+			if a != null:
+				a.cast = ""
+			for sp: Variant in msg.get("spots", []):
+				if sp is Array and (sp as Array).size() >= 2:
+					_acid_pool(Vector3(float(sp[0]), 0.04, float(sp[1])), float(msg.get("r", 2.0)), ms)
+		"phase2":
+			# v0.28.17 2페이즈 변신: 포효 · 붉은 충격파 · 화면 흔들림 · '분노!' — 크기는 creatures 의 s 로 따라간다.
+			if a != null:
+				a.scream = 1.0
+				a.cast = ""
+				a.dashing = false
+				_float_text(a.root.global_position + Vector3(0.0, 3.2 * a.root.scale.y, 0.0), "분노!", Color("#FF4A3A"), 1.6)
+				for l: Node in a.root.get_children():
+					if l is OmniLight3D:
+						(l as OmniLight3D).light_color = Color("#FF2A1A")
+						(l as OmniLight3D).light_energy = 2.4
+			_scream(str(msg.get("id", "")))
+			Fx.ring_wave(self, at + Vector3(0.0, 0.1, 0.0), Color("#FF3A2A"), 6.0, 0.7, 0.6)
+			Fx.flash(self, at + Vector3(0.0, 1.5, 0.0), Color("#FF5A3A"), 3.0)
+			_shake_if_near(at, 0.45)
 		"summon":
 			if a != null:
 				a.scream = 1.0
@@ -923,6 +957,38 @@ func _boss_cast(msg: Dictionary) -> void:
 
 
 static var _warn_mat: StandardMaterial3D = null
+static var _acid_mat: StandardMaterial3D = null
+
+
+## v0.28.17 독 장판: 녹빛 웅덩이가 ms 동안 일렁이다 사라진다 (서버가 그 안의 사람을 tick 마다 친다).
+func _acid_pool(at: Vector3, r: float, ms: float) -> void:
+	if _acid_mat == null:
+		_acid_mat = StandardMaterial3D.new()
+		_acid_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_acid_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_acid_mat.albedo_color = Color(0.45, 0.95, 0.25, 0.42)
+		_acid_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var holder: Node3D = Node3D.new()
+	holder.name = "BossPool"
+	holder.add_to_group(&"boss_warn")
+	add_child(holder)
+	holder.global_position = at
+	var disc: MeshInstance3D = _flat_disc(r)
+	disc.material_override = _acid_mat
+	holder.add_child(disc)
+	var core: MeshInstance3D = _flat_disc(r * 0.6)
+	core.material_override = _acid_mat
+	core.position.y = 0.01
+	holder.add_child(core)
+	Fx.burst(self, at + Vector3(0.0, 0.1, 0.0), false, 16, 0.9, Vector3.UP, 60.0, Vector2(0.6, 1.6), -2.0, Vector2(0.12, 0.25), Color(0.5, 1.0, 0.3, 0.8), Color(0.2, 0.5, 0.1, 0.0), true, 0.5, r * 0.7)
+	var tw: Tween = holder.create_tween().set_loops(maxi(1, int(ms / 0.8)))
+	tw.tween_property(core, "scale", Vector3(1.25, 1.0, 1.25), 0.4).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(core, "scale", Vector3.ONE, 0.4).set_trans(Tween.TRANS_SINE)
+	get_tree().create_timer(maxf(ms, 0.2)).timeout.connect(func() -> void:
+		if is_instance_valid(holder):
+			var out: Tween = holder.create_tween()
+			out.tween_property(holder, "scale", Vector3(0.05, 1.0, 0.05), 0.35)
+			out.tween_callback(holder.queue_free))
 
 
 static func _warn_material() -> StandardMaterial3D:

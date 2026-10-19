@@ -180,7 +180,39 @@ func _run() -> void:
 	var grid: GridContainer = bag.find_child("BagGrid", true, false) as GridContainer
 	_check(grid != null and grid.get_child_count() == Net.inventory_capacity and grid.columns == 7, "가방 창 %d칸 (한 줄 %d칸)" % [grid.get_child_count() if grid != null else -1, grid.columns if grid != null else -1])
 	await _shot("hunter_bag")
-	bag.close()
+	# v0.28.17 가방 정렬: 등급별 → 비싼 것이 앞 칸, 종류별 → 도구가 앞 칸.
+	var first_bag: Callable = func() -> String:
+		for i: int in range(Net.quick_slot_count, Net.inventory.size()):
+			if Net.inventory[i] != null:
+				return Net.inventory[i].id
+		return ""
+	(bag.find_child("SortGrade", true, false) as Button).pressed.emit()
+	var top_price: Callable = func() -> int:
+		var best: int = 0
+		for i: int in range(Net.quick_slot_count, Net.inventory.size()):
+			if Net.inventory[i] != null and GameData.item(Net.inventory[i].id) != null:
+				best = maxi(best, GameData.item(Net.inventory[i].id).price)
+		return best
+	_check(await _wait_until(func() -> bool: return GameData.item(first_bag.call()) != null and GameData.item(first_bag.call()).price == top_price.call(), 3.0), "등급별 정렬 (맨 앞 %s)" % first_bag.call())
+	(bag.find_child("SortKind", true, false) as Button).pressed.emit()
+	await get_tree().create_timer(0.5).timeout
+	var kinds: PackedStringArray = []
+	for i: int in range(Net.quick_slot_count, Net.inventory.size()):
+		if Net.inventory[i] != null:
+			kinds.append(GameData.item(Net.inventory[i].id).kind if GameData.item(Net.inventory[i].id) != null else "?")
+	_check(kinds.size() >= 1 and (kinds.size() < 2 or kinds[0] != "goods" or not kinds.has("material")), "종류별 정렬 (%s)" % ",".join(kinds))
+	# v0.28.17 아공간 보관함: 가방 '아공간 보관함' → 어디서든 열고 넣는다.
+	(bag.find_child("VaultButton", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	var survival: SurvivalController = _village.get_node("Survival")
+	_check(survival.stash_window.is_open() and survival.stash_window.vault, "아공간 보관함이 열렸다 (가방에서, 어디서든)")
+	var vput: Button = survival.stash_window.find_child("Put_*", true, false) as Button
+	_check(vput != null, "보관함 '넣기'")
+	if vput != null:
+		vput.pressed.emit()
+		_check(await _wait_until(func() -> bool: return (Net.hunter.get("vault", []) as Array).size() == 1, 3.0), "보관함에 넣었다 (%s)" % str(Net.hunter.get("vault", [])))
+	await _shot("hunter_vault")
+	survival.stash_window.close()
 
 	# ---- 헌터넷 ----
 	var phone: PhoneWindow = economy.phone
@@ -247,6 +279,11 @@ func _run() -> void:
 		app.call("_build")
 		await get_tree().process_frame
 		_check(app.find_child("Bounty_*", true, false) != null, "오늘의 의뢰 카드")
+		# v0.28.17 협회 임무 (매일 · 매주): 마석을 팔았으니 '마석 매각' 이 1개 이상, 처치도 1.
+		_check(app.find_child("Missions_daily", true, false) != null and app.find_child("Missions_weekly", true, false) != null and app.find_child("Mission_d_kill", true, false) != null, "협회 임무 (오늘 · 이번 주)")
+		var dk: Array = (Net.hunter.get("missions", {}) as Dictionary).get("daily", [])
+		_check(dk.any(func(m: Dictionary) -> bool: return str(m.get("id", "")) == "d_kill" and int(m.get("got", 0)) >= 1), "처치가 임무에 센다 (%s)" % str(dk))
+		await _shot("hunter_missions")
 		await _shot("hunter_app")
 		app.set("_tab", 3)
 		app.call("_build")

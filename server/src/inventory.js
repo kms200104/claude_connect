@@ -153,6 +153,39 @@ export function sanitize(raw, cfg, isKnown, limitOf, positional = Array.isArray(
   return slots;
 }
 
+/** v0.28.17 가방 정렬 (퀵슬롯은 그대로): 같은 물건은 한 칸에 모으고 (한 칸 한도까지), by = kind (종류 → 값 높은 순) · grade (값 높은 순 → 종류).
+ *  kindOf(id) · valueOf(id) 는 gamedata. 앞 칸부터 채우고 남는 칸은 빈다. */
+export const SORT_KINDS = ['tool', 'material', 'ingredient', 'fish', 'goods', 'furniture', 'clothing'];
+export function sortBag(slots, cfg, by, kindOf, valueOf, limitOf) {
+  const totals = new Map();
+  for (let i = cfg.quickSlots; i < slots.length; i++) {
+    const s = slots[i];
+    if (s) totals.set(s.id, (totals.get(s.id) ?? 0) + s.n);
+    slots[i] = null;
+  }
+  const rank = (id) => {
+    const k = SORT_KINDS.indexOf(kindOf(id));
+    return k < 0 ? SORT_KINDS.length : k;
+  };
+  const ids = [...totals.keys()].sort((a, b) => {
+    const kind = rank(a) - rank(b);
+    const value = valueOf(b) - valueOf(a);
+    const first = by === 'grade' ? value || kind : kind || value;
+    return first || (a < b ? -1 : a > b ? 1 : 0);
+  });
+  let i = cfg.quickSlots;
+  for (const id of ids) {
+    let left = totals.get(id);
+    const cap = Math.max(1, limitOf(id));
+    while (left > 0 && i < slots.length) {
+      const n = Math.min(cap, left);
+      slots[i++] = { id, n };
+      left -= n;
+    }
+  }
+  return true;
+}
+
 /** held: 손에 든 퀵슬롯 번호(없으면 -1). */
 export function toWire(slots, cfg, held = -1) {
   return { slots: slots.map((s) => (s === null ? null : { id: s.id, n: s.n })), quick: cfg.quickSlots, cap: slots.length - cfg.quickSlots, held };

@@ -6,7 +6,7 @@ import { RoomManager } from './rooms.js';
 import { RoomStore } from './persistence.js';
 import { loadGameData, pickWeighted } from './gamedata.js';
 import { createFishing } from './fishing.js';
-import { addItem, canAdd, moveSlot, removeAt, removeWhere, toWire as inventoryToWire } from './inventory.js';
+import { addItem, canAdd, moveSlot, removeAt, removeWhere, sortBag, toWire as inventoryToWire } from './inventory.js';
 import { createClock, isWeather, seasonOf, timeBand, weatherAt } from './clock.js';
 import { chopTree, newTreeState, refreshTree, treeWire, TreeStage } from './trees.js';
 import { beginTalk, chooseActivity, endTalk, npcWire, pauseFor, stepNpcs, updateApproaches } from './npcs.js';
@@ -660,6 +660,17 @@ export function createServer(overrides = {}) {
         sendInventory(player);
         room.dirty = true;
         room.saveDirty = true; // 자리 바꾸기는 개수가 안 바뀌니 주기 저장으로 충분하다
+        return;
+      }
+      case 'inv_sort': {
+        // v0.28.17 가방 정렬 (종류별 · 등급(값)별).
+        if (!player.acceptRid(msg.rid)) return;
+        if (player.fishing) return fail(ErrorCode.alreadyFishing);
+        if (msg.by !== 'kind' && msg.by !== 'grade') return fail(ErrorCode.badMessage);
+        sortBag(player.slots, cfg, msg.by, data.kindOf, (id) => data.items.get(id)?.price ?? data.priceOf(id), data.limitOf);
+        sendInventory(player);
+        room.dirty = true;
+        room.saveDirty = true;
         return;
       }
       case 'inv_discard': {
@@ -1774,6 +1785,7 @@ export function createServer(overrides = {}) {
         return handleSay(ctx, msg, fail);
       case 'equip':
       case 'inv_move':
+      case 'inv_sort':
       case 'inv_discard':
         return handleInventory(ctx, msg, fail);
       case 'chop':
@@ -1880,6 +1892,8 @@ export function createServer(overrides = {}) {
       case 'hunter_sell':
       case 'hunter_rank':
       case 'hunter_buy':
+      case 'mission_claim':
+      case 'vault':
       case 'hunter_claim':
       case 'guild_create':
       case 'guild_join':
@@ -2074,6 +2088,7 @@ export function createServer(overrides = {}) {
       case 'say':
       case 'equip':
       case 'inv_move':
+      case 'inv_sort':
       case 'inv_discard':
       case 'chop':
       case 'talk':
@@ -2144,6 +2159,8 @@ export function createServer(overrides = {}) {
       case 'hunter_sell':
       case 'hunter_rank':
       case 'hunter_buy':
+      case 'mission_claim':
+      case 'vault':
       case 'hunter_claim':
       case 'guild_create':
       case 'guild_join':

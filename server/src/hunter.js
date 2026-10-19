@@ -8,12 +8,14 @@
 //   awaken { a }                              v0.28.5 각성 고르기 (level.awaken.slots 레벨마다 하나, 바꿀 수 없다)
 //   hunter_buy { i }                          v0.28.14 협회 상점 (창구): v0.28.15 헌터 마일리지로 산다 (store.items 의 id)
 //                                             up: bag (아공간 주머니 — 내 가방 칸) · stash (아공간 상자 — 방 전체 거점 상자 칸) 은 산 즉시 늘어난다
+//   mission_claim { m }                       v0.28.17 협회 임무 (매일 · 매주) 다 채운 것을 받기 → 헌터 마일리지
+//   vault { op: put|take, slot|id, n? }       v0.28.17 내 아공간 보관함 (어디서든, 나만 — hunter.vault, vault.slots + 늘린 칸)
 //   awaken_use { a }                          v0.28.5 쓰는 각성 (그림자 걸음 · 마력 방패) → 방 전체 awaken_fx { id, a, ms }
 // v0.28.1 레벨: 경험치(처치 · 게이트 · 의뢰 · 뒤지기 · 보급 상자)가 차면 레벨이 오르고 스탯 포인트를 받는다, 레벨이 되면 기술을 배운다.
 // 서버 → hunter { rank, pts, next, kills, bounties, guild } (나) · guild { … } (방 전체) · hunter_result { kind, … }.
 // 처치 · 뒤지기 · 보급 상자 · 게이트는 survival.js 가 onKill · onLoot · onSupply · onGate 로 알린다.
 import { ErrorCode } from './protocol.js';
-import { addItem, removeAt } from './inventory.js';
+import { addItem, canAdd, removeAt } from './inventory.js';
 import { earn } from './economy.js';
 
 const hashString = (s) => {
@@ -31,7 +33,7 @@ export function loadHunter(raw, isKnown) {
   for (const [rank, a] of Object.entries(raw.gates?.assoc?.by_gate ?? {})) for (const it of a.items ?? []) if (!isKnown(it.id)) throw new Error(`hunter assoc ${rank}: unknown item ${it.id}`);
   for (const it of raw.store?.items ?? []) {
     if (!isKnown(it.id)) throw new Error(`hunter store: unknown item ${it.id}`);
-    if (it.up && !['bag', 'stash'].includes(it.up)) throw new Error(`hunter store ${it.id}: unknown upgrade ${it.up}`);
+    if (it.up && !['bag', 'stash', 'vault'].includes(it.up)) throw new Error(`hunter store ${it.id}: unknown upgrade ${it.up}`);
     if (!ranks.some((r) => r.id === it.rank)) throw new Error(`hunter store ${it.id}: unknown rank ${it.rank}`);
     if (!Number.isInteger(it.cost) || it.cost <= 0) throw new Error(`hunter store ${it.id}: bad cost`);
   }
@@ -46,7 +48,13 @@ export function loadHunter(raw, isKnown) {
     }
     jobById.set(job.id, { ...job, nodeById: new Map(job.tree.map((n) => [n.id, n])) });
   }
-  return { ...raw, ranks, rankById: new Map(ranks.map((r) => [r.id, r])), bountyById: new Map(raw.bounty.pool.map((b) => [b.id, b])), jobById };
+  const missionIds = new Set();
+  for (const m of [...(raw.missions?.daily ?? []), ...(raw.missions?.weekly ?? [])]) {
+    if (missionIds.has(m.id)) throw new Error(`hunter mission: duplicate ${m.id}`);
+    if (!Number.isInteger(m.n) || m.n <= 0 || !Number.isInteger(m.mi) || m.mi <= 0) throw new Error(`hunter mission ${m.id}: bad n · mi`);
+    missionIds.add(m.id);
+  }
+  return { ...raw, missionIds, ranks, rankById: new Map(ranks.map((r) => [r.id, r])), bountyById: new Map(raw.bounty.pool.map((b) => [b.id, b])), jobById };
 }
 
 /** 저장된 헌터 기록 { rank, pts, kills, bday, bprog: { id: n }, bdone: [id] } (모양이 틀리면 새로). */
@@ -75,6 +83,13 @@ export function sanitizeHunter(raw, rules) {
     acts: Object.fromEntries(Object.entries(h.acts ?? {}).filter(([k, v]) => rules?.level?.xp?.acts?.[k] !== undefined && Number.isInteger(v) && v >= 0)),
     // v0.28.15 헌터 마일리지 (협회 상점에서 쓴다, 등급 심사 점수 pts 와 따로). 마일리지가 없던 기록은 모은 점수만큼 들고 시작한다.
     mi: Number.isInteger(h.mi) ? Math.max(0, h.mi) : Math.max(0, intOr(h.pts, 0) - Math.max(0, intOr(h.spent, 0))),
+    // v0.28.17 협회 임무 진행 (매일 mday · 매주 mweek 이 바뀌면 비운다) · 내 아공간 보관함.
+    mday: intOr(h.mday, -1),
+    mweek: intOr(h.mweek, -1),
+    mprog: Object.fromEntries(Object.entries(h.mprog ?? {}).filter(([id, n]) => rules?.missionIds?.has(id) && Number.isInteger(n) && n >= 0)),
+    mdone: Array.isArray(h.mdone) ? h.mdone.filter((id) => rules?.missionIds?.has(id)) : [],
+    vault: Array.isArray(h.vault) ? h.vault.filter((e) => typeof e?.id === 'string' && Number.isInteger(e.n) && e.n > 0).map((e) => ({ id: e.id, n: e.n })) : [],
+    vaultExtra: Math.max(0, intOr(h.vaultExtra, 0)),
   };
 }
 
@@ -223,6 +238,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     const r = rankOf(h);
     const nx = nextRank(h);
     return {
+      missions: missionsWire(h), vault: h.vault.map((e) => ({ ...e })), vaultCap: (H.vault?.slots ?? 0) + h.vaultExtra, vaultExtra: h.vaultExtra,
       rank: r.id, pts: h.pts, mi: h.mi, bag: player.profile.bagExtra ?? 0, stashCap: (data.survival?.base?.slots ?? 12) + (room.stashExtra ?? 0), next: nx?.points ?? 0, nextRank: nx?.id ?? '', kills: h.kills, gates: h.gates,
       bounties: todayBounties(room).map((b) => ({ id: b.id, kind: b.kind, k: b.k ?? '', n: b.n, got: Math.min(b.n, h.bprog[b.id] ?? 0), done: h.bdone.includes(b.id), reward: b.reward, pts: b.pts, name: b.name, desc: b.desc })),
       guild: guildWire(room),
@@ -276,9 +292,45 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
   }
 
   /** 의뢰 진행 (kind · 크리처 k). 바뀐 게 있으면 true. */
+  // ---- v0.28.17 협회 임무 (매일 · 매주 같은 목록, 사람마다 진행) ----
+  const weekOf = (day) => Math.floor((day + 3) / 7); // 월요일에 바뀐다 (day 0 = 1970-01-01 목요일)
+  function freshMissions(h) {
+    const day = clock.day();
+    if (h.mday !== day) {
+      h.mday = day;
+      for (const m of H.missions?.daily ?? []) {
+        delete h.mprog[m.id];
+        h.mdone = h.mdone.filter((id) => id !== m.id);
+      }
+    }
+    if (h.mweek !== weekOf(day)) {
+      h.mweek = weekOf(day);
+      for (const m of H.missions?.weekly ?? []) {
+        delete h.mprog[m.id];
+        h.mdone = h.mdone.filter((id) => id !== m.id);
+      }
+    }
+  }
+  const allMissions = () => [...(H.missions?.daily ?? []).map((m) => ({ ...m, per: 'day' })), ...(H.missions?.weekly ?? []).map((m) => ({ ...m, per: 'week' }))];
+  function missionStep(player, kind, k = '', n = 1) {
+    if (!H?.missions || n <= 0) return;
+    const h = rec(player);
+    freshMissions(h);
+    for (const m of allMissions()) {
+      if (m.kind !== kind || (m.k && m.k !== k) || h.mdone.includes(m.id)) continue;
+      h.mprog[m.id] = Math.min(m.n, (h.mprog[m.id] ?? 0) + n);
+    }
+  }
+  function missionsWire(h) {
+    freshMissions(h);
+    const row = (m) => ({ id: m.id, name: m.name, n: m.n, got: Math.min(m.n, h.mprog[m.id] ?? 0), done: h.mdone.includes(m.id), mi: m.mi });
+    return { daily: (H.missions?.daily ?? []).map(row), weekly: (H.missions?.weekly ?? []).map(row) };
+  }
+
   function progress(room, player, kind, k = '', n = 1) {
     const h = rec(player);
     freshDay(h);
+    missionStep(player, kind, k, n);
     let changed = false;
     for (const b of todayBounties(room)) {
       if (b.kind !== kind || (b.k && b.k !== k) || h.bdone.includes(b.id)) continue;
@@ -337,6 +389,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
     const take = Math.max(0, Math.min(n, cap - (h.acts[kind] ?? 0)));
     if (take <= 0) return 0;
     h.acts[kind] = (h.acts[kind] ?? 0) + take;
+    missionStep(player, kind, '', take);
     const xp = per * take;
     sendTo(player, { t: 'hunter_result', kind: 'act', a: kind, xp });
     grant(room, player, { xp });
@@ -451,6 +504,9 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
           if ((player.profile.bagExtra ?? 0) !== (it.at ?? 0)) return fail(ErrorCode.badItem);
           player.profile.bagExtra = (player.profile.bagExtra ?? 0) + it.add;
           for (let i = 0; i < it.add; i++) player.slots.push(null);
+        } else if (it.up === 'vault') {
+          if (h.vaultExtra !== (it.at ?? 0)) return fail(ErrorCode.badItem);
+          h.vaultExtra += it.add;
         } else if (it.up === 'stash') {
           if ((room.stashExtra ?? 0) !== (it.at ?? 0)) return fail(ErrorCode.badItem);
           room.stashExtra = (room.stashExtra ?? 0) + it.add;
@@ -460,6 +516,53 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'buy', i: it.id, n, cost: it.cost, mi: h.mi, up: it.up ?? '', add: it.add ?? 0 });
         if (it.up === 'stash') for (const p of room.players.values()) sendHunter(room, p);
         else sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'mission_claim': {
+        const h = rec(player);
+        freshMissions(h);
+        const m = allMissions().find((x) => x.id === msg.m);
+        if (!m) return fail(ErrorCode.badItem);
+        if (h.mdone.includes(m.id)) return fail(ErrorCode.alreadyLooted);
+        if ((h.mprog[m.id] ?? 0) < m.n) return fail(ErrorCode.bountyNotDone);
+        h.mdone.push(m.id);
+        h.mi += m.mi;
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'mission', m: m.id, name: m.name, got: m.mi, mi: h.mi });
+        sendHunter(room, player);
+        saveRoom(room);
+        return;
+      }
+      case 'vault': {
+        // 어디서든 (쓰러져 있을 때만 빼고). 칸 = vault.slots + 아공간 금고로 늘린 칸, 한 칸 vault.max 개.
+        const V = H.vault;
+        if (!V) return fail(ErrorCode.badMessage);
+        if (player.downed) return fail(ErrorCode.downed);
+        const h = rec(player);
+        const box = h.vault;
+        if (msg.op === 'put') {
+          const slot = Number.isInteger(msg.slot) ? player.slots[msg.slot] : null;
+          if (!slot || !data.isKnown(slot.id)) return fail(ErrorCode.badItem);
+          const entry = box.find((e) => e.id === slot.id);
+          if (!entry && box.length >= V.slots + h.vaultExtra) return fail(ErrorCode.stashFull);
+          const n = Math.min(Number.isInteger(msg.n) && msg.n > 0 ? msg.n : slot.n, slot.n, V.max - (entry?.n ?? 0));
+          if (n <= 0) return fail(ErrorCode.stashFull);
+          const id = slot.id;
+          removeAt(player.slots, msg.slot, n);
+          if (entry) entry.n += n;
+          else box.push({ id, n });
+        } else if (msg.op === 'take') {
+          const entry = box.find((e) => e.id === msg.id);
+          if (!entry) return fail(ErrorCode.badItem);
+          const n = Math.min(Number.isInteger(msg.n) && msg.n > 0 ? msg.n : entry.n, entry.n);
+          if (!canAdd(player.slots, entry.id, n, data.limitOf)) return fail(ErrorCode.inventoryFull);
+          addItem(player.slots, entry.id, n, cfg, data.limitOf);
+          entry.n -= n;
+          if (entry.n <= 0) box.splice(box.indexOf(entry), 1);
+        } else return fail(ErrorCode.badMessage);
+        sendInventory(player);
+        send(ctx.ws, { t: 'hunter_result', rid: msg.rid, kind: 'vault', op: msg.op });
+        sendHunter(room, player);
         saveRoom(room);
         return;
       }
@@ -488,6 +591,7 @@ export function createHunter({ data, cfg, clock, random, now, send, sendTo, send
         if (h.bdone.includes(b.id)) return fail(ErrorCode.alreadyLooted);
         if ((h.bprog[b.id] ?? 0) < b.n) return fail(ErrorCode.bountyNotDone);
         h.bdone.push(b.id);
+        missionStep(player, 'bounty');
         player.profile.sol += b.reward;
         earn(player.profile, b.reward);
         addPoints(room, player, b.pts);

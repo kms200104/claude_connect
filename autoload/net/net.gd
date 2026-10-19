@@ -1608,6 +1608,29 @@ func hunter_rank_up() -> void:
 		_request("hunter_rank", {})
 
 
+## v0.28.17 가방 정렬 (by = kind 종류별 · grade 등급(값)별).
+func inv_sort(by: String) -> void:
+	if state == State.ONLINE:
+		_request("inv_sort", {"by": by})
+
+
+## v0.28.17 협회 임무 받기 (다 채운 것, 헌터 마일리지).
+func mission_claim(mission_id: String) -> void:
+	if state == State.ONLINE:
+		_request("mission_claim", {"m": mission_id})
+
+
+## v0.28.17 내 아공간 보관함 (어디서든): 넣기 (가방 칸) · 꺼내기 (물건 id). n = 0 이면 다.
+func vault_put(slot: int, n: int = 0) -> void:
+	if state == State.ONLINE:
+		_request("vault", {"op": "put", "slot": slot, "n": n} if n > 0 else {"op": "put", "slot": slot})
+
+
+func vault_take(item_id: String, n: int = 0) -> void:
+	if state == State.ONLINE:
+		_request("vault", {"op": "take", "id": item_id, "n": n} if n > 0 else {"op": "take", "id": item_id})
+
+
 ## v0.28.14 협회 상점에서 사기 (store.items 의 id, 헌터 점수로).
 func hunter_buy(item_id: String) -> void:
 	if state == State.ONLINE:

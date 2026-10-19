@@ -192,12 +192,18 @@ func _on_done(info: Dictionary) -> void:
 		"act":
 			# v0.28.12 행동 경험치 (낚시 · 벌목 · 제작 …, 하루 상한까지).
 			_show_points("경험치 +%d (%s)" % [int(info.get("xp", 0)), ACT_NAMES.get(str(info.get("a", "")), "활동")])
+		"mission":
+			if toast_hud != null:
+				toast_hud.show_toast("협회 임무 완료! '%s' · 마일리지 +%d (지금 %d)" % [str(info.get("name", "")), int(info.get("got", 0)), int(info.get("mi", 0))], true)
+			Audio.play_sfx("quest_done", -6.0)
 		"buy":
 			if toast_hud != null:
 				var spent: String = "−%d 마일리지, 남은 %d" % [int(info.get("cost", 0)), int(info.get("mi", 0))]
 				match str(info.get("up", "")):
 					"bag":
 						toast_hud.show_toast("%s! 가방이 %d칸 늘었어요 — 이제 %d칸 (%s)" % [GameData.item_name(str(info.get("i", ""))), int(info.get("add", 0)), Net.inventory_capacity, spent], true)
+					"vault":
+						toast_hud.show_toast("%s! 내 아공간 보관함이 %d칸 늘었어요 (%s)" % [GameData.item_name(str(info.get("i", ""))), int(info.get("add", 0)), spent], true)
 					"stash":
 						toast_hud.show_toast("%s! 이 마을 거점 상자가 %d칸 늘었어요 (%s)" % [GameData.item_name(str(info.get("i", ""))), int(info.get("add", 0)), spent], true)
 					_:
@@ -289,7 +295,7 @@ func _on_guild(msg: Dictionary) -> void:
 
 
 func _on_failed(kind: String, code: String) -> void:
-	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind.begins_with("skill_") or kind.begins_with("class_") or kind == "gate_enter" or kind == "gate_leave"):
+	if toast_hud == null or not (kind.begins_with("hunter_") or kind.begins_with("mission_") or kind.begins_with("guild_") or kind.begins_with("awaken") or kind.begins_with("skill_") or kind.begins_with("class_") or kind == "gate_enter" or kind == "gate_leave"):
 		return
 	var text: String = ""
 	match code:

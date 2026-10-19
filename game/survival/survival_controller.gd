@@ -683,6 +683,10 @@ func _on_failed(kind: String, code: String) -> void:
 		toast_hud.show_toast("판자가 아직 튼튼해요", true)
 	elif (kind == "stash" or kind == "sleep") and code == NetProtocol.ERR_NOT_BASE:
 		toast_hud.show_toast("판자가 부서졌어요 — 다시 막아야 거점이 돼요", false)
+	elif kind == "vault" and code == NetProtocol.ERR_STASH_FULL:
+		toast_hud.show_toast("보관함이 가득해요 (%d칸) — 협회 상점의 아공간 금고로 늘릴 수 있어요" % int(Net.hunter.get("vaultCap", 0)), false)
+	elif kind == "vault" and code == NetProtocol.ERR_INVENTORY_FULL:
+		toast_hud.show_toast("가방이 가득해요", false)
 	elif kind == "stash" and code == NetProtocol.ERR_STASH_FULL:
 		toast_hud.show_toast("상자가 가득해요 (%d칸) — 협회 상점의 아공간 상자로 늘릴 수 있어요" % int(Net.hunter.get("stashCap", GameData.survival.stash_slots)), false)
 	elif kind == "stash" and code == NetProtocol.ERR_INVENTORY_FULL:
@@ -1124,6 +1128,11 @@ func _build_hud() -> void:
 		hud.add_child.call_deferred(_blood_chip)
 		hud.add_child.call_deferred(_supply_chip)
 		hud.add_child.call_deferred(stash_window)
+		var bag: InventoryWindow = hud.get_node_or_null("InventoryWindow") as InventoryWindow
+		if bag != null:
+			bag.vault_requested.connect(func() -> void:
+				bag.close()
+				stash_window.open_vault())
 	_refresh_hearts()
 
 

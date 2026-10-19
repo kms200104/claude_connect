@@ -206,7 +206,7 @@ func _build_store() -> void:
 		var why: String = ""
 		# v0.28.15 칸을 늘리는 물건: 차례대로 (at = 지금까지 늘린 칸).
 		var up: String = str(it.get("up", ""))
-		var have: int = int(Net.hunter.get("bag", 0)) if up == "bag" else int(Net.hunter.get("stashCap", GameData.survival.stash_slots)) - GameData.survival.stash_slots
+		var have: int = int(Net.hunter.get("bag", 0)) if up == "bag" else (int(Net.hunter.get("vaultExtra", 0)) if up == "vault" else int(Net.hunter.get("stashCap", GameData.survival.stash_slots)) - GameData.survival.stash_slots)
 		var at: int = int(it.get("at", 0))
 		if not up.is_empty() and have > at:
 			why = "샀어요"
@@ -235,6 +235,8 @@ func _build_store() -> void:
 		var what: String = "%s × %d" % [GameData.item_name(id), int(it.get("n", 1))]
 		if up == "bag":
 			what = "%s · 가방 +%d칸" % [GameData.item_name(id), int(it.get("add", 0))]
+		elif up == "vault":
+			what = "%s · 내 보관함 +%d칸" % [GameData.item_name(id), int(it.get("add", 0))]
 		elif up == "stash":
 			what = "%s · 거점 상자 +%d칸 (마을 전체)" % [GameData.item_name(id), int(it.get("add", 0))]
 		var l: Label = _label("%s\n%s" % [what, " · ".join(tags)], 26, INK if why.is_empty() else SOFT)

@@ -58,6 +58,7 @@ func _build_bounties() -> void:
 		var mine: bool = GameData.hunter.can_enter(str(Net.hunter.get("rank", "E")), str(g["rank"]))
 		var state_text: String = "던전 브레이크 중! 피하세요" if st == "break" else ("공략 중 · 웨이브 %d/%d" % [int(g["wave"]) + 1, int(g["waves"])] if st == "raid" else "브레이크까지 %d분 %d초" % [left / 60000, (left / 1000) % 60])
 		gc.add_child(label("%s · %s" % [state_text, "진입 가능" if mine else "등급이 모자라요"], 22, SOFT))
+	_build_missions()
 	var list: Array = Net.hunter.get("bounties", [])
 	if list.is_empty():
 		add_child(label("오늘은 의뢰가 없어요.", 26, SOFT))
@@ -95,6 +96,43 @@ func _build_bounties() -> void:
 				Audio.play_ui(Audio.SFX_CLICK)
 				Net.hunter_claim(bid))
 			row.add_child(claim)
+
+
+## v0.28.17 협회 임무 (매일 · 매주): 진행 막대 · 다 채우면 '받기' → 헌터 마일리지.
+func _build_missions() -> void:
+	var ms: Dictionary = Net.hunter.get("missions", {}) if Net.hunter.get("missions") is Dictionary else {}
+	for part: Array in [["daily", "오늘의 협회 임무 · 날마다 새로"], ["weekly", "이번 주 협회 임무 · 월요일에 새로"]]:
+		var list: Array = ms.get(str(part[0]), []) if ms.get(str(part[0])) is Array else []
+		if list.is_empty():
+			continue
+		add_child(label(str(part[1]), 24, SOFT))
+		var c: VBoxContainer = card()
+		c.get_parent().name = "Missions_%s" % str(part[0])
+		for m: Variant in list:
+			if not m is Dictionary:
+				continue
+			var md: Dictionary = m
+			var mid: String = str(md.get("id", ""))
+			var got: int = int(md.get("got", 0))
+			var n: int = maxi(1, int(md.get("n", 1)))
+			var row: HBoxContainer = HBoxContainer.new()
+			row.name = "Mission_%s" % mid
+			row.add_theme_constant_override("separation", 10)
+			c.add_child(row)
+			var t: Label = label("%s · %d/%d" % [str(md.get("name", "")), got, n], 24, INK, false)
+			t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(t)
+			if bool(md.get("done", false)):
+				row.add_child(label("✔ 받음", 22, GOOD, false))
+			else:
+				var claim: Button = button("+%d M" % int(md.get("mi", 0)), 22, INK, got >= n)
+				claim.name = "MissionClaim_%s" % mid
+				claim.disabled = got < n
+				claim.pressed.connect(func() -> void:
+					Audio.play_ui(Audio.SFX_CLICK)
+					Net.mission_claim(mid))
+				row.add_child(claim)
+			c.add_child(meter(clampf(float(got) / float(n), 0.0, 1.0), GOLD if got >= n else NAVY))
 
 
 func _build_guild() -> void:

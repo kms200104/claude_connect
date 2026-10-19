@@ -769,6 +769,7 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (c.boss) {
       w.b = c.boss;
       w.s = c.scale ?? 1;
+      if (c.phase2) w.p2 = 1;
     }
     return w;
   };
@@ -1581,6 +1582,32 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     const B = data.hunter?.gates?.boss_skills;
     if (!B) return false;
     const victims = () => [...room.players.values()].filter((p) => p.online && !p.downed && !hunter?.bonus.hidden(p));
+    const P2 = B.phase2;
+    const nextIn = () => t + B.every_ms * (c.phase2 && P2 ? P2.every_mult : 1);
+    // v0.28.17 독 장판: 남은 동안 안에 있는 사람은 tick_ms 마다 맞는다.
+    if (c.pools?.length) {
+      c.pools = c.pools.filter((pl) => pl.until > t);
+      for (const pl of c.pools) {
+        if (t < pl.next) continue;
+        pl.next = t + B.pool.tick_ms;
+        for (const p of victims()) if (Math.hypot(p.x - pl.x, p.z - pl.z) <= pl.r) hurt(room, p, Math.round(B.pool.damage * (c.dmg ?? 1)), c.id);
+      }
+    }
+    // v0.28.17 2페이즈: 체력이 hp_at 아래로 처음 떨어지면 변신 (그동안 맞지 않는다) → 크고 · 세고 · 패턴이 잦다.
+    if (P2 && !c.phase2 && c.hp / Math.max(1, c.max ?? c.hp) <= P2.hp_at) {
+      c.phase2 = true;
+      c.cast = null;
+      c.dash = null;
+      c.summonCast = null;
+      c.riseUntil = t + P2.ms;
+      c.phaseUntil = t + P2.ms;
+      c.dmg = (c.dmg ?? 1) * P2.dmg;
+      c.scale = (c.scale ?? 1) * P2.scale;
+      c.nextCast = t + P2.ms + 600;
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'phase2', x: round(c.x), z: round(c.z), ms: P2.ms });
+      return true;
+    }
+    if (t < (c.phaseUntil ?? 0)) return true;
     // 소환: 체력이 기준 아래로 떨어질 때마다 (포효 · 부하가 기어 나온다).
     const frac = c.hp / Math.max(1, c.max ?? c.hp);
     c.summoned ??= 0;
@@ -1619,12 +1646,12 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (c.dash) {
       const d = c.dash;
       const left = Math.hypot(d.tx - c.x, d.tz - c.z);
-      const step = Math.min(left, B.charge.speed * dt);
+      const step = Math.min(left, B.charge.speed * (c.phase2 && P2 ? P2.speed : 1) * dt);
       const nx = c.x + ((d.tx - c.x) / Math.max(left, 0.001)) * step;
       const nz = c.z + ((d.tz - c.z) / Math.max(left, 0.001)) * step;
       if (left < 0.05 || t > d.until || !canStand(nx, nz, def)) {
         c.dash = null;
-        c.nextCast = t + B.every_ms;
+        c.nextCast = nextIn();
         room.broadcast({ t: 'boss_cast', id: c.id, k: 'charge_end', x: round(c.x), z: round(c.z), ms: 0 });
         return true;
       }
@@ -1645,7 +1672,11 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
       if (k.k === 'slam') {
         for (const p of victims()) if (Math.hypot(p.x - k.x, p.z - k.z) <= B.slam.r) hurt(room, p, Math.round(B.slam.damage * (c.dmg ?? 1)), c.id);
         room.broadcast({ t: 'boss_cast', id: c.id, k: 'slam_hit', x: round(k.x), z: round(k.z), r: B.slam.r, ms: 0 });
-        c.nextCast = t + B.every_ms;
+        c.nextCast = nextIn();
+      } else if (k.k === 'pool') {
+        c.pools = [...(c.pools ?? []), ...k.spots.map((sp) => ({ x: sp.x, z: sp.z, r: B.pool.r, until: t + B.pool.ms, next: t }))];
+        room.broadcast({ t: 'boss_cast', id: c.id, k: 'pool_on', x: round(c.x), z: round(c.z), r: B.pool.r, ms: B.pool.ms, spots: k.spots.map((sp) => [round(sp.x), round(sp.z)]) });
+        c.nextCast = nextIn();
       } else if (k.k === 'charge') {
         c.dash = { tx: k.x, tz: k.z, until: t + (B.charge.dist / B.charge.speed) * 1000 + 300, hit: new Set() };
       }
@@ -1654,6 +1685,21 @@ export function createSurvival({ data, cfg, clock, random, now, send, sendTo, se
     if (!target) return false;
     c.nextCast ??= t + B.first_ms;
     if (t < c.nextCast) return false;
+    // v0.28.17 패턴 every 번째마다 독 장판 (대상 자리 + 둘레).
+    c.casts = (c.casts ?? 0) + 1;
+    if (B.pool && c.casts % B.pool.every === 0) {
+      const spots = [{ x: target.x, z: target.z }];
+      for (let i = 0; spots.length < B.pool.n && i < 24; i++) {
+        const a = random() * Math.PI * 2;
+        const x = target.x + Math.cos(a) * B.pool.spread * (0.5 + random() * 0.5);
+        const z = target.z + Math.sin(a) * B.pool.spread * (0.5 + random() * 0.5);
+        if (canStand(x, z, def)) spots.push({ x, z });
+      }
+      c.yaw = Math.atan2(target.x - c.x, target.z - c.z);
+      c.cast = { k: 'pool', at: t + B.pool.windup_ms, spots };
+      room.broadcast({ t: 'boss_cast', id: c.id, k: 'pool', x: round(c.x), z: round(c.z), r: B.pool.r, ms: B.pool.windup_ms, spots: spots.map((sp) => [round(sp.x), round(sp.z)]) });
+      return true;
+    }
     if (targetD >= B.charge.min_range && targetD <= B.charge.dist) {
       // 돌진: 대상 쪽으로 dist 만큼 (막히면 그 앞까지).
       const ux = (target.x - c.x) / targetD;

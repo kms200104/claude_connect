@@ -95,4 +95,40 @@ describe('v0.28.5 우두머리 패턴', () => {
     await sleep(600);
     assert.equal([...room.creatures.values()].filter((x) => x.k === B.summon.k).length, B.summon.n, '다시 부르지 않는다 (30% 전까지)');
   });
+
+  it('v0.28.17 독 장판: 패턴 every 번째마다 경고 원 → 장판, 안에 서 있으면 계속 맞는다', async () => {
+    const { c, room, me } = await setup();
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putBoss(room, { x: spot.x + 2.4, z: spot.z });
+    room.creatures.get('zboss').casts = B.pool.every - 1;
+    const warn = await c.next((m) => m.t === 'boss_cast' && m.k === 'pool', 3000);
+    assert.equal(warn.ms, B.pool.windup_ms);
+    assert.ok(warn.spots.length >= 1 && warn.spots.length <= B.pool.n);
+    assert.ok(Math.hypot(warn.spots[0][0] - spot.x, warn.spots[0][1] - spot.z) < 0.5, '내 자리에 경고');
+    const on = await c.next((m) => m.t === 'boss_cast' && m.k === 'pool_on', 3000);
+    assert.equal(on.ms, B.pool.ms);
+    const hp0 = me.profile.hp;
+    await c.next((m) => m.t === 'hurt', 2000);
+    assert.ok(me.profile.hp < hp0, '장판 위에서 맞는다');
+  });
+
+  it('v0.28.17 2페이즈: 체력이 절반 아래로 떨어지면 변신 (그동안 맞지 않는다) → 크고 · 세진다 (한 번만)', async () => {
+    const { c, room } = await setup();
+    c.send({ t: 'move', x: spot.x, y: 0.1, z: spot.z, yaw: 0, vx: 0, vz: 0 });
+    await sleep(150);
+    putBoss(room, { x: spot.x + 12, z: spot.z }, 29);
+    const boss = room.creatures.get('zboss');
+    boss.summoned = B.summon.hp_at.length;
+    const cast = await c.next((m) => m.t === 'boss_cast' && m.k === 'phase2', 3000);
+    assert.equal(cast.ms, B.phase2.ms);
+    assert.ok(boss.phase2);
+    assert.ok(Math.abs(boss.scale - 1.6 * B.phase2.scale) < 1e-6);
+    assert.ok(Math.abs(boss.dmg - B.phase2.dmg) < 1e-6);
+    assert.ok(boss.riseUntil > 0, '변신하는 동안은 맞지 않는다');
+    const wire = await c.next((m) => m.t === 'creatures' && m.c.some((x) => x.id === 'zboss' && x.p2 === 1), 3000);
+    assert.ok(wire);
+    await sleep(400);
+    assert.ok(Math.abs(boss.scale - 1.6 * B.phase2.scale) < 1e-6, '한 번만');
+  });
 });

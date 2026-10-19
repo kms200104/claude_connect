@@ -4,6 +4,7 @@ extends Control
 ## 위: 상자에 든 것 (그림 · 이름 × 개수 · "1개" · "다 꺼내기"), 아래: 가방 (칸마다 "넣기" · 여러 개면 "1개").
 ## 판정은 서버 (Net.stash_put · Net.stash_take → stash), 열린 채로 다른 사람이 넣고 빼도 바로 바뀐다.
 ## v0.27 탈것 짐칸도 같은 창 (open_vehicle — veh_cargo, 내 탈것 cargo).
+## v0.28.17 내 아공간 보관함도 같은 창 (open_vault — 서버 vault, 어디서든 · 나만).
 
 signal closed
 
@@ -14,6 +15,10 @@ const CREAM: Color = Color("#FFF8EC")
 var house_id: String = ""
 ## 탈것 짐칸으로 열었으면 그 탈것 id (아니면 빈 글자 = 거점 상자).
 var vehicle_id: String = ""
+## 아공간 보관함으로 열었는지.
+var vault: bool = false
+var _hint: Label = null
+var _box_title: Label = null
 var _title: Label = null
 var _stash_list: VBoxContainer = null
 var _bag_list: VBoxContainer = null
@@ -51,9 +56,13 @@ func _ready() -> void:
 	close_button.name = "CloseButton"
 	close_button.pressed.connect(close)
 	head.add_child(close_button)
-	box.add_child(_label("함께 쓰는 상자예요. 판자가 부서져도 넣어 둔 것은 남아요.", 26, SOFT))
+	_hint = _label("함께 쓰는 상자예요. 판자가 부서져도 넣어 둔 것은 남아요.", 26, SOFT)
+	box.add_child(_hint)
 	for part: Array in [["StashScroll", "상자"], ["BagScroll", "가방"]]:
-		box.add_child(_label(str(part[1]), 32, INK))
+		var section: Label = _label(str(part[1]), 32, INK)
+		box.add_child(section)
+		if part[0] == "StashScroll":
+			_box_title = section
 		var scroll: ScrollContainer = ScrollContainer.new()
 		scroll.name = str(part[0])
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -82,6 +91,9 @@ func _ready() -> void:
 	Net.inventory_updated.connect(func(_s: Array[InventoryItem], _h: int) -> void:
 		if visible:
 			_build.call_deferred())
+	Net.hunter_changed.connect(func() -> void:
+		if visible and vault:
+			_build.call_deferred())
 
 
 func is_open() -> bool:
@@ -91,6 +103,7 @@ func is_open() -> bool:
 func open(house: String) -> void:
 	house_id = house
 	vehicle_id = ""
+	vault = false
 	move_to_front()
 	visible = true
 	_build()
@@ -100,6 +113,7 @@ func open(house: String) -> void:
 func open_vehicle(id: String) -> void:
 	vehicle_id = id
 	house_id = ""
+	vault = false
 	move_to_front()
 	visible = true
 	_build()
@@ -111,12 +125,28 @@ func close() -> void:
 	visible = false
 	closed.emit()
 
+## v0.28.17 내 아공간 보관함으로 연다 (어디서든).
+func open_vault() -> void:
+	vault = true
+	house_id = ""
+	vehicle_id = ""
+	move_to_front()
+	visible = true
+	_build()
+
+
 
 func _build() -> void:
 	var items: Array = Net.stash.get(house_id, [])
 	# v0.28.15 아공간 상자로 늘린 칸까지 (서버 hunter 의 stashCap).
 	_title.text = "거점 상자 · %d/%d칸" % [items.size(), int(Net.hunter.get("stashCap", GameData.survival.stash_slots))]
-	if not vehicle_id.is_empty():
+	_hint.text = "함께 쓰는 상자예요. 판자가 부서져도 넣어 둔 것은 남아요."
+	_box_title.text = "보관함" if vault else ("짐칸" if not vehicle_id.is_empty() else "상자")
+	if vault:
+		items = Net.hunter.get("vault", []) if Net.hunter.get("vault") is Array else []
+		_title.text = "아공간 보관함 · %d/%d칸" % [items.size(), int(Net.hunter.get("vaultCap", 0))]
+		_hint.text = "나만 쓰는 보관함이에요. 어디서든 열 수 있어요 (칸은 협회 상점 아공간 금고로 늘려요)."
+	elif not vehicle_id.is_empty():
 		var v: Dictionary = Net.vehicle(vehicle_id)
 		var m: VehicleCatalog.Model = GameData.garage.model(str(v.get("model", "")))
 		items = v.get("cargo", []) if v.get("cargo") is Array else []
@@ -165,14 +195,18 @@ func _build() -> void:
 
 
 func _put(slot: int, n: int) -> void:
-	if vehicle_id.is_empty():
+	if vault:
+		Net.vault_put(slot, n)
+	elif vehicle_id.is_empty():
 		Net.stash_put(house_id, slot, n)
 	else:
 		Net.request("veh_cargo", {"v": vehicle_id, "op": "put", "slot": slot, "n": n})
 
 
 func _take(item_id: String, n: int) -> void:
-	if vehicle_id.is_empty():
+	if vault:
+		Net.vault_take(item_id, n)
+	elif vehicle_id.is_empty():
 		Net.stash_take(house_id, item_id, n)
 	else:
 		Net.request("veh_cargo", {"v": vehicle_id, "op": "take", "id": item_id, "n": n})

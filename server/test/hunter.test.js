@@ -14,6 +14,7 @@ import { Client, sleep, uid } from './helpers.js';
 const data = loadGameData(defaultConfig.dataDir, defaultConfig);
 const H = data.hunter;
 const S = data.survival;
+const count = ({ slots }, id) => slots.reduce((t, x) => t + (x?.id === id ? x.n : 0), 0);
 const office = { x: H.office.x, z: H.office.z + 1.2 };
 const offsetTo = (hour) => {
   const d = new Date();
@@ -186,6 +187,67 @@ describe('v0.28 헌터', () => {
     room.creatures.get('zr1').riseUntil = 0;
     await sleep(800);
     assert.equal((await ask(c, { t: 'attack' })).hit, 'zr1');
+  });
+
+  it('v0.28.17 협회 임무: 처치 · 매각 등으로 채우고 다 채우면 마일리지를 받는다 (한 번만) · 날이 바뀌면 일일 임무는 새로', async () => {
+    const server = start(23, { startItems: 'pipe_spear:1,mana_stone_e:5' });
+    const { c, w } = await join(server);
+    const d = H.missions.daily.find((m) => m.id === 'd_sell');
+    assert.equal(w.hunter.missions.daily.length, H.missions.daily.length);
+    assert.equal(w.hunter.missions.weekly.length, H.missions.weekly.length);
+    const room = roomOf(server);
+    const me = [...room.players.values()][0];
+    assert.equal((await ask(c, { t: 'mission_claim', m: 'd_sell' })).code, 'bounty_not_done');
+    await moveTo(c, office);
+    await ask(c, { t: 'hunter_sell', all: true });
+    const hu = await c.next((m) => m.t === 'hunter' && m.missions.daily.find((x) => x.id === 'd_sell').got === d.n, 2000);
+    assert.ok(hu);
+    const mi0 = me.profile.hunter.mi;
+    const got = await ask(c, { t: 'mission_claim', m: 'd_sell' });
+    assert.equal(got.kind, 'mission');
+    assert.equal(me.profile.hunter.mi, mi0 + d.mi);
+    assert.equal((await ask(c, { t: 'mission_claim', m: 'd_sell' })).code, 'already_looted');
+    // 처치는 주간 임무에도 센다.
+    await moveTo(c, spot);
+    me.profile.held = me.slots.findIndex((x) => x?.id === 'pipe_spear');
+    put(room, 'zm1', { x: spot.x + 1, z: spot.z });
+    assert.equal((await ask(c, { t: 'attack' })).hit, 'zm1');
+    await c.next((m) => m.t === 'hunter_result' && m.kind === 'kill', 2000);
+    assert.equal(me.profile.hunter.mprog.d_kill, 1);
+    assert.equal(me.profile.hunter.mprog.w_kill, 1);
+    // 다음 날: 일일은 비고, 주간은 (같은 주면) 남는다.
+    me.profile.hunter.mday -= 1;
+    const h2 = await ask(c, { t: 'mission_claim', m: 'd_sell' });
+    assert.equal(h2.code, 'bounty_not_done', '새 날');
+    assert.equal(me.profile.hunter.mprog.d_kill, undefined);
+  });
+
+  it('v0.28.17 아공간 보관함: 어디서든 넣고 빼고, 나만 쓴다 · 칸이 차면 못 넣고 아공간 금고로 늘린다 (저장된다)', async () => {
+    const server = start(12, { startItems: 'wood:5,bandage:3' });
+    const { c, w } = await join(server);
+    assert.equal(w.hunter.vaultCap, H.vault.slots);
+    const room = roomOf(server);
+    const me = [...room.players.values()][0];
+    const wood = me.slots.findIndex((x) => x?.id === 'wood');
+    assert.equal((await ask(c, { t: 'vault', op: 'put', slot: wood, n: 3 })).kind, 'vault');
+    assert.deepEqual(me.profile.hunter.vault, [{ id: 'wood', n: 3 }]);
+    assert.equal(count({ slots: me.slots }, 'wood'), 2);
+    assert.equal((await ask(c, { t: 'vault', op: 'take', id: 'wood', n: 1 })).kind, 'vault');
+    assert.equal(count({ slots: me.slots }, 'wood'), 3);
+    const hu = await c.next((m) => m.t === 'hunter' && Array.isArray(m.vault) && m.vault[0]?.n === 2, 2000);
+    assert.ok(hu);
+    // 가득 차면 새 물건은 못 넣는다.
+    const fill = ['wood', 'nails', 'rope', 'scrap_metal', 'hardwood', 'canned_food', 'hardtack', 'clean_water', 'torch', 'herb_salve'];
+    me.profile.hunter.vault = fill.slice(0, H.vault.slots).map((id) => ({ id, n: 1 }));
+    const band = me.slots.findIndex((x) => x?.id === 'bandage');
+    assert.equal((await ask(c, { t: 'vault', op: 'put', slot: band })).code, 'stash_full');
+    // 아공간 금고: 칸 +5.
+    me.profile.hunter.mi = 1000;
+    await moveTo(c, office);
+    assert.equal((await ask(c, { t: 'hunter_buy', i: 'subspace_vault' })).up, 'vault');
+    assert.equal((await ask(c, { t: 'vault', op: 'put', slot: band })).kind, 'vault');
+    assert.equal(room.toSave().profiles[me.uid].hunter.vault.find((e) => e.id === 'bandage').n, 3);
+    assert.equal(room.toSave().profiles[me.uid].hunter.vaultExtra, 5);
   });
 
   it('현상금 의뢰: 다 채워야 보고, 한 번만 받는다 · 뒤지기도 센다', async () => {

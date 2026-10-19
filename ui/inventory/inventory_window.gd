@@ -9,6 +9,8 @@ extends Control
 signal closed
 ## v0.22: 가방의 "제작" 단추 (맨손 · 곁의 작업대로 만들기 — CraftController 가 연다).
 signal craft_requested
+## v0.28.17 '보관함' 단추 (내 아공간 보관함 — SurvivalController 가 연다).
+signal vault_requested
 
 @export var player: Player
 ## 열면 이 카메라를 가방 구도(캐릭터는 아래, 머리 위는 비움)로 옮긴다.
@@ -73,6 +75,30 @@ func _ready() -> void:
 		craft_requested.emit())
 	_close.get_parent().add_child(craft)
 	_close.get_parent().move_child(craft, _close.get_index())
+	# v0.28.17 정렬 (종류별 · 등급별) · 내 아공간 보관함 (어디서든).
+	var tools: HBoxContainer = HBoxContainer.new()
+	tools.name = "BagTools"
+	tools.add_theme_constant_override("separation", 12)
+	var header: Node = _close.get_parent()
+	header.get_parent().add_child(tools)
+	header.get_parent().move_child(tools, header.get_index() + 1)
+	for spec: Array in [["SortKind", "종류별 정렬", "kind"], ["SortGrade", "등급별 정렬", "grade"], ["VaultButton", "아공간 보관함", ""]]:
+		var b: Button = Button.new()
+		b.name = str(spec[0])
+		b.text = str(spec[1])
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(0, 66)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 28)
+		var by: String = str(spec[2])
+		b.pressed.connect(func() -> void:
+			Audio.play_ui(Audio.SFX_CLICK)
+			if by.is_empty():
+				vault_requested.emit()
+			else:
+				selected_slot = -1
+				Net.inv_sort(by))
+		tools.add_child(b)
 	_discard.pressed.connect(_on_discard_pressed)
 	_use.pressed.connect(_on_use_pressed)
 	_tail.draw.connect(_draw_tail)

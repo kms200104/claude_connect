@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { addItem, canAdd, countWhere, emptySlots, hasFreeSpace, moveSlot, removeAt, removeWhere, sanitize, toWire } from '../src/inventory.js';
+import { addItem, canAdd, countWhere, emptySlots, hasFreeSpace, moveSlot, removeAt, removeWhere, sanitize, sortBag, toWire } from '../src/inventory.js';
 
 // 퀵슬롯 2칸 + 가방 3칸. 물고기는 2마리, 목재는 3개, 도구는 1개씩 쌓인다.
 const cfg = { quickSlots: 2, inventoryCapacity: 3, inventoryStackSize: 2 };
@@ -84,5 +84,17 @@ describe('inventory (퀵슬롯 + 가방 칸)', () => {
     const s = emptySlots(cfg);
     s[0] = { id: 'rod', n: 1 };
     assert.deepEqual(toWire(s, cfg, 0), { slots: [{ id: 'rod', n: 1 }, null, null, null, null], quick: 2, cap: 3, held: 0 });
+  });
+
+  it('v0.28.17 가방 정렬: 퀵슬롯은 그대로, 같은 물건은 모으고, 종류순 · 등급(값)순', () => {
+    const c2 = { quickSlots: 1, inventoryCapacity: 5, inventoryStackSize: 2 };
+    const kindOf = (id) => ({ rod: 'tool', wood: 'material', carp: 'fish', gem: 'goods' })[id] ?? '';
+    const valueOf = (id) => ({ rod: 50, wood: 1, carp: 30, gem: 900 })[id] ?? 0;
+    const lim = (id) => ({ rod: 1, wood: 3, gem: 5 })[id] ?? 2;
+    const s = [{ id: 'rod', n: 1 }, { id: 'carp', n: 1 }, { id: 'wood', n: 2 }, { id: 'gem', n: 1 }, { id: 'wood', n: 2 }, { id: 'carp', n: 1 }];
+    sortBag(s, c2, 'kind', kindOf, valueOf, lim);
+    assert.deepEqual(s, [{ id: 'rod', n: 1 }, { id: 'wood', n: 3 }, { id: 'wood', n: 1 }, { id: 'carp', n: 2 }, { id: 'gem', n: 1 }, null]);
+    sortBag(s, c2, 'grade', kindOf, valueOf, lim);
+    assert.deepEqual(s, [{ id: 'rod', n: 1 }, { id: 'gem', n: 1 }, { id: 'carp', n: 2 }, { id: 'wood', n: 3 }, { id: 'wood', n: 1 }, null]);
   });
 });

@@ -43,6 +43,29 @@
     "gate": { "E": 10, "D": 30, "C": 80, "B": 200, "A": 500, "S": 1500 }
   },
 
+  "missions": {
+    "_comment": "v0.28.17 협회 임무: 날마다 (daily) · 주마다 (weekly, 월요일에 바뀐다) 같은 목록을 사람마다 채운다. kind = 처치 kill (k 가 있으면 그 크리처) · 빈집 뒤지기 loot · 마석 매각 sell (개수) · 보급 상자 supply · 게이트 gate · 현상금 의뢰 보고 bounty · 행동 (level.xp.acts 의 낚시 fish · 제작 craft · 판자 board · 동료 살리기 revive …). 다 채우면 헌터넷 '의뢰' 탭에서 받는다 → mi 만큼 헌터 마일리지.",
+    "daily": [
+      { "id": "d_kill", "kind": "kill", "n": 10, "mi": 30, "name": "크리처 10마리 처치" },
+      { "id": "d_loot", "kind": "loot", "n": 3, "mi": 20, "name": "빈집 3곳 뒤지기" },
+      { "id": "d_sell", "kind": "sell", "n": 5, "mi": 20, "name": "마석 5개 매각" },
+      { "id": "d_bounty", "kind": "bounty", "n": 1, "mi": 25, "name": "현상금 의뢰 1건 보고" },
+      { "id": "d_craft", "kind": "craft", "n": 2, "mi": 15, "name": "물건 2번 만들기" }
+    ],
+    "weekly": [
+      { "id": "w_gate", "kind": "gate", "n": 3, "mi": 200, "name": "게이트 3곳 공략" },
+      { "id": "w_kill", "kind": "kill", "n": 80, "mi": 150, "name": "크리처 80마리 처치" },
+      { "id": "w_bounty", "kind": "bounty", "n": 7, "mi": 150, "name": "현상금 의뢰 7건 보고" },
+      { "id": "w_supply", "kind": "supply", "n": 3, "mi": 100, "name": "보급 상자 3개 열기" },
+      { "id": "w_revive", "kind": "revive", "n": 2, "mi": 80, "name": "쓰러진 동료 2번 살리기" }
+    ]
+  },
+
+  "vault": {
+    "_comment": "v0.28.17 내 아공간 보관함: 어디서든 연다 (가방 창 '보관함'), 나만 쓴다. slots 칸 (아공간 금고로 늘린다), 한 칸 max 개.",
+    "slots": 10, "max": 99
+  },
+
   "store": {
     "_comment": "v0.28.14 협회 상점 (출장소 창구): v0.28.15 헌터 마일리지 (cost) 로 산다 — 등급 심사 점수와 따로. rank = 살 수 있는 가장 낮은 헌터 등급, job = 그 직업만, n = 한 번에 받는 수. up 이 있으면 물건 대신 칸을 늘린다: bag = 내 가방 (아공간 주머니), stash = 방 전체 거점 상자 (아공간 상자). at = 지금까지 늘린 칸 수 (차례대로 산다), add = 늘어나는 칸.",
     "items": [
@@ -50,6 +73,8 @@
       { "id": "subspace_pouch_m", "up": "bag", "at": 5, "add": 5, "cost": 250, "rank": "D" },
       { "id": "subspace_pouch_l", "up": "bag", "at": 10, "add": 10, "cost": 800, "rank": "C" },
       { "id": "subspace_pouch_xl", "up": "bag", "at": 20, "add": 10, "cost": 2500, "rank": "B" },
+      { "id": "subspace_vault", "up": "vault", "at": 0, "add": 5, "cost": 150, "rank": "E" },
+      { "id": "subspace_vault_l", "up": "vault", "at": 5, "add": 10, "cost": 600, "rank": "C" },
       { "id": "subspace_crate", "up": "stash", "at": 0, "add": 6, "cost": 300, "rank": "D" },
       { "id": "subspace_crate_l", "up": "stash", "at": 6, "add": 6, "cost": 1200, "rank": "B" },
       { "id": "first_aid_kit", "n": 1, "cost": 20, "rank": "E" },
@@ -106,7 +131,10 @@
       "first_ms": 2500, "every_ms": 4500,
       "slam": { "windup_ms": 1300, "r": 3.0, "damage": 3, "range": 5.5 },
       "charge": { "windup_ms": 900, "dist": 9, "speed": 13, "width": 1.5, "damage": 3, "min_range": 3.5 },
-      "summon": { "hp_at": [0.6, 0.3], "n": 2, "k": "runner", "windup_ms": 1200 }
+      "summon": { "hp_at": [0.6, 0.3], "n": 2, "k": "runner", "windup_ms": 1200 },
+      "_comment_v0_28_17": "광역 장판 pool = 패턴 every 번째마다 대상 자리 + 둘레 (spread m) 에 n 개 원 (r m) 을 windup_ms 동안 경고한 뒤 ms 동안 독 장판 — 안에 있는 사람은 tick_ms 마다 damage. 2페이즈 phase2 = 체력이 hp_at 아래로 처음 떨어지면 ms 동안 변신 (맞지 않는다), 그 뒤 크기 scale 배 · 피해 dmg 배 · 돌진 speed 배 · 패턴 간격 every_mult 배.",
+      "pool": { "every": 3, "windup_ms": 1100, "n": 3, "r": 2.2, "spread": 4.5, "ms": 4500, "tick_ms": 700, "damage": 1 },
+      "phase2": { "hp_at": 0.5, "ms": 1500, "scale": 1.2, "dmg": 1.3, "speed": 1.3, "every_mult": 0.65 }
     },
     "dungeon": {
       "_comment": "v0.28.2 게이트 안 던전: 진입하면 도시 밖 먼 곳의 별도 공간으로 옮겨 간다. 던전 자리는 spots 순서 i 마다 (x0 + i × dx, z0) 가 가운데. 게이트가 열릴 때 maps 중 하나를 고른다. 지도 (로컬 좌표, 가운데 기준 m): w × d 바닥, spawn = 들어선 자리, exit = 나가는 균열 (exit_range 안에서 '나가기'), center = 웨이브가 나오는 곳 (spread m 둘레), pillars [x, z, r] · rubble [x, z, w, d] 는 막힌 곳. 공략하면 return_ms 뒤 모두 게이트 앞으로 돌아온다.",
