@@ -186,7 +186,7 @@ func _run() -> void:
 			if Net.inventory[i] != null:
 				return Net.inventory[i].id
 		return ""
-	(bag.find_child("SortGrade", true, false) as Button).pressed.emit()
+	(bag.find_child("SortButton", true, false) as MenuButton).get_popup().id_pressed.emit(1)
 	var top_price: Callable = func() -> int:
 		var best: int = 0
 		for i: int in range(Net.quick_slot_count, Net.inventory.size()):
@@ -194,7 +194,7 @@ func _run() -> void:
 				best = maxi(best, GameData.item(Net.inventory[i].id).price)
 		return best
 	_check(await _wait_until(func() -> bool: return GameData.item(first_bag.call()) != null and GameData.item(first_bag.call()).price == top_price.call(), 3.0), "등급별 정렬 (맨 앞 %s)" % first_bag.call())
-	(bag.find_child("SortKind", true, false) as Button).pressed.emit()
+	(bag.find_child("SortButton", true, false) as MenuButton).get_popup().id_pressed.emit(0)
 	await get_tree().create_timer(0.5).timeout
 	var kinds: PackedStringArray = []
 	for i: int in range(Net.quick_slot_count, Net.inventory.size()):

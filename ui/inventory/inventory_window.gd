@@ -75,30 +75,36 @@ func _ready() -> void:
 		craft_requested.emit())
 	_close.get_parent().add_child(craft)
 	_close.get_parent().move_child(craft, _close.get_index())
-	# v0.28.17 정렬 (종류별 · 등급별) · 내 아공간 보관함 (어디서든).
-	var tools: HBoxContainer = HBoxContainer.new()
-	tools.name = "BagTools"
-	tools.add_theme_constant_override("separation", 12)
+	# v0.28.17 정렬 (누르면 종류별 · 등급별 고르기) · 내 아공간 보관함 (어디서든) — 머리글 줄에 (창 높이를 늘리지 않게).
 	var header: Node = _close.get_parent()
-	header.get_parent().add_child(tools)
-	header.get_parent().move_child(tools, header.get_index() + 1)
-	for spec: Array in [["SortKind", "종류별 정렬", "kind"], ["SortGrade", "등급별 정렬", "grade"], ["VaultButton", "아공간 보관함", ""]]:
-		var b: Button = Button.new()
-		b.name = str(spec[0])
-		b.text = str(spec[1])
-		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(0, 66)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 28)
-		var by: String = str(spec[2])
-		b.pressed.connect(func() -> void:
-			Audio.play_ui(Audio.SFX_CLICK)
-			if by.is_empty():
-				vault_requested.emit()
-			else:
-				selected_slot = -1
-				Net.inv_sort(by))
-		tools.add_child(b)
+	var sort: MenuButton = MenuButton.new()
+	sort.name = "SortButton"
+	sort.text = "정렬"
+	sort.flat = false
+	sort.focus_mode = Control.FOCUS_NONE
+	sort.custom_minimum_size = Vector2(100, 78)
+	sort.add_theme_font_size_override("font_size", 30)
+	var menu: PopupMenu = sort.get_popup()
+	menu.add_theme_font_size_override("font_size", 34)
+	menu.add_item("종류별 정렬", 0)
+	menu.add_item("등급별 정렬", 1)
+	menu.id_pressed.connect(func(item_id: int) -> void:
+		Audio.play_ui(Audio.SFX_CLICK)
+		selected_slot = -1
+		Net.inv_sort("grade" if item_id == 1 else "kind"))
+	header.add_child(sort)
+	header.move_child(sort, craft.get_index())
+	var vault: Button = Button.new()
+	vault.name = "VaultButton"
+	vault.text = "보관함"
+	vault.focus_mode = Control.FOCUS_NONE
+	vault.custom_minimum_size = Vector2(110, 78)
+	vault.add_theme_font_size_override("font_size", 30)
+	vault.pressed.connect(func() -> void:
+		Audio.play_ui(Audio.SFX_CLICK)
+		vault_requested.emit())
+	header.add_child(vault)
+	header.move_child(vault, craft.get_index())
 	_discard.pressed.connect(_on_discard_pressed)
 	_use.pressed.connect(_on_use_pressed)
 	_tail.draw.connect(_draw_tail)
